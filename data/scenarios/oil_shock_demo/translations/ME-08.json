@@ -1,0 +1,53 @@
+{
+  "market_event_id": "ME-08",
+  "rationale": "Hand-drawn. Export controls rise again by 0.5 standard units.",
+  "spans": [
+    [
+      12,
+      28,
+      0
+    ]
+  ],
+  "events": [
+    {
+      "id": "GUE-ME08",
+      "kind": "real",
+      "event_type": "regulatory_action",
+      "occurred_at": "2026-03-23T09:00:00Z",
+      "recorded_at": "2026-03-23T09:00:00Z",
+      "produced_by": "hand_drawn",
+      "confidence": 0.85,
+      "market_event_id": "ME-08",
+      "evidence": [
+        {
+          "id": "EV-ME08",
+          "source_type": "news",
+          "excerpt": "Netherlands widens licensing for chipmaking tools",
+          "observed_at": "2026-03-23T09:00:00Z",
+          "strength": 0.6,
+          "market_event_id": "ME-08"
+        }
+      ],
+      "ops": [
+        {
+          "op": "change_value",
+          "target": {
+            "kind": "concrete",
+            "subentity_id": "legal_regulatory.export_controls"
+          },
+          "delta": 0.5,
+          "mode": "standardized",
+          "persistence": "step",
+          "at": "2026-03-23T09:00:00Z"
+        }
+      ],
+      "mentions": [
+        "licensing",
+        "chipmaking tools"
+      ],
+      "tags": [
+        "trade-restriction-like"
+      ]
+    }
+  ]
+}

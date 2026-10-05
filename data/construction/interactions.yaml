@@ -1,0 +1,146 @@
+# Construction spec: interactions (§14.1, §14.3).
+# Effects are in target standard units per source standard unit. Kernels are mean days;
+# duration_days: null means a permanent effect. Effects default to sigma 0.15 and existence to
+# Beta(9, 1). "A1"-"A20" are Figure 1's arrows. Every interaction from e24 on is a demo addition.
+interactions:
+  - {id: e01, source: interest_rates.us_policy_rate, target: credit_availability.us_bank_funding_cost, label: raises funding costs,
+     effect: {mu: 0.9}, kernel: {delay_days: 7, lag_days: 14, duration_days: null}, note: "A1; Figure 5 Fed rate -> US bank funding"}
+  - {id: e02, source: interest_rates.euro_policy_rate, target: credit_availability.euro_bank_funding_cost, label: raises funding costs,
+     effect: {mu: 0.9}, kernel: {delay_days: 7, lag_days: 14, duration_days: null}, note: "A1; Figure 5 ECB rate -> euro bank funding"}
+  - {id: e03, source: interest_rates.real_rate, target: credit_availability.credit_growth, label: limits,
+     effect: {mu: -0.5}, kernel: {delay_days: 30, lag_days: 90, duration_days: null}, note: A1}
+  - {id: e04, source: credit_availability.credit_growth, target: debt_cycle.credit_gap, label: feeds,
+     effect: {mu: 0.6}, kernel: {delay_days: 30, lag_days: 180, duration_days: null}, note: A2}
+  - {id: e05, source: capital_flows.us_inflows, target: dollar_fx.dollar_index, label: moves,
+     effect: {mu: 0.5}, kernel: {delay_days: 7, lag_days: 14, duration_days: 120}, note: A3}
+  - {id: e06, source: consumer_spending.durable_goods_spending, target: business_investment.new_orders, label: drives,
+     effect: {mu: 0.5}, kernel: {delay_days: 14, lag_days: 30, duration_days: 180}, note: A4}
+  - {id: e07, source: asset_prices.equity_volatility, target: financial_crises.banking_stress, label: sparks,
+     effect: {mu: 0.5}, kernel: {delay_days: 7, lag_days: 14, duration_days: 90}, note: A5}
+  - {id: e08, source: resources_energy.oil_price, target: inflation.headline_cpi, label: raises,
+     effect: {mu: 0.4}, kernel: {delay_days: 14, lag_days: 60, duration_days: 270}, note: A6}
+  - {id: e09, source: legal_regulatory.export_controls, target: cross_border_trade.trade_volume, label: limits,
+     effect: {mu: -0.3}, kernel: {delay_days: 30, lag_days: 90, duration_days: null}, note: A7}
+  - {id: e10, source: wars.geopolitical_risk, target: policy_uncertainty.epu_index, label: raises,
+     effect: {mu: 0.5}, kernel: {delay_days: 7, lag_days: 14, duration_days: 120}, note: A8}
+  - {id: e11, source: climate_change.temperature_anomaly, target: productivity_tech.tfp_growth, label: lowers,
+     effect: {mu: -0.15}, kernel: {delay_days: 180, lag_days: 360, duration_days: null}, note: A9}
+  - {id: e12, source: medical_crises.case_growth, target: gov_spending.health_spending, label: raises,
+     effect: {mu: 0.6}, kernel: {delay_days: 14, lag_days: 30, duration_days: 180}, note: A10}
+  - id: e13
+    source: interest_rates.real_rate
+    target: consumer_spending.household_saving_rate
+    label: raises saving
+    direction: unidirectional
+    effect: {family: gaussian, mu: 0.3, sigma: 0.15}
+    kernel: {delay_days: 30, lag_days: 90, duration_days: null}
+    existence: {alpha: 9, beta: 1}
+    parameters:
+      - name: household debt level
+        moderator: debt_cycle.household_debt
+        form: multiplicative
+        coefficient: {family: gaussian, mu: 0.3, sigma: 0.1}
+    evidence:
+      - {source_type: human, excerpt: "Designer prior (Figure 2 example)", strength: 0.5}
+    note: "A11; Figure 2"
+  - {id: e14, source: interest_rates.us_policy_rate, target: consumer_spending.durable_goods_spending, label: cuts,
+     effect: {mu: -0.4}, kernel: {delay_days: 30, lag_days: 90, duration_days: 365}, note: A11}
+  - {id: e15, source: credit_availability.credit_growth, target: business_investment.capex_growth, label: funds,
+     effect: {mu: 0.5}, kernel: {delay_days: 30, lag_days: 90, duration_days: 365}, note: A12}
+  - {id: e16, source: wars.sanctions_intensity, target: supply_chains.delivery_times, label: disrupts,
+     effect: {mu: 0.5}, kernel: {delay_days: 14, lag_days: 45, duration_days: 270}, note: A13}
+  - {id: e17, source: medical_crises.lockdown_stringency, target: labor_demographics.labor_force_participation, label: shrinks,
+     effect: {mu: -0.4}, kernel: {delay_days: 7, lag_days: 30, duration_days: 365}, note: A14}
+  - {id: e18, source: inequality_within.gini, target: culture_trust.social_trust, label: erodes,
+     effect: {mu: -0.3}, kernel: {delay_days: 365, lag_days: 720, duration_days: null}, note: A15}
+  - {id: e19, source: culture_trust.social_trust, target: institutions.rule_of_law, label: sustains,
+     effect: {mu: 0.2}, kernel: {delay_days: 365, lag_days: 1095, duration_days: null}, note: A16}
+  - {id: e20, source: resources_energy.oil_price, target: business_investment.input_costs, label: raises costs,
+     effect: {mu: 0.5}, kernel: {delay_days: 7, lag_days: 30, duration_days: 270}, note: A17}
+  - {id: e21, source: financial_crises.banking_stress, target: cross_border_trade.trade_finance_availability, label: cuts trade finance,
+     effect: {mu: -0.5}, kernel: {delay_days: 7, lag_days: 30, duration_days: 180}, note: A18}
+  - {id: e22, source: resources_energy.oil_price, target: productivity_tech.tfp_growth, label: drags on,
+     effect: {mu: -0.1}, kernel: {delay_days: 90, lag_days: 180, duration_days: 365}, note: A19}
+  - {id: e23, source: medical_crises.case_growth, target: policy_uncertainty.epu_index, label: raises,
+     effect: {mu: 0.4}, kernel: {delay_days: 7, lag_days: 14, duration_days: 120}, note: A20}
+  # ---- internal edges and demo additions (tags: [demo_addition]) --------------------------------
+  - {id: e24, source: business_investment.input_costs, target: business_investment.capex_growth, label: squeezes,
+     effect: {mu: -0.4}, kernel: {delay_days: 30, lag_days: 60, duration_days: 365}, tags: [demo_addition], note: internal}
+  - {id: e25, source: credit_availability.us_bank_funding_cost, target: credit_availability.lending_standards, label: tightens,
+     effect: {mu: 0.5}, kernel: {delay_days: 14, lag_days: 30, duration_days: null}, tags: [demo_addition], note: internal}
+  - {id: e26, source: credit_availability.lending_standards, target: credit_availability.credit_growth, label: restricts,
+     effect: {mu: -0.5}, kernel: {delay_days: 30, lag_days: 90, duration_days: null}, tags: [demo_addition], note: internal}
+  - {id: e27, source: consumer_spending.household_saving_rate, target: consumer_spending.durable_goods_spending, label: reduces,
+     effect: {mu: -0.4}, kernel: {delay_days: 7, lag_days: 30, duration_days: null}, tags: [demo_addition], note: internal}
+  - {id: e28, source: asset_prices.equity_index, target: asset_prices.equity_volatility, label: falls raise volatility,
+     effect: {mu: -0.5}, kernel: {delay_days: 7, lag_days: 7, duration_days: 60}, tags: [demo_addition], note: internal}
+  - {id: e29, source: dollar_fx.dollar_index, target: dollar_fx.em_fx_volatility, label: raises,
+     effect: {mu: 0.5}, kernel: {delay_days: 7, lag_days: 14, duration_days: 90}, tags: [demo_addition], note: internal}
+  - {id: e30, source: interest_rates.us_policy_rate, target: interest_rates.real_rate, label: lifts,
+     effect: {mu: 0.6}, kernel: {delay_days: 7, lag_days: 30, duration_days: null}, tags: [demo_addition], note: internal}
+  - {id: e31, source: interest_rates.us_policy_rate, target: interest_rates.long_term_yields, label: lifts,
+     effect: {mu: 0.4}, kernel: {delay_days: 7, lag_days: 14, duration_days: null}, tags: [demo_addition], note: internal}
+  - {id: e32, source: interest_rates.long_term_yields, target: asset_prices.equity_index, label: reprices,
+     effect: {mu: -0.4}, kernel: {delay_days: 7, lag_days: 14, duration_days: 180}, tags: [demo_addition], note: demo addition (S1)}
+  - {id: e33, source: wars.geopolitical_risk, target: resources_energy.oil_price, label: raises,
+     effect: {mu: 0.3}, kernel: {delay_days: 7, lag_days: 14, duration_days: 120}, tags: [demo_addition], note: demo addition (S2)}
+  - {id: e34, source: supply_chains.delivery_times, target: inflation.core_cpi, label: passes through,
+     effect: {mu: 0.3}, kernel: {delay_days: 30, lag_days: 90, duration_days: 270}, tags: [demo_addition], note: demo addition (S2)}
+  - {id: e35, source: capital_flows.em_portfolio_flows, target: dollar_fx.em_fx_volatility, label: calms EM currencies,
+     effect: {mu: -0.5}, kernel: {delay_days: 7, lag_days: 14, duration_days: 90}, tags: [demo_addition], note: demo addition (S3)}
+  - {id: e36, source: debt_cycle.credit_gap, target: financial_crises.default_rate, label: amplifies,
+     effect: {mu: 0.3}, kernel: {delay_days: 90, lag_days: 180, duration_days: null}, tags: [demo_addition], note: demo addition (S3)}
+  - {id: e37, source: dollar_fx.dollar_index, target: inequality_between.em_growth_gap, label: squeezes EM growth,
+     effect: {mu: -0.3}, kernel: {delay_days: 30, lag_days: 90, duration_days: 365}, tags: [demo_addition], note: demo addition (S3)}
+  - {id: e38, source: supply_chains.delivery_times, target: cross_border_trade.trade_volume, label: slows,
+     effect: {mu: -0.3}, kernel: {delay_days: 14, lag_days: 30, duration_days: 180}, tags: [demo_addition], note: demo addition (S4)}
+  - {id: e39, source: climate_change.temperature_anomaly, target: disasters_weather.disaster_losses, label: intensifies,
+     effect: {mu: 0.3}, kernel: {delay_days: 90, lag_days: 180, duration_days: null}, tags: [demo_addition], note: demo addition (S5)}
+  - {id: e40, source: disasters_weather.disaster_losses, target: gov_spending.relief_spending, label: raises relief spending,
+     effect: {mu: 0.6}, kernel: {delay_days: 14, lag_days: 30, duration_days: 180}, tags: [demo_addition], note: demo addition (S5)}
+  - {id: e41, source: federal_reserve.policy_stance, target: interest_rates.us_policy_rate, label: sets,
+     effect: {mu: 1.0}, kernel: {delay_days: 1, lag_days: 0, duration_days: null}, existence: {alpha: 99, beta: 1},
+     tags: [demo_addition], note: demo addition}
+  - {id: e42, source: ecb.policy_stance, target: interest_rates.euro_policy_rate, label: sets,
+     effect: {mu: 1.0}, kernel: {delay_days: 1, lag_days: 0, duration_days: null}, existence: {alpha: 99, beta: 1},
+     tags: [demo_addition], note: demo addition}
+  - {id: e43, source: inflation.headline_cpi, target: federal_reserve.policy_stance, label: prompts tightening,
+     effect: {mu: 0.5}, kernel: {delay_days: 45, lag_days: 30, duration_days: null}, existence: {alpha: 6, beta: 4},
+     tags: [demo_addition], note: "demo addition; S8 says present, S9 says absent"}
+  - {id: e44, source: dollar_fx.dollar_index, target: financial_crises.banking_stress, label: tightens dollar funding,
+     effect: {mu: 0.3}, kernel: {delay_days: 7, lag_days: 30, duration_days: 180}, tags: [demo_addition], note: demo addition (S3)}
+  - {id: e45, source: credit_availability.credit_growth, target: asset_prices.house_prices, label: feed each other,
+     direction: bidirectional, effect: {mu: 0.3}, kernel: {delay_days: 30, lag_days: 90, duration_days: null},
+     reverse: {effect: {mu: 0.2}, kernel: {delay_days: 30, lag_days: 90, duration_days: null}},
+     tags: [demo_addition], note: "demo addition (S1); the demo's bidirectional edge"}
+  - {id: e46, source: legal_regulatory.export_controls, target: northwind_semis.export_revenue, label: cuts export sales,
+     effect: {mu: -0.4}, kernel: {delay_days: 14, lag_days: 30, duration_days: null}, tags: [demo_addition], note: demo addition (company)}
+  - {id: e47, source: northwind_semis.export_revenue, target: northwind_semis.share_price, label: drives,
+     effect: {mu: 0.6}, kernel: {delay_days: 1, lag_days: 7, duration_days: null}, tags: [demo_addition], note: internal; demo addition}
+  - {id: e48, source: northwind_semis.export_revenue, target: northwind_semis.capex, label: funds,
+     effect: {mu: 0.5}, kernel: {delay_days: 30, lag_days: 90, duration_days: null}, tags: [demo_addition], note: internal; demo addition}
+  - {id: e49, source: fed_chair.hawkishness, target: federal_reserve.policy_stance, label: leans on,
+     effect: {mu: 0.3}, kernel: {delay_days: 14, lag_days: 30, duration_days: null}, tags: [demo_addition], note: demo addition (person)}
+
+# Figure 1's arrow labels are entity-level labels, used by CausalGraph.entity_links().
+entity_link_labels:
+  interest_rates->credit_availability: limits                 # A1
+  credit_availability->debt_cycle: feeds                      # A2
+  capital_flows->dollar_fx: moves                             # A3
+  consumer_spending->business_investment: drives              # A4
+  asset_prices->financial_crises: spark                       # A5
+  resources_energy->inflation: raises                         # A6
+  legal_regulatory->cross_border_trade: limits                # A7
+  wars->policy_uncertainty: raises                            # A8
+  climate_change->productivity_tech: lowers                   # A9
+  medical_crises->gov_spending: raise                         # A10
+  interest_rates->consumer_spending: cuts                     # A11
+  credit_availability->business_investment: funds             # A12
+  wars->supply_chains: disrupt                                # A13
+  medical_crises->labor_demographics: shrink                  # A14
+  inequality_within->culture_trust: erodes                    # A15
+  culture_trust->institutions: sustains                       # A16
+  resources_energy->business_investment: raises costs         # A17
+  financial_crises->cross_border_trade: cut trade finance     # A18
+  resources_energy->productivity_tech: drags on               # A19
+  medical_crises->policy_uncertainty: raise                   # A20

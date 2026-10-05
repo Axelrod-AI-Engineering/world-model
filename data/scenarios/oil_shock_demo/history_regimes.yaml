@@ -1,0 +1,47 @@
+# History regimes (§14.9): dated shocks in the synthetic history, emitted as data market events
+# carrying the headline, the tags, and the regime's event_type.
+# DECISION: tuned per §15.3's note (scenario world shocks may be tuned). World shocks persist, so
+# each spike is followed by an easing regime that brings the level back toward normal; and the two
+# oil spikes are large enough (+35%, +40%) that headline CPI rises fast enough for the Fed's
+# reaction rule to fire at a meeting, so the history teaches e43 and supports S8 as well as S9.
+regimes:
+  - {at: 2023-03-13, event_type: financial_stress, tags: [bank-run-like, 2023-like],
+     headline: "Synthetic: mid-size bank fails after a deposit run",
+     shocks: [{subentity: financial_crises.banking_stress, mode: standardized, delta: 2.5},
+              {subentity: asset_prices.equity_index, mode: relative, delta: -0.06}]}
+  - {at: 2023-06-12, event_type: financial_relief, tags: [stress-easing], headline: "Synthetic: bank stress subsides",
+     shocks: [{subentity: financial_crises.banking_stress, mode: standardized, delta: -2.0},
+              {subentity: asset_prices.equity_index, mode: relative, delta: 0.04}]}
+  - {at: 2023-09-25, event_type: supply_shock, tags: [energy-shock-like], headline: "Synthetic: oil jumps on supply cuts",
+     shocks: [{subentity: resources_energy.oil_price, mode: relative, delta: 0.35}]}
+  - {at: 2024-03-18, event_type: supply_relief, tags: [energy-easing], headline: "Synthetic: oil eases as supply returns",
+     shocks: [{subentity: resources_energy.oil_price, mode: relative, delta: -0.25}]}
+  - {at: 2024-04-15, event_type: regulatory_action, tags: [trade-restriction-like],
+     headline: "Synthetic: new export restrictions",
+     shocks: [{subentity: legal_regulatory.export_controls, mode: standardized, delta: 1.0}]}
+  - {at: 2024-08-05, event_type: market_volatility, tags: [volatility-spike], headline: "Synthetic: equity volatility spikes",
+     shocks: [{subentity: asset_prices.equity_volatility, mode: standardized, delta: 2.0}]}
+  - {at: 2024-10-07, event_type: market_calm, tags: [volatility-easing], headline: "Synthetic: volatility normalizes",
+     shocks: [{subentity: asset_prices.equity_volatility, mode: standardized, delta: -1.8}]}
+  - {at: 2024-11-18, event_type: capital_flow_shift, tags: [dollar-squeeze-like],
+     headline: "Synthetic: dollar surges on inflows",
+     shocks: [{subentity: capital_flows.us_inflows, mode: standardized, delta: 2.0}]}
+  - {at: 2025-03-10, event_type: supply_shock, tags: [energy-shock-like], headline: "Synthetic: oil spikes on an outage",
+     shocks: [{subentity: resources_energy.oil_price, mode: relative, delta: 0.40}]}
+  - {at: 2025-06-16, event_type: financial_stress, tags: [bank-run-like, 2008-like],
+     headline: "Synthetic: broad banking stress",
+     shocks: [{subentity: financial_crises.banking_stress, mode: standardized, delta: 3.0},
+              {subentity: asset_prices.equity_index, mode: relative, delta: -0.12},
+              {subentity: credit_availability.lending_standards, mode: standardized, delta: 1.5}]}
+  - {at: 2025-08-18, event_type: supply_relief, tags: [energy-easing], headline: "Synthetic: oil eases after the outage",
+     shocks: [{subentity: resources_energy.oil_price, mode: relative, delta: -0.28}]}
+  - {at: 2025-09-08, event_type: health_shock, tags: [pandemic-like], headline: "Synthetic: outbreak scare",
+     shocks: [{subentity: medical_crises.case_growth, mode: standardized, delta: 2.0}]}
+  - {at: 2025-10-13, event_type: financial_relief, tags: [stress-easing], headline: "Synthetic: banks recapitalize",
+     shocks: [{subentity: financial_crises.banking_stress, mode: standardized, delta: -2.5},
+              {subentity: credit_availability.lending_standards, mode: standardized, delta: -1.2}]}
+  - {at: 2025-11-03, event_type: regulatory_action, tags: [trade-restriction-like],
+     headline: "Synthetic: export restrictions widen",
+     shocks: [{subentity: legal_regulatory.export_controls, mode: standardized, delta: 1.0}]}
+  - {at: 2025-11-24, event_type: health_relief, tags: [pandemic-easing], headline: "Synthetic: outbreak fades",
+     shocks: [{subentity: medical_crises.case_growth, mode: standardized, delta: -2.0}]}

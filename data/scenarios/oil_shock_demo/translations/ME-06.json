@@ -1,0 +1,69 @@
+{
+  "market_event_id": "ME-06",
+  "rationale": "Hand-drawn. Bank stress: banking stress up two standard units and equities down 4%.",
+  "spans": [
+    [
+      16,
+      40,
+      0
+    ],
+    [
+      42,
+      62,
+      1
+    ]
+  ],
+  "events": [
+    {
+      "id": "GUE-ME06",
+      "kind": "real",
+      "event_type": "financial_stress",
+      "occurred_at": "2026-03-09T21:00:00Z",
+      "recorded_at": "2026-03-09T21:00:00Z",
+      "produced_by": "hand_drawn",
+      "confidence": 0.85,
+      "market_event_id": "ME-06",
+      "evidence": [
+        {
+          "id": "EV-ME06",
+          "source_type": "news",
+          "excerpt": "Regional lender reports deposit outflows; bank shares fall 12%",
+          "observed_at": "2026-03-09T21:00:00Z",
+          "strength": 0.6,
+          "market_event_id": "ME-06"
+        }
+      ],
+      "ops": [
+        {
+          "op": "change_value",
+          "target": {
+            "kind": "concrete",
+            "subentity_id": "financial_crises.banking_stress"
+          },
+          "delta": 2.0,
+          "mode": "standardized",
+          "persistence": "step",
+          "at": "2026-03-09T21:00:00Z"
+        },
+        {
+          "op": "change_value",
+          "target": {
+            "kind": "concrete",
+            "subentity_id": "asset_prices.equity_index"
+          },
+          "delta": -0.04,
+          "mode": "relative",
+          "persistence": "step",
+          "at": "2026-03-09T21:00:00Z"
+        }
+      ],
+      "mentions": [
+        "deposit outflows",
+        "bank shares"
+      ],
+      "tags": [
+        "bank-run-like"
+      ]
+    }
+  ]
+}

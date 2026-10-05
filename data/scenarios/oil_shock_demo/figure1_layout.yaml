@@ -1,0 +1,46 @@
+# Figure 1 layout (§14.10). Pill centers in Figure 1's working-memory frame; pills are 164 x 30.
+pill: {width: 164, height: 30}
+entities:
+  interest_rates: [168, 251]
+  credit_availability: [384, 251]
+  debt_cycle: [600, 251]
+  dollar_fx: [816, 251]
+  capital_flows: [1032, 251]
+  consumer_spending: [168, 303]
+  business_investment: [384, 303]
+  asset_prices: [600, 303]
+  financial_crises: [816, 303]
+  inequality_between: [1032, 303]
+  inflation: [168, 413]
+  resources_energy: [384, 413]
+  supply_chains: [600, 413]
+  cross_border_trade: [816, 413]
+  legal_regulatory: [1032, 413]
+  confidence: [168, 465]
+  wars: [600, 465]
+  policy_uncertainty: [816, 465]
+  market_concentration: [1032, 465]
+  climate_change: [168, 575]
+  productivity_tech: [384, 575]
+  gov_spending: [600, 575]
+  medical_crises: [816, 575]
+  institutions: [1032, 575]
+  disasters_weather: [168, 627]
+  geography: [384, 627]
+  labor_demographics: [816, 627]
+  culture_trust: [1032, 627]
+  inequality_within: [1032, 679]
+  federal_reserve: [1290, 251]
+  ecb: [1290, 303]
+  fed_chair: [1290, 199]
+  northwind_semis: [1290, 413]
+hulls:
+  S1: {rect: [74, 224, 620, 106]}
+  S3: {path: "M506 224H1126V330H722V277H506Z"}
+  S2: {rect: [74, 386, 620, 106]}
+  S4: {path: "M506 386H1126V439H910V492H506Z"}
+  S5: {path: "M74 548H694V601H262V654H74Z"}
+  S7: {path: "M506 548H910V654H722V601H506Z"}
+  S6: {rect: [938, 548, 188, 158]}
+frontier_lines:
+  - {earlier: inflation.headline_cpi, later: confidence.consumer_confidence, path: "M168 450V428"}

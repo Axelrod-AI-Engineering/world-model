@@ -1,0 +1,53 @@
+{
+  "market_event_id": "ME-05",
+  "rationale": "Hand-drawn. Export controls rise again by 0.75 standard units.",
+  "spans": [
+    [
+      3,
+      26,
+      0
+    ]
+  ],
+  "events": [
+    {
+      "id": "GUE-ME05",
+      "kind": "real",
+      "event_type": "regulatory_action",
+      "occurred_at": "2026-03-02T10:00:00Z",
+      "recorded_at": "2026-03-02T10:00:00Z",
+      "produced_by": "hand_drawn",
+      "confidence": 0.85,
+      "market_event_id": "ME-05",
+      "evidence": [
+        {
+          "id": "EV-ME05",
+          "source_type": "news",
+          "excerpt": "EU aligns its export rules on chipmaking tools with the US",
+          "observed_at": "2026-03-02T10:00:00Z",
+          "strength": 0.6,
+          "market_event_id": "ME-05"
+        }
+      ],
+      "ops": [
+        {
+          "op": "change_value",
+          "target": {
+            "kind": "concrete",
+            "subentity_id": "legal_regulatory.export_controls"
+          },
+          "delta": 0.75,
+          "mode": "standardized",
+          "persistence": "step",
+          "at": "2026-03-02T10:00:00Z"
+        }
+      ],
+      "mentions": [
+        "export rules",
+        "chipmaking tools"
+      ],
+      "tags": [
+        "trade-restriction-like"
+      ]
+    }
+  ]
+}

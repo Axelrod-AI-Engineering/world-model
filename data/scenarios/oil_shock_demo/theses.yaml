@@ -1,0 +1,35 @@
+# Theses, hypotheses, and decisions (§14.8). The loader fills id, recorded_at, and produced_by
+# for the embedded events.
+theses:
+  - id: T-00
+    question: Where is the economy heading if nothing else happens?
+    mode: open_ended
+    horizon_days: 182
+    event: {kind: hypothetical, occurred_at: 2026-04-06T00:00:00Z, ops: []}
+  - id: T-01
+    question: What if oil prices doubled next quarter?
+    mode: scaffolded
+    horizon_days: 270
+    targets: [inflation.headline_cpi, interest_rates.us_policy_rate, credit_availability.credit_growth,
+              business_investment.capex_growth, asset_prices.equity_index, confidence.consumer_confidence,
+              productivity_tech.tfp_growth]
+    event:
+      kind: hypothetical
+      event_type: supply_shock
+      occurred_at: 2026-07-01T00:00:00Z
+      ops:
+        - op: change_value
+          target: {kind: concrete, subentity_id: resources_energy.oil_price}
+          delta: 1.0
+          mode: relative
+          persistence: step
+          at: 2026-07-01T00:00:00Z
+hypotheses:
+  - id: H-fed-hold
+    kind: entity_decision
+    statement: The Fed holds its rate through the oil shock.
+    decision_subentity_id: federal_reserve.policy_stance
+    decision_change: 0.0
+    decision_window_days: 270
+    origin: human
+    subject_entity_ids: [federal_reserve]

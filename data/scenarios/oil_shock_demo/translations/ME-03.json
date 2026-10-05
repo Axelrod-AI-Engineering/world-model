@@ -1,0 +1,117 @@
+{
+  "market_event_id": "ME-03",
+  "rationale": "Hand-drawn. Op 0 should bind to legal_regulatory.export_controls. Op 1 should bind its source the same way, bind its target to Cross-border trade, and create chip_exports. Op 2 should stay at gen:obj:supply_factor until later evidence (ME-09).",
+  "spans": [
+    [
+      0,
+      26,
+      0
+    ],
+    [
+      27,
+      62,
+      1
+    ],
+    [
+      77,
+      89,
+      2
+    ]
+  ],
+  "events": [
+    {
+      "id": "GUE-ME03",
+      "kind": "real",
+      "event_type": "regulatory_action",
+      "occurred_at": "2026-02-09T14:00:00Z",
+      "recorded_at": "2026-02-09T14:05:00Z",
+      "produced_by": "hand_drawn",
+      "confidence": 0.7,
+      "market_event_id": "ME-03",
+      "evidence": [
+        {
+          "id": "EV-ME03",
+          "source_type": "news",
+          "excerpt": "expands export controls on advanced chips to more countries",
+          "observed_at": "2026-02-09T14:00:00Z",
+          "strength": 0.6,
+          "market_event_id": "ME-03"
+        }
+      ],
+      "ops": [
+        {
+          "op": "change_value",
+          "target": {
+            "kind": "abstract",
+            "generalization_id": "gen:obj:structural_factor",
+            "attribute_kind": "restriction_index",
+            "mention": "export controls on advanced chips"
+          },
+          "delta": 1.5,
+          "mode": "standardized",
+          "persistence": "step",
+          "at": "2026-02-09T14:00:00Z"
+        },
+        {
+          "op": "add_interaction",
+          "source": {
+            "kind": "abstract",
+            "attribute_kind": "restriction_index",
+            "mention": "export controls"
+          },
+          "target": {
+            "kind": "abstract",
+            "generalization_id": "gen:obj:demand_flow",
+            "attribute_kind": "trade_flow",
+            "constraints": {
+              "product": "semiconductors"
+            },
+            "mention": "chip exports"
+          },
+          "label": "restricts",
+          "polarity": -1,
+          "interaction_generalization_id": "gen:int:trade_restriction",
+          "dynamics": {
+            "effect": {
+              "family": "gaussian",
+              "mu": -0.8,
+              "sigma": 0.3
+            },
+            "kernel": {
+              "delay_days": 7,
+              "lag_days": 30,
+              "duration_days": null
+            }
+          }
+        },
+        {
+          "op": "add_interaction",
+          "source": {
+            "kind": "abstract",
+            "generalization_id": "gen:obj:demand_flow",
+            "constraints": {
+              "product": "semiconductors"
+            },
+            "mention": "chip exports"
+          },
+          "target": {
+            "kind": "abstract",
+            "generalization_id": "gen:obj:supply_factor",
+            "mention": "downstream chip users"
+          },
+          "label": "supports investment by chip users",
+          "polarity": 1,
+          "interaction_generalization_id": "gen:int:technology_diffusion"
+        }
+      ],
+      "mentions": [
+        "export controls",
+        "advanced chips",
+        "chip exports"
+      ],
+      "tags": [
+        "trade-restriction-like"
+      ]
+    }
+  ]
+}

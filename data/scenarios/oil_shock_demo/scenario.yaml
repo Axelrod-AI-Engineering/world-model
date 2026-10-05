@@ -1,0 +1,69 @@
+# The oil_shock_demo scenario script (§11.2, §14.6). Times are UTC. A step's `at` is advanced to
+# the latest publication time of its listed market events.
+id: oil_shock_demo
+title: Oil shock, export controls, and a new central bank
+start: 2026-01-26
+seed: 11
+initialization:
+  construction_dir: data/construction
+  taxonomy_dir: data/taxonomy
+  seeds: data/scenarios/oil_shock_demo/superentity_seeds.yaml
+  layout: data/scenarios/oil_shock_demo/figure1_layout.yaml
+  history:
+    from: 2023-01-02
+    to: 2026-01-25
+    regimes: data/scenarios/oil_shock_demo/history_regimes.yaml
+world:
+  truth: data/scenarios/oil_shock_demo/truth.yaml
+config_overrides: configs/demo.yaml
+steps:
+  - at: 2026-01-26T00:00:00Z
+    caption: "Figure 1's picture: seven superentities, the S8/S9 rival pair, and one co-movement on the frontier."
+  - at: 2026-01-28T19:00:00Z
+    market_events: [ME-01]
+    caption: The Fed raises rates. Watch credit tightening light up.
+  - at: 2026-02-02T13:00:00Z
+    market_events: [ME-02]
+    caption: OPEC+ cuts output. News needs a human to approve it.
+  - at: 2026-02-09T14:00:00Z
+    market_events: [ME-03]
+    caption: "Fuzzy to real: export controls on chips refine from broad to concrete."
+  - at: 2026-02-16T05:30:00Z
+    market_events: [ME-04]
+    caption: The RBI is new to the model. Event parsing creates it and classification gives it priors.
+  - at: 2026-02-23T12:00:00Z
+    data_tick: true
+    caption: Weekly data fold in. Edges thicken or thin as their posteriors update.
+  - at: 2026-03-02T10:00:00Z
+    market_events: [ME-05]
+    caption: Export controls rise again. A candidate pattern forms around chip exports.
+  - at: 2026-03-09T21:00:00Z
+    market_events: [ME-06]
+    caption: Bank stress. Bank-run analogs are recalled and a history pattern binds.
+  - at: 2026-03-16T02:00:00Z
+    market_events: [ME-07]
+    caption: Japan tightens chip controls. The candidate pattern's support keeps growing.
+  - at: 2026-03-18T20:00:00Z
+    data_tick: true
+    caption: The Fed meets. Its reaction rule decides, and the fold weighs the evidence about e43.
+  - at: 2026-03-23T16:00:00Z
+    market_events: [ME-08, ME-09]
+    caption: Chipmakers cut capex. The pending link from chip exports to tech capex binds.
+  - at: 2026-03-30T12:00:00Z
+    data_tick: true
+    caption: Approve the frontier promotion and the new pattern to see the learned edge and the new hull.
+  - at: 2026-04-06T12:00:00Z
+    thesis: [T-00, T-01]
+    caption: "Performance: the baseline, then what if oil prices doubled next quarter?"
+  - at: 2026-04-06T12:30:00Z
+    pose_hypothesis: {hypothesis: H-fed-hold, base_thesis: T-01}
+    caption: A decision hypothesis posed as a thesis. Compare T-02 with T-01.
+  - at: 2026-04-07T12:00:00Z
+    evaluate: {freeze_at: 2026-01-31T00:00:00Z, market_event_ids: [ME-02], horizon_days: 63}
+    caption: "Evaluate against history: freeze before the oil shock, pose it, and score."
+  - at: 2026-04-08T12:00:00Z
+    decision: D-01
+    caption: A mock agent records a recommendation that cites the baseline and the oil scenario.
+  - at: 2026-07-06T12:00:00Z
+    resolve_decision: D-01
+    caption: The world fast-forwards and the decision is scored against the baseline forecast.

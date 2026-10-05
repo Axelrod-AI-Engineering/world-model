@@ -1,0 +1,46 @@
+/* Design tokens (§13.2): the architecture page's palette, so the demo and the page read as one system. */
+:root {
+  --linen: #F3EDE2;
+  --panel: #FFFDF8;
+  --ink: #2F2A25;
+  --ink-2: #665E54;
+  --rule: #E2D9CA;
+  --rule-strong: #CDBFA8;
+
+  /* roles: fill / line / ink */
+  --real-fill: #DAD0F4;   --real-line: #7C64C4;   --real-ink: #4A3590;      /* real events, learning */
+  --hyp-fill: #E8CFEC;    --hyp-line: #B07CC0;    --hyp-ink: #7A3F8C;       /* hypothetical, performance */
+  --init-fill: #E7E0F3;   --init-line: #B9ACD8;   --init-ink: #5A4A88;      /* construction, initialization */
+  --wm-fill: #E1ECDF;     --wm-line: #A9C6A9;     --wm-ink: #3E6A46;        /* working memory */
+  --ltm-fill: #DCE6F0;    --ltm-line: #A9BFD6;    --ltm-ink: #3B5B7C;       /* long-term memory */
+  --front-fill: #F5E4E9;  --front-line: #D9A9B8;  --front-ink: #93465F;     /* frontier co-movements */
+  --out-fill: #F7E1D3;    --out-line: #E0B092;    --out-ink: #874B2B;       /* outputs */
+  --eval-fill: #D6ECE7;   --eval-line: #7FB5A9;   --eval-ink: #2F6B5F;      /* evaluation */
+
+  /* hulls S1-S7 (fill / line) */
+  --h1-fill: #F3E1A6; --h1-line: #B08F2E;
+  --h2-fill: #F4CDB6; --h2-line: #C9825A;
+  --h3-fill: #C9D9EA; --h3-line: #6F93B8;
+  --h4-fill: #E3D9C6; --h4-line: #9A8C74;
+  --h5-fill: #CFE3CC; --h5-line: #6E9E72;
+  --h6-fill: #EFCBD6; --h6-line: #B86A84;
+  --h7-fill: #CBE6E0; --h7-line: #5E9C8F;
+
+  /* deviation halos */
+  --up: #B5523B;
+  --down: #2F5F8A;
+
+  --font-head: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  --font-ui: "Instrument Sans", "Helvetica Neue", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  --radius: 8px;
+  --radius-sm: 5px;
+  --shadow: 0 1px 2px rgba(47, 42, 37, 0.08), 0 4px 14px rgba(47, 42, 37, 0.06);
+  --focus: 0 0 0 3px rgba(124, 100, 196, 0.45);
+
+  --toolbar-h: 48px;
+  --bottom-h: 132px;
+  --left-w: 300px;
+  --right-w: 380px;
+}

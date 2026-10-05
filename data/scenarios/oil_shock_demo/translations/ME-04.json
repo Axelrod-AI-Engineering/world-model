@@ -1,0 +1,122 @@
+{
+  "market_event_id": "ME-04",
+  "rationale": "Hand-drawn. Creates the RBI, two subentities on existing entities, and two edges. Classification should place the RBI under Central bank and the funding edge under Policy rate -> bank funding cost.",
+  "spans": [
+    [
+      0,
+      3,
+      0
+    ],
+    [
+      4,
+      33,
+      7
+    ]
+  ],
+  "events": [
+    {
+      "id": "GUE-ME04",
+      "kind": "real",
+      "event_type": "policy_decision",
+      "occurred_at": "2026-02-16T05:30:00Z",
+      "recorded_at": "2026-02-16T05:35:00Z",
+      "produced_by": "hand_drawn",
+      "confidence": 0.85,
+      "market_event_id": "ME-04",
+      "ops": [
+        {
+          "op": "add_entity",
+          "temp_id": "new:rbi",
+          "name": "Reserve Bank of India",
+          "kind": "agency",
+          "category_tags": [
+            "MF"
+          ],
+          "features": {
+            "region": "IN",
+            "function": "monetary_policy"
+          },
+          "aliases": [
+            "RBI"
+          ]
+        },
+        {
+          "op": "add_subentity",
+          "entity": "new:rbi",
+          "temp_id": "new:rbi.policy_stance",
+          "name": "Repo rate decision",
+          "attribute_kind": "policy_rate",
+          "unit": "pct"
+        },
+        {
+          "op": "add_subentity",
+          "entity": "interest_rates",
+          "temp_id": "new:interest_rates.india_policy_rate",
+          "name": "India policy rate",
+          "attribute_kind": "policy_rate",
+          "unit": "pct",
+          "features": {
+            "region": "IN"
+          }
+        },
+        {
+          "op": "add_subentity",
+          "entity": "credit_availability",
+          "temp_id": "new:credit_availability.india_bank_funding_cost",
+          "name": "Indian bank funding cost",
+          "attribute_kind": "bank_funding_cost",
+          "unit": "pct",
+          "features": {
+            "region": "IN"
+          }
+        },
+        {
+          "op": "add_interaction",
+          "source": {
+            "kind": "concrete",
+            "subentity_id": "new:rbi.policy_stance"
+          },
+          "target": {
+            "kind": "concrete",
+            "subentity_id": "new:interest_rates.india_policy_rate"
+          },
+          "label": "sets",
+          "polarity": 1
+        },
+        {
+          "op": "add_interaction",
+          "source": {
+            "kind": "concrete",
+            "subentity_id": "new:interest_rates.india_policy_rate"
+          },
+          "target": {
+            "kind": "concrete",
+            "subentity_id": "new:credit_availability.india_bank_funding_cost"
+          },
+          "label": "raises funding costs",
+          "polarity": 1
+        },
+        {
+          "op": "observe_value",
+          "target": {
+            "kind": "concrete",
+            "subentity_id": "new:rbi.policy_stance"
+          },
+          "value": 5.5,
+          "observed_at": "2026-02-15T00:00:00Z"
+        },
+        {
+          "op": "change_value",
+          "target": {
+            "kind": "concrete",
+            "subentity_id": "new:rbi.policy_stance"
+          },
+          "delta": 0.25,
+          "mode": "absolute",
+          "persistence": "step",
+          "at": "2026-02-16T05:30:00Z"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,83 @@
+# Superentity seeds (§14.4). Patterns are given by their concrete members and interactions.
+# The loader derives one role per member (role name = entity id, role generalization = the
+# member's object generalization) and one relation per listed interaction. Patterns load with
+# origin=seed and status=admitted, and bind an instance inst-<id> unless bind: false.
+patterns:
+  - id: S1
+    name: Credit tightening
+    palette: h1
+    members: [interest_rates, credit_availability, debt_cycle, consumer_spending, business_investment, asset_prices]
+    interactions: [e01, e02, e03, e04, e06, e13, e14, e15, e24, e25, e26, e27, e28, e30, e31, e32, e45]
+    support: 9
+  - id: S2
+    name: Energy price shock
+    palette: h2
+    members: [inflation, resources_energy, supply_chains, confidence, wars]
+    interactions: [e08, e16, e33, e34]
+    support: 6
+  - id: S3
+    name: Dollar funding squeeze
+    palette: h3
+    members: [debt_cycle, dollar_fx, capital_flows, financial_crises, inequality_between]
+    interactions: [e05, e29, e35, e36, e37, e44]
+    support: 5
+  - id: S4
+    name: Trade fragmentation
+    palette: h4
+    members: [supply_chains, cross_border_trade, legal_regulatory, wars, policy_uncertainty]
+    interactions: [e09, e10, e16, e38]
+    support: 5
+  - id: S5
+    name: Climate transition
+    palette: h5
+    members: [climate_change, productivity_tech, gov_spending, disasters_weather]
+    interactions: [e11, e39, e40]
+    support: 4
+  - id: S6
+    name: Trust erosion
+    palette: h6
+    members: [institutions, culture_trust, inequality_within]
+    interactions: [e18, e19]
+    support: 4
+  - id: S7
+    name: Pandemic shock
+    palette: h7
+    members: [gov_spending, medical_crises, labor_demographics]
+    interactions: [e12, e17]
+    support: 4
+  - id: S8
+    name: Policy tightens into inflation
+    palette: h8
+    members: [inflation, federal_reserve, interest_rates]
+    interactions: [e43, e41]
+    rivals: [S9]
+    support: 6
+  - id: S9
+    name: Policy looks through supply shocks
+    palette: h9
+    members: [inflation, federal_reserve, interest_rates]
+    interactions: [e41]
+    absent_interactions: [e43]
+    rivals: [S8]
+    support: 4
+  - id: HP1
+    name: Bank run (2008-like)
+    members: [asset_prices, financial_crises, credit_availability, cross_border_trade]
+    interactions: [e07, e21, e26, e28]
+    support: 4
+    bind: false
+  - id: HP2
+    name: Bank run (2023-like)
+    members: [asset_prices, financial_crises]
+    interactions: [e07, e28]
+    support: 4
+    bind: false
+super_interaction_labels:
+  - {source: S2, target: S1, label: raises costs}
+  - {source: S1, target: S3, label: sparks crises}
+  - {source: S3, target: S4, label: cuts trade finance}
+frontier_seeds:
+  - {earlier: inflation.headline_cpi, later: confidence.consumer_confidence, lag_steps: 1, sign: -1, support: 1.0}
+palettes:
+  h8: {fill: "#E6E3C8", line: "#A39A5B"}
+  h9: {fill: "#D9E4E8", line: "#7A98A3"}

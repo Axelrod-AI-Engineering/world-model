@@ -1,0 +1,50 @@
+{
+  "market_event_id": "ME-09",
+  "rationale": "Hand-drawn. Tech capex falls 1.5 standard units; the mentions name chipmakers and chip capex.",
+  "spans": [
+    [
+      0,
+      20,
+      0
+    ]
+  ],
+  "events": [
+    {
+      "id": "GUE-ME09",
+      "kind": "real",
+      "event_type": "corporate_guidance",
+      "occurred_at": "2026-03-23T16:00:00Z",
+      "recorded_at": "2026-03-23T16:00:00Z",
+      "produced_by": "hand_drawn",
+      "confidence": 0.85,
+      "market_event_id": "ME-09",
+      "evidence": [
+        {
+          "id": "EV-ME09",
+          "source_type": "news",
+          "excerpt": "Chipmakers cut capex, citing lost export markets",
+          "observed_at": "2026-03-23T16:00:00Z",
+          "strength": 0.6,
+          "market_event_id": "ME-09"
+        }
+      ],
+      "ops": [
+        {
+          "op": "change_value",
+          "target": {
+            "kind": "concrete",
+            "subentity_id": "productivity_tech.tech_capex"
+          },
+          "delta": -1.5,
+          "mode": "standardized",
+          "persistence": "step",
+          "at": "2026-03-23T16:00:00Z"
+        }
+      ],
+      "mentions": [
+        "chipmakers",
+        "chip capex"
+      ]
+    }
+  ]
+}

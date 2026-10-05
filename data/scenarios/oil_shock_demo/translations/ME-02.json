@@ -1,0 +1,65 @@
+{
+  "market_event_id": "ME-02",
+  "rationale": "Hand-drawn. A supply-driven oil shock: Brent +35%, and a note on e08 that the move is supply-driven.",
+  "spans": [
+    [
+      0,
+      44,
+      1
+    ],
+    [
+      46,
+      74,
+      0
+    ]
+  ],
+  "events": [
+    {
+      "id": "GUE-ME02",
+      "kind": "real",
+      "event_type": "supply_shock",
+      "occurred_at": "2026-02-02T13:00:00Z",
+      "recorded_at": "2026-02-02T13:00:00Z",
+      "produced_by": "hand_drawn",
+      "confidence": 0.9,
+      "market_event_id": "ME-02",
+      "evidence": [
+        {
+          "id": "EV-ME02",
+          "source_type": "news",
+          "excerpt": "OPEC+ announces a surprise 3m bpd output cut; Brent jumps 35% in two weeks",
+          "observed_at": "2026-02-02T13:00:00Z",
+          "strength": 0.6,
+          "market_event_id": "ME-02"
+        }
+      ],
+      "ops": [
+        {
+          "op": "change_value",
+          "target": {
+            "kind": "concrete",
+            "subentity_id": "resources_energy.oil_price"
+          },
+          "delta": 0.35,
+          "mode": "relative",
+          "persistence": "step",
+          "at": "2026-02-02T13:00:00Z"
+        },
+        {
+          "op": "annotate_interaction",
+          "interaction_id": "e08",
+          "note": "OPEC+ cut: supply-driven",
+          "valid_from": "2026-02-02T13:00:00Z"
+        }
+      ],
+      "mentions": [
+        "OPEC+",
+        "output cut",
+        "Brent"
+      ],
+      "tags": [
+        "energy-shock-like"
+      ]
+    }
+  ]
+}

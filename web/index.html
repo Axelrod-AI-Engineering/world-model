@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Axelrod World Model</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Mono:wght@400;500;700&family=Instrument+Sans:wght@400;500;600&display=swap">
+  <link rel="stylesheet" href="css/tokens.css">
+  <link rel="stylesheet" href="css/app.css">
+  <script src="vendor/d3.v7.min.js"></script>
+  <script type="module" src="js/main.js"></script>
+</head>
+<body>
+  <header id="toolbar" role="toolbar" aria-label="Scenario controls">
+    <div class="brand">Axelrod <span>World Model</span></div>
+    <label class="sr-only" for="scenario-select">Scenario</label>
+    <select id="scenario-select" title="Scenario"></select>
+    <button id="btn-load" title="Load the scenario from its init snapshot">Load</button>
+    <div class="sep"></div>
+    <button id="btn-back" title="Open the previous state version read-only (Shift+←)" aria-label="Previous version">◀</button>
+    <button id="btn-step" class="primary" title="Step (→)">Step ▶</button>
+    <button id="btn-play" title="Play or pause (Space)" aria-pressed="false">▶ Play</button>
+    <label class="small muted" for="speed">Speed</label>
+    <select id="speed" title="Animation speed">
+      <option value="0.25">0.25×</option><option value="0.5">0.5×</option><option value="1" selected>1×</option>
+      <option value="2">2×</option><option value="4">4×</option>
+    </select>
+    <div class="sep"></div>
+    <span id="sim-time" title="Simulated time">—</span>
+    <span id="sim-version" title="State version">v—</span>
+    <span id="step-label">step 0/0</span>
+    <span id="sim-state" data-state="idle">idle</span>
+    <div class="spacer"></div>
+    <label class="small muted" for="review-policy">Review</label>
+    <select id="review-policy" title="Review policy">
+      <option value="default">default (structural changes wait)</option>
+      <option value="auto_approve_all">auto-approve all</option>
+    </select>
+    <button id="btn-motion" aria-pressed="false" title="Reduced motion: animations become short fades">Reduced motion</button>
+    <button id="btn-memory" aria-expanded="false" title="Memory drawer">Memory ▴</button>
+  </header>
+
+  <main id="app">
+    <aside id="left">
+      <section id="inbox" class="panel" aria-labelledby="inbox-h">
+        <header><h2 id="inbox-h">Inbox</h2><span class="badge" id="inbox-count">0</span></header>
+        <div class="body" id="inbox-body"><p class="muted small">Market events appear here as the scenario runs.</p></div>
+      </section>
+      <section id="review" class="panel" aria-labelledby="review-h">
+        <header><h2 id="review-h">Review queue</h2><span class="badge count" id="review-count">0</span></header>
+        <div class="body" id="review-body"><p class="muted small">Nothing waits for review.</p></div>
+      </section>
+    </aside>
+
+    <section id="center">
+      <div id="caption" aria-live="polite"><span class="step"></span><span class="text">Loading…</span></div>
+      <div id="readonly-banner" class="hidden" role="status"></div>
+      <div id="canvas-toolbar">
+        <div class="group" role="group" aria-label="Zoom level">
+          <button id="lvl-super" title="Superentities (1)">Superentities</button>
+          <button id="lvl-entity" title="Entities (2)" aria-pressed="true">Entities</button>
+          <button id="lvl-sub" title="Subentities (3)">Subentities</button>
+        </div>
+        <button id="btn-draw" aria-pressed="false" title="Draw a hand-drawn proposal (D)">Draw</button>
+        <button id="btn-fit" title="Fit everything (F)">Fit</button>
+        <div class="group" role="group" aria-label="Layout">
+          <button id="layout-gravity" aria-pressed="true" title="Gravity layout">Gravity</button>
+          <button id="layout-figure1" title="Figure 1 layout (pinned)">Figure 1</button>
+        </div>
+        <button id="btn-category" aria-pressed="false" title="Group by category tag">Group by category</button>
+        <button id="btn-fig1links" aria-pressed="false" title="Show only Figure 1's links">Figure 1 links only</button>
+        <button id="btn-clear" class="hidden" title="Clear the highlight">Clear highlight</button>
+        <div class="spacer"></div>
+        <label class="sr-only" for="search">Search entities and subentities</label>
+        <input id="search" type="search" placeholder="Search (/)" list="search-list" autocomplete="off">
+        <datalist id="search-list"></datalist>
+      </div>
+      <div id="canvas" tabindex="0" aria-label="Causal graph canvas">
+        <svg id="graph-svg" role="img" aria-label="World model graph"></svg>
+        <div id="legend"></div>
+      </div>
+    </section>
+
+    <aside id="right">
+      <nav id="right-tabs" role="tablist" aria-label="Panels">
+        <button role="tab" data-tab="inspector" aria-selected="true">Inspector</button>
+        <button role="tab" data-tab="thesis" aria-selected="false">Thesis</button>
+        <button role="tab" data-tab="forecast" aria-selected="false">Forecast</button>
+        <button role="tab" data-tab="hypotheses" aria-selected="false">Hypotheses</button>
+        <button role="tab" data-tab="decisions" aria-selected="false">Decisions</button>
+      </nav>
+      <div id="right-body">
+        <section class="tabpanel active" id="tab-inspector" role="tabpanel"><p class="muted">Click an entity, edge, or hull to inspect it.</p></section>
+        <section class="tabpanel" id="tab-thesis" role="tabpanel"></section>
+        <section class="tabpanel" id="tab-forecast" role="tabpanel"><p class="muted">Pose a thesis to see a forecast.</p></section>
+        <section class="tabpanel" id="tab-hypotheses" role="tabpanel"></section>
+        <section class="tabpanel" id="tab-decisions" role="tabpanel"></section>
+      </div>
+    </aside>
+  </main>
+
+  <footer id="bottom">
+    <div id="pipeline" aria-label="Pipeline phases"></div>
+    <div id="timeline">
+      <div class="label">TIMELINE</div>
+      <div id="timeline-track"></div>
+      <div id="timeline-controls">
+        <input id="scrubber" type="range" min="0" max="0" value="0" aria-label="Timeline scrubber">
+        <div class="row small"><span id="scrub-label" class="mono">live</span><button id="btn-live" class="hidden">Back to live</button></div>
+      </div>
+    </div>
+  </footer>
+
+  <section id="drawer" aria-label="Memory drawer">
+    <header role="tablist">
+      <h2 style="margin-right:8px">Memory</h2>
+      <button data-mtab="object" role="tab" aria-selected="true">Object taxonomy</button>
+      <button data-mtab="interaction" role="tab" aria-selected="false">Interaction taxonomy</button>
+      <button data-mtab="episodes" role="tab" aria-selected="false">Episodes</button>
+      <button data-mtab="frontier" role="tab" aria-selected="false">Frontier</button>
+      <button data-mtab="explanations" role="tab" aria-selected="false">Explanations</button>
+      <button data-mtab="entity_memories" role="tab" aria-selected="false">Entity memories</button>
+      <button data-mtab="versions" role="tab" aria-selected="false">Versions</button>
+      <div class="spacer"></div>
+      <button id="drawer-close" aria-label="Close the memory drawer">✕</button>
+    </header>
+    <div class="body" id="drawer-body"></div>
+  </section>
+
+  <div id="tooltip" class="hidden"></div>
+  <div id="modal-root"></div>
+  <div id="toast" aria-live="polite"></div>
+</body>
+</html>

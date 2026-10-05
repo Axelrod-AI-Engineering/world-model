@@ -1,0 +1,19 @@
+# Data series -> subentity (§7.4). The synthetic world keys its data by subentity id directly;
+# these ids show how a real feed (FRED-style series) would plug in.
+series:
+  FEDFUNDS: interest_rates.us_policy_rate
+  ECBDFR: interest_rates.euro_policy_rate
+  DFII10: interest_rates.real_rate
+  DGS10: interest_rates.long_term_yields
+  CPIAUCSL_YOY: inflation.headline_cpi
+  CPILFESL_YOY: inflation.core_cpi
+  DCOILBRENTEU: resources_energy.oil_price
+  DHHNGSP: resources_energy.gas_price
+  SP500: asset_prices.equity_index
+  VIXCLS: asset_prices.equity_volatility
+  DTWEXBGS: dollar_fx.dollar_index
+  UMCSENT: confidence.consumer_confidence
+  UNRATE: labor_demographics.unemployment_rate
+  TOTBKCR_YOY: credit_availability.credit_growth
+  DRTSCILM: credit_availability.lending_standards
+  USEPUINDXD: policy_uncertainty.epu_index

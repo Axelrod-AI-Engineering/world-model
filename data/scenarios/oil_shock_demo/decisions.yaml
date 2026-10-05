@@ -1,0 +1,9 @@
+# Decisions (§14.8). `cites` refers to theses; the runner substitutes the ids of the forecasts
+# posed for them.
+decisions:
+  - id: D-01
+    agent_id: demo-agent
+    recommendation: Reduce exposure to energy-intensive industrials over the next quarter.
+    rationale: Input costs rise and capex growth slows in the baseline, and more so in the oil scenario.
+    cites: [T-00, T-01]
+    review_after_days: 89

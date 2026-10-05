@@ -1,0 +1,14 @@
+# Demo overrides (§14.9).
+propagation:
+  samples: 300
+frontier:
+  min_innovation: 1.0
+  min_source_move: 0.3
+  # DECISION: the demo's news shocks (oil, export controls, bank stress) are the largest movers, so with
+  # five candidates per target they crowd out inflation as a candidate cause for confidence.
+  max_candidates_per_target: 10
+attention:
+  # DECISION: under auto-approve the demo admits a few discovered patterns (a composite of S1 and S2, an
+  # oil-to-input-costs pattern) that an energy entity can fill, and with the default 6 they push the S8/S9
+  # policy pair out of an oil thesis's recall. The demo keeps 8.
+  top_k_superentities: 8

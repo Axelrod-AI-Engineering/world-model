@@ -1,0 +1,131 @@
+# Engine configuration (§8.2). A component can be given as a name or as {name: ..., params: {...}}.
+seed: 7                 # precedence: --seed flag, then the scenario's seed, then this value
+time:
+  state_step_days: 1
+  propagation_step_days: 7
+  horizon_steps: 26     # default horizon; a thesis's horizon_days overrides it
+thresholds:
+  recognition: 3        # a candidate must exceed this support to be admitted or promoted
+  recall: 4             # a generalization must exceed this support to supply priors or analogs
+propagation:
+  samples: 400
+  min_delay_steps: 1
+  moderator_clip: [0.0, 3.0]
+  kernel_window_steps: 104
+  include_level_noise: true
+learning:
+  effect_process_noise: 0.02      # random-walk sd for effects, per step
+  level_process_noise: 0.10       # random-walk sd for each subentity's local level, per step
+  existence_learning_rate: 0.5
+  min_regressor: 0.05
+  min_change_noise: 0.05          # floor on the noise of a real change_value (standardized)
+kernel_update:
+  min_observations: 8
+  window_steps: 26
+  multipliers: [0.5, 1.0, 2.0]
+  step: 0.5                       # how far a kernel mean moves toward the best multiplier (geometric)
+  cv_shrink: 0.9
+  min_cv: 0.15
+  min_log_lik_gain: 2.0           # DECISION: a rescale must beat the current kernel by this much log likelihood
+prefill:
+  drift_damping: 0.9              # drift at step t is drift * damping**t
+attention:
+  top_k_superentities: 6
+  top_k_analogs: 5
+  temperature: 0.5
+  min_attention: 0.02
+isolation:
+  max_networks: 6
+  min_relevance: 0.05
+  reach_hops: 2
+  residual_hops: 2
+  residual_min_significance: 0.05
+unify:
+  max_scenarios: 8
+  branch_hypothesis_min_voi: 0.15
+  branch_probability_range: [0.15, 0.85]
+  fit_window_steps: 8
+frontier:
+  window_steps: 4
+  max_lag_steps: 4
+  min_innovation: 1.5
+  min_source_move: 0.5
+  max_candidates_per_target: 5
+  min_corr: 0.3
+  min_consistency: 0.75
+  half_life_days: 30
+  remove_below: 0.5
+  reject_cooldown_days: 60
+  backfill_steps: 26
+abduction:
+  min_edge_contribution: 0.2
+  match_jaccard: 0.75
+  min_binding_coverage: 0.6
+  mdl_lambda: 0.05
+  support_half_life_days: 90
+  dissolve_below: 1.0
+  missing_relation_cooldown_days: 30
+refinement:
+  min_generalization_score: 0.5
+  bind_score: 0.6
+  bind_margin: 0.15
+  evidence_bonus: 0.2
+  pending_ttl_days: 60
+hypotheses:
+  half_life_days: 14
+  reference_samples: 100
+  watch_list:
+    inflation.headline_cpi: 1.0
+    interest_rates.us_policy_rate: 1.0
+    credit_availability.credit_growth: 0.8
+    business_investment.capex_growth: 0.8
+    asset_prices.equity_index: 1.0
+    confidence.consumer_confidence: 0.6
+    productivity_tech.tfp_growth: 0.5
+consolidation:
+  episode_min_abs_z: 0.5
+evaluation:
+  significant_effect: 0.5
+  sign_probability: 0.7
+review:
+  policy: default
+  min_auto_confidence: 0.8
+  auto_approve_human: true
+translators:
+  news: hand_drawn
+  data: data_feed
+  filing: hand_drawn
+  analyst: hand_drawn
+components:
+  parser: default
+  classifier: taxonomy_descent
+  taxonomy_grower: shared_feature_split
+  recaller: overlap_attention
+  attention: softmax_top_k
+  binder: bfs_role_filling
+  inducer: co_activation
+  prefiller: analog_empirical_bayes
+  propagator: mc_impulse
+  analyzer: propagation
+  posterior_updater: link_kalman
+  folder: kalman_edge
+  kernel_updater: grid_rescale
+  generalization_updater: path_stats
+  frontier: residual_comovement
+  promotion_test: threshold
+  explainer: path_attribution
+  isolator: bound_superentity
+  network_predictor: mc_network
+  coupler: union_graph
+  rival_detector: pattern_and_sign
+  scenario_weighter: support_fit_reliability
+  unifier: channels_and_rivals
+  hypothesis_scorer: forecast_sensitivity_voi
+  consolidator: daily
+  scorer: omission_commission_calibration
+  refiner: taxonomy
+  entity_resolver: alias_fuzzy
+  review_policy: default
+storage:
+  backend: files
+  path: var/axelrod

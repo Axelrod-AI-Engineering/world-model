@@ -1,0 +1,29 @@
+# The object taxonomy (§14.5): what an object is and does. It is not the category tags.
+root: gen:obj:root
+nodes:
+  - {id: gen:obj:root, name: Economic object, parent: null}
+  - {id: gen:obj:actor, name: Actor, parent: gen:obj:root, signature: {required: {kind: [agency, company, person]}}}
+  - {id: gen:obj:monetary_authority, name: Monetary authority, parent: gen:obj:actor, signature: {required: {function: [monetary_policy]}}}
+  - {id: gen:obj:central_bank, name: Central bank, parent: gen:obj:monetary_authority, signature: {any_of: {attribute_kinds: [policy_rate]}}, instances: [federal_reserve, ecb]}
+  - {id: gen:obj:currency_board, name: Currency board, parent: gen:obj:monetary_authority, signature: {required: {regime: [currency_board]}}}
+  - {id: gen:obj:fiscal_authority, name: Fiscal authority, parent: gen:obj:actor, signature: {required: {function: [fiscal_policy]}}}
+  - {id: gen:obj:firm, name: Firm, parent: gen:obj:actor, signature: {required: {kind: [company]}}, instances: [northwind_semis]}
+  - {id: gen:obj:official, name: Official, parent: gen:obj:actor, signature: {required: {kind: [person]}}, instances: [fed_chair]}
+  - {id: gen:obj:financial_condition, name: Financial condition, parent: gen:obj:root, signature: {required: {kind: [macro_factor, market]}, any_of: {attribute_kinds: [interest_rate, borrowing_cost, fx_rate, capital_flow]}}}
+  - {id: gen:obj:price_of_credit, name: Price and supply of credit, parent: gen:obj:financial_condition, instances: [interest_rates, credit_availability, debt_cycle]}
+  - {id: gen:obj:external_finance, name: External finance, parent: gen:obj:financial_condition, instances: [dollar_fx, capital_flows]}
+  - {id: gen:obj:market_stress, name: Market stress, parent: gen:obj:root, instances: [asset_prices, financial_crises]}
+  - {id: gen:obj:price_level, name: Price level, parent: gen:obj:root, instances: [inflation]}
+  - {id: gen:obj:demand_flow, name: Demand flow, parent: gen:obj:root, instances: [consumer_spending, business_investment, cross_border_trade, gov_spending]}
+  - {id: gen:obj:supply_factor, name: Supply factor, parent: gen:obj:root, instances: [resources_energy, supply_chains, market_concentration, productivity_tech, labor_demographics]}
+  - {id: gen:obj:structural_factor, name: Structural factor, parent: gen:obj:root, instances: [legal_regulatory, geography, institutions, culture_trust, inequality_between, inequality_within]}
+  - {id: gen:obj:environmental_factor, name: Environmental factor, parent: gen:obj:root, instances: [climate_change, disasters_weather]}
+  - {id: gen:obj:risk_source, name: Risk source, parent: gen:obj:root, instances: [wars, medical_crises]}
+  - {id: gen:obj:sentiment, name: Sentiment, parent: gen:obj:root, instances: [confidence, policy_uncertainty]}
+  - {id: gen:obj:configuration, name: Configuration, parent: gen:obj:root, signature: {required: {object_type: [superentity]}}}
+  - {id: gen:obj:financial_stress_config, name: Financial stress configuration, parent: gen:obj:configuration}
+  - {id: gen:obj:bank_run, name: Bank run, parent: gen:obj:financial_stress_config, instances: [HP1, HP2]}
+  - {id: gen:obj:funding_squeeze, name: Funding squeeze, parent: gen:obj:financial_stress_config, instances: [S3]}
+  - {id: gen:obj:policy_config, name: Policy configuration, parent: gen:obj:configuration, instances: [S1, S8, S9]}
+  - {id: gen:obj:shock_config, name: Shock configuration, parent: gen:obj:configuration, instances: [S2, S7]}
+  - {id: gen:obj:structural_config, name: Structural configuration, parent: gen:obj:configuration, instances: [S4, S5, S6]}
