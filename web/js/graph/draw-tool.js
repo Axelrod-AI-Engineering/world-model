@@ -25,6 +25,7 @@ function endFromTarget(el, view) {
 export function installDrawTool({ svgEl, rootSel, renderer, openModal, toast }) {
   let start = null;
   let line = null;
+  let attach = null;      // set when the Update dialog asked for a drawn edge to attach to its request
   const pointer = (ev) => d3.pointer(ev, rootSel.node());
 
   svgEl.addEventListener("pointerdown", (ev) => {
@@ -90,6 +91,14 @@ export function installDrawTool({ svgEl, rootSel, renderer, openModal, toast }) 
         const now = store.status?.sim_time ?? new Date().toISOString();
         const ev = { id: `GUE-DRAW-${Date.now()}`, kind: "real", event_type: "hand_drawn", occurred_at: now,
                      recorded_at: now, produced_by: "human", ops: [op] };
+        if (attach) {
+          const fn = attach;
+          attach = null;
+          close();
+          toast("Drawn edge attached to the update.");
+          fn(ev);
+          return;
+        }
         try {
           const pv = await api.submitGraphUpdate(ev);
           toast(`Proposal ${pv.proposal.id} submitted (${pv.proposal.status}).`);
@@ -101,5 +110,10 @@ export function installDrawTool({ svgEl, rootSel, renderer, openModal, toast }) 
       });
     });
   }
-  return { cancel: () => { start = null; line?.remove(); line = null; } };
+  return {
+    cancel: () => { start = null; line?.remove(); line = null; },
+    // the next drawn edge goes to `fn` (the Update dialog) instead of straight to review
+    armAttach: (fn) => { attach = fn; },
+    disarm: () => { attach = null; },
+  };
 }

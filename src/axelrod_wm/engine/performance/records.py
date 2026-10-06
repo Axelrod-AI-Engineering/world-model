@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import StrEnum
+from typing import Any
 
 import numpy as np
 from pydantic import BaseModel, ConfigDict
@@ -45,7 +46,7 @@ class NetworkInputs(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True, extra="forbid")
 
     shocks: list[ShockInput]
-    boundary: dict[str, np.ndarray] = {}    # subentity -> exogenous input [samples, steps]
+    boundary: dict[str, np.ndarray] = {}    # subentity -> exogenous input [samples, days]
 
 
 class NetworkPrediction(BaseModel):
@@ -66,6 +67,7 @@ class ForecastScenario(BaseModel):
     branched_hypothesis_ids: dict[str, bool] = {}
     summary: dict[str, list[DistSummary]] = {}
     effect_summary: dict[str, list[DistSummary]] = {}
+    summary_days: list[int] = []                   # the days the scenario summaries refer to
     rival_choices: dict[str, str] = {}             # rival group key -> chosen network id
 
 
@@ -83,6 +85,22 @@ class NetworkSummary(BaseModel):
     channel_ids: list[str] = []
 
 
+class ForecastGroup(BaseModel):
+    """The forecast for a coarser target (addition): the average standardized effect of its subentities,
+    mixed across scenarios like any target."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str                                        # "<kind>:<ref>"
+    kind: str                                      # entity | superentity | sector | category
+    ref: str
+    name: str
+    members: list[str]                             # the subentities averaged
+    effect_summary: list[DistSummary]              # per day, in standard deviations
+    effect_density: list[list[float]] = []         # at the horizon: (effect, density / peak)
+    top: list[list[Any]] = []                      # [subentity, median effect at the horizon], largest first
+
+
 class Forecast(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -92,17 +110,20 @@ class Forecast(BaseModel):
     config_hash: str
     seed: int
     created_at: datetime
-    step_days: float
-    horizon_steps: int
+    horizon_days: int
     targets: list[str]
-    summary: dict[str, list[DistSummary]]          # levels: mixture, native units, per step
-    effect_summary: dict[str, list[DistSummary]]   # effect of the thesis: standardized, per step
+    summary: dict[str, list[DistSummary]]          # levels: mixture, native units, per day
+    effect_summary: dict[str, list[DistSummary]]   # effect of the thesis: standardized, per day
     scenarios: list[ForecastScenario]
     isolated: dict[str, dict[str, DistSummary]]    # network id -> target -> isolated effect at the horizon
     decomposition: dict[str, dict[str, float]]     # target -> {network id: isolated median, "coupling": rest}
     networks: list[NetworkSummary]
     explanation_id: str | None = None
     dropped_mass: float = 0.0
-    z_summary: dict[str, list[DistSummary]] = {}   # levels in standardized units, per step
+    z_summary: dict[str, list[DistSummary]] = {}   # levels in standardized units, per day
     question: str = ""
     is_baseline: bool = False                      # a thesis with no shocks
+    start_day: int | None = None                   # day index of day 0 (the last processed day when posed)
+    groups: list[ForecastGroup] = []               # coarser targets (entities, superentities, sectors, categories)
+    effect_density: dict[str, list[list[float]]] = {}   # each target's effect at the horizon, as a small density
+    movers: dict[str, float] = {}                  # the subentities it moves most: median effect at the horizon

@@ -68,7 +68,7 @@ class ChangeMode(StrEnum):
 
 class Persistence(StrEnum):
     STEP = "step"      # the change persists
-    PULSE = "pulse"    # the change lasts one step
+    PULSE = "pulse"    # the change lasts one day
 
 
 class AddEntity(BaseModel):

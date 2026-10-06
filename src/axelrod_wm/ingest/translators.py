@@ -32,11 +32,12 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 class TranslationContext:
     """Read-only view of the model for translators. An LLM translator gets the same content as text."""
 
-    def __init__(self, wm: WorkingMemory, ltm: LongTermMemory, now: datetime,
+    def __init__(self, wm: WorkingMemory, ltm: LongTermMemory, vocab: AttributeVocabulary, now: datetime,
                  recent: Callable[[int], list[GraphUpdateEvent]] | None = None,
                  emit: Callable[..., None] | None = None) -> None:
         self.wm = wm
         self.ltm = ltm
+        self.vocab = vocab
         self.now = now
         self._recent = recent
         self.emit = emit or (lambda *a, **k: None)
@@ -50,7 +51,7 @@ class TranslationContext:
         return [self.wm.graph.subentities[s] for s in (ent.subentity_ids if ent else []) if s in self.wm.graph.subentities]
 
     def attribute_vocabulary(self) -> AttributeVocabulary:
-        return self.ltm.attributes
+        return self.vocab
 
     def taxonomy_outline(self, kind: TaxonomyKind, depth: int = 2) -> list[tuple[str, str, int]]:
         """(generalization id, name, depth) rows."""
@@ -68,7 +69,7 @@ class TranslationContext:
         return rows
 
     def admitted_patterns(self) -> list[SuperentityPattern]:
-        return self.ltm.patterns.admitted()
+        return self.ltm.object_generalizations.admitted()
 
     def recent_events(self, n: int = 20) -> list[GraphUpdateEvent]:
         return self._recent(n) if self._recent else []
@@ -128,9 +129,25 @@ class HandDrawnTranslator(MarketEventTranslator):
                                                  "events": events})
 
 
+def decision_move(sub: Subentity, value: float) -> float | None:
+    """For a released decision: the difference from the current posterior mean in native units, or
+    None for a hold.
+    # DECISION: a release "differs" from the posterior mean when the gap is more than half a
+    # standardized unit (the threshold DecisionProfile uses to tell a move from a hold); smaller gaps
+    # are the model's own drift between meetings, and the release is an observation."""
+    from axelrod_wm.core.distributions import from_link
+
+    mean = float(sub.posterior.mean())
+    unit = abs(float(from_link(sub.anchor + sub.scale, sub.posterior.link)) - float(from_link(sub.anchor, sub.posterior.link)))
+    gap = float(value) - mean
+    return gap if abs(gap) > 0.5 * unit else None
+
+
 @register("translator", "data_feed")
 class DataFeedTranslator(MarketEventTranslator):
-    """Maps each key in MarketEvent.data to a concrete observe_value op (§7.4)."""
+    """Maps each key in MarketEvent.data to a concrete observe_value op, except for decision
+    variables: a released decision that differs from the current posterior mean becomes a
+    change_value (mode absolute, the difference), while a hold stays an observe_value (§7.4)."""
 
     def __init__(self, config: Any = None, series_map: str | Path | dict | None = None) -> None:
         self.config = config
@@ -147,8 +164,15 @@ class DataFeedTranslator(MarketEventTranslator):
             if sid is None or sid not in ctx.wm.graph.subentities:
                 ctx.emit("translate.missing", market_event_id=event.id, key=key)
                 continue
-            ops.append({"op": "observe_value", "target": {"kind": "concrete", "subentity_id": sid},
-                        "value": float(event.data[key]), "observed_at": event.occurred_at.isoformat()})
+            value = float(event.data[key])
+            move = decision_move(ctx.wm.graph.subentities[sid], value) if sid in ctx.wm.decision_variables else None
+            if move is not None:
+                ops.append({"op": "change_value", "target": {"kind": "concrete", "subentity_id": sid},
+                            "delta": move, "mode": "absolute", "persistence": "step",
+                            "at": event.occurred_at.isoformat()})
+            else:
+                ops.append({"op": "observe_value", "target": {"kind": "concrete", "subentity_id": sid},
+                            "value": value, "observed_at": event.occurred_at.isoformat()})
         if not ops:
             return TranslationResult(market_event_id=event.id, events=[], rationale="no known series")
         ev = GraphUpdateEvent.model_validate({

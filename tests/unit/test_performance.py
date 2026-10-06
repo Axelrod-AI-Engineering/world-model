@@ -110,7 +110,7 @@ def test_baseline_thesis_has_zero_effect(posed):
 def test_union_counts_a_shared_edge_once():
     eng = constructed_engine(build=True)
     ctx = eng.context(learn=False, now=NOW)
-    ctx.scope, ctx.notes["horizon_steps"] = "T-u", 20
+    ctx.scope, ctx.notes["horizon_days"] = "T-u", 140
     chans = graph_channels(eng.wm, {"e01", "e25", "e26", "e15"})
     model = PrefilledModel(channels=chans, analog_evidence={}, network_episodes={}, drifts={}, instance_ids=[], notes=[])
     a = Network(id="NW-a", kind=NetworkKind.SUPERENTITY, instance_id=None, pattern_id=None, relevance=1.0,
@@ -121,11 +121,11 @@ def test_union_counts_a_shared_edge_once():
         n.subentity_ids = sorted({s for c in n.channels for s in (c.source_id, c.target_id)})
     from axelrod_wm.engine.propagation import ShockInput
 
-    shock = [ShockInput(subentity_id="interest_rates.us_policy_rate", size=1.0, start_step=1)]
+    shock = [ShockInput(subentity_id="interest_rates.us_policy_rate", size=1.0, start_day=1)]
     prop = eng.components["propagator"]
     coupled = UnionGraphCoupler(eng.config, prop).couple([a, b], {}, shock, model, ctx)
     union = [chans[k] for k in sorted(chans)]
-    direct = prop.propagate(build_system(union, eng.wm, ctx, 20, extra_subentities=["interest_rates.us_policy_rate"]),
+    direct = prop.propagate(build_system(union, eng.wm, ctx, 140, extra_subentities=["interest_rates.us_policy_rate"]),
                             shock, eng.config.propagation.samples, ctx.child_rng("couple", "T-u"),
                             record_contributions=True)
     for sid in ("business_investment.capex_growth", "credit_availability.credit_growth"):

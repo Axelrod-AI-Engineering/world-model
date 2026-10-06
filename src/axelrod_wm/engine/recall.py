@@ -54,22 +54,29 @@ class SoftmaxTopK(AttentionPolicy):
 
 
 def pattern_signature(p: SuperentityPattern, ltm: LongTermMemory) -> set[str]:
+    otax = ltm.object_generalizations.taxonomy
+    itax = ltm.interaction_generalizations.taxonomy
     out: set[str] = set()
     for r in p.roles:
-        if r.generalization_id in ltm.object_taxonomy.nodes:
-            out.update(ltm.object_taxonomy.path_to_root(r.generalization_id))
+        if r.generalization_id in otax.nodes:
+            out.update(otax.path_to_root(r.generalization_id))
     for rel in p.relations:
         gid = rel.interaction_generalization_id
-        if gid and gid in ltm.interaction_taxonomy.nodes:
-            out.update(ltm.interaction_taxonomy.path_to_root(gid))
+        if gid and gid in itax.nodes:
+            out.update(itax.path_to_root(gid))
     return out
 
 
 def can_fill(entity_gen: str | None, pattern: SuperentityPattern, ltm: LongTermMemory) -> bool:
-    if not entity_gen or entity_gen not in ltm.object_taxonomy.nodes:
+    otax = ltm.object_generalizations.taxonomy
+    if not entity_gen or entity_gen not in otax.nodes:
         return False
-    path = set(ltm.object_taxonomy.path_to_root(entity_gen))
+    path = set(otax.path_to_root(entity_gen))
     return any(r.generalization_id in path for r in pattern.roles)
+
+
+def episode_age_days(ep: Any, ctx: ProcessContext) -> float:
+    return max(float((ctx.now.date() - ep.day).days), 0.0)
 
 
 def near_instance(pattern_id: str, wm: WorkingMemory, entity_ids: set[str]) -> str | None:
@@ -102,12 +109,13 @@ class OverlapAttentionRecaller(Recaller):
         scores: dict[str, float] = {}
         shared: dict[str, list[str]] = {}
         tags = set(parsed.tags)
-        for eid, ep in sorted(ltm.episodes.episodes.items()):
-            age = max((ctx.now - ep.end).total_seconds() / 86400.0, 0.0)
-            recency = 0.5 ** (age / 365.0)
+        prior = ltm.prior_states
+        for ep in prior.analog_candidates():
+            eid = ep.id
+            recency = 0.5 ** (episode_age_days(ep, ctx) / 365.0)
             tag_score = len(tags & set(ep.tags)) / max(1, len(tags))
             etype = 1.0 if parsed.event_type and parsed.event_type in ep.event_types else 0.0
-            keys = ltm.explanations.index_keys_of(ep.explanation_ids)
+            keys = prior.index_keys_of(ep.explanation_ids)
             expl = jaccard(sig, keys)
             j = jaccard(sig, set(ep.key_signature))
             scores[eid] = recency * (0.4 * j + 0.3 * tag_score + 0.3 * etype) * (1.0 + 0.5 * expl)
@@ -116,7 +124,9 @@ class OverlapAttentionRecaller(Recaller):
 
     def _pattern_scores(self, parsed: ParsedEvent, sig: set[str], wm: WorkingMemory, ltm: LongTermMemory,
                         ctx: ProcessContext) -> dict[str, float]:
-        admitted = ltm.patterns.admitted()
+        # DECISION: attention ranks leaf superentities; a composite is recalled through its parts, so it
+        # never crowds its own parts out of the top-k (they are the networks the forecast isolates).
+        admitted = [p for p in ltm.object_generalizations.admitted() if not p.sub_pattern_ids]
         if not admitted:
             return {}
         max_support = max(max(p.support for p in admitted), 1e-9)
@@ -155,11 +165,13 @@ class OverlapAttentionRecaller(Recaller):
         have = {s.pattern_id for s in sups}
         analogs = [ScoredEpisode(episode_id=eid, score=e_scores[eid], attention=a, shared_generalizations=shared[eid])
                    for eid, a in e_att.items()]
+        episodes = ltm.prior_states.episodes
+        patterns = ltm.object_generalizations.patterns
         for an in analogs:
-            ep = ltm.episodes.episodes[an.episode_id]
+            ep = episodes[an.episode_id]
             for pid in sorted(ep.active_pattern_ids):
-                p = ltm.patterns.patterns.get(pid)
-                if p is None or p.status != SuperentityStatus.ADMITTED or pid in have:
+                p = patterns.get(pid)
+                if p is None or p.status != SuperentityStatus.ADMITTED or pid in have or p.sub_pattern_ids:
                     continue
                 have.add(pid)
                 sups.append(ScoredSuperentity(pattern_id=pid, instance_id=near_instance(pid, wm, touched) or any_instance(pid, wm),
@@ -171,7 +183,7 @@ class OverlapAttentionRecaller(Recaller):
                         patterns=[{"id": s.pattern_id, "instance": s.instance_id, "attention": round(s.attention, 4)}
                                   for s in sups],
                         episodes=[{"id": a.episode_id, "attention": round(a.attention, 4),
-                                   "tags": list(ltm.episodes.episodes[a.episode_id].tags)} for a in analogs])
+                                   "tags": list(episodes[a.episode_id].tags)} for a in analogs])
         return result
 
 
@@ -181,13 +193,12 @@ class RecencyRecaller(OverlapAttentionRecaller):
 
     def _episode_scores(self, parsed, sig, ltm, ctx):  # type: ignore[override]
         scores, shared = {}, {}
-        for eid, ep in sorted(ltm.episodes.episodes.items()):
-            age = max((ctx.now - ep.end).total_seconds() / 86400.0, 0.0)
-            scores[eid] = 0.5 ** (age / 365.0)
-            shared[eid] = []
+        for ep in ltm.prior_states.analog_candidates():
+            scores[ep.id] = 0.5 ** (episode_age_days(ep, ctx) / 365.0)
+            shared[ep.id] = []
         return scores, shared
 
     def _pattern_scores(self, parsed, sig, wm, ltm, ctx):  # type: ignore[override]
-        admitted = ltm.patterns.admitted()
+        admitted = ltm.object_generalizations.admitted()
         mx = max([p.support for p in admitted] + [1e-9])
         return {p.id: math.log1p(max(p.support, 0.0)) / math.log1p(mx) for p in admitted}

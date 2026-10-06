@@ -12,8 +12,8 @@ import numpy as np
 from axelrod_wm.core.distributions import from_link
 from axelrod_wm.core.interaction import base_interaction_id
 from axelrod_wm.engine.explain_records import Explanation, PathContribution
+from axelrod_wm.engine.kernels import mean_kernel_days
 from axelrod_wm.engine.registry import register, registry
-from axelrod_wm.engine.regressors import mean_kernel
 
 if TYPE_CHECKING:
     from axelrod_wm.engine.context import ProcessContext
@@ -46,9 +46,20 @@ def _sig(ch: Channel) -> float:
     return ch.existence.mean() * abs_mean(ch.dynamics.effect)
 
 
+def kernel_value(ch: Channel, day: int, min_delay: int = 1) -> float:
+    """The channel's step response g(day) at its mean kernel (§6.4)."""
+    d, l, lam = mean_kernel_days(ch.dynamics.kernel, min_delay)
+    if day < d:
+        return 0.0
+    if day <= d + l - 1:
+        return (day - d + 1) / l
+    return float(lam ** (day - (d + l - 1)))
+
+
 def top_paths(channels: list[Channel], shocks: list[tuple[str, float]], targets: list[str], horizon: int,
-              step_days: float, min_delay: float, k: int = 3, max_edges: int = 5) -> list[PathContribution]:
-    """For each shock and target, the k best simple paths by cost -log(significance)."""
+              min_delay: int = 1, k: int = 3, max_edges: int = 5) -> list[PathContribution]:
+    """For each shock and target, the k best simple paths by cost -log(significance). A path's gain is
+    the product of mean effects times the kernels' values at the horizon (in days)."""
     g = nx.DiGraph()
     best_edge: dict[tuple[str, str], Channel] = {}
     for ch in channels:
@@ -74,8 +85,7 @@ def top_paths(channels: list[Channel], shocks: list[tuple[str, float]], targets:
                     ids = []
                     for a, b in zip(path[:-1], path[1:]):
                         ch = g.edges[a, b]["channel"]
-                        gk = mean_kernel(ch.dynamics, horizon, step_days, min_delay)
-                        gain *= ch.dynamics.effect.mean() * float(gk[min(horizon, len(gk) - 1)])
+                        gain *= ch.dynamics.effect.mean() * kernel_value(ch, horizon, min_delay)
                         ids.append(ch.channel_key)
                     found.append(PathContribution(interaction_ids=ids, shock_id=shock_id, target_id=tgt, gain=gain,
                                                   share=0.0))
@@ -116,7 +126,7 @@ class PathAttributionExplainer(Explainer):
             targets = sorted(shared.analysis.expected_moves, key=lambda s: -abs(shared.analysis.expected_moves[s].q50))[:5]
             chans = [shared.model.channels[k] for k in sorted(shared.model.channels)]
             paths = top_paths(chans, [(s.subentity_id, s.size) for s in parsed.shocks], targets,
-                              shared.analysis.horizon_steps, ctx.step_days, float(ctx.config.propagation.min_delay_steps))
+                              shared.analysis.horizon_days, int(ctx.config.propagation.min_delay_days))
         index: set[str] = set()
         for iid, _ in key_ints:
             inter = graph.interactions.get(iid)
@@ -163,7 +173,7 @@ class PathAttributionExplainer(Explainer):
     def explain_forecast(self, forecast: Forecast, networks: list[Network], scenarios: list[ForecastScenario],
                          shared: SharedResult, ctx: ProcessContext) -> Explanation:
         graph = ctx.wm.graph
-        H = forecast.horizon_steps
+        H = forecast.horizon_days
         top = max(scenarios, key=lambda s: (s.weight, s.id)) if scenarios else None
         coupled = ctx.notes.get("coupled", {})
         targets = [t for t in forecast.targets if t in forecast.effect_summary]
@@ -201,8 +211,7 @@ class PathAttributionExplainer(Explainer):
                     forced = top.forced_existence.get(base_interaction_id(ch.channel_key)) if top else None
                     chans.append(ch.model_copy(update={"forced": forced if forced is not None else ch.forced}))
         shocks = [(s.subentity_id, s.size) for s in shared.parsed.shocks if not s.intervention]
-        paths = top_paths(chans, shocks, ranked_targets[:5], H, ctx.step_days,
-                          float(ctx.config.propagation.min_delay_steps))
+        paths = top_paths(chans, shocks, ranked_targets[:5], H, int(ctx.config.propagation.min_delay_days))
         nets_share: list[tuple[str, float]] = []
         if ranked_targets and ranked_targets[0] in forecast.decomposition:
             dec = {k: v for k, v in forecast.decomposition[ranked_targets[0]].items() if k != "coupling"}
@@ -253,7 +262,7 @@ class PathAttributionExplainer(Explainer):
         end = forecast.created_at
         from datetime import timedelta
 
-        end = end + timedelta(days=forecast.step_days * forecast.horizon_steps)
+        end = end + timedelta(days=forecast.horizon_days)
         if sub is not None:
             base = sub.anchor + sub.scale * (forecast.z_summary[t][-1].q50 - eff.q50) if t in forecast.z_summary else sub.anchor
             native = lambda dz: float(from_link(base + sub.scale * dz, sub.posterior.link) - from_link(base, sub.posterior.link))  # noqa: E731

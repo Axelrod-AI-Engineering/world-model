@@ -1,4 +1,5 @@
-"""Market event sources and the monitor (§7.8)."""
+"""Market event sources (§7.8). An update run polls each configured source for the window since
+its cursor; scrapers, data feeds, and the history replay all plug in behind the same interface."""
 
 from __future__ import annotations
 
@@ -6,13 +7,10 @@ import json
 from abc import ABC, abstractmethod
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-from axelrod_wm.events.market import MarketEvent
-
-if TYPE_CHECKING:
-    from axelrod_wm.control.review import Proposal
-    from axelrod_wm.ingest.pipeline import IngestionPipeline
+from axelrod_wm.engine.registry import register, registry
+from axelrod_wm.events.market import MarketEvent, MarketEventChannel
 
 SCENARIO_ONLY_FIELDS = ("world_shocks",)
 
@@ -24,53 +22,70 @@ def parse_market_event(data: dict) -> tuple[MarketEvent, dict]:
     return MarketEvent.model_validate(clean), extra
 
 
+def load_market_events(path: str | Path) -> tuple[list[MarketEvent], dict[str, dict]]:
+    """Every MarketEvent in a JSONL file (in published_at order) and its scenario-only fields."""
+    events: list[MarketEvent] = []
+    extras: dict[str, dict] = {}
+    p = Path(path)
+    if not p.exists():
+        return events, extras
+    for line in p.read_text().splitlines():
+        if line.strip():
+            ev, extra = parse_market_event(json.loads(line))
+            events.append(ev)
+            extras[ev.id] = extra
+    events.sort(key=lambda e: (e.published_at, e.id))
+    return events, extras
+
+
+def in_window(t: datetime, since: datetime | None, until: datetime) -> bool:
+    return (since is None or t > since) and t <= until
+
+
 class MarketEventSource(ABC):
+    name: str = ""
+
     @abstractmethod
-    def poll(self, until: datetime) -> list[MarketEvent]:
-        """Market events published up to `until` that have not been returned before."""
+    def poll(self, since: datetime | None, until: datetime) -> list[MarketEvent]:
+        """Market events with since < published_at <= until (since=None means from the start)."""
 
 
+registry("source", MarketEventSource)
+
+
+@register("source", "jsonl_replay")
 class JsonlReplaySource(MarketEventSource):
-    """Replays a market_events.jsonl file in published_at order."""
+    """Replays a market_events.jsonl file (registered as `jsonl_replay`). It can be limited to one
+    channel."""
 
-    def __init__(self, path: str | Path) -> None:
+    name = "jsonl_replay"
+
+    def __init__(self, path: str | Path, channel: str | MarketEventChannel | None = None, config: Any = None,
+                 **_: Any) -> None:
         self.path = Path(path)
-        self.events: list[MarketEvent] = []
-        self.extras: dict[str, dict] = {}
-        for line in self.path.read_text().splitlines():
-            if line.strip():
-                ev, extra = parse_market_event(json.loads(line))
-                self.events.append(ev)
-                self.extras[ev.id] = extra
-        self.events.sort(key=lambda e: (e.published_at, e.id))
-        self._cursor = 0
+        self.channel = MarketEventChannel(channel) if channel else None
+        self.events, self.extras = load_market_events(self.path)
 
     def get(self, event_id: str) -> MarketEvent | None:
         return next((e for e in self.events if e.id == event_id), None)
 
-    def poll(self, until: datetime) -> list[MarketEvent]:
-        out = []
-        while self._cursor < len(self.events) and self.events[self._cursor].published_at <= until:
-            out.append(self.events[self._cursor])
-            self._cursor += 1
-        return out
-
-    def reset(self) -> None:
-        self._cursor = 0
+    def poll(self, since: datetime | None, until: datetime) -> list[MarketEvent]:
+        return [e for e in self.events if in_window(e.published_at, since, until)
+                and (self.channel is None or e.channel == self.channel)]
 
 
-class Monitor:
-    """Polls its sources at each simulated (or real) tick and hands new events to the pipeline."""
+@register("source", "history_replay")
+class HistoryReplaySource(MarketEventSource):
+    """Serves the history's market events (from the synthetic world's generate_history(), or a JSONL
+    file) to the initialization's update run (§8.13)."""
 
-    def __init__(self, sources: list[MarketEventSource], pipeline: IngestionPipeline) -> None:
-        self.sources = sources
-        self.pipeline = pipeline
+    name = "history_replay"
 
-    def tick(self, now: datetime) -> list[Proposal]:
-        events: list[MarketEvent] = []
-        for src in self.sources:
-            events.extend(src.poll(now))
-        out: list[Any] = []
-        for ev in sorted(events, key=lambda e: (e.published_at, e.id)):
-            out.extend(self.pipeline.ingest(ev, ev.published_at))
-        return out
+    def __init__(self, events: list[MarketEvent] | None = None, path: str | Path | None = None,
+                 config: Any = None, **_: Any) -> None:
+        if events is None and path is not None:
+            events, _ = load_market_events(path)
+        self.events = sorted(events or [], key=lambda e: (e.published_at, e.id))
+
+    def poll(self, since: datetime | None, until: datetime) -> list[MarketEvent]:
+        return [e for e in self.events if in_window(e.published_at, since, until)]

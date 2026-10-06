@@ -1,56 +1,71 @@
 """The one writer: GraphMutator, transactions, and change sets (§7.7, D8).
 
 Every change to working or long-term memory goes through a MutationTxn. Changes apply
-immediately (later stages of the same event read them), are logged with before/after values,
-and are rolled back if the transaction raises. On exit the transaction commits one ChangeSet
-to the ledger and bumps the state version, unless it touched only the forecast layer.
+immediately (later stages of the same event read them), are logged, and are rolled back if the
+transaction raises. On exit the transaction commits one ChangeSet to the ledger and bumps the
+state version, unless it touched only the forecast layer.
 
-# DECISION: besides whole-field "set" updates, a Change may carry mode "append" (extend a list
-# field) or "merge" (deep-merge a dict field). This keeps the ledger compact for growing fields
-# such as time states and the deviation history. Replay (§9) understands all three modes.
+A change's `collection` is the dotted path of a field in WorkingMemory (`wm.`) or LongTermMemory
+(`ltm.`). Daily data lives in keyed collections, and growing lists inside records change only
+through `append` and `truncate`, so a day's change sets record only that day's new points and
+entries and the ledger grows linearly with time.
+
+# DECISION: change sets record new values only (`after`); the old values live in the in-memory undo
+# log until commit. `before` stays in the model for callers that want to record an audit value.
+# DECISION: an `update` may name a nested field with a dot ("forward.effect"), so the daily effect
+# variance bump records the effect alone rather than the whole edge dynamics.
 """
 
 from __future__ import annotations
 
-import copy
-import json
+import typing
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, TypeAdapter
 
-from axelrod_wm.core.entity import Entity, EntityMemory, Subentity
+from axelrod_wm.core.entity import Entity, Subentity
 from axelrod_wm.core.hypothesis import Hypothesis
 from axelrod_wm.core.ids import entity_of
 from axelrod_wm.core.interaction import Interaction
 from axelrod_wm.core.superentity import SuperentityInstance, SuperentityPattern, SuperInteraction
 from axelrod_wm.core.taxonomy import Generalization
 from axelrod_wm.engine.explain_records import Explanation
-from axelrod_wm.memory.episodes import Episode
+from axelrod_wm.memory.entity_memory import EntityMemory
 from axelrod_wm.memory.frontier import CoMovement
-from axelrod_wm.memory.working import ForecastStateView, PendingRefinement
+from axelrod_wm.memory.long_term import Episode
+from axelrod_wm.memory.working import (
+    ActivityRecord,
+    ChannelState,
+    DeviationPoint,
+    ForecastStateView,
+    PendingRefinement,
+)
 
 if TYPE_CHECKING:
     from axelrod_wm.memory.long_term import LongTermMemory
     from axelrod_wm.memory.working import WorkingMemory
 
+Action = Literal["add", "update", "remove", "put", "append", "truncate", "clear"]
+
 
 class Change(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    action: Literal["add", "update", "remove"]
-    collection: str          # see the list below
-    id: str
+    action: Action
+    collection: str          # dotted path, see the tables below
+    id: str                  # key in a keyed collection; "_" for a singleton or a top-level list
+    field: str | None = None # for append/truncate on a list field of a keyed record
     before: dict | None = None
-    after: dict | None = None
-    mode: Literal["set", "append", "merge"] = "set"
+    after: dict | None = None   # "put": {"value": ...}; "append": the appended item only;
+                                # "truncate": {"keep_last": n}
 
 
 class ChangeSet(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     id: str
-    cause: str               # event id, proposal id, "construction", "consolidation:<date>", ...
+    cause: str               # event id, proposal id, "construction", "predict:<date>", "consolidation:<date>", ...
     version_before: int
     version_after: int
     changes: list[Change]
@@ -58,53 +73,91 @@ class ChangeSet(BaseModel):
     recorded_at: datetime
 
 
-# collection -> (root, dotted path to the dict, model class)
-KEYED: dict[str, tuple[str, str, type[BaseModel]]] = {
-    "entities": ("wm", "graph.entities", Entity),
-    "subentities": ("wm", "graph.subentities", Subentity),
-    "interactions": ("wm", "graph.interactions", Interaction),
-    "instances": ("wm", "graph.instances", SuperentityInstance),
-    "super_interactions": ("wm", "graph.super_interactions", SuperInteraction),
-    "hypotheses": ("wm", "hypotheses", Hypothesis),
-    "pending_refinements": ("wm", "pending_refinements", PendingRefinement),
-    "patterns": ("ltm", "patterns.patterns", SuperentityPattern),
-    "generalizations.object": ("ltm", "object_taxonomy.nodes", Generalization),
-    "generalizations.interaction": ("ltm", "interaction_taxonomy.nodes", Generalization),
-    "frontier": ("ltm", "frontier.entries", CoMovement),
-    "episodes": ("ltm", "episodes.episodes", Episode),
-    "entity_memories": ("ltm", "entity_memories", EntityMemory),
-    "explanations": ("ltm", "explanations.explanations", Explanation),
-    "forecast_layer": ("wm", "forecast_layer.by_thesis", ForecastStateView),
+# Keyed records: path -> (model, key field or None when the caller supplies the key)
+RECORDS: dict[str, tuple[type[BaseModel], str | None]] = {
+    "wm.graph.entities": (Entity, "id"),
+    "wm.graph.subentities": (Subentity, "id"),
+    "wm.graph.interactions": (Interaction, "id"),
+    "wm.graph.instances": (SuperentityInstance, "id"),
+    "wm.graph.super_interactions": (SuperInteraction, "id"),
+    "wm.deviations.points": (DeviationPoint, None),        # key "<subentity id>|<day>"
+    "wm.channels": (ChannelState, "channel_id"),
+    "wm.hypotheses": (Hypothesis, "id"),
+    "wm.pending_refinements": (PendingRefinement, "id"),
+    "wm.activity_log": (ActivityRecord, None),              # key "<day>|<channel id>"
+    "wm.forecast_layer.by_thesis": (ForecastStateView, "thesis_id"),
+    "ltm.object_generalizations.taxonomy.nodes": (Generalization, "id"),
+    "ltm.object_generalizations.patterns": (SuperentityPattern, "id"),
+    "ltm.interaction_generalizations.taxonomy.nodes": (Generalization, "id"),
+    "ltm.entity_memories": (EntityMemory, "entity_id"),
+    "ltm.correlation_frontier.entries": (CoMovement, "id"),
+    "ltm.prior_states.episodes": (Episode, "id"),
+    "ltm.prior_states.explanations": (Explanation, "id"),
 }
 
-KEY_FIELD = {"entity_memories": "entity_id", "forecast_layer": "thesis_id"}
-
-# singleton path -> (root, dotted owner path, attribute)
-SINGLETONS: dict[str, tuple[str, str, str]] = {
-    "wm.clock": ("wm", "", "clock"),
-    "wm.deviations": ("wm", "", "deviations"),
-    "wm.activity_log": ("wm", "", "activity_log"),
-    "wm.fold_accumulators": ("wm", "", "fold_accumulators"),
-    "wm.episode_buffer": ("wm", "", "episode_buffer"),
-    "wm.ids": ("wm", "", "ids"),
-    "wm.decision_variables": ("wm", "", "decision_variables"),
-    "wm.pending_episode_tags": ("wm", "", "pending_episode_tags"),
-    "wm.last_consolidated": ("wm", "", "last_consolidated"),
-    "wm.missing_relation_log": ("wm", "", "missing_relation_log"),
-    "wm.graph.entity_link_labels": ("wm", "graph", "entity_link_labels"),
-    "ltm.reliability": ("ltm", "", "reliability"),
-    "ltm.frontier.blocked_until": ("ltm", "frontier", "blocked_until"),
-    "ltm.attributes": ("ltm", "", "attributes"),
-    "ltm.patterns.super_interaction_labels": ("ltm", "patterns", "super_interaction_labels"),
-    "ltm.patterns.palettes": ("ltm", "patterns", "palettes"),
-    "ltm.object_taxonomy.root_id": ("ltm", "object_taxonomy", "root_id"),
-    "ltm.interaction_taxonomy.root_id": ("ltm", "interaction_taxonomy", "root_id"),
-    "forecast_layer.pinned": ("wm", "forecast_layer", "pinned"),
-    "forecast_layer.pose_counts": ("wm", "forecast_layer", "pose_counts"),
-    "forecast_layer.order": ("wm", "forecast_layer", "order"),
+# Keyed values (put, remove)
+VALUES: set[str] = {
+    "wm.channel_phi",                  # key "<channel id>|<day>"
+    "wm.fold_accumulators",
+    "wm.source_cursors",
+    "wm.late_queue",
+    "wm.missing_relation_log",
+    "ltm.correlation_frontier.blocked_until",
 }
+
+# Lists (append, clear)
+LISTS: set[str] = {"wm.episode_buffer", "wm.pending_episode_tags"}
+
+# Singletons (update with id "_")
+SINGLETONS: set[str] = {
+    "wm.clock",
+    "wm.last_processed_day",
+    "wm.ids",
+    "wm.decision_variables",
+    "wm.deviations.origin_date",
+    "wm.deviations.first_kept_day",
+    "wm.graph.entity_link_labels",
+    "wm.forecast_layer.pose_counts",
+    "wm.forecast_layer.pinned",
+    "wm.forecast_layer.order",
+    "ltm.object_generalizations.taxonomy.root_id",
+    "ltm.object_generalizations.taxonomy.kind",
+    "ltm.object_generalizations.super_interaction_labels",
+    "ltm.object_generalizations.palettes",
+    "ltm.interaction_generalizations.taxonomy.root_id",
+    "ltm.interaction_generalizations.taxonomy.kind",
+}
+
+# Short names some engine code still uses; changes always record the dotted path.
+ALIASES: dict[str, str] = {
+    "entities": "wm.graph.entities",
+    "subentities": "wm.graph.subentities",
+    "interactions": "wm.graph.interactions",
+    "instances": "wm.graph.instances",
+    "super_interactions": "wm.graph.super_interactions",
+    "hypotheses": "wm.hypotheses",
+    "pending_refinements": "wm.pending_refinements",
+    "patterns": "ltm.object_generalizations.patterns",
+    "generalizations.object": "ltm.object_generalizations.taxonomy.nodes",
+    "generalizations.interaction": "ltm.interaction_generalizations.taxonomy.nodes",
+    "frontier": "ltm.correlation_frontier.entries",
+    "episodes": "ltm.prior_states.episodes",
+    "entity_memories": "ltm.entity_memories",
+    "explanations": "ltm.prior_states.explanations",
+    "forecast_layer": "wm.forecast_layer.by_thesis",
+    "forecast_layer.pinned": "wm.forecast_layer.pinned",
+    "forecast_layer.pose_counts": "wm.forecast_layer.pose_counts",
+    "forecast_layer.order": "wm.forecast_layer.order",
+    "ltm.frontier.blocked_until": "ltm.correlation_frontier.blocked_until",
+}
+
+
+def canonical(collection: str) -> str:
+    return ALIASES.get(collection, collection)
+
 
 _ADAPTERS: dict[tuple[type, str], TypeAdapter] = {}
+_ITEM_ADAPTERS: dict[tuple[type, str], TypeAdapter] = {}
 
 
 def field_adapter(cls: type[BaseModel], name: str) -> TypeAdapter:
@@ -115,8 +168,22 @@ def field_adapter(cls: type[BaseModel], name: str) -> TypeAdapter:
     return ad
 
 
-def _list_item_adapter(cls: type[BaseModel], name: str) -> TypeAdapter:
-    return field_adapter(cls, name)
+def item_adapter(cls: type[BaseModel], name: str) -> TypeAdapter:
+    """Adapter for the items of a list field, or the values of a dict field."""
+    key = (cls, name)
+    ad = _ITEM_ADAPTERS.get(key)
+    if ad is None:
+        ann = cls.model_fields[name].annotation
+        args = typing.get_args(ann)
+        origin = typing.get_origin(ann)
+        if origin is dict or (args and len(args) == 2):
+            inner = args[1]
+        elif args:
+            inner = args[0]
+        else:
+            inner = Any
+        ad = _ITEM_ADAPTERS[key] = TypeAdapter(inner)
+    return ad
 
 
 def dump_value(cls: type[BaseModel], name: str, value: Any) -> Any:
@@ -132,56 +199,39 @@ def _resolve(root: Any, dotted: str) -> Any:
 
 
 class _Roots:
-    """Resolves collection and singleton paths against a (wm, ltm) pair."""
+    """Resolves dotted paths against a (wm, ltm) pair."""
 
     def __init__(self, wm: WorkingMemory, ltm: LongTermMemory) -> None:
         self.wm = wm
         self.ltm = ltm
 
-    def root(self, name: str) -> Any:
-        return self.wm if name == "wm" else self.ltm
-
-    def mapping(self, collection: str) -> dict[str, Any]:
-        root, path, _ = KEYED[collection]
-        return _resolve(self.root(root), path)
-
     def owner(self, path: str) -> tuple[Any, str]:
-        root, owner_path, attr = SINGLETONS[path]
-        return _resolve(self.root(root), owner_path), attr
+        root, _, rest = path.partition(".")
+        base = self.wm if root == "wm" else self.ltm
+        owner_path, _, attr = rest.rpartition(".")
+        return _resolve(base, owner_path), attr
+
+    def target(self, path: str) -> Any:
+        owner, attr = self.owner(path)
+        return getattr(owner, attr)
 
 
-def _deep_merge(target: dict, patch: dict, undo: dict | None) -> None:
-    """Merge `patch` into `target` in place. A None value deletes the key. If `undo` is given it
-    receives the previous values (None for keys that did not exist)."""
-    for k, v in patch.items():
-        if isinstance(v, dict) and isinstance(target.get(k), dict):
-            sub_undo: dict | None = {} if undo is not None else None
-            _deep_merge(target[k], v, sub_undo)
-            if undo is not None:
-                undo[k] = sub_undo
-        else:
-            if undo is not None:
-                undo[k] = copy.deepcopy(target[k]) if k in target else None
-            if v is None:
-                target.pop(k, None)
-            else:
-                target[k] = copy.deepcopy(v) if isinstance(v, (dict, list)) else v
+def _nested(obj: Any, field: str) -> tuple[Any, str]:
+    """(object that owns the last part, attribute name) for a possibly dotted field."""
+    if "." not in field:
+        return obj, field
+    head, _, last = field.rpartition(".")
+    return _resolve(obj, head), last
 
 
-def _jsonify(obj: Any) -> Any:
-    return json.loads(json.dumps(obj, default=_json_default))
-
-
-def _json_default(o: Any) -> Any:
-    if isinstance(o, BaseModel):
-        return o.model_dump(mode="json")
-    if isinstance(o, (set, frozenset)):
-        return sorted(o, key=str)
-    if hasattr(o, "isoformat"):
-        return o.isoformat()
-    if isinstance(o, tuple):
-        return list(o)
-    raise TypeError(type(o).__name__)
+def _note_touch(touched: set[str], collection: str, obj_id: str, obj: Any) -> None:
+    if collection in ("wm.graph.entities", "ltm.entity_memories"):
+        touched.add(obj_id)
+    elif collection == "wm.graph.subentities":
+        touched.add(entity_of(obj_id))
+    elif collection == "wm.graph.interactions" and obj is not None:
+        touched.add(entity_of(obj.source_id))
+        touched.add(entity_of(obj.target_id))
 
 
 class MutationTxn:
@@ -197,7 +247,7 @@ class MutationTxn:
         self._touched: set[str] = set()
         self._ids_before = dict(mutator.state.wm.ids.counters)
         self._ids_dirty = False
-        self.dirty: set[tuple[str, str]] = set()
+        self.dirty: set[tuple[str, str, str | None]] = set()
         self.result: ChangeSet | None = None
 
     # -- helpers ---------------------------------------------------------------------------
@@ -215,159 +265,178 @@ class MutationTxn:
     def touched_entities(self) -> set[str]:
         return set(self._touched)
 
-    def _note_touch(self, collection: str, obj_id: str, obj: Any) -> None:
-        if collection in ("entities", "entity_memories"):
-            self._touched.add(obj_id)
-        elif collection == "subentities":
-            self._touched.add(entity_of(obj_id))
-        elif collection == "interactions" and obj is not None:
-            self._touched.add(entity_of(obj.source_id))
-            self._touched.add(entity_of(obj.target_id))
+    def _mark(self, collection: str, key: str, field: str | None = None) -> None:
+        self.dirty.add((collection, key, field))
 
-    # -- keyed collections ----------------------------------------------------------------
+    # -- keyed records ---------------------------------------------------------------------
     def get(self, collection: str, obj_id: str) -> Any:
-        return self.roots.mapping(collection).get(obj_id)
+        return self.roots.target(canonical(collection)).get(obj_id)
 
-    def add(self, collection: str, obj: BaseModel) -> None:
-        mapping = self.roots.mapping(collection)
-        obj_id = getattr(obj, KEY_FIELD.get(collection, "id"))
+    def add(self, collection: str, obj: BaseModel, key: str | None = None) -> None:
+        collection = canonical(collection)
+        model, key_field = RECORDS[collection]
+        mapping = self.roots.target(collection)
+        obj_id = key if key is not None else getattr(obj, key_field or "id")
         if obj_id in mapping:
             raise KeyError(f"{collection}: {obj_id} already exists")
         mapping[obj_id] = obj
         self._undo.append(lambda m=mapping, k=obj_id: m.pop(k, None))
-        self.changes.append(Change(action="add", collection=collection, id=obj_id,
-                                   after=obj.model_dump(mode="json")))
-        self.dirty.add((collection, obj_id))
-        self._note_touch(collection, obj_id, obj)
+        self.changes.append(Change(action="add", collection=collection, id=obj_id, after=obj.model_dump(mode="json")))
+        self._mark(collection, obj_id)
+        _note_touch(self._touched, collection, obj_id, obj)
+
+    def replace(self, collection: str, obj: BaseModel, key: str | None = None) -> None:
+        """Add, or replace a record whole (recorded as a remove and an add)."""
+        collection = canonical(collection)
+        _, key_field = RECORDS[collection]
+        obj_id = key if key is not None else getattr(obj, key_field or "id")
+        if obj_id in self.roots.target(collection):
+            self.remove(collection, obj_id)
+        self.add(collection, obj, key=obj_id)
 
     def update(self, collection: str, obj_id: str, **fields: Any) -> None:
-        mapping = self.roots.mapping(collection)
+        collection = canonical(collection)
+        if collection in SINGLETONS:
+            if set(fields) != {"value"}:
+                raise TypeError(f"singleton {collection} takes update(..., value=...)")
+            self.set(collection, fields["value"])
+            return
+        mapping = self.roots.target(collection)
         obj = mapping[obj_id]
-        cls = type(obj)
-        before, after = {}, {}
-        old_vals = {}
+        after = {}
+        old_vals = []
         for name, value in fields.items():
-            old = getattr(obj, name)
-            old_vals[name] = old
-            before[name] = dump_value(cls, name, old)
-            after[name] = dump_value(cls, name, value)
-            setattr(obj, name, value)
+            owner, attr = _nested(obj, name)
+            old = getattr(owner, attr)
+            old_vals.append((owner, attr, old))
+            after[name] = dump_value(type(owner), attr, value)
+            setattr(owner, attr, value)
 
-        def undo(o=obj, vals=old_vals) -> None:
-            for n, v in vals.items():
-                setattr(o, n, v)
+        def undo(vals=old_vals) -> None:
+            for o, a, v in reversed(vals):
+                setattr(o, a, v)
 
         self._undo.append(undo)
-        self.changes.append(Change(action="update", collection=collection, id=obj_id,
-                                   before=before, after=after))
-        self.dirty.add((collection, obj_id))
-        self._note_touch(collection, obj_id, obj)
-
-    def append_to(self, collection: str, obj_id: str, field: str, *items: Any, keep_last: int | None = None) -> None:
-        """Extend a list field of a keyed object. With keep_last, older items are trimmed
-        (recorded as a set of the field instead)."""
-        mapping = self.roots.mapping(collection)
-        obj = mapping[obj_id]
-        cls = type(obj)
-        cur = getattr(obj, field)
-        if keep_last is not None and len(cur) + len(items) > keep_last:
-            new_val = (list(cur) + list(items))[-keep_last:]
-            self.update(collection, obj_id, **{field: new_val})
-            return
-        old_len = len(cur)
-        cur.extend(items)
-        self._undo.append(lambda c=cur, n=old_len: c.__delitem__(slice(n, None)))
-        self.changes.append(Change(action="update", collection=collection, id=obj_id, mode="append",
-                                   before={field: old_len},
-                                   after={field: dump_value(cls, field, list(items))}))
-        self.dirty.add((collection, obj_id))
-        self._note_touch(collection, obj_id, obj)
+        self.changes.append(Change(action="update", collection=collection, id=obj_id, after=after))
+        if collection in FIELD_HASHED:
+            for name in fields:
+                self._mark(collection, obj_id, name.split(".")[0])
+        else:
+            self._mark(collection, obj_id)
+        _note_touch(self._touched, collection, obj_id, obj)
 
     def remove(self, collection: str, obj_id: str) -> None:
-        mapping = self.roots.mapping(collection)
+        collection = canonical(collection)
+        mapping = self.roots.target(collection)
         if obj_id not in mapping:
             return
         obj = mapping.pop(obj_id)
         self._undo.append(lambda m=mapping, k=obj_id, o=obj: m.__setitem__(k, o))
-        self.changes.append(Change(action="remove", collection=collection, id=obj_id,
-                                   before=obj.model_dump(mode="json")))
-        self.dirty.add((collection, obj_id))
-        self._note_touch(collection, obj_id, obj)
+        self.changes.append(Change(action="remove", collection=collection, id=obj_id))
+        self._mark(collection, obj_id)
+        _note_touch(self._touched, collection, obj_id, obj if collection in RECORDS else None)
+
+    # -- keyed values ----------------------------------------------------------------------
+    def put(self, collection: str, key: str, value: Any) -> None:
+        collection = canonical(collection)
+        owner, attr = self.roots.owner(collection)
+        mapping = getattr(owner, attr)
+        had = key in mapping
+        old = mapping.get(key)
+        mapping[key] = value
+        if had:
+            self._undo.append(lambda m=mapping, k=key, v=old: m.__setitem__(k, v))
+        else:
+            self._undo.append(lambda m=mapping, k=key: m.pop(k, None))
+        js = item_adapter(type(owner), attr).dump_python(value, mode="json")
+        self.changes.append(Change(action="put", collection=collection, id=key, after={"value": js}))
+        self._mark(collection, key)
+
+    # -- lists -----------------------------------------------------------------------------
+    def append(self, collection: str, item: Any, *, key: str | None = None, field: str | None = None) -> None:
+        """Append to a top-level list (`key` None) or to a list field of a keyed record."""
+        collection = canonical(collection)
+        if key is None:
+            owner, attr = self.roots.owner(collection)
+            lst = getattr(owner, attr)
+            js = item_adapter(type(owner), attr).dump_python(item, mode="json")
+            obj_id = "_"
+        else:
+            if field is None:
+                raise TypeError("append to a record needs a field")
+            obj = self.roots.target(collection)[key]
+            owner, attr = _nested(obj, field)
+            lst = getattr(owner, attr)
+            js = item_adapter(type(owner), attr).dump_python(item, mode="json")
+            obj_id = key
+        n = len(lst)
+        lst.append(item)
+        self._undo.append(lambda c=lst, k=n: c.__delitem__(slice(k, None)))
+        if not isinstance(js, dict):
+            js = {"value": js}
+        self.changes.append(Change(action="append", collection=collection, id=obj_id, field=field, after=js))
+        if key is not None and collection in FIELD_HASHED:
+            self._mark(collection, obj_id, field.split(".")[0] if field else None)
+        else:
+            self._mark(collection, obj_id)
+        if key is not None:
+            _note_touch(self._touched, collection, key, self.roots.target(collection).get(key))
+
+    def truncate(self, collection: str, key: str, field: str, keep_last: int) -> None:
+        collection = canonical(collection)
+        obj = self.roots.target(collection)[key]
+        owner, attr = _nested(obj, field)
+        lst = getattr(owner, attr)
+        if len(lst) <= keep_last:
+            return
+        cut = len(lst) - keep_last
+        removed = lst[:cut]
+        del lst[:cut]
+        self._undo.append(lambda c=lst, r=removed: c.__setitem__(slice(0, 0), r))
+        self.changes.append(Change(action="truncate", collection=collection, id=key, field=field,
+                                   after={"keep_last": int(keep_last)}))
+        if collection in FIELD_HASHED:
+            self._mark(collection, key, field.split(".")[0])
+        else:
+            self._mark(collection, key)
+
+    def append_to(self, collection: str, obj_id: str, field: str, *items: Any, keep_last: int | None = None) -> None:
+        """Append items to a record's list field, then keep at most `keep_last` of them."""
+        for item in items:
+            self.append(collection, item, key=obj_id, field=field)
+        if keep_last is not None:
+            self.truncate(collection, obj_id, field, keep_last)
+
+    def clear(self, collection: str) -> None:
+        collection = canonical(collection)
+        owner, attr = self.roots.owner(collection)
+        cur = getattr(owner, attr)
+        if not cur:
+            return
+        saved = list(cur) if isinstance(cur, list) else dict(cur)
+        cur.clear()
+        if isinstance(cur, list):
+            self._undo.append(lambda c=cur, s=saved: c.extend(s))
+        else:
+            self._undo.append(lambda c=cur, s=saved: c.update(s))
+        self.changes.append(Change(action="clear", collection=collection, id="_"))
+        if collection in VALUES:
+            for k in saved:
+                self._mark(collection, k)
+        else:
+            self._mark(collection, "_")
 
     # -- singletons ------------------------------------------------------------------------
     def set(self, path: str, value: Any) -> None:
+        path = canonical(path)
         owner, attr = self.roots.owner(path)
         cls = type(owner)
         old = getattr(owner, attr)
-        before = {"value": dump_value(cls, attr, old)}
         setattr(owner, attr, value)
         self._undo.append(lambda o=owner, a=attr, v=old: setattr(o, a, v))
-        self.changes.append(Change(action="update", collection=path, id="_", before=before,
+        self.changes.append(Change(action="update", collection=path, id="_",
                                    after={"value": dump_value(cls, attr, value)}))
-        self._mark_singleton(path, None)
-
-    def append(self, path: str, item: Any) -> None:
-        """For list singletons, e.g. "wm.episode_buffer"."""
-        owner, attr = self.roots.owner(path)
-        cls = type(owner)
-        cur = getattr(owner, attr)
-        old_len = len(cur)
-        cur.append(item)
-        self._undo.append(lambda c=cur, n=old_len: c.__delitem__(slice(n, None)))
-        self.changes.append(Change(action="update", collection=path, id="_", mode="append",
-                                   before={"value": old_len},
-                                   after={"value": dump_value(cls, attr, [item])}))
-        self._mark_singleton(path, None)
-
-    def merge(self, path: str, patch: dict) -> None:
-        """Deep-merge a patch into a dict-valued singleton (or a model's dict fields).
-        A None value deletes a key."""
-        owner, attr = self.roots.owner(path)
-        cur = getattr(owner, attr)
-        undo: dict = {}
-        if isinstance(cur, BaseModel):
-            for k, v in patch.items():
-                sub_undo: dict = {}
-                field_val = getattr(cur, k)
-                if isinstance(field_val, dict) and isinstance(v, dict):
-                    _deep_merge(field_val, v, sub_undo)
-                    undo[k] = sub_undo
-                else:
-                    undo[k] = field_val
-                    setattr(cur, k, v)
-        else:
-            _deep_merge(cur, patch, undo)
-
-        def do_undo(c=cur, u=undo) -> None:
-            if isinstance(c, BaseModel):
-                for k, v in u.items():
-                    fv = getattr(c, k)
-                    if isinstance(fv, dict) and isinstance(v, dict):
-                        _deep_merge(fv, v, None)
-                    else:
-                        setattr(c, k, v)
-            else:
-                _deep_merge(c, u, None)
-
-        self._undo.append(do_undo)
-        self.changes.append(Change(action="update", collection=path, id="_", mode="merge",
-                                   before={"value": _jsonify(undo)}, after={"value": _jsonify(patch)}))
-        self._mark_singleton(path, patch)
-
-    def _mark_singleton(self, path: str, patch: dict | None) -> None:
-        if path == "wm.deviations" and patch is not None:
-            for k, v in patch.items():
-                if k in ("z", "innovation") and isinstance(v, dict):
-                    for sid in v:
-                        self.dirty.add((f"wm.deviations.{k}", sid))
-                else:
-                    self.dirty.add(("wm.deviations.meta", "_"))
-        elif path == "wm.deviations":
-            self.dirty.add(("wm.deviations.meta", "_"))
-            self.dirty.add(("wm.deviations.z", "*"))
-            self.dirty.add(("wm.deviations.innovation", "*"))
-        else:
-            self.dirty.add((path, "_"))
+        self._mark(path, "_")
 
     # -- lifecycle -------------------------------------------------------------------------
     def rollback(self) -> None:
@@ -379,6 +448,20 @@ class MutationTxn:
 
     def ids_changed(self) -> bool:
         return self._ids_dirty and self.mutator.state.wm.ids.counters != self._ids_before
+
+
+# Records large enough that the hasher keeps one digest per field (§9).
+FIELD_HASHED: set[str] = {
+    "wm.graph.entities",
+    "wm.graph.subentities",
+    "wm.graph.interactions",
+    "wm.graph.instances",
+    "ltm.object_generalizations.taxonomy.nodes",
+    "ltm.object_generalizations.patterns",
+    "ltm.interaction_generalizations.taxonomy.nodes",
+    "ltm.entity_memories",
+    "ltm.correlation_frontier.entries",
+}
 
 
 class _TxnContext:
@@ -415,11 +498,13 @@ class GraphMutator:
     def active(self) -> MutationTxn | None:
         return self._active
 
-    def begin(self, cause: str, now: datetime | None = None) -> _TxnContext:
-        """Use as a context manager. Nested calls join the open transaction."""
+    def begin(self, cause: str, at: datetime | None = None, *, now: datetime | None = None) -> _TxnContext:
+        """Use as a context manager. Nested calls join the open transaction. `at` is the simulated
+        time the change set is stamped with (§7.8); `now` is an older name for it."""
         if self._active is not None:
             return _TxnContext(self, self._active, outer=False)
-        txn = MutationTxn(self, cause, now or self.state.wm.clock)
+        stamp = at or now or self.state.wm.clock
+        txn = MutationTxn(self, cause, stamp)
         self._active = txn
         return _TxnContext(self, txn, outer=True)
 
@@ -427,7 +512,7 @@ class GraphMutator:
         st = self.state
         if not txn.changes and not txn.ids_changed():
             return None
-        forecast_only = bool(txn.changes) and all(c.collection.startswith("forecast_layer")
+        forecast_only = bool(txn.changes) and all(c.collection.startswith("wm.forecast_layer")
                                                   for c in txn.changes) and not txn.ids_changed()
         version_before = st.version
         if forecast_only:
@@ -438,7 +523,7 @@ class GraphMutator:
             txn._ids_dirty = True
             version_after = version_before + 1
         if txn.ids_changed() or not forecast_only:
-            txn.dirty.add(("wm.ids", "_"))
+            txn.dirty.add(("wm.ids", "_", None))
         cs = ChangeSet(id=cs_id, cause=txn.cause, version_before=version_before, version_after=version_after,
                        changes=txn.changes, id_counters_after=dict(st.wm.ids.counters), recorded_at=txn.now)
         st.on_commit(cs, txn, bumped=not forecast_only)
@@ -450,53 +535,76 @@ class GraphMutator:
 # Replay (§9): apply a JSON change to a (wm, ltm) pair
 # ---------------------------------------------------------------------------------------------
 
-def _validate_merge_target(cls: type[BaseModel], attr: str, current: Any, patch_json: Any) -> Any:
-    cur_json = dump_value(cls, attr, current)
-    if isinstance(current, BaseModel):
-        for k, v in patch_json.items():
-            if isinstance(v, dict) and isinstance(cur_json.get(k), dict):
-                _deep_merge(cur_json[k], v, None)
-            else:
-                cur_json[k] = v
-    else:
-        _deep_merge(cur_json, patch_json, None)
-    return field_adapter(cls, attr).validate_python(cur_json)
-
-
 def apply_change(wm: WorkingMemory, ltm: LongTermMemory, change: Change) -> None:
     roots = _Roots(wm, ltm)
-    if change.collection in KEYED:
-        _, _, model = KEYED[change.collection]
-        mapping = roots.mapping(change.collection)
-        if change.action == "add":
+    col = change.collection
+    act = change.action
+    if col in RECORDS:
+        model, _ = RECORDS[col]
+        mapping = roots.target(col)
+        if act == "add":
             mapping[change.id] = model.model_validate(change.after)
-        elif change.action == "remove":
+        elif act == "remove":
             mapping.pop(change.id, None)
-        else:
+        elif act == "update":
             obj = mapping[change.id]
-            cls = type(obj)
             for name, val in (change.after or {}).items():
-                if change.mode == "append":
-                    items = field_adapter(cls, name).validate_python(val)
-                    getattr(obj, name).extend(items)
-                elif change.mode == "merge":
-                    setattr(obj, name, _validate_merge_target(cls, name, getattr(obj, name), val))
-                else:
-                    setattr(obj, name, field_adapter(cls, name).validate_python(val))
-        return
-    if change.collection in SINGLETONS:
-        owner, attr = roots.owner(change.collection)
-        cls = type(owner)
-        val = (change.after or {}).get("value")
-        if change.mode == "append":
-            items = field_adapter(cls, attr).validate_python(val)
-            getattr(owner, attr).extend(items)
-        elif change.mode == "merge":
-            setattr(owner, attr, _validate_merge_target(cls, attr, getattr(owner, attr), val))
+                owner, attr = _nested(obj, name)
+                setattr(owner, attr, field_adapter(type(owner), attr).validate_python(val))
+        elif act == "append":
+            obj = mapping[change.id]
+            owner, attr = _nested(obj, change.field or "")
+            val = change.after
+            ad = item_adapter(type(owner), attr)
+            try:
+                item = ad.validate_python(val)
+            except Exception:
+                item = ad.validate_python((val or {}).get("value"))
+            getattr(owner, attr).append(item)
+        elif act == "truncate":
+            obj = mapping[change.id]
+            owner, attr = _nested(obj, change.field or "")
+            lst = getattr(owner, attr)
+            keep = int((change.after or {})["keep_last"])
+            if len(lst) > keep:
+                del lst[: len(lst) - keep]
         else:
-            setattr(owner, attr, field_adapter(cls, attr).validate_python(val))
+            raise ValueError(f"{act} is not valid on records ({col})")
         return
-    raise KeyError(f"unknown collection {change.collection!r}")
+    if col in VALUES:
+        owner, attr = roots.owner(col)
+        mapping = getattr(owner, attr)
+        if act == "put":
+            mapping[change.id] = item_adapter(type(owner), attr).validate_python((change.after or {}).get("value"))
+        elif act == "remove":
+            mapping.pop(change.id, None)
+        elif act == "clear":
+            mapping.clear()
+        else:
+            raise ValueError(f"{act} is not valid on keyed values ({col})")
+        return
+    if col in LISTS:
+        owner, attr = roots.owner(col)
+        lst = getattr(owner, attr)
+        if act == "append":
+            val = change.after
+            ad = item_adapter(type(owner), attr)
+            try:
+                item = ad.validate_python(val)
+            except Exception:
+                item = ad.validate_python((val or {}).get("value"))
+            lst.append(item)
+        elif act == "clear":
+            lst.clear()
+        else:
+            raise ValueError(f"{act} is not valid on lists ({col})")
+        return
+    if col in SINGLETONS:
+        owner, attr = roots.owner(col)
+        val = (change.after or {}).get("value")
+        setattr(owner, attr, field_adapter(type(owner), attr).validate_python(val))
+        return
+    raise KeyError(f"unknown collection {col!r}")
 
 
 def apply_changeset(wm: WorkingMemory, ltm: LongTermMemory, cs: ChangeSet) -> None:

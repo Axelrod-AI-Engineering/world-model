@@ -102,9 +102,21 @@ def _signature_attrs(sig: Signature, key: str) -> list[str]:
 
 @register("refiner", "taxonomy")
 class TaxonomyRefiner(Refiner):
-    def __init__(self, config: Any = None, entity_resolver: EntityResolver | None = None) -> None:
+    def __init__(self, config: Any = None, entity_resolver: EntityResolver | None = None, engine: Any = None,
+                 vocab: Any = None) -> None:
         self.config = config
+        self.engine = engine
+        self._vocab = vocab
         self.resolver = entity_resolver or AliasFuzzyResolver(config)
+
+    @property
+    def vocab(self) -> Any:
+        """The attribute vocabulary (from the construction spec, through the engine)."""
+        if self._vocab is not None:
+            return self._vocab
+        from axelrod_wm.core.taxonomy import AttributeVocabulary
+
+        return getattr(self.engine, "vocab", None) or AttributeVocabulary(kinds={})
 
     # -- helpers ---------------------------------------------------------------------------
     def _entity_subs(self, eid: str, graph: CausalGraph, virtual: list[_VirtualSub]) -> list[Any]:
@@ -119,7 +131,7 @@ class TaxonomyRefiner(Refiner):
         return any(_attr_ok(s.attribute_kind, allowed, vocab) for s in self._entity_subs(eid, graph, virtual))
 
     def _entity_instances(self, gen_id: str, ltm: LongTermMemory, graph: CausalGraph) -> list[str]:
-        return [i for i in ltm.object_taxonomy.instances_under(gen_id) if i in graph.entities]
+        return [i for i in ltm.object_generalizations.taxonomy.instances_under(gen_id) if i in graph.entities]
 
     def _signature_fit(self, gen_id: str, allowed: list[str], constraints: dict[str, str], ltm: LongTermMemory,
                        graph: CausalGraph, virtual: list[_VirtualSub]) -> float:
@@ -128,7 +140,7 @@ class TaxonomyRefiner(Refiner):
             return 0.0
         ents = self._entity_instances(gen_id, ltm, graph)
         met = 0
-        if allowed and any(self._can_satisfy(e, allowed, graph, virtual, ltm.attributes) for e in ents):
+        if allowed and any(self._can_satisfy(e, allowed, graph, virtual, self.vocab) for e in ents):
             met += 1
         for k, v in constraints.items():
             if any(graph.entities[e].features.get(k) == v
@@ -140,7 +152,7 @@ class TaxonomyRefiner(Refiner):
                      virtual: list[_VirtualSub]) -> float:
         if not mention:
             return 0.0
-        strings = [ltm.object_taxonomy.nodes[gen_id].name]
+        strings = [ltm.object_generalizations.taxonomy.nodes[gen_id].name]
         for e in self._entity_instances(gen_id, ltm, graph):
             ent = graph.entities[e]
             strings += [ent.name, *ent.aliases]
@@ -151,7 +163,7 @@ class TaxonomyRefiner(Refiner):
     # -- relation (step 0) -----------------------------------------------------------------
     def _relation(self, idx: int, op: AddInteraction, graph: CausalGraph, ltm: LongTermMemory,
                   ctx: ProcessContext, steps: list[RefinementStep]) -> tuple[str, dict[str, list[str]]]:
-        tax = ltm.interaction_taxonomy
+        tax = ltm.interaction_generalizations.taxonomy
         thr = ctx.recall_threshold
         feats: dict[str, list[str]] = {"polarity": [str(op.polarity)], "label_family": [label_family(op.label)]}
         for end, t in (("source", op.source), ("target", op.target)):
@@ -178,7 +190,7 @@ class TaxonomyRefiner(Refiner):
             nxt = None
             for child in sorted(tax.children(node), key=lambda c: (-c.stats.support, c.id)):
                 sig = node_signature(tax, child.id, graph, ltm)
-                if child.stats.support > thr and sig.satisfied_by_known(feats, ltm.attributes):
+                if child.stats.support > thr and sig.satisfied_by_known(feats, self.vocab):
                     nxt = child.id
                     break
             if nxt is None:
@@ -197,8 +209,8 @@ class TaxonomyRefiner(Refiner):
                     pattern_bonus: set[str]) -> dict[str, Any]:
         cfg = ctx.config.refinement
         thr = ctx.recall_threshold
-        tax = ltm.object_taxonomy
-        vocab = ltm.attributes
+        tax = ltm.object_generalizations.taxonomy
+        vocab = self.vocab
         self.resolver.extra_subs = virtual  # type: ignore[attr-defined]
         entity = None
         node = t.generalization_id if t.generalization_id in tax.nodes else tax.root_id
@@ -373,15 +385,15 @@ class TaxonomyRefiner(Refiner):
 
     def _pattern_bonus(self, op: AddInteraction, wm: WorkingMemory, ltm: LongTermMemory) -> set[str]:
         ref = op.pattern_relation
-        p = ltm.patterns.patterns.get(ref.pattern_id) if ref else None
+        p = ltm.object_generalizations.patterns.get(ref.pattern_id) if ref else None
         if p is None or ref.relation_index >= len(p.relations):
             return set()
         rel = p.relations[ref.relation_index]
         out: set[str] = set()
         for role_name in (rel.source_role, rel.target_role):
             role = p.role(role_name)
-            if role is not None and role.generalization_id in ltm.object_taxonomy.nodes:
-                out |= set(ltm.object_taxonomy.instances_under(role.generalization_id))
+            if role is not None and role.generalization_id in ltm.object_generalizations.taxonomy.nodes:
+                out |= set(ltm.object_generalizations.taxonomy.instances_under(role.generalization_id))
         for inst in wm.graph.instances.values():
             if inst.pattern_id == p.id:
                 out |= set(inst.bindings.values())
@@ -416,10 +428,10 @@ class TaxonomyRefiner(Refiner):
                       ctx: ProcessContext) -> list[GraphUpdateEvent]:
         cfg = ctx.config.refinement
         graph = wm.graph
-        vocab = ltm.attributes
-        dev = wm.deviations
-        w = int(ctx.config.frontier.window_steps)
-        step = dev.step_of(ctx.now)
+        vocab = self.vocab
+        # DECISION: a "recent move" is the change over the activity window (abduction.window_days)
+        w = int(ctx.config.abduction.window_days)
+        step = ctx.today
         touched: dict[str, list[tuple[str, float]]] = {}       # entity -> [(subentity, signed move)]
         for op in applied.ops:
             if isinstance(op, (ChangeValue, ObserveValue)) and isinstance(op.target, ConcreteTarget):
@@ -427,8 +439,12 @@ class TaxonomyRefiner(Refiner):
                 sub = graph.subentities.get(sid)
                 if sub is None:
                     continue
-                move = op.delta if isinstance(op, ChangeValue) else dev.window_change(sid, step, w)
-                touched.setdefault(sub.entity_id, []).append((sid, float(move)))
+                # DECISION: only a reported change (change_value) touches a candidate "with a change" for the
+                # evidence bonus; a routine observation's move is the model's own bookkeeping, and on the
+                # daily grid it would bind pending ops to whichever series happens to be released first.
+                if not isinstance(op, ChangeValue):
+                    continue
+                touched.setdefault(sub.entity_id, []).append((sid, float(op.delta)))
         out: list[GraphUpdateEvent] = []
         self.resolver.extra_subs = []  # type: ignore[attr-defined]
         for pid in sorted(wm.pending_refinements):

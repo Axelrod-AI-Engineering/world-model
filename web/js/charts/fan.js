@@ -3,10 +3,11 @@
 /* global d3 */
 
 export function fanChart({ dates, series, compare = null, width = 340, height = 150, unit = "", title = "",
-                           zeroLine = false }) {
+                           zeroLine = false, compact = false, axes = true }) {
   const svg = d3.create("svg").attr("viewBox", `0 0 ${width} ${height}`).attr("role", "img")
     .attr("aria-label", `${title} fan chart`);
-  const m = { top: 8, right: 8, bottom: 20, left: 44 };
+  // without axes (a small card), the fan fills the box; its header carries the number
+  const m = !axes ? { top: 3, right: 3, bottom: 3, left: 3 } : compact ? { top: 4, right: 6, bottom: 14, left: 40 } : { top: 8, right: 8, bottom: 20, left: 44 };
   const parse = d3.utcParse("%Y-%m-%d");
   const ts = dates.map((d) => parse(d));
   const all = [...series, ...(compare ?? [])].flatMap((s) => [s.q05, s.q95]).filter(Number.isFinite);
@@ -28,12 +29,13 @@ export function fanChart({ dates, series, compare = null, width = 340, height = 
     svg.append("path").attr("class", "cmp-median").attr("d", line("q50")(c));
   }
   svg.append("path").attr("class", "median").attr("d", line("q50")(series));
+  if (!axes) return svg.node();
   const fmt = d3.format(Math.max(...all.map(Math.abs)) >= 100 ? ",.0f" : ".2f");
   svg.append("g").attr("class", "axis").attr("transform", `translate(0,${height - m.bottom})`)
-    .call(d3.axisBottom(x).ticks(4).tickSizeOuter(0).tickFormat(d3.utcFormat("%b %y")));
+    .call(d3.axisBottom(x).ticks(compact ? 2 : 4).tickSizeOuter(0).tickFormat(d3.utcFormat("%b %y")));
   svg.append("g").attr("class", "axis").attr("transform", `translate(${m.left},0)`)
-    .call(d3.axisLeft(y).ticks(4).tickSizeOuter(0).tickFormat(fmt));
-  if (unit) {
+    .call(d3.axisLeft(y).ticks(compact ? 3 : 4).tickSizeOuter(0).tickFormat(fmt));
+  if (unit && !compact) {
     svg.append("text").attr("x", m.left + 4).attr("y", m.top + 8).attr("font-size", 9.5).attr("fill", "#665E54").text(unit);
   }
   return svg.node();

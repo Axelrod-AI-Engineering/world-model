@@ -44,12 +44,19 @@ def test_read_endpoints_after_load(client):
     assert h["ok"] is True and h["version"] > 0
     view = client.get("/api/state").json()
     assert view["version"] == h["version"]
-    assert len(view["entities"]) == 33 and len(view["subentities"]) == 69
+    assert len(view["entities"]) == 48 and len(view["subentities"]) == 107
     assert {x["pattern_id"] for x in view["hulls"]} >= {f"S{i}" for i in range(1, 10)}
     assert len(view["frontier"]) == 1 and view["frontier"][0]["earlier"] == "inflation.headline_cpi"
     assert client.get("/api/versions").json()
     cfg = client.get("/api/config").json()
     assert cfg["components"]["propagator"]["name"] == "mc_impulse"
+    # the history replay approves everything, but the session keeps the configured policy
+    assert cfg["review_policy"] == "default"
+    # the composite seed, its parts, and the descriptions the demo shows
+    s10 = next(x for x in view["hulls"] if x["pattern_id"] == "S10")
+    assert s10["child_instance_ids"] == ["inst-S2", "inst-S1"] and s10["description"]
+    assert all(e["description"] for e in view["entities"])
+    assert all(f["next_eligible"] is None or len(f["next_eligible"]) == 10 for f in client.get("/api/frontier").json())
     assert "e08" in [x["id"] for x in view["links"]]
     assert client.get("/api/entities/inflation").json()["entity"]["id"] == "inflation"
     rec = client.get("/api/interactions/e08").json()
@@ -60,9 +67,12 @@ def test_read_endpoints_after_load(client):
     assert client.get("/api/taxonomies/nope").status_code == 404
     mem = client.get("/api/memory").json()
     assert mem["episodes"] > 0 and mem["patterns"] >= 11
+    assert list(mem)[:5] == ["object_generalizations", "interaction_generalizations", "entity_memories",
+                             "correlation_frontier", "prior_states"]
+    assert all("observed_today" in s for s in view["subentities"])
     fr = client.get("/api/frontier").json()
     series = client.get(f"/api/frontier/{fr[0]['id']}/series").json()
-    assert "pairs" in series and series["lag_steps"] == fr[0]["lag_steps"]
+    assert "pairs" in series and series["lag_days"] == fr[0]["lag_days"]
     hyps = client.get("/api/hypotheses?sort=voi").json()
     assert any(x["hypothesis"]["id"] == "H-fed-hold" for x in hyps)
     assert client.get("/api/scenarios").json()[0]["id"] == "oil_shock_demo"
@@ -97,27 +107,77 @@ def test_ws_replays_and_streams_trace_events(client):
     assert [e["seq"] for e in trace][: len(seqs)] == seqs
 
 
+def wait_for_update(client: TestClient, update_id: str, timeout: float = 600.0) -> dict:
+    t0 = time.time()
+    while time.time() - t0 < timeout:
+        run = client.get(f"/api/updates/{update_id}").json()
+        if run["state"] not in ("running", "collecting"):
+            return run
+        time.sleep(0.1)
+    raise AssertionError("the update kept running")
+
+
 def test_step_until_review_then_approve(client):
     v0 = client.get("/api/health").json()["version"]
     for _ in range(4):
         st = client.get("/api/sim/status").json()
-        if st["pending_proposals"]:
+        if st["state"] == "awaiting_review":
             break
         client.post("/api/sim/step")
-    pending = client.get("/api/proposals?status=pending").json()
-    assert pending, "a news event should wait for review"
     st = client.get("/api/sim/status").json()
-    assert st["state"] == "awaiting_review"
-    p = pending[0]
-    assert p["ops"] and p["review_reasons"]
+    assert st["state"] == "awaiting_review" and st["update_id"], "a news event should pause the update for review"
+    run = client.get(f"/api/updates/{st['update_id']}").json()
+    assert run["state"] == "awaiting_review" and run["waiting_on"]
+    pending = client.get("/api/proposals?status=pending").json()
+    p = next(x for x in pending if x["proposal"]["id"] == run["waiting_on"][0])
+    assert p["ops"] and p["review_reasons"] and p["proposal"]["world_event"]
     out = client.post(f"/api/proposals/{p['proposal']['id']}/approve", json={"by": "tester", "note": "ok"}).json()
     assert out["proposal"]["status"] == "approved"
+    done = wait_for_update(client, run["id"])
+    assert done["state"] == "done" and done["report"]["approved"] >= 1
     assert client.get("/api/health").json()["version"] > v0
     again = client.post(f"/api/proposals/{p['proposal']['id']}/approve", json={"by": "tester"})
     assert again.status_code == 409
-    for q in client.get("/api/proposals?status=pending").json():
-        client.post(f"/api/proposals/{q['proposal']['id']}/defer", json={"by": "tester"})
-    assert client.get("/api/sim/status").json()["state"] != "awaiting_review"
+    wait_until_not_running(client)
+    assert client.get("/api/sim/status").json()["step_index"] >= 3
+
+
+def test_an_update_with_a_typed_event_pauses_and_resumes(client):
+    st = client.get("/api/sim/status").json()
+    if st["state"] == "awaiting_review":
+        for q in client.get("/api/proposals?status=pending").json():
+            client.post(f"/api/proposals/{q['proposal']['id']}/defer", json={"by": "tester"})
+        wait_until_not_running(client)
+    today = client.get("/api/state").json()["today"]
+    from datetime import date, timedelta
+
+    until = (date.fromisoformat(today) + timedelta(days=3)).isoformat()
+    body = {"until": until, "user_market_events": [{"headline": "Oil jumps by 10% after a pipeline outage",
+                                                    "kind": "news"}]}
+    run = client.post("/api/updates", json=body).json()
+    assert run["requested_by"] == "user" and run["days_total"] == 3
+    run = wait_for_update(client, run["id"])
+    assert run["state"] == "awaiting_review"               # a typed news item is translated from text
+    me = [m for m in client.get(f"/api/market-events?update_id={run['id']}").json() if m["channel"] == "user"]
+    assert me and me[0]["id"].startswith("ME-U-")
+    client.post(f"/api/proposals/{run['waiting_on'][0]}/approve", json={"by": "tester"})
+    run = wait_for_update(client, run["id"])
+    assert run["state"] == "done" and run["report"]["collected"].get("user") == 1
+    assert run["report"]["days"] == 3
+    assert any(r["id"] == run["id"] for r in client.get("/api/updates").json())
+    # a repeat collects nothing and processes no days
+    again = wait_for_update(client, client.post("/api/updates", json={"until": until}).json()["id"])
+    assert again["state"] == "done" and again["report"]["days"] == 0
+
+
+def test_drawn_events_with_world_ops_are_refused(client):
+    now = client.get("/api/sim/status").json()["sim_time"]
+    ev = {"id": "GUE-DRAW-world", "kind": "real", "occurred_at": now, "recorded_at": now, "produced_by": "human",
+          "ops": [{"op": "observe_value", "target": {"kind": "concrete", "subentity_id": "inflation.headline_cpi"},
+                   "value": 3.0, "observed_at": now}]}
+    assert client.post("/api/graph-update-events", json=ev).status_code == 422
+    assert client.post("/api/market-events", json={}).status_code in (404, 405)
+    assert client.post("/api/consolidate", json={}).status_code in (404, 405)
 
 
 def test_pose_thesis_and_read_the_forecast(client):
@@ -138,6 +198,56 @@ def test_pose_thesis_and_read_the_forecast(client):
     assert q.status_code in (200, 422), q.text
     if q.status_code == 422:
         assert "unbound" in q.json()
+
+
+def test_a_question_forecasts_actors_and_sectors_and_its_trace_replays_alone(client):
+    """A question with coarser targets (an actor, a sector) and the trace of just that question, which the
+    walkthrough replays step by step (additions)."""
+    r = client.post("/api/theses", json={"question": "What if OPEC cuts output by 10%?", "horizon_days": 120,
+                                         "targets": ["inflation.headline_cpi"],
+                                         "target_groups": [{"kind": "entity", "ref": "delta"},
+                                                           {"kind": "sector", "ref": "airlines"}]})
+    assert r.status_code == 200, r.text
+    fv = r.json()
+    assert [g["id"] for g in fv["groups"]] == ["entity:delta", "sector:airlines"]
+    for g in fv["groups"]:
+        assert g["members"] > 0 and len(g["effects"]) == len(fv["dates"]) and g["top"]
+    cpi = next(t for t in fv["targets"] if t["id"] == "inflation.headline_cpi")
+    assert cpi["entity"] and "effect_density" in cpi
+    tid = fv["forecast"]["thesis_id"]
+    evs = client.get(f"/api/trace?since_seq=0&scope={tid}").json()
+    kinds = [e["kind"] for e in evs]
+    assert evs and all(e["scope"] == tid for e in evs)
+    assert kinds[0] == "thesis.posed" and "forecast.ready" in kinds and "isolate.networks" in kinds
+    assert evs[0]["payload"]["ops"] and evs[0]["payload"]["target_groups"] == ["entity:delta", "sector:airlines"]
+
+
+def test_a_forecast_brief_reads_the_forecast_and_the_news_behind_it(client):
+    """The brief (addition): a bottom line, a timeline, who is affected, why, the news that shaped it, and
+    what to watch, built only from what the model holds."""
+    r = client.post("/api/theses", json={"question": "What if OPEC cuts output by 10%?", "horizon_days": 150,
+                                         "targets": ["inflation.headline_cpi"],
+                                         "target_groups": [{"kind": "sector", "ref": "airlines"}]})
+    assert r.status_code == 200, r.text
+    fv = r.json()
+    assert fv["movers"] and all(abs(m["effect"]) >= 0.02 for m in fv["movers"])
+    assert "opec_plus.quota" not in {m["id"] for m in fv["movers"]}        # the shock itself is not a mover
+    b = client.get(f"/api/forecasts/{fv['forecast']['id']}/brief").json()
+    assert b["forecast_id"] == fv["forecast"]["id"] and b["question"]
+    assert b["bottom_line"].startswith("By ") and b["effects"]
+    assert b["why"] and all(w["interaction_ids"] for w in b["why"])
+    assert {"shaped_by", "since", "tracking", "watch", "change", "caveats", "timeline", "affected", "movers"} <= set(b)
+    assert any("synthetic" in c for c in b["caveats"])
+    for e in b["shaped_by"] + b["since"]:
+        assert 0 < e["relevance"] <= 1 and e["reasons"]
+    assert client.get("/api/forecasts/FC-nope/brief").status_code == 404
+
+
+def test_the_script_lists_every_scripted_step(client):
+    steps = client.get("/api/sim/script").json()
+    assert len(steps) == 18 and [s["index"] for s in steps] == list(range(18))
+    assert {s["kind"] for s in steps} >= {"update", "question", "evaluation", "decision"}
+    assert all(s["caption"] for s in steps)
 
 
 def test_a_hand_drawn_edge_becomes_a_proposal(client):

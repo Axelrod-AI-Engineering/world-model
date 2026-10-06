@@ -40,6 +40,7 @@ class EntityNode(_V):
     features: dict[str, str] = {}
     subentity_ids: list[str] = []
     demo_addition: bool = False
+    description: str = ""
 
 
 class SubentityNode(_V):
@@ -53,6 +54,9 @@ class SubentityNode(_V):
     summary: DistSummary
     attribute_kind: str = ""
     decision_variable: bool = False
+    observed_today: bool = False      # today's z came from data, not from daily propagation
+    observed: bool = True             # False if no source ever reports it
+    density: list[list[float]] = []   # a small picture of the posterior: (native value, density / peak)
 
 
 class LinkView(_V):
@@ -96,6 +100,8 @@ class HullView(_V):
     activation: float = 0.0
     interaction_ids: list[str] = []
     origin: str = ""
+    description: str = ""
+    sub_pattern_ids: list[str] = []
 
 
 class SuperLinkView(_V):
@@ -114,7 +120,7 @@ class FrontierLineView(_V):
     earlier: str
     later: str
     support: float
-    lag_steps: int
+    lag_days: int
     sign: int
     status: str
     consistent: int = 0
@@ -158,12 +164,17 @@ class GraphView(_V):
     proposals_pending: int
     palettes: dict[str, dict[str, str]] = {}
     read_only: bool = False
+    update: dict | None = None        # the active update run: {"id", "state", "current_day"}
+    today: str | None = None          # the last processed day
 
 
 def _z(wm: WorkingMemory, sid: str) -> float:
-    dev = wm.deviations
-    z = dev.z_at(sid, dev.step_of(wm.clock))
-    return float(z) if z is not None else 0.0
+    return float(wm.deviations.z(sid, wm.last_processed_day))
+
+
+def _observed_today(wm: WorkingMemory, sid: str) -> bool:
+    p = wm.deviations.point(sid, wm.last_processed_day)
+    return bool(p is not None and p.observed)
 
 
 def _pattern_label(p: Any) -> str:
@@ -211,12 +222,16 @@ def build_graph_view(wm: WorkingMemory, ltm: LongTermMemory, controller: WorldMo
                                    deviation=Deviation(z=round(zmax, 4), direction="up" if zmax > 0.25 else (
                                        "down" if zmax < -0.25 else "flat")),
                                    aliases=list(e.aliases), features=dict(e.features), subentity_ids=list(e.subentity_ids),
-                                   demo_addition=eid in ("federal_reserve", "ecb", "northwind_semis", "fed_chair")))
+                                   # actors added to Figure 1's ideas: agencies, companies, people, sectors
+                                   demo_addition=str(e.kind) in ("agency", "company", "person") or "sector" in e.features,
+                                   description=e.description))
     subs = []
     for sid, s in sorted(g.subentities.items()):
         subs.append(SubentityNode(id=sid, entity_id=s.entity_id, name=s.name, family=s.posterior.family, unit=s.unit,
                                   z=round(_z(wm, sid), 4), origin=str(s.origin), summary=s.posterior.summary(),
-                                  attribute_kind=s.attribute_kind, decision_variable=sid in wm.decision_variables))
+                                  attribute_kind=s.attribute_kind, decision_variable=sid in wm.decision_variables,
+                                  observed_today=_observed_today(wm, sid), observed=bool(s.observed),
+                                  density=s.posterior.density_points(20)))
     links = []
     for inter in g.active_interactions():
         links.append(LinkView(id=inter.id, source=inter.source_id, target=inter.target_id, label=inter.label,
@@ -231,37 +246,46 @@ def build_graph_view(wm: WorkingMemory, ltm: LongTermMemory, controller: WorldMo
                                 interaction_ids=el.interaction_ids, significance=round(el.significance, 4))
                  for el in g.entity_links()]
     hulls = []
+    patterns = ltm.object_generalizations.patterns
     for iid, inst in sorted(g.instances.items()):
-        p = ltm.patterns.patterns.get(inst.pattern_id)
+        p = patterns.get(inst.pattern_id)
         if p is None:
             continue
         hulls.append(HullView(id=iid, pattern_id=p.id, label=_pattern_label(p), members=sorted(instance_members[iid]),
                               status=str(p.status), transient=inst.transient, palette=p.palette,
                               child_instance_ids=list(inst.child_instance_ids), rival_ids=sorted(p.rival_ids),
                               support=round(p.support, 3), activation=round(inst.activation, 3),
-                              interaction_ids=list(inst.interaction_ids), origin=str(p.origin)))
+                              interaction_ids=list(inst.interaction_ids), origin=str(p.origin),
+                              description=p.description, sub_pattern_ids=list(p.sub_pattern_ids)))
     sups = [SuperLinkView(id=s.id, source=s.source_instance_id, target=s.target_instance_id, kind=str(s.kind),
                           label=s.label, interaction_ids=list(s.underlying_interaction_ids),
                           shared_entity_ids=list(s.shared_entity_ids), significance=round(s.significance, 4))
             for _, s in sorted(g.super_interactions.items())]
     frontier = [FrontierLineView(id=co.id, earlier=co.earlier_id, later=co.later_id, support=round(co.support, 3),
-                                 lag_steps=co.lag_steps, sign=co.sign, status=str(co.status), consistent=co.consistent,
+                                 lag_days=co.lag_days, sign=co.sign, status=str(co.status), consistent=co.consistent,
                                  inconsistent=co.inconsistent, corr=round(co.corr.corr(), 3),
                                  hypothesis_id=co.hypothesis_id, ambiguous_direction=co.ambiguous_direction,
                                  seeded=co.seeded)
-                for _, co in sorted(ltm.frontier.entries.items()) if str(co.status) != "decayed"]
+                for _, co in sorted(ltm.correlation_frontier.entries.items()) if str(co.status) != "decayed"]
     fuzzy = [fuzzy_from_pending(p) for _, p in sorted(wm.pending_refinements.items())]
     pending = 0
+    update = None
     if controller is not None:
-        for p in controller.proposals.values():
-            if str(p.status) == "pending":
-                pending += 1
-                for k, pend in enumerate(p.pending):
-                    fuzzy.append(fuzzy_from_pending(pend, status="proposed", proposal_id=p.id))
+        for p in controller.pending_proposals():
+            pending += 1
+            for k, pend in enumerate(p.pending):
+                fuzzy.append(fuzzy_from_pending(pend, status="proposed", proposal_id=p.id))
+        if controller.active_update and controller.active_update in controller.updates:
+            run = controller.updates[controller.active_update]
+            cur = run.current_day if run.current_day is not None else run.first_day
+            update = {"id": run.id, "state": str(run.state),
+                      "current_day": wm.deviations.date_of(min(cur, run.last_day)).isoformat()}
+    today = wm.deviations.date_of(wm.last_processed_day).isoformat() if wm.last_processed_day >= 0 else None
     return GraphView(version=version, sim_time=wm.clock, entities=entities, subentities=subs, links=links,
                      entity_links=ent_links, hulls=hulls, super_links=sups, frontier=frontier, fuzzy=fuzzy,
-                     proposals_pending=pending, palettes=dict(ltm.patterns.palettes),
-                     read_only=controller is not None and version != controller.engine.version)
+                     proposals_pending=pending, palettes=dict(ltm.object_generalizations.palettes),
+                     read_only=controller is not None and version != controller.engine.version, update=update,
+                     today=today)
 
 
 # ---------------------------------------------------------------------------------------------
@@ -277,6 +301,19 @@ def native_summary_points(sub: Any, wm: WorkingMemory, n: int = 60) -> list[dict
     return pts
 
 
+def daily_points(sid: str, wm: WorkingMemory, n: int = 120) -> list[dict]:
+    """The last n days of a subentity's daily state, marking observed days."""
+    dev = wm.deviations
+    last = int(wm.last_processed_day)
+    out = []
+    for d in range(max(last - n + 1, dev.first_kept_day), last + 1):
+        p = dev.point(sid, d)
+        if p is not None:
+            out.append({"day": d, "date": dev.date_of(d).isoformat(), "z": round(p.z, 5),
+                        "sd": round(p.var ** 0.5, 5), "observed": p.observed})
+    return out
+
+
 def entity_view(eid: str, wm: WorkingMemory, ltm: LongTermMemory) -> dict:
     g = wm.graph
     e = g.entities[eid]
@@ -290,15 +327,21 @@ def entity_view(eid: str, wm: WorkingMemory, ltm: LongTermMemory) -> dict:
                      "prior": s.prior.summary().model_dump(), "z": _z(wm, sid), "scale": s.scale,
                      "level_noise": s.level_noise, "prior_source_id": s.prior_source_id, "origin": str(s.origin),
                      "aliases": s.aliases, "features": s.features, "decision_variable": sid in wm.decision_variables,
-                     "history": native_summary_points(s, wm)})
-    path = ltm.object_taxonomy.path_from_root(e.generalization_id) if e.generalization_id in ltm.object_taxonomy.nodes else []
+                     "observed_today": _observed_today(wm, sid), "observed": bool(s.observed),
+                     "history": native_summary_points(s, wm), "daily": daily_points(sid, wm),
+                     "density": s.posterior.density_points(40), "prior_density": s.prior.density_points(40)})
+    otax = ltm.object_generalizations.taxonomy
+    path = otax.path_from_root(e.generalization_id) if e.generalization_id in otax.nodes else []
     mem = ltm.entity_memories.get(eid)
     memory = None
     if mem is not None:
         memory = {"entries": len(mem.entries), "decisions": [d.model_dump(mode="json") for d in mem.decisions[-20:]],
-                  "profiles": {k: v.by_context for k, v in mem.profiles.items()}}
+                  "profiles": {k: v.by_context for k, v in mem.profiles.items()},
+                  # the weekly entries as series, for sparklines (§13.6)
+                  "series": {sid: [{"t": en.at.isoformat(), "z": en.z.get(sid)} for en in mem.entries]
+                             for sid in e.subentity_ids}}
     return {"entity": e.model_dump(mode="json"), "subentities": subs,
-            "generalization_path": [{"id": gid, "name": ltm.object_taxonomy.nodes[gid].name} for gid in path],
+            "generalization_path": [{"id": gid, "name": otax.nodes[gid].name} for gid in path],
             "instance_ids": g.instances_of_entity(eid), "entity_memory": memory,
             "in_links": [i.id for i in g.active_interactions() if g.subentities.get(i.target_id) is not None
                          and g.subentities[i.target_id].entity_id == eid and not i.internal],
@@ -315,7 +358,8 @@ def interaction_view(iid: str, wm: WorkingMemory, ltm: LongTermMemory) -> dict:
                       "existence_mean": ts.values.get("existence_mean")}
                      for ts in i.time_states if "significance" in ts.values][-80:]
     sig = i.significance()
-    path = ltm.interaction_taxonomy.path_from_root(i.generalization_id) if i.generalization_id in ltm.interaction_taxonomy.nodes else []
+    itax = ltm.interaction_generalizations.taxonomy
+    path = itax.path_from_root(i.generalization_id) if i.generalization_id in itax.nodes else []
     return {"id": i.id, "label": i.label, "direction": str(i.direction), "origin": str(i.origin),
             "edge_type": str(i.edge_type), "source": i.source_id, "target": i.target_id, "internal": i.internal,
             "weight": {"now": sig.model_dump(), "history": weight_points},
@@ -329,12 +373,13 @@ def interaction_view(iid: str, wm: WorkingMemory, ltm: LongTermMemory) -> dict:
             "reverse_effect": i.reverse.effect.summary().model_dump() if i.reverse is not None else None,
             "confidence": i.confidence(), "evidence": [e.model_dump(mode="json") for e in i.evidence[-20:]],
             "evidence_count": len(i.evidence) + i.evidence_dropped,
-            "generalization_path": [{"id": gid, "name": ltm.interaction_taxonomy.nodes[gid].name} for gid in path],
+            "generalization_path": [{"id": gid, "name": itax.nodes[gid].name} for gid in path],
             "prior_source_id": i.prior_source_id, "tags": i.tags, "created_at": i.created_at.isoformat()}
 
 
 def pattern_view(pid: str, wm: WorkingMemory, ltm: LongTermMemory) -> dict:
-    p = ltm.patterns.patterns[pid]
+    p = ltm.object_generalizations.patterns[pid]
+    otax = ltm.object_generalizations.taxonomy
     g = wm.graph
     insts = [inst for inst in g.instances.values() if inst.pattern_id == pid]
     inst_ids = {i.id for i in insts}
@@ -343,12 +388,13 @@ def pattern_view(pid: str, wm: WorkingMemory, ltm: LongTermMemory) -> dict:
     return {"pattern": p.model_dump(mode="json"),
             "support_history": [{"t": ts.at.valid_at.isoformat(), "support": ts.values.get("support")} for ts in p.history],
             "instances": [i.model_dump(mode="json") for i in insts], "super_interactions": sups,
-            "generalization_path": ltm.object_taxonomy.path_from_root(p.generalization_id)
-            if p.generalization_id in ltm.object_taxonomy.nodes else []}
+            "track_record": {"hits": p.track_record.hits, "misses": p.track_record.misses,
+                             "mean": p.track_record.mean()},
+            "generalization_path": otax.path_from_root(p.generalization_id) if p.generalization_id in otax.nodes else []}
 
 
 def taxonomy_view(kind: str, ltm: LongTermMemory) -> dict:
-    tax = ltm.object_taxonomy if kind == "object" else ltm.interaction_taxonomy
+    tax = ltm.taxonomy(kind)
     return {"kind": kind, "root_id": tax.root_id,
             "nodes": [{"id": n.id, "name": n.name, "parent": n.parent_id, "children": list(n.child_ids),
                        "support": round(n.stats.support, 3), "instance_ids": list(n.instance_ids),
@@ -357,18 +403,49 @@ def taxonomy_view(kind: str, ltm: LongTermMemory) -> dict:
 
 
 def memory_summary(wm: WorkingMemory, ltm: LongTermMemory) -> dict:
-    eps = sorted(ltm.episodes.episodes.values(), key=lambda e: (e.end, e.id))
-    return {"episodes": len(eps), "patterns": len(ltm.patterns.patterns),
-            "generalizations": len(ltm.object_taxonomy.nodes) + len(ltm.interaction_taxonomy.nodes),
-            "frontier_entries": len(ltm.frontier.entries), "explanations": len(ltm.explanations.explanations),
-            "entity_memories": len(ltm.entity_memories),
-            "recent_episodes": [{"id": e.id, "start": e.start.isoformat(), "end": e.end.isoformat(), "tags": e.tags,
+    """One block per part of long-term memory, in Figure 1's order, then prior states (§12.2)."""
+    og, ig = ltm.object_generalizations, ltm.interaction_generalizations
+    prior = ltm.prior_states
+    eps = sorted(prior.episodes.values(), key=lambda e: (e.day, e.id))
+    non_routine = [e for e in eps if not e.routine]
+    by_status: dict[str, int] = {}
+    for co in ltm.correlation_frontier.entries.values():
+        by_status[str(co.status)] = by_status.get(str(co.status), 0) + 1
+    profiles = {}
+    for eid, mem in sorted(ltm.entity_memories.items()):
+        if mem.profiles:
+            profiles[eid] = {k: v.by_context for k, v in mem.profiles.items()}
+    return {
+        "object_generalizations": {
+            "nodes": len(og.taxonomy.nodes),
+            "admitted": [{"id": p.id, "name": p.name, "support": round(p.support, 3),
+                          "track_record": round(p.track_record.mean(), 3), "generalization_id": p.generalization_id,
+                          "sub_pattern_ids": list(p.sub_pattern_ids), "origin": str(p.origin)} for p in og.admitted()],
+            "candidates": [{"id": p.id, "name": p.name, "support": round(p.support, 3),
+                            "generalization_id": p.generalization_id} for p in og.candidates()]},
+        "interaction_generalizations": {"nodes": len(ig.taxonomy.nodes)},
+        "entity_memories": {"entities": sorted(e for e, m in ltm.entity_memories.items() if m.entries),
+                            "entries": sum(len(m.entries) for m in ltm.entity_memories.values()),
+                            "decision_profiles": profiles},
+        "correlation_frontier": {"entries": len(ltm.correlation_frontier.entries), "by_status": by_status,
+                                 "live": [{"id": co.id, "earlier": co.earlier_id, "later": co.later_id,
+                                           "support": round(co.support, 3), "lag_days": co.lag_days,
+                                           "status": str(co.status)} for co in ltm.correlation_frontier.live()]},
+        "prior_states": {
+            "episodes": len(eps), "non_routine_episodes": len(non_routine),
+            "explanations": len(prior.explanations),
+            "recent_episodes": [{"id": e.id, "day": e.day.isoformat(), "routine": e.routine, "tags": e.tags,
                                  "event_types": e.event_types, "signature": sorted(e.signature)[:20],
-                                 "active_patterns": e.active_pattern_ids, "deltas": len(e.deltas)}
-                                for e in eps[-25:][::-1]],
+                                 "active_patterns": e.active_pattern_ids, "deltas": len(e.deltas),
+                                 "responses": len(e.response_effects)}
+                                for e in (non_routine or eps)[-25:][::-1]],
             "explanations_recent": [{"id": x.id, "subject": x.subject_id, "kind": x.subject_kind, "text": x.text}
-                                    for x in list(ltm.explanations.explanations.values())[-15:][::-1]],
-            "entity_memory_ids": sorted(ltm.entity_memories)}
+                                    for x in list(prior.explanations.values())[-15:][::-1]]},
+        # flat counts kept for the header badges
+        "episodes": len(eps), "patterns": len(og.patterns),
+        "generalizations": len(og.taxonomy.nodes) + len(ig.taxonomy.nodes),
+        "frontier_entries": len(ltm.correlation_frontier.entries), "explanations": len(prior.explanations),
+    }
 
 
 def hypothesis_view(h: Hypothesis, now: datetime) -> dict:
@@ -421,10 +498,11 @@ def proposal_view(p: Any, wm: WorkingMemory, ltm: LongTermMemory) -> dict:
     breadcrumb = []
     for st in p.refinement_steps:
         name = st.node_id
-        if st.node_id in ltm.object_taxonomy.nodes:
-            name = ltm.object_taxonomy.nodes[st.node_id].name
-        elif st.node_id in ltm.interaction_taxonomy.nodes:
-            name = ltm.interaction_taxonomy.nodes[st.node_id].name
+        otax, itax = ltm.object_generalizations.taxonomy, ltm.interaction_generalizations.taxonomy
+        if st.node_id in otax.nodes:
+            name = otax.nodes[st.node_id].name
+        elif st.node_id in itax.nodes:
+            name = itax.nodes[st.node_id].name
         elif st.node_id in g.entities:
             name = g.entities[st.node_id].name
         breadcrumb.append({"op_index": st.op_index, "end": st.end, "name": name, "node_id": st.node_id,
@@ -436,23 +514,72 @@ def proposal_view(p: Any, wm: WorkingMemory, ltm: LongTermMemory) -> dict:
 
 def forecast_view(fc: Any, explanation: Any, wm: WorkingMemory) -> dict:
     g = wm.graph
-    dates = [(fc.created_at + timedelta(days=fc.step_days * k)).date().isoformat() for k in range(fc.horizon_steps + 1)]
+    dev = wm.deviations
+    if fc.start_day is not None:
+        dates = [dev.date_of(fc.start_day + k).isoformat() for k in range(fc.horizon_days + 1)]
+    else:
+        dates = [(fc.created_at + timedelta(days=k)).date().isoformat() for k in range(fc.horizon_days + 1)]
     targets = []
     for sid in fc.targets:
         s = g.subentities.get(sid)
+        e = g.entities.get(s.entity_id) if s else None
         targets.append({"id": sid, "name": s.name if s else sid, "unit": s.unit if s else "",
+                        "entity": e.name if e else None,
                         "levels": [x.model_dump() for x in fc.summary.get(sid, [])],
                         "effects": [x.model_dump() for x in fc.effect_summary.get(sid, [])],
                         "z_levels": [x.model_dump() for x in fc.z_summary.get(sid, [])],
-                        "decomposition": fc.decomposition.get(sid, {})})
-    return {"forecast": fc.model_dump(mode="json", exclude={"summary", "effect_summary", "z_summary"}),
-            "dates": dates, "targets": targets,
+                        "decomposition": fc.decomposition.get(sid, {}),
+                        "effect_density": fc.effect_density.get(sid, [])})
+    groups = []
+    for grp in fc.groups:
+        groups.append({"id": grp.id, "kind": grp.kind, "ref": grp.ref, "name": grp.name,
+                       "members": len(grp.members), "effects": [x.model_dump() for x in grp.effect_summary],
+                       "effect_density": grp.effect_density,
+                       "top": [{"id": sid, "name": g.subentities[sid].name if sid in g.subentities else sid, "effect": v}
+                               for sid, v in grp.top]})
+    movers = [{"id": sid, "name": g.subentities[sid].name if sid in g.subentities else sid,
+               "entity": g.entities[g.subentities[sid].entity_id].name if sid in g.subentities else None, "effect": v}
+              for sid, v in (fc.movers or {}).items()]
+    return {"forecast": fc.model_dump(mode="json", exclude={"summary", "effect_summary", "z_summary", "groups",
+                                                            "effect_density", "movers"}),
+            "movers": movers,
+            "dates": dates, "targets": targets, "groups": groups,
             "scenarios": [{"id": s.id, "name": s.name, "weight": s.weight, "network_ids": s.network_ids,
                            "forced_existence": s.forced_existence, "branched": s.branched_hypothesis_ids,
                            "effects_at_horizon": {k: v[-1].q50 for k, v in s.effect_summary.items()},
+                           "days": list(s.summary_days),
                            "levels": {k: [x.model_dump() for x in v] for k, v in s.summary.items()}}
                           for s in fc.scenarios],
             "networks": [n.model_dump(mode="json") for n in fc.networks],
             "isolated": {nid: {t: d.model_dump() for t, d in v.items()} for nid, v in fc.isolated.items()},
             "explanation": explanation.model_dump(mode="json") if explanation is not None else None}
 
+
+
+def update_run_view(run: Any, controller: WorldModelController) -> dict:
+    """The run, its market events by day with channel and status, what it waits on, and its report."""
+    dev = controller.engine.wm.deviations
+    cur = run.current_day if run.current_day is not None else run.first_day
+    days_done = max(0, min(int(controller.engine.wm.last_processed_day), run.last_day) - run.first_day + 1)
+    by_day = []
+    for d, ids in sorted(run.queue.items()):
+        items = []
+        for i in ids:
+            me = controller.market_events.get(i)
+            if me is None:
+                continue
+            items.append({"id": i, "channel": str(me.channel), "kind": str(me.kind), "headline": me.headline,
+                          "published_at": me.published_at.isoformat(), "status": controller.market_status.get(i, ""),
+                          "late_from": dev.date_of(run.late_from[i]).isoformat() if i in run.late_from else None,
+                          "synthetic": me.synthetic, "proposal_ids": list(run.walk.get(i, []))})
+        by_day.append({"day": d, "date": dev.date_of(d).isoformat(), "events": items})
+    return {"id": run.id, "requested_by": run.request.requested_by, "until": run.request.until.isoformat(),
+            "state": str(run.state), "first_day": dev.date_of(run.first_day).isoformat(),
+            "last_day": dev.date_of(run.last_day).isoformat(),
+            "current_day": dev.date_of(min(cur, run.last_day)).isoformat() if run.last_day >= run.first_day else None,
+            "days_total": max(0, run.last_day - run.first_day + 1), "days_done": days_done,
+            "market_events": by_day, "waiting_on": [run.waiting_on] if run.waiting_on else [],
+            "started_at": run.started_at.isoformat(),
+            "finished_at": run.finished_at.isoformat() if run.finished_at else None,
+            "report": run.report.model_dump(mode="json") if run.report is not None else None,
+            "error": run.error}

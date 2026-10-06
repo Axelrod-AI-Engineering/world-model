@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -53,8 +53,9 @@ registry("scorer", Scorer)
 @register("scorer", "omission_commission_calibration")
 class OmissionCommissionCalibrationScorer(Scorer):
     """Omission and commission rates (TRELLIS; Langley & Stromsten, 2000), interval coverage, and CRPS.
-    `realized` holds standardized deviations per step 0..H (None where unobserved); significance is
-    judged on changes from the freeze date (step 0)."""
+    `realized` holds standardized deviations for days 0..H: day 0 is the freeze day, and later days
+    hold a value only when the subentity was observed that day (None otherwise). Significance is
+    judged on changes from the freeze day, at the last observed day up to the horizon."""
 
     def __init__(self, config: Any = None) -> None:
         self.config = config
@@ -62,7 +63,7 @@ class OmissionCommissionCalibrationScorer(Scorer):
     def score(self, forecast: Forecast, realized: dict[str, list[float]], cfg: dict) -> dict[str, Any]:
         sig = float(cfg.get("significant_effect", 0.5))
         sign_p = float(cfg.get("sign_probability", 0.7))
-        H = forecast.horizon_steps
+        H = forecast.horizon_days
         R: set[tuple[str, int]] = set()
         P: set[tuple[str, int]] = set()
         cover = {"50": [0, 0], "80": [0, 0], "90": [0, 0]}
@@ -73,13 +74,15 @@ class OmissionCommissionCalibrationScorer(Scorer):
             real = realized.get(sid)
             if not zs or not real:
                 continue
+            t_last = last_observed(real, H)
+            if t_last is None:
+                continue                      # no observation in the window: left out
             z0 = real[0] if real[0] is not None else zs[0].q50
-            yh = real[min(H, len(real) - 1)]
-            if yh is not None:
-                change = yh - z0
-                if abs(change) >= sig:
-                    R.add((sid, 1 if change > 0 else -1))
-            pred = zs[H].map(lambda q, z0=z0: q - z0)
+            yh = real[t_last]
+            change = yh - z0
+            if abs(change) >= sig:
+                R.add((sid, 1 if change > 0 else -1))
+            pred = zs[t_last].map(lambda q, z0=z0: q - z0)
             if abs(pred.q50) >= sig:
                 s = 1 if pred.q50 > 0 else -1
                 p_sign = prob_positive(pred) if s > 0 else 1.0 - prob_positive(pred)
@@ -99,9 +102,8 @@ class OmissionCommissionCalibrationScorer(Scorer):
                     crps_t.append(c)
             if crps_t:
                 crps_all.extend(crps_t)
-                per_target[sid] = {"crps": float(np.mean(crps_t)),
-                                   "realized_change": float((yh - z0) if yh is not None else 0.0),
-                                   "predicted_change": float(pred.q50)}
+                per_target[sid] = {"crps": float(np.mean(crps_t)), "realized_change": float(change),
+                                   "predicted_change": float(pred.q50), "observed_days": float(len(crps_t))}
         omission = len(R - P) / len(R) if R else 0.0
         commission = len(P - R) / len(P) if P else 0.0
         coverage = {b: (v[0] / v[1] if v[1] else 0.0) for b, v in cover.items()}
@@ -110,35 +112,64 @@ class OmissionCommissionCalibrationScorer(Scorer):
                 "realized": sorted(f"{s}:{d:+d}" for s, d in R), "predicted": sorted(f"{s}:{d:+d}" for s, d in P)}
 
 
-def realized_series(dev: Any, sid: str, start: datetime, horizon_steps: int, step_days: float) -> list[float | None]:
-    """Realized standardized deviations at each step from `start` (forward-filled, None before data)."""
-    out: list[float | None] = []
-    for k in range(horizon_steps + 1):
-        t = start + timedelta(days=step_days * k)
-        out.append(dev.z_at(sid, dev.step_of(t)))
+def last_observed(real: list[float | None], H: int) -> int | None:
+    for t in range(min(H, len(real) - 1), 0, -1):
+        if real[t] is not None:
+            return t
+    return None
+
+
+def realized_series(dev: Any, sid: str, start_day: int, horizon_days: int) -> list[float | None]:
+    """Realized standardized deviations for days 0..H after the freeze day. Day 0 is the point at the
+    freeze day; later days only where the subentity was observed (predicted points are the model's own
+    output and are never scored)."""
+    out: list[float | None] = [dev.z_at(sid, start_day)]
+    for k in range(1, horizon_days + 1):
+        p = dev.point(sid, start_day + k)
+        out.append(p.z if p is not None and p.observed else None)
     return out
 
 
 def pattern_hit(network_subs: list[str], forecast: Forecast, realized: dict[str, list[float]],
                 sig: float) -> bool | None:
     """Hit if predicted signs matched realized signs for at least 70% of the members that moved."""
-    H = forecast.horizon_steps
+    H = forecast.horizon_days
     moved, matched = 0, 0
     for sid in network_subs:
         real = realized.get(sid)
         zs = forecast.z_summary.get(sid)
-        if not real or not zs or real[0] is None or real[min(H, len(real) - 1)] is None:
+        if not real or not zs or real[0] is None:
             continue
-        change = real[min(H, len(real) - 1)] - real[0]
+        t_last = last_observed(real, H)
+        if t_last is None:
+            continue
+        change = real[t_last] - real[0]
         if abs(change) < sig:
             continue
         moved += 1
-        pred = zs[H].q50 - real[0]
+        pred = zs[t_last].q50 - real[0]
         if pred * change > 0:
             matched += 1
     if moved == 0:
         return None
     return matched / moved >= 0.7
+
+
+def apply_track_records(engine: Any, hits: dict[str, tuple[int, int]], cause: str, at: datetime) -> None:
+    """Add (hits, trials) to the live patterns' track records and pool them into their configuration
+    generalizations, through the mutator (§8.14 step 6)."""
+    patterns = engine.ltm.object_generalizations.patterns
+    updater = engine.components.get("generalization_updater")
+    ctx = engine.context(learn=True, now=at)
+    with engine.mutator.begin(cause=cause, at=at) as txn:
+        for pid, (h, n) in sorted(hits.items()):
+            p = patterns.get(pid)
+            if p is None or n <= 0:
+                continue
+            txn.update("ltm.object_generalizations.patterns", pid, track_record=p.track_record.plus(h, n - h))
+            if updater is not None and hasattr(updater, "update_pattern"):
+                updater.update_pattern(pid, engine.ltm, ctx, txn, count_support=False, hits=float(h),
+                                       misses=float(n - h))
 
 
 class Backtester:
@@ -160,8 +191,9 @@ class Backtester:
         rid = c.ids.next("EVAL")
         # 1. freeze: restore the state as of recorded time in a separate engine
         wm, ltm, version = eng.snapshots.as_of(request.freeze_at)
-        frozen = build_engine(cfg, MemoryBackend(), NullTracer())
+        frozen = build_engine(cfg, MemoryBackend(), NullTracer(), vocab=eng.vocab)
         frozen.load_state(wm, ltm, version)
+        start_day = int(wm.last_processed_day)
         # 2. pose what later happened
         theses: list[Thesis] = []
         for me_id in request.market_event_ids:
@@ -187,7 +219,7 @@ class Backtester:
         for th in theses:
             fc = frozen.performance.run(th, request.freeze_at)
             forecast_ids.append(fc.id)
-            realized = {sid: realized_series(eng.wm.deviations, sid, request.freeze_at, fc.horizon_steps, fc.step_days)
+            realized = {sid: realized_series(eng.wm.deviations, sid, start_day, fc.horizon_days)
                         for sid in sorted(set(fc.targets) | {s for n in fc.networks for s in n.subentity_ids})}
             rows.append(scorer.score(fc, realized, scfg))
             for n in fc.networks:
@@ -213,14 +245,9 @@ class Backtester:
                                   coverage=coverage, crps=avg("crps"), per_target=per_target,
                                   pattern_hits={k: (v[0], v[1]) for k, v in sorted(hits.items())},
                                   frozen_version=version, forecast_ids=forecast_ids)
-        # 6. reliability, through the live mutator
+        # 6. track records, through the live mutator
         if hits:
-            book = eng.ltm.reliability.model_copy(deep=True)
-            for pid, (h, n) in sorted(hits.items()):
-                for k in range(n):
-                    book.update(pid, k < h)
-            with eng.mutator.begin(cause=f"evaluation:{rid}", now=c.now) as txn:
-                txn.set("ltm.reliability", book)
+            apply_track_records(eng, {k: (v[0], v[1]) for k, v in hits.items()}, f"evaluation:{rid}", c.now)
         eng.ledger.append(LedgerKind.EVALUATION, report, recorded_at=c.now)
         eng.tracer.emit(Phase.EVALUATE, "evaluation.done", refs=[rid] + report.thesis_ids,
                         report=report.model_dump(mode="json"))

@@ -2,6 +2,15 @@
 # next quarter?" and a fallback for market events with no fixture. A subject phrase maps to a
 # subentity; a verb phrase gives the change; a timeframe sets when the change happens.
 subjects:
+  # real actors first, so "jet fuel" or "NVIDIA's China sales" win over the generic subjects
+  - {pattern: "nvidia(?:'s)? china (?:sales|revenue)", subentity: nvidia.china_revenue}
+  - {pattern: "nvidia(?:'s)? (?:shares|stock|share price)|nvidia", subentity: nvidia.share_price}
+  - {pattern: "(?:opec plus|opec)(?: output| production| quotas?)?", subentity: opec_plus.quota}
+  - {pattern: "jet fuel(?: prices?| costs?)?|fuel costs", subentity: delta.fuel_cost}
+  - {pattern: "ai (?:capex|spending|investment)|hyperscaler (?:capex|spending)", subentity: microsoft.ai_capex}
+  - {pattern: "(?:us )?chip (?:export )?rules", subentity: us_commerce.chip_rule_stringency}
+  - {pattern: "(?:rare earth|critical mineral|mineral) (?:export )?curbs", subentity: china_mofcom.mineral_export_curbs}
+  - {pattern: "regional bank deposits", subentity: regional_banks.deposits}
   - {pattern: "oil(?: prices?)?|brent|crude", subentity: resources_energy.oil_price}
   - {pattern: "(?:natural )?gas(?: prices?)?", subentity: resources_energy.gas_price}
   - {pattern: "(?:the )?fed(?:eral reserve)?|(?:us )?policy rates?|interest rates|rates", subentity: federal_reserve.policy_stance}

@@ -106,9 +106,9 @@ class PrefilledModel(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True, extra="forbid")
 
     channels: dict[str, Channel]                         # working set, with plain posterior dynamics
-    analog_evidence: dict[str, list[AnalogEvidence]]     # channel key -> evidence from recalled episodes
+    analog_evidence: dict[str, list[AnalogEvidence]]     # channel id -> evidence from recalled episodes' responses
     network_episodes: dict[str, list[str]]               # instance id -> recalled episodes where its pattern was active
-    drifts: dict[str, float]                             # subentity -> trend of its local level, per step
+    drifts: dict[str, float]                             # subentity -> trend of its local level, per day
     instance_ids: list[str]                              # bound instances relevant to this event
     notes: list[str]                                     # human-readable adjustments, for explanations
     target_noise: dict[str, float] = {}                  # channel key -> obs noise of its target
@@ -167,7 +167,7 @@ class Analysis(BaseModel):
     result: PropagationResult | None                     # the event's effect (shocked minus unshocked)
     expected_moves: dict[str, DistSummary]               # at the horizon, |median| >= 0.1
     levels: PropagationResult | None = None              # the shocked run (levels)
-    horizon_steps: int = 0
+    horizon_days: int = 0
 
 
 class Analyzer(ABC):

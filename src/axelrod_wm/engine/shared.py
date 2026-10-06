@@ -28,7 +28,8 @@ class ParsedEvent(BaseModel):
     event_id: str
     kind: EventKind
     event_type: str | None
-    step: int                                  # propagation-grid step of occurred_at
+    day: int                                   # day index of occurred_at
+    processing_day: int                        # the day being processed; observations and shocks apply on it
     shocks: list[ShockInput]                   # from change_value ops
     observations: list[tuple[str, float, float, datetime]]   # (subentity id, value, noise_sd, at)
     touched_subentity_ids: list[str]
@@ -101,6 +102,18 @@ def signature_of(classifications: list[Classification], ltm: LongTermMemory, ctx
     return out
 
 
+def build_new_channels(interaction_ids: list[str], ctx: ProcessContext, txn: MutationTxn) -> None:
+    """Every interaction has a ChannelState per direction from the moment it is created, warm-started
+    at the current day (§6.12). Built after classification, which fills the kernel the op left out."""
+    from axelrod_wm.engine.daily import ensure_channel_states
+
+    wm = ctx.wm
+    for iid in interaction_ids:
+        inter = wm.graph.interactions.get(iid)
+        if inter is not None:
+            ensure_channel_states(inter, wm, ctx, txn)
+
+
 class SharedProcess:
     def __init__(self, engine: Any, parser: Any, classifier: Any, recaller: Any, inducer: Any,
                  prefiller: Any, analyzer: Any) -> None:
@@ -122,6 +135,8 @@ class SharedProcess:
         parsed = self.parser.parse(event, wm, self.ltm, ctx, txn)
         classifications = [self.classifier.classify(kind, item_id, is_new, ctx, txn)
                            for kind, item_id, is_new in parsed.to_classify()]
+        if txn is not None:
+            build_new_channels(parsed.new_interaction_ids, ctx, txn)
         parsed.signature = signature_of(classifications, self.ltm, ctx, parsed)
         recall = self.recaller.recall(parsed, ctx.wm, self.ltm, ctx)
         induction = self.inducer.bind(parsed, recall, ctx.wm, self.ltm, ctx, txn)

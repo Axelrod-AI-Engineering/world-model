@@ -17,8 +17,8 @@ export function emit(topic, payload) {
 }
 
 export const PHASE_GROUPS = {
-  learn: ["ingest", "translate", "refine", "review", "parse", "classify", "recall", "prefill", "analyze",
-          "fold", "generalize", "frontier", "abduce", "explain", "consolidate"],
+  learn: ["update", "collect", "ingest", "translate", "refine", "review", "daily", "parse", "classify", "recall",
+          "prefill", "analyze", "fold", "generalize", "frontier", "abduce", "explain", "consolidate"],
   perf: ["isolate", "predict", "couple", "unify", "read_out"],
 };
 
@@ -32,20 +32,23 @@ export const store = {
   config: null,
   traces: [],              // trace events received, in seq order
   lastSeq: 0,
-  versions: [],            // {version, seq, cause}
+  versions: [],            // {version, seq, cause, at}
   marketEvents: new Map(), // id -> card state
+  updates: new Map(),      // update run id -> {id, state, first, last, current, days, done, waiting, report, ...}
+  activeUpdate: null,
+  days: [],                // {date, seq} as update runs reach each day, for the timeline's day axis
   proposals: [],           // pending ProposalViews
-  forecasts: [],           // forecast list
+  forecasts: [],
   forecast: null,          // ForecastView on screen
   compare: null,           // ForecastView overlaid
   selection: null,         // {kind, id}
   caption: { text: "", step: null, hyp: false },
   liveOps: new Map(),      // "<event id>:<op index>" -> {event_id, op, ends: {end: {level, ref, candidates}}, hyp}
   recentlyCreated: new Set(),
-  highlight: null,         // {entities:Set, links:Set, hulls:Set} for dimming
+  highlight: null,         // {entities:Set, links:Set, hulls:Set, hot:Set} for dimming
   phaseFilter: null,
-  settings: { speed: 1, reducedMotion: false, figure1LinksOnly: false, groupByCategory: false, layout: "gravity",
-              level: "entity", draw: false },
+  settings: { speed: 1, reducedMotion: false, figure1LinksOnly: false, groupByCategory: false, layout: "figure1",
+              draw: false, showCandidates: false },
 };
 
 export function nodeIndex() {
@@ -75,14 +78,13 @@ export async function refreshGraph() {
   if (refreshing) { scheduleRefresh(200); return; }
   refreshing = true;
   try {
-    const g = await api.state();
+    const [g, pending] = await Promise.all([api.state(), api.proposals("pending")]);
     store.graph = g;
+    store.proposals = pending;
     if (store.readOnlyVersion == null) {
       store.view = g;
       emit("graph", g);
     }
-    const pending = await api.proposals("pending");
-    store.proposals = pending;
     emit("proposals", pending);
   } catch (err) {
     console.warn("refresh failed", err);
@@ -120,8 +122,13 @@ function dropLiveOps(eventId) {
 }
 
 function marketCard(id) {
-  if (!store.marketEvents.has(id)) store.marketEvents.set(id, { id, status: "received", headline: id });
+  if (!store.marketEvents.has(id)) store.marketEvents.set(id, { id, status: "queued", headline: id });
   return store.marketEvents.get(id);
+}
+
+function updateRun(id) {
+  if (!store.updates.has(id)) store.updates.set(id, { id, state: "collecting", collected: {}, done: 0, days: 0 });
+  return store.updates.get(id);
 }
 
 export function applyTrace(ev) {
@@ -132,23 +139,110 @@ export function applyTrace(ev) {
   const p = ev.payload ?? {};
   switch (ev.kind) {
     case "scenario.caption":
-      store.caption = { text: p.text, step: p.step_index, hyp: false };
+      store.caption = { text: p.text, step: p.step_index, hyp: false, seq: ev.seq };
       emit("caption", store.caption);
       break;
     case "scenario.loaded":
       store.marketEvents.clear();
+      store.updates.clear();
+      store.activeUpdate = null;
+      store.days = [];
       store.liveOps.clear();
       store.recentlyCreated.clear();
       store.forecast = null;
       store.compare = null;
       emit("inbox", null);
+      emit("update", null);
       emit("forecast", null);
       scheduleRefresh(50);
       break;
+    // -- update runs (§7.8) --------------------------------------------------------------------
+    case "update.started": {
+      const u = updateRun(p.update_id);
+      Object.assign(u, { state: "collecting", first: p.first_date, last: p.last_date, until: p.until,
+                         requestedBy: p.requested_by, firstDay: p.first_day, lastDay: p.last_day,
+                         days: Math.max(0, (p.last_day ?? 0) - (p.first_day ?? 0) + 1),
+                         done: 0, current: null, waiting: null, report: null, startedSeq: ev.seq });
+      store.activeUpdate = p.update_id;
+      emit("update", u);
+      break;
+    }
+    case "scrape.result": {
+      const u = updateRun(p.update_id);
+      u.collected[p.source] = p.new;
+      u.dropped = (u.dropped ?? 0) + (p.duplicates_dropped ?? 0);
+      emit("update", u);
+      break;
+    }
+    case "update.collected": {
+      const u = updateRun(p.update_id);
+      u.state = "running";
+      for (const [date, items] of Object.entries(p.by_day ?? {})) {
+        for (const it of items) {
+          const c = marketCard(it.id);
+          Object.assign(c, { headline: it.headline, channel: it.channel, update_id: p.update_id, day: date });
+          if (!c.status || c.status === "received") c.status = "queued";
+        }
+      }
+      u.collected = p.collected ?? u.collected;
+      u.dropped = p.duplicates_dropped ?? u.dropped;
+      emit("inbox", null);
+      emit("update", u);
+      break;
+    }
+    case "update.day": {
+      const u = updateRun(p.update_id);
+      u.state = "running";
+      u.current = p.date;
+      if (u.firstDay == null) u.firstDay = p.day;
+      u.done = Math.max(0, (p.day ?? 0) - u.firstDay);   // days finished before this one
+      u.waiting = null;
+      if (!store.days.length || store.days[store.days.length - 1].date !== p.date) {
+        store.days.push({ date: p.date, seq: ev.seq, update: p.update_id });
+      }
+      emit("update", u);
+      emit("day", p);
+      break;
+    }
+    case "update.awaiting_review": {
+      const u = updateRun(p.update_id);
+      u.state = "awaiting_review";
+      u.waiting = (p.proposal_ids ?? [])[0] ?? null;
+      emit("update", u);
+      emit("awaiting-review", u);
+      break;
+    }
+    case "update.resumed": {
+      const u = updateRun(p.update_id);
+      u.state = "running";
+      u.waiting = null;
+      emit("update", u);
+      break;
+    }
+    case "update.done":
+    case "update.failed": {
+      const u = updateRun(p.update_id);
+      u.state = ev.kind === "update.failed" ? "failed" : (p.state ?? "done");
+      u.report = p.report ?? null;
+      u.error = p.error ?? null;
+      u.done = u.days;
+      u.endSeq = ev.seq;
+      if (store.activeUpdate === p.update_id) store.activeUpdate = null;
+      emit("update", u);
+      emit("update-done", u);
+      scheduleRefresh(80);
+      break;
+    }
+    case "daily.propagated":
+      emit("propagated", p);
+      break;
+    // -- the shared process ----------------------------------------------------------------------
     case "market_event.received": {
       const c = marketCard(p.id);
       Object.assign(c, { headline: p.headline, source: p.source, synthetic: p.synthetic, kind: p.kind,
+                         channel: p.channel ?? c.channel, update_id: p.update_id ?? c.update_id,
                          published_at: p.published_at, status: "received" });
+      if (!c.day && p.published_at) c.day = String(p.published_at).slice(0, 10);
       emit("inbox", c);
       break;
     }

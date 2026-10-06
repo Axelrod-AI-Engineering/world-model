@@ -54,6 +54,23 @@ class DistSummary(BaseModel):
                            q25=qs[2], q50=qs[3], q75=qs[4], q90=qs[5], q95=qs[6])
 
 
+def summarize_columns(x: np.ndarray, digits: int = 6) -> list[DistSummary]:
+    """One DistSummary per column of a [samples, days] array, computed in one pass. Values are rounded
+    to `digits` decimals, which keeps daily forecast paths compact."""
+    x = np.asarray(x, dtype=float)
+    if x.ndim == 1:
+        x = x[:, None]
+    if x.shape[0] == 0:
+        return [summarize_samples(np.zeros(0)) for _ in range(x.shape[1])]
+    qs = np.round(np.quantile(x, QUANTILE_LEVELS, axis=0), digits)
+    mean = np.round(x.mean(axis=0), digits)
+    sd = np.round(x.std(axis=0), digits)
+    return [DistSummary.model_construct(mean=float(mean[t]), sd=float(sd[t]), q05=float(qs[0, t]), q10=float(qs[1, t]),
+                                        q25=float(qs[2, t]), q50=float(qs[3, t]), q75=float(qs[4, t]),
+                                        q90=float(qs[5, t]), q95=float(qs[6, t]))
+            for t in range(x.shape[1])]
+
+
 def summarize_samples(x: np.ndarray) -> DistSummary:
     x = np.asarray(x, dtype=float).ravel()
     if x.size == 0:
@@ -62,6 +79,24 @@ def summarize_samples(x: np.ndarray) -> DistSummary:
     return DistSummary(mean=float(x.mean()), sd=float(x.std()), q05=float(qs[0]), q10=float(qs[1]),
                        q25=float(qs[2]), q50=float(qs[3]), q75=float(qs[4]), q90=float(qs[5]),
                        q95=float(qs[6]))
+
+
+def density_of_samples(x: np.ndarray, n: int = 24) -> list[list[float]]:
+    """A small picture of a sample distribution for the demo: n points of (x, density scaled to a peak of
+    1) across the central 98%, from a Gaussian kernel estimate with Silverman's bandwidth."""
+    x = np.asarray(x, dtype=float).ravel()
+    x = x[np.isfinite(x)]
+    if x.size < 2:
+        return []
+    lo, hi = (float(v) for v in np.quantile(x, [0.01, 0.99]))
+    sd = float(x.std())
+    if not hi > lo or sd <= 0:
+        return []
+    bw = 1.06 * sd * x.size ** (-0.2)
+    grid = np.linspace(lo - bw, hi + bw, n)
+    dens = np.exp(-0.5 * ((grid[:, None] - x[None, :]) / bw) ** 2).sum(axis=1)
+    peak = float(dens.max()) or 1.0
+    return [[round(float(g), 6), round(float(d) / peak, 4)] for g, d in zip(grid, dens)]
 
 
 def to_link(x, link: Link | str):
@@ -138,6 +173,22 @@ class DistributionBase(BaseModel, ABC):
     @abstractmethod
     def from_link_moments(cls, mean: float, var: float) -> DistributionBase:
         """Refit this family from link-space moments by moment matching."""
+
+    def density_points(self, n: int = 24) -> list[list[float]]:
+        """A small picture of the distribution for the demo: n points of (x, density scaled to a peak of 1)
+        on an even grid across its central 99%, in native units."""
+        try:
+            lo, hi = (float(v) for v in self.quantile(np.array([0.005, 0.995])))
+        except Exception:  # noqa: BLE001  (a degenerate distribution has no picture)
+            return []
+        if not (np.isfinite(lo) and np.isfinite(hi)) or hi <= lo:
+            return []
+        xs = np.linspace(lo, hi, n)
+        ps = np.exp(self.logpdf(xs))
+        peak = float(np.max(ps)) if np.all(np.isfinite(ps)) else 0.0
+        if peak <= 0:
+            return []
+        return [[round(float(x), 6), round(float(q) / peak, 4)] for x, q in zip(xs, ps)]
 
     def summary(self) -> DistSummary:
         qs = np.asarray(self.quantile(np.asarray(QUANTILE_LEVELS)), dtype=float)

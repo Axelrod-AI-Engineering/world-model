@@ -5,48 +5,56 @@
 patterns:
   - id: S1
     name: Credit tightening
+    description: "Higher rates make credit scarce and dear, so spending, investment, and asset prices fall while debt burdens bite."
     palette: h1
     members: [interest_rates, credit_availability, debt_cycle, consumer_spending, business_investment, asset_prices]
     interactions: [e01, e02, e03, e04, e06, e13, e14, e15, e24, e25, e26, e27, e28, e30, e31, e32, e45]
     support: 9
   - id: S2
     name: Energy price shock
+    description: "An energy price jump, often set off by war, raises costs along supply chains, lifts inflation, and drags confidence down."
     palette: h2
     members: [inflation, resources_energy, supply_chains, confidence, wars]
     interactions: [e08, e16, e33, e34]
     support: 6
   - id: S3
     name: Dollar funding squeeze
+    description: "A strong dollar and heavy debt pull capital out of emerging markets, raising the risk of crises and widening the gap between countries."
     palette: h3
     members: [debt_cycle, dollar_fx, capital_flows, financial_crises, inequality_between]
     interactions: [e05, e29, e35, e36, e37, e44]
     support: 5
   - id: S4
     name: Trade fragmentation
+    description: "Wars and regulation split trade into blocs: controls and uncertainty cut cross-border trade and snarl supply chains."
     palette: h4
     members: [supply_chains, cross_border_trade, legal_regulatory, wars, policy_uncertainty]
     interactions: [e09, e10, e16, e38]
     support: 5
   - id: S5
     name: Climate transition
+    description: "Climate change and disasters push governments to spend and firms to invest in new technology."
     palette: h5
     members: [climate_change, productivity_tech, gov_spending, disasters_weather]
     interactions: [e11, e39, e40]
     support: 4
   - id: S6
     name: Trust erosion
+    description: "Inequality wears down social trust, and weaker trust erodes institutions: a slow loop."
     palette: h6
     members: [institutions, culture_trust, inequality_within]
     interactions: [e18, e19]
     support: 4
   - id: S7
     name: Pandemic shock
+    description: "An epidemic keeps people from working, and governments spend heavily to bridge the gap."
     palette: h7
     members: [gov_spending, medical_crises, labor_demographics]
     interactions: [e12, e17]
     support: 4
   - id: S8
     name: Policy tightens into inflation
+    description: "The Fed answers inflation by raising rates, even when the inflation comes from a supply shock."
     palette: h8
     members: [inflation, federal_reserve, interest_rates]
     interactions: [e43, e41]
@@ -54,20 +62,88 @@ patterns:
     support: 6
   - id: S9
     name: Policy looks through supply shocks
+    description: "The Fed holds rates when inflation comes from a supply shock, expecting it to pass. The rival of S8."
     palette: h9
     members: [inflation, federal_reserve, interest_rates]
     interactions: [e41]
     absent_interactions: [e43]
     rivals: [S8]
     support: 4
+  # DECISION: one seeded composite shows nesting from the first screen: a superentity whose parts are
+  # two superentities (S2, S1) plus one plain entity (the Fed), joined by the boundary edges e20 (oil
+  # raises input costs), e43 (inflation prompts tightening), and e41 (the Fed sets the policy rate).
+  # Composition (§8.8 step 9) can still form composites from co-active patterns at run time.
+  - id: S10
+    name: Stagflation squeeze
+    description: "A superentity made of superentities: the energy price shock (S2) and credit tightening (S1), joined through the Fed, which tightens into the inflation the shock causes."
+    palette: h10
+    sub_patterns: [S2, S1]
+    members: [inflation, resources_energy, supply_chains, confidence, wars, interest_rates, credit_availability,
+              debt_cycle, consumer_spending, business_investment, asset_prices, federal_reserve]
+    interactions: [e08, e16, e33, e34, e01, e02, e03, e04, e06, e13, e14, e15, e24, e25, e26, e27, e28, e30, e31,
+                   e32, e45, e20, e43, e41]
+    support: 5
+  # DECISION: sectors and competitive play among the real actors (the user asked for concrete instances
+  # whose cross-entity links are grouped by sector and rivalry). Supports are modest, below Figure 1's.
+  - id: S11
+    name: AI chip supply chain
+    description: "Cloud spending becomes GPU orders, GPU orders become wafer orders, and wafer orders become tool orders: demand flows upstream from Microsoft to NVIDIA to TSMC to ASML and Tokyo Electron."
+    palette: h11
+    members: [microsoft, nvidia, tsmc, asml, tokyo_electron]
+    interactions: [e55, e56, e57, e53, e54]
+    support: 5
+  - id: S12
+    name: GPU rivalry
+    description: "NVIDIA and AMD compete for the same AI-accelerator buyers; share one loses, the other tends to win."
+    palette: h12
+    members: [nvidia, amd]
+    interactions: [e59]
+    support: 4
+  - id: S13
+    name: Foundry rivalry
+    description: "TSMC and Samsung compete to manufacture other companies' chip designs."
+    palette: h13
+    members: [tsmc, samsung]
+    interactions: [e62]
+    support: 3
+  - id: S14
+    name: Oil producers
+    description: "OPEC+ sets supply, Saudi Aramco and ExxonMobil earn the price, and US drilling answers high prices with more supply a year later."
+    palette: h14
+    members: [opec_plus, saudi_aramco, exxonmobil, resources_energy]
+    interactions: [e70, e72, e71, e73, e74, e75, e76]
+    support: 5
+  - id: S15
+    name: Airlines
+    description: "Delta and United fly the same routes: fuel costs squeeze both, and they trade travelers between them."
+    palette: h15
+    members: [delta, united_airlines]
+    interactions: [e82, e79, e83]
+    support: 4
+  - id: S16
+    name: Deposit flight
+    description: "When banks look shaky, deposits leave regional lenders for the largest bank, as in 2023."
+    palette: h16
+    members: [regional_banks, jpmorgan]
+    interactions: [e86]
+    support: 4
+  - id: S17
+    name: US-China tech rivalry
+    description: "Each new US chip rule draws a Chinese answer, often curbs on the critical minerals chipmakers need."
+    palette: h17
+    members: [us_commerce, china_mofcom]
+    interactions: [e68]
+    support: 4
   - id: HP1
     name: Bank run (2008-like)
+    description: "A historical pattern: falling asset prices start a banking crisis that freezes credit and trade finance."
     members: [asset_prices, financial_crises, credit_availability, cross_border_trade]
     interactions: [e07, e21, e26, e28]
     support: 4
     bind: false
   - id: HP2
     name: Bank run (2023-like)
+    description: "A smaller historical pattern: a drop in asset prices sets off a run on a few banks."
     members: [asset_prices, financial_crises]
     interactions: [e07, e28]
     support: 4
@@ -77,7 +153,15 @@ super_interaction_labels:
   - {source: S1, target: S3, label: sparks crises}
   - {source: S3, target: S4, label: cuts trade finance}
 frontier_seeds:
-  - {earlier: inflation.headline_cpi, later: confidence.consumer_confidence, lag_steps: 1, sign: -1, support: 1.0}
+  - {earlier: inflation.headline_cpi, later: confidence.consumer_confidence, lag_days: 7, sign: -1, support: 1.0}
 palettes:
   h8: {fill: "#E6E3C8", line: "#A39A5B"}
   h9: {fill: "#D9E4E8", line: "#7A98A3"}
+  h10: {fill: "#EAE2D6", line: "#8C7A66"}
+  h11: {fill: "#DCE3EE", line: "#5F7AA3"}
+  h12: {fill: "#F1D9DF", line: "#A86D80"}
+  h13: {fill: "#E9E3C9", line: "#958C4F"}
+  h14: {fill: "#F3DCC9", line: "#A9764B"}
+  h15: {fill: "#D6E8E4", line: "#4F8C80"}
+  h16: {fill: "#E0E9D9", line: "#6E8E5E"}
+  h17: {fill: "#EDE0CF", line: "#8F7550"}

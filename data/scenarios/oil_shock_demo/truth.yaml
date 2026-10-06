@@ -1,57 +1,63 @@
-# The synthetic world's truth (§14.9). The world runs the model's own equations with one draw of
-# true parameters, plus the hidden subentities and interactions below, AR(1) noise, and decision rules.
+# The synthetic world's truth (§14.9). The world steps the model's own daily equations with one
+# draw of true parameters, plus the hidden subentities and interactions below, AR(1) noise, and
+# decision rules.
 effect_multiplier_sd: 0.2
-ar_coefficient: 0.5
-noise_sd: {default: 0.15}
-history_noise_sd: 0.15   # DECISION: tuned from 0.3 (§15.3) so oil-driven inflation, not noise, drives the history's Fed decisions
-# DECISION: tuned per §15.3 (timing). The world's oil -> CPI pass-through is faster than the model's
-# prior kernel for e08 (14/60/270 days) and lasts longer, so the +35% shock lifts headline CPI by about 1.5 standard
-# units within two months and H1 shows up in confidence over several weekly episodes by step 11.
-# The model must learn the faster timing (kernel learning, §8.6). The kernel updater rescales delay, lag, and
-# duration together, so a much faster rise (7/21 days) taught it half the prior's duration too, and the
-# effect was gone by the analysis horizon (item 3). At 10/30 days it settles near 0.7x the prior.
-kernel_overrides:
-  e08: {delay_days: 10, lag_days: 30, duration_days: 540}
+ar_coefficient: 0.5                 # per day
+noise_sd: {}                        # empty: each series uses the model's default obs_noise for its kind (§6.3)
+history_noise_sd: 0.3
 hidden_subentities:
   - {id: cross_border_trade.chip_exports, family: lognormal, anchor_value: 100, scale: 0.05,
      attribute_kind: trade_flow, features: {product: semiconductors}}
-# DECISION: tuned per §15.3 (timing). H1 answers a move in inflation the next week, and it
-# is active from mid-2025, so the frontier seed's backfilled history already shows the relation.
-# The frontier still never runs during the replay, so history contains no promotion of it.
+# DECISION: tuned per §15.3 (timing). H1 is active from mid-2025 rather than 2026-01-01, so the frontier
+# seed's backfilled pairs (the last 182 days of history) already show the relation; with H1 switched on
+# only at the end of the history, the backfill was all noise and the pair's correlation stayed below
+# min_corr after three consistent verifications (item 6). The frontier still never runs during the
+# replay, so the history contains no promotion of it. H1 builds over four weeks (lag 28) at -2.0: with
+# the plan's two-week build, confidence's unexplained drop was over within one 14-day evidence spacing,
+# so the pair could be verified twice in the run-up to step 12, not three times (item 6).
 hidden_interactions:
-  - {id: H1, source: inflation.headline_cpi, target: confidence.consumer_confidence, effect: -1.0,
-     delay_days: 0, lag_days: 0, duration_days: null, active_from: 2025-07-01}
+  - {id: H1, source: inflation.headline_cpi, target: confidence.consumer_confidence, effect: -2.0,
+     delay_days: 7, lag_days: 28, duration_days: null, active_from: 2025-07-01}
   - {id: H2, source: legal_regulatory.export_controls, target: cross_border_trade.chip_exports, effect: -0.6,
      delay_days: 7, lag_days: 30, duration_days: null}
   - {id: H3, source: cross_border_trade.chip_exports, target: productivity_tech.tech_capex, effect: 0.5,
      delay_days: 14, lag_days: 30, duration_days: null}
-# DECISION: tuned per §15.3. The rules read headline CPI as e43 does (lag_steps 6 matches e43's
-# 45-day delay), and they are symmetric (cut on a fall as well as hike on a rise), so the history
-# teaches e43 in both directions and a fall the Fed ignores is not automatic evidence for S9.
-# The Fed's rule reads a 9-step window with a 0.5 threshold and fires with probability 0.8: with the
-# plan's 0.75 over 6 steps it fired once in three years of history, which left e43 near zero and S8
-# with nothing to tighten (items 10 and 12). It still skips one move in five, so S9 stays a rival.
+# DECISION: tuned per §15.3. With the plan's rule (a 0.75 rise over the default 42-day window, p 0.65)
+# the Fed never moved in three years of synthetic history, so the model learned e43 near zero and S8
+# had nothing to tighten (checklist items 10 and 12). The rules now read headline CPI's 7-day average
+# over 63 days ending 42 days before the meeting (about e43's delay), with a 0.5 threshold, and they are
+# symmetric (a fall brings a cut), so the history teaches e43 in both directions. The Fed's rule fires
+# with probability 0.8: it still skips one move in five, so S9 stays an honest rival.
 decision_rules:
   - {decision: federal_reserve.policy_stance,
-     condition: {subentity: inflation.headline_cpi, window_change_gt: 0.5, window_steps: 9, lag_steps: 6},
+     condition: {subentity: inflation.headline_cpi, window_change_gt: 0.5, window_days: 63, lag_days: 42},
      change: 0.25, probability: 0.8}
   - {decision: federal_reserve.policy_stance,
-     condition: {subentity: inflation.headline_cpi, window_change_lt: -0.5, window_steps: 9, lag_steps: 6},
+     condition: {subentity: inflation.headline_cpi, window_change_lt: -0.5, window_days: 63, lag_days: 42},
      change: -0.25, probability: 0.8}
-  - {decision: ecb.policy_stance, condition: {subentity: inflation.headline_cpi, window_change_gt: 1.0, lag_steps: 6},
+  - {decision: ecb.policy_stance,
+     condition: {subentity: inflation.headline_cpi, window_change_gt: 1.0, window_days: 63, lag_days: 42},
      change: 0.25, probability: 0.5}
-  - {decision: ecb.policy_stance, condition: {subentity: inflation.headline_cpi, window_change_lt: -1.0, lag_steps: 6},
+  - {decision: ecb.policy_stance,
+     condition: {subentity: inflation.headline_cpi, window_change_lt: -1.0, window_days: 63, lag_days: 42},
      change: -0.25, probability: 0.5}
-release_calendar:
-  weekly: [resources_energy.oil_price, resources_energy.gas_price, asset_prices.equity_index,
-           asset_prices.equity_volatility, dollar_fx.dollar_index, interest_rates.long_term_yields,
-           interest_rates.real_rate, credit_availability.us_bank_funding_cost, credit_availability.lending_standards,
+release_calendar:                   # business days for "daily"; Fridays for "weekly"; the 15th for "monthly"
+  daily: [resources_energy.oil_price, resources_energy.gas_price, asset_prices.equity_index,
+          asset_prices.equity_volatility, dollar_fx.dollar_index, dollar_fx.em_fx_volatility,
+          interest_rates.long_term_yields, interest_rates.real_rate, nvidia.share_price, amd.share_price,
+          asml.share_price, microsoft.share_price, exxonmobil.share_price, delta.share_price,
+          united_airlines.share_price, regional_banks.share_index, delta.fuel_cost]
+  weekly: [credit_availability.us_bank_funding_cost, credit_availability.lending_standards,
            credit_availability.credit_growth, inflation.headline_cpi, inflation.core_cpi,
            confidence.consumer_confidence, business_investment.input_costs, business_investment.capex_growth,
            cross_border_trade.trade_volume, cross_border_trade.chip_exports, productivity_tech.tech_capex,
            financial_crises.banking_stress, policy_uncertainty.epu_index, supply_chains.delivery_times,
-           northwind_semis.export_revenue, northwind_semis.share_price]
-  monthly: [default]
+           nvidia.china_revenue, regional_banks.deposits, jpmorgan.deposits]
+  # DECISION: NVIDIA's capex is never reported (it shows daily propagation moving an unobserved value, as
+  # Northwind's did), and the two trade authorities' rule indices move only through news and theses
+  never: [nvidia.capex, culture_trust.social_trust, institutions.rule_of_law, geography.trade_distance_cost,
+          us_commerce.chip_rule_stringency, china_mofcom.mineral_export_curbs]
+  default: monthly
 meetings:
   federal_reserve.policy_stance: [2026-01-28, 2026-03-18, 2026-04-29, 2026-06-17]
   ecb.policy_stance: [2026-02-05, 2026-03-19, 2026-04-30, 2026-06-11]

@@ -2,18 +2,20 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 import pytest
 
 from axelrod_wm.engine.config import load_config
 from axelrod_wm.engine.engine import Engine
-from axelrod_wm.engine.initialize import ConstructionSpec, Initializer, SeedFile
+from axelrod_wm.engine.initialize import ConstructionSpec, Initializer, SeedFile, load_vocabulary
 from axelrod_wm.memory.snapshots import MemoryBackend
 from axelrod_wm.trace import NullTracer
 
+START_DATE = date(2023, 1, 2)                     # day 0 of the constructed engine
 START = datetime(2023, 1, 2, tzinfo=timezone.utc)
 SEEDS = "data/scenarios/oil_shock_demo/superentity_seeds.yaml"
+VOCAB = load_vocabulary("data/taxonomy")
 
 
 def pytest_addoption(parser):
@@ -42,12 +44,12 @@ def constructed_engine(build: bool = False, config=None) -> Engine:
     if build:
         from axelrod_wm.engine.engine import build_engine
 
-        eng = build_engine(cfg, MemoryBackend(), NullTracer())
+        eng = build_engine(cfg, MemoryBackend(), NullTracer(), vocab=VOCAB)
     else:
-        eng = Engine(cfg, MemoryBackend(), NullTracer())
+        eng = Engine(cfg, MemoryBackend(), NullTracer(), vocab=VOCAB)
     init = Initializer(eng)
-    init.construct(ConstructionSpec.load("data/construction"), "data/taxonomy", start=START)
-    init.load_seeds(SeedFile.load(SEEDS), now=START)
+    init.construct(ConstructionSpec.load("data/construction"), "data/taxonomy", start=START_DATE, vocab=VOCAB)
+    init.load_seeds(SeedFile.load(SEEDS), now=eng.wm.clock)
     return eng
 
 
@@ -62,22 +64,23 @@ def warm_taxonomies(eng, rounds: int = 6, now=None) -> None:
     from axelrod_wm.core.taxonomy import TaxonomyKind
     from axelrod_wm.engine.interfaces import Classification
 
-    now = now or START
+    now = now or eng.wm.clock
     ltm = eng.ltm
+    otax, itax = ltm.object_generalizations.taxonomy, ltm.interaction_generalizations.taxonomy
     updater = eng.components["generalization_updater"]
     for _ in range(rounds):
         cls = []
         for eid, ent in sorted(eng.wm.graph.entities.items()):
             if ent.generalization_id:
-                path = ltm.object_taxonomy.path_from_root(ent.generalization_id)
+                path = otax.path_from_root(ent.generalization_id)
                 cls.append(Classification(item_id=eid, taxonomy=TaxonomyKind.OBJECT, path=path, prior_source_id=path[0]))
         for iid, inter in sorted(eng.wm.graph.interactions.items()):
             if inter.generalization_id:
-                path = ltm.interaction_taxonomy.path_from_root(inter.generalization_id)
+                path = itax.path_from_root(inter.generalization_id)
                 cls.append(Classification(item_id=iid, taxonomy=TaxonomyKind.INTERACTION, path=path,
                                           prior_source_id=path[0]))
         ctx = eng.context(learn=True, now=now)
-        with eng.mutator.begin("warm", now=now) as txn:
+        with eng.mutator.begin("warm", at=now) as txn:
             updater.update(cls, ltm, ctx, txn)
 
 
@@ -142,3 +145,48 @@ def market_event(me_id: str):
             if d["id"] == me_id:
                 return parse_market_event(d)[0]
     raise KeyError(me_id)
+
+
+# ---------------------------------------------------------------------------------------------
+# The daily loop without an update run: predict, fold, record, consolidate (§7.8 step 4)
+# ---------------------------------------------------------------------------------------------
+
+def predict_day(eng, d: int) -> None:
+    dev = eng.wm.deviations
+    ctx = eng.context(learn=True, now=dev.day_start(d), processing_day=d)
+    with eng.mutator.begin(f"predict:{dev.date_of(d)}", at=dev.day_start(d)) as txn:
+        eng.components["daily_propagator"].predict(d, eng.wm, ctx, txn)
+
+
+def close_day(eng, d: int):
+    dev = eng.wm.deviations
+    ctx = eng.context(learn=True, now=dev.day_end(d), processing_day=d)
+    with eng.mutator.begin(f"record:{dev.date_of(d)}", at=dev.day_end(d)) as txn:
+        moves = eng.components["daily_propagator"].record(d, eng.wm, ctx, txn)
+    report = eng.components["consolidator"].run(d, ctx)
+    return moves, report
+
+
+def run_days(eng, n: int, events=None, at_hour: int = 21):
+    """Process the next n days. `events(day) -> list[GraphUpdateEvent]` supplies real events to fold
+    on a day. Returns the consolidation reports."""
+    from datetime import time as _time
+
+    reports = []
+    for _ in range(n):
+        d = eng.wm.last_processed_day + 1
+        predict_day(eng, d)
+        dev = eng.wm.deviations
+        for ev in (events(d) if events else []):
+            now = datetime.combine(dev.date_of(d), _time(at_hour), tzinfo=timezone.utc)
+            eng.learning.run(ev, now, d)
+        reports.append(close_day(eng, d)[1])
+    return reports
+
+
+def observe_event(eid: str, values: dict, day_date, event_type: str = "data_release", **kw):
+    """A data-release style real event observing native values on a date."""
+    at = datetime.combine(day_date, datetime.min.time(), tzinfo=timezone.utc).replace(hour=21)
+    ops = [{"op": "observe_value", "target": {"kind": "concrete", "subentity_id": sid}, "value": float(v),
+            "observed_at": at.isoformat()} for sid, v in values.items()]
+    return real_event(ops, eid=eid, at=at, produced_by="data_feed", event_type=event_type, **kw)

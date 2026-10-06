@@ -47,6 +47,9 @@ class AppState:
         self.runner: ScenarioRunner | None = None
         self.interactive = True
         self.play_task: asyncio.Task | None = None
+        self.update_task: asyncio.Task | None = None
+        self.schedule_task: asyncio.Task | None = None
+        self.play_requested = False             # /sim/play was pressed and not paused since
         # DECISION: play mode waits this long between steps so the canvas can animate each one
         self.play_delay = play_delay
 
@@ -62,7 +65,10 @@ class AppState:
         with self.lock:
             if self.runner is None or (scenario and scenario != self.scenario) or interactive != self.interactive:
                 self.build(scenario, interactive)
-            return self.runner.load()
+            status = self.runner.load()
+            # the API drives update runs itself, one day per lock acquisition (§12.4)
+            self.runner.controller.auto_resume = False
+            return status
 
     def ensure_loaded(self) -> ScenarioRunner:
         with self.lock:
@@ -82,15 +88,102 @@ class AppState:
         """Run an engine call in a worker thread, under the lock."""
         return await anyio.to_thread.run_sync(lambda: self.locked(fn, *args, **kwargs))
 
+    # -- update runs in the background (§12.4) ---------------------------------------------
+    def _one_day(self, run_id: str) -> str:
+        from axelrod_wm.control.updates import UpdateState
+
+        ctl = self.runner.controller
+        run = ctl.get_update(run_id)
+        if run.state == UpdateState.RUNNING:
+            try:
+                ctl.cycle.run_days(run, max_days=1)
+            except Exception as exc:
+                ctl.cycle._fail(run, exc)
+        if self.runner is not None:
+            self.runner._broadcast()
+        return str(run.state)
+
+    async def drive(self, run_id: str) -> str:
+        """Process an update run one day at a time, releasing the lock between days, until it is done
+        or pauses for review. A scenario step waiting on the run then finishes its action."""
+        runner = self.runner
+
+        def mark(state: str) -> None:
+            # the scenario's status follows its step's run: waiting on review, or running again
+            if runner is not None and runner.pending_update() == run_id and runner.state != state:
+                runner.state = state
+                runner._broadcast()
+
+        await self.call(mark, "running")
+        state = "running"
+        while state == "running":
+            state = await self.call(self._one_day, run_id)
+            await asyncio.sleep(0)
+        if state == "awaiting_review":
+            await self.call(mark, "awaiting_review")
+        elif runner is not None and runner.pending_update() == run_id:
+            await self.call(runner.step, False)
+        return state
+
+    def start_drive(self, run_id: str) -> None:
+        """Drive a run in a background task; if play was requested, keep playing afterwards."""
+        async def go() -> None:
+            state = await self.drive(run_id)
+            if state not in ("running", "awaiting_review") and self.play_requested and \
+                    (self.play_task is None or self.play_task.done()):
+                from axelrod_wm.api.routes import _play_loop
+
+                self.play_task = asyncio.create_task(_play_loop(self, None))
+
+        if self.update_task is not None and not self.update_task.done():
+            return
+        self.update_task = asyncio.create_task(go())
+
 
 def _error(status: int, detail: Any) -> JSONResponse:
     return JSONResponse(status_code=status, content={"detail": detail})
+
+
+async def _daily_schedule(state: AppState) -> None:
+    """With update.auto_daily, request an update every day at update.daily_at in update.timezone
+    (§7.8). A run that is still active (for example paused for review) skips that day's request."""
+    from datetime import timedelta
+    from zoneinfo import ZoneInfo
+
+    from axelrod_wm.control.updates import UpdateRequest
+
+    cfg = state.runner.controller.config
+    tz = ZoneInfo(cfg.update.timezone)
+    hh, mm = (int(x) for x in cfg.update.daily_at.split(":"))
+    while True:
+        now = datetime.now(tz)
+        nxt = now.replace(hour=hh, minute=mm, second=0, microsecond=0)
+        if nxt <= now:
+            nxt += timedelta(days=1)
+        await asyncio.sleep((nxt - now).total_seconds())
+        ctl = state.runner.controller
+        if ctl.active_update is not None:
+            continue
+
+        def start(ctl=ctl, nxt=nxt) -> str:
+            run = ctl.request_update(UpdateRequest(requested_by="schedule", until=nxt.date(),
+                                                   requested_at=nxt.astimezone(UTC)), run_to_end=False)
+            return run.id
+
+        run_id = await state.call(start)
+        state.start_drive(run_id)
 
 
 def create_app(config_path: str | None = None, scenario: str = "oil_shock_demo", *,
                storage: StorageBackend | None = None, trace_dir: str | Path | None = "var/axelrod/traces",
                load_on_startup: bool = True, play_delay: float = 0.4,
                cache_dir: str | Path | None = None) -> FastAPI:
+    if storage is None:
+        # DECISION: the demo server keeps its state under var/axelrod/demo, so it never overwrites the
+        # session that `axelrod init` and `axelrod update` keep under var/axelrod.
+        from axelrod_wm.memory.snapshots import FilesBackend
+
+        storage = FilesBackend(path=Path("var/axelrod/demo"))
     state = AppState(scenario, config_path, storage=storage, trace_dir=trace_dir, play_delay=play_delay,
                      cache_dir=cache_dir)
 
@@ -98,11 +191,15 @@ def create_app(config_path: str | None = None, scenario: str = "oil_shock_demo",
     async def lifespan(app: FastAPI):
         if load_on_startup:
             await anyio.to_thread.run_sync(state.ensure_loaded)
+            cfg = state.runner.controller.config if state.runner is not None and state.runner.loaded else None
+            if cfg is not None and cfg.update.auto_daily:
+                state.schedule_task = asyncio.create_task(_daily_schedule(state))
         yield
-        if state.play_task is not None:
-            if state.runner is not None:
-                state.runner.pause()
-            state.play_task.cancel()
+        for task in (state.play_task, state.update_task, state.schedule_task):
+            if task is not None and not task.done():
+                task.cancel()
+        if state.runner is not None:
+            state.runner.pause()
 
     app = FastAPI(title="Axelrod World Model", version="0.1.0", lifespan=lifespan)
     app.state.axelrod = state

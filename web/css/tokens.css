@@ -1,32 +1,43 @@
-/* Design tokens (§13.2): the architecture page's palette, so the demo and the page read as one system. */
+/* Design tokens (§13.2): the architecture page's palette, so the demo and the page read as one system.
+   DECISION: a single light theme, like the architecture page it mirrors. */
 :root {
-  --linen: #F3EDE2;
-  --panel: #FFFDF8;
+  color-scheme: light;
+  --linen: #F3EDE2;       /* page */
+  --paper: #FBF8F2;       /* canvas */
+  --sheet: #FFFDF8;       /* panels, pills, cards */
   --ink: #2F2A25;
   --ink-2: #665E54;
-  --rule: #E2D9CA;
-  --rule-strong: #CDBFA8;
+  --ink-3: #93897C;
+  --rule: #DDD3C4;
+  --rule-soft: #EAE3D7;
+  --rule-strong: #C9BFAF;
+  --edge: #857C70;        /* causal edges */
+  --pill-line: #C2B8A8;
+  --loose-line: #A69C8E;
+  --grid-minor: #EEE7DB;  /* the canvas grid: present but faint */
+  --grid-major: #E5DDCF;
 
   /* roles: fill / line / ink */
-  --real-fill: #DAD0F4;   --real-line: #7C64C4;   --real-ink: #4A3590;      /* real events, learning */
-  --hyp-fill: #E8CFEC;    --hyp-line: #B07CC0;    --hyp-ink: #7A3F8C;       /* hypothetical, performance */
-  --init-fill: #E7E0F3;   --init-line: #B9ACD8;   --init-ink: #5A4A88;      /* construction, initialization */
-  --wm-fill: #E1ECDF;     --wm-line: #A9C6A9;     --wm-ink: #3E6A46;        /* working memory */
-  --ltm-fill: #DCE6F0;    --ltm-line: #A9BFD6;    --ltm-ink: #3B5B7C;       /* long-term memory */
-  --front-fill: #F5E4E9;  --front-line: #D9A9B8;  --front-ink: #93465F;     /* frontier co-movements */
-  --out-fill: #F7E1D3;    --out-line: #E0B092;    --out-ink: #874B2B;       /* outputs */
-  --eval-fill: #D6ECE7;   --eval-line: #7FB5A9;   --eval-ink: #2F6B5F;      /* evaluation */
+  --real-fill: #DAD0F4;   --real-line: #7C64C4;   --real-ink: #4A3590;      /* real events, learning (violet) */
+  --hyp-fill: #E8CFEC;    --hyp-line: #B07CC0;    --hyp-ink: #7A3F8C;       /* hypothetical, performance (orchid) */
+  --init-fill: #E7E0F3;   --init-line: #B9ACD8;   --init-ink: #5A4A88;      /* construction, initialization (lavender) */
+  --wm-fill: #E1ECDF;     --wm-line: #A9C6A9;     --wm-ink: #3E6A46;        /* working memory (sage) */
+  --ltm-fill: #DCE6F0;    --ltm-line: #A9BFD6;    --ltm-ink: #3B5B7C;       /* long-term memory (blue) */
+  --front-fill: #F5E4E9;  --front-line: #D9A9B8;  --front-ink: #93465F;     /* frontier co-movements (rose) */
+  --out-fill: #F7E1D3;    --out-line: #E0B092;    --out-ink: #874B2B;       /* outputs (peach) */
+  --eval-fill: #D6ECE7;   --eval-line: #7FB5A9;   --eval-ink: #2F6B5F;      /* evaluation (teal) */
+  --butter-fill: #F5EAC6; --butter-line: #D2BB72; --butter-ink: #6E581A;
 
-  /* hulls S1-S7 (fill / line) */
-  --h1-fill: #F3E1A6; --h1-line: #B08F2E;
-  --h2-fill: #F4CDB6; --h2-line: #C9825A;
-  --h3-fill: #C9D9EA; --h3-line: #6F93B8;
-  --h4-fill: #E3D9C6; --h4-line: #9A8C74;
-  --h5-fill: #CFE3CC; --h5-line: #6E9E72;
-  --h6-fill: #EFCBD6; --h6-line: #B86A84;
-  --h7-fill: #CBE6E0; --h7-line: #5E9C8F;
+  /* hulls S1-S7 (fill / line / tab ink), as in Figure 1 */
+  --h1-fill: #F3E1A6; --h1-line: #B08F2E; --h1-ink: #7A6213;
+  --h2-fill: #F4CDB6; --h2-line: #C9825A; --h2-ink: #8E4A26;
+  --h3-fill: #C9D9EA; --h3-line: #6F93B8; --h3-ink: #355A80;
+  --h4-fill: #E3D9C6; --h4-line: #9A8C74; --h4-ink: #6B5D45;
+  --h5-fill: #CFE3CC; --h5-line: #6E9E72; --h5-ink: #3E6A46;
+  --h6-fill: #EFCBD6; --h6-line: #B86A84; --h6-ink: #8C3D58;
+  --h7-fill: #CBE6E0; --h7-line: #5E9C8F; --h7-ink: #2F6B5F;
 
-  /* deviation halos */
+  /* deviation halos: up with ▲, down with ▼ */
   --up: #B5523B;
   --down: #2F5F8A;
 
@@ -34,13 +45,14 @@
   --font-ui: "Instrument Sans", "Helvetica Neue", "Segoe UI", system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
-  --radius: 8px;
-  --radius-sm: 5px;
-  --shadow: 0 1px 2px rgba(47, 42, 37, 0.08), 0 4px 14px rgba(47, 42, 37, 0.06);
-  --focus: 0 0 0 3px rgba(124, 100, 196, 0.45);
+  --radius: 10px;
+  --radius-sm: 6px;
+  --shadow: 0 1px 2px rgba(47, 42, 37, 0.06), 0 6px 20px rgba(47, 42, 37, 0.07);
+  --shadow-lg: 0 2px 4px rgba(47, 42, 37, 0.06), 0 14px 40px rgba(47, 42, 37, 0.12);
+  --focus: 0 0 0 3px rgba(124, 100, 196, 0.40);
 
-  --toolbar-h: 48px;
-  --bottom-h: 132px;
-  --left-w: 300px;
-  --right-w: 380px;
+  --topbar-h: 52px;
+  --bottom-h: 44px;
+  --left-w: 360px;
+  --right-w: 420px;
 }

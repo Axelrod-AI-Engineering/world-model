@@ -113,14 +113,108 @@ interactions:
      direction: bidirectional, effect: {mu: 0.3}, kernel: {delay_days: 30, lag_days: 90, duration_days: null},
      reverse: {effect: {mu: 0.2}, kernel: {delay_days: 30, lag_days: 90, duration_days: null}},
      tags: [demo_addition], note: "demo addition (S1); the demo's bidirectional edge"}
-  - {id: e46, source: legal_regulatory.export_controls, target: northwind_semis.export_revenue, label: cuts export sales,
-     effect: {mu: -0.4}, kernel: {delay_days: 14, lag_days: 30, duration_days: null}, tags: [demo_addition], note: demo addition (company)}
-  - {id: e47, source: northwind_semis.export_revenue, target: northwind_semis.share_price, label: drives,
+  - {id: e46, source: legal_regulatory.export_controls, target: nvidia.china_revenue, label: cuts China sales,
+     effect: {mu: -0.4}, kernel: {delay_days: 14, lag_days: 30, duration_days: null}, tags: [demo_addition], note: demo addition (company; NVIDIA replaces the plan's fictional Northwind)}
+  - {id: e47, source: nvidia.china_revenue, target: nvidia.share_price, label: drives,
      effect: {mu: 0.6}, kernel: {delay_days: 1, lag_days: 7, duration_days: null}, tags: [demo_addition], note: internal; demo addition}
-  - {id: e48, source: northwind_semis.export_revenue, target: northwind_semis.capex, label: funds,
+  - {id: e48, source: nvidia.china_revenue, target: nvidia.capex, label: funds,
      effect: {mu: 0.5}, kernel: {delay_days: 30, lag_days: 90, duration_days: null}, tags: [demo_addition], note: internal; demo addition}
   - {id: e49, source: fed_chair.hawkishness, target: federal_reserve.policy_stance, label: leans on,
      effect: {mu: 0.3}, kernel: {delay_days: 14, lag_days: 30, duration_days: null}, tags: [demo_addition], note: demo addition (person)}
+
+  # -- Real actors: supply chains, competition, policy, and costs. All are demo additions.
+  # Semiconductors: demand flows upstream (cloud capex -> GPUs -> wafers -> tools); rivals trade share.
+  - {id: e50, source: us_commerce.chip_rule_stringency, target: legal_regulatory.export_controls, label: writes,
+     effect: {mu: 0.8}, kernel: {delay_days: 1, lag_days: 7, duration_days: null}, tags: [demo_addition], note: actor (regulator)}
+  - {id: e51, source: legal_regulatory.export_controls, target: asml.china_sales, label: cuts China sales,
+     effect: {mu: -0.4}, kernel: {delay_days: 30, lag_days: 60, duration_days: null}, tags: [demo_addition], note: actor}
+  - {id: e52, source: legal_regulatory.export_controls, target: tokyo_electron.china_sales, label: cuts China sales,
+     effect: {mu: -0.4}, kernel: {delay_days: 30, lag_days: 60, duration_days: null}, tags: [demo_addition], note: actor}
+  - {id: e53, source: tsmc.capex, target: asml.orders, label: orders tools from,
+     effect: {mu: 0.6}, kernel: {delay_days: 30, lag_days: 60, duration_days: null}, tags: [demo_addition], note: supply chain}
+  - {id: e54, source: tsmc.capex, target: tokyo_electron.orders, label: orders tools from,
+     effect: {mu: 0.5}, kernel: {delay_days: 30, lag_days: 60, duration_days: null}, tags: [demo_addition], note: supply chain}
+  - {id: e55, source: microsoft.ai_capex, target: nvidia.datacenter_revenue, label: buys GPUs from,
+     effect: {mu: 0.6}, kernel: {delay_days: 30, lag_days: 90, duration_days: null}, tags: [demo_addition], note: supply chain}
+  - {id: e56, source: nvidia.datacenter_revenue, target: tsmc.revenue, label: orders wafers from,
+     effect: {mu: 0.5}, kernel: {delay_days: 14, lag_days: 60, duration_days: null}, tags: [demo_addition], note: supply chain}
+  - {id: e57, source: tsmc.revenue, target: tsmc.capex, label: funds,
+     effect: {mu: 0.4}, kernel: {delay_days: 60, lag_days: 120, duration_days: null}, tags: [demo_addition], note: internal}
+  - {id: e58, source: nvidia.datacenter_revenue, target: nvidia.share_price, label: drives,
+     effect: {mu: 0.5}, kernel: {delay_days: 1, lag_days: 14, duration_days: null}, tags: [demo_addition], note: internal}
+  - {id: e59, source: nvidia.gpu_share, target: amd.gpu_share, label: compete for share, direction: bidirectional,
+     effect: {mu: -0.6}, kernel: {delay_days: 30, lag_days: 90, duration_days: null},
+     reverse: {effect: {mu: -0.6}, kernel: {delay_days: 30, lag_days: 90, duration_days: null}},
+     tags: [demo_addition], note: competition}
+  - {id: e60, source: legal_regulatory.export_controls, target: nvidia.gpu_share, label: hands share to local rivals,
+     effect: {mu: -0.2}, kernel: {delay_days: 60, lag_days: 180, duration_days: null}, tags: [demo_addition], note: actor}
+  - {id: e61, source: amd.gpu_share, target: amd.datacenter_revenue, label: drives,
+     effect: {mu: 0.6}, kernel: {delay_days: 14, lag_days: 60, duration_days: null}, tags: [demo_addition], note: internal}
+  - {id: e62, source: tsmc.foundry_share, target: samsung.foundry_share, label: compete for foundry share,
+     direction: bidirectional, effect: {mu: -0.6}, kernel: {delay_days: 60, lag_days: 180, duration_days: null},
+     reverse: {effect: {mu: -0.6}, kernel: {delay_days: 60, lag_days: 180, duration_days: null}},
+     tags: [demo_addition], note: competition}
+  - {id: e63, source: microsoft.ai_capex, target: productivity_tech.tech_capex, label: adds to,
+     effect: {mu: 0.4}, kernel: {delay_days: 14, lag_days: 60, duration_days: null}, tags: [demo_addition], note: actor to idea}
+  - {id: e64, source: interest_rates.long_term_yields, target: microsoft.ai_capex, label: raises the cost of,
+     effect: {mu: -0.2}, kernel: {delay_days: 60, lag_days: 120, duration_days: null}, tags: [demo_addition], note: idea to actor}
+  - {id: e65, source: nvidia.share_price, target: market_concentration.top4_share, label: concentrates the market,
+     effect: {mu: 0.4}, kernel: {delay_days: 7, lag_days: 30, duration_days: null}, tags: [demo_addition], note: actor to idea}
+  - {id: e66, source: nvidia.share_price, target: asset_prices.equity_index, label: lifts,
+     effect: {mu: 0.3}, kernel: {delay_days: 1, lag_days: 7, duration_days: null}, tags: [demo_addition], note: actor to idea}
+  - {id: e67, source: china_mofcom.mineral_export_curbs, target: supply_chains.delivery_times, label: slows,
+     effect: {mu: 0.3}, kernel: {delay_days: 30, lag_days: 60, duration_days: null}, tags: [demo_addition], note: actor to idea}
+  - {id: e68, source: us_commerce.chip_rule_stringency, target: china_mofcom.mineral_export_curbs, label: provokes retaliation,
+     effect: {mu: 0.6}, kernel: {delay_days: 30, lag_days: 60, duration_days: null}, tags: [demo_addition], note: competition (governments)}
+  - {id: e69, source: microsoft.ai_capex, target: samsung.memory_revenue, label: buys memory from,
+     effect: {mu: 0.4}, kernel: {delay_days: 30, lag_days: 90, duration_days: null}, tags: [demo_addition], note: supply chain}
+  # Energy: the cartel sets supply, producers earn the price, US shale answers with a lag.
+  - {id: e70, source: opec_plus.quota, target: resources_energy.oil_price, label: sets supply for,
+     effect: {mu: -0.6}, kernel: {delay_days: 7, lag_days: 30, duration_days: null}, tags: [demo_addition], note: actor to idea}
+  - {id: e71, source: resources_energy.oil_price, target: saudi_aramco.revenue, label: lifts,
+     effect: {mu: 0.7}, kernel: {delay_days: 14, lag_days: 30, duration_days: null}, tags: [demo_addition], note: idea to actor}
+  - {id: e72, source: opec_plus.quota, target: saudi_aramco.production, label: caps,
+     effect: {mu: 0.8}, kernel: {delay_days: 7, lag_days: 14, duration_days: null}, tags: [demo_addition], note: actor}
+  - {id: e73, source: resources_energy.oil_price, target: exxonmobil.earnings, label: lifts,
+     effect: {mu: 0.7}, kernel: {delay_days: 14, lag_days: 60, duration_days: null}, tags: [demo_addition], note: idea to actor}
+  - {id: e74, source: exxonmobil.earnings, target: exxonmobil.upstream_capex, label: funds,
+     effect: {mu: 0.4}, kernel: {delay_days: 90, lag_days: 180, duration_days: null}, tags: [demo_addition], note: internal}
+  - {id: e75, source: exxonmobil.upstream_capex, target: resources_energy.oil_price, label: adds supply to,
+     effect: {mu: -0.2}, kernel: {delay_days: 180, lag_days: 360, duration_days: null}, tags: [demo_addition], note: competition (shale vs OPEC+)}
+  - {id: e76, source: resources_energy.oil_price, target: opec_plus.quota, label: prompts more supply,
+     effect: {mu: 0.3}, kernel: {delay_days: 60, lag_days: 60, duration_days: null}, tags: [demo_addition], note: policy reaction}
+  - {id: e77, source: exxonmobil.earnings, target: exxonmobil.share_price, label: drives,
+     effect: {mu: 0.5}, kernel: {delay_days: 1, lag_days: 14, duration_days: null}, tags: [demo_addition], note: internal}
+  # Airlines: fuel is a big cost; confident consumers fly; rivals trade share.
+  - {id: e78, source: resources_energy.oil_price, target: delta.fuel_cost, label: raises,
+     effect: {mu: 0.9}, kernel: {delay_days: 7, lag_days: 30, duration_days: null}, tags: [demo_addition], note: idea to actor}
+  - {id: e79, source: delta.fuel_cost, target: delta.operating_margin, label: squeezes,
+     effect: {mu: -0.6}, kernel: {delay_days: 14, lag_days: 60, duration_days: null}, tags: [demo_addition], note: internal}
+  - {id: e80, source: resources_energy.oil_price, target: united_airlines.operating_margin, label: squeezes,
+     effect: {mu: -0.5}, kernel: {delay_days: 21, lag_days: 60, duration_days: null}, tags: [demo_addition], note: idea to actor}
+  - {id: e81, source: confidence.consumer_confidence, target: delta.operating_margin, label: fills planes,
+     effect: {mu: 0.3}, kernel: {delay_days: 30, lag_days: 60, duration_days: null}, tags: [demo_addition], note: idea to actor}
+  - {id: e82, source: delta.market_share, target: united_airlines.market_share, label: compete for travelers,
+     direction: bidirectional, effect: {mu: -0.6}, kernel: {delay_days: 30, lag_days: 90, duration_days: null},
+     reverse: {effect: {mu: -0.6}, kernel: {delay_days: 30, lag_days: 90, duration_days: null}},
+     tags: [demo_addition], note: competition}
+  - {id: e83, source: delta.operating_margin, target: delta.share_price, label: drives,
+     effect: {mu: 0.5}, kernel: {delay_days: 1, lag_days: 14, duration_days: null}, tags: [demo_addition], note: internal}
+  # Banks: rates widen margins; stress moves deposits from regional banks to the biggest bank.
+  - {id: e84, source: interest_rates.us_policy_rate, target: jpmorgan.net_interest_margin, label: widens,
+     effect: {mu: 0.6}, kernel: {delay_days: 30, lag_days: 90, duration_days: null}, tags: [demo_addition], note: idea to actor}
+  - {id: e85, source: financial_crises.banking_stress, target: regional_banks.deposits, label: drains,
+     effect: {mu: -0.7}, kernel: {delay_days: 1, lag_days: 14, duration_days: 180}, tags: [demo_addition], note: idea to actor}
+  - {id: e86, source: regional_banks.deposits, target: jpmorgan.deposits, label: flow to,
+     effect: {mu: -0.5}, kernel: {delay_days: 1, lag_days: 14, duration_days: 180}, tags: [demo_addition], note: competition (deposits)}
+  - {id: e87, source: credit_availability.lending_standards, target: jpmorgan.loan_growth, label: restrains,
+     effect: {mu: -0.4}, kernel: {delay_days: 30, lag_days: 90, duration_days: null}, tags: [demo_addition], note: idea to actor}
+  - {id: e88, source: regional_banks.deposits, target: credit_availability.credit_growth, label: funds lending,
+     effect: {mu: 0.3}, kernel: {delay_days: 60, lag_days: 120, duration_days: null}, tags: [demo_addition], note: actor to idea}
+  - {id: e89, source: interest_rates.long_term_yields, target: regional_banks.share_index, label: erodes,
+     effect: {mu: -0.4}, kernel: {delay_days: 7, lag_days: 30, duration_days: null}, tags: [demo_addition], note: idea to actor}
+  - {id: e90, source: united_airlines.operating_margin, target: united_airlines.share_price, label: drives,
+     effect: {mu: 0.5}, kernel: {delay_days: 1, lag_days: 14, duration_days: null}, tags: [demo_addition], note: internal}
 
 # Figure 1's arrow labels are entity-level labels, used by CausalGraph.entity_links().
 entity_link_labels:

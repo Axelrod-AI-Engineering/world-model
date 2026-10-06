@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import threading
 from abc import ABC, abstractmethod
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from enum import StrEnum
 from pathlib import Path
@@ -15,6 +16,9 @@ from pydantic import BaseModel, ConfigDict
 
 class Phase(StrEnum):
     INIT = "init"
+    UPDATE = "update"
+    COLLECT = "collect"
+    DAILY = "daily"
     INGEST = "ingest"
     TRANSLATE = "translate"
     REFINE = "refine"
@@ -51,6 +55,10 @@ class TraceEvent(BaseModel):
     state_version: int
     refs: list[str] = []          # ids of the objects involved, for highlighting
     payload: dict = {}
+    # what the event belongs to (addition): a market event id while it is ingested, reviewed, and folded;
+    # a thesis id while it is posed; "day:<date>" for a day's predict, record, and consolidation. The
+    # demo's walkthrough reads one scope's events as the steps the model took.
+    scope: str | None = None
 
 
 def _plain(value: Any) -> Any:
@@ -79,6 +87,18 @@ class Tracer(ABC):
     sim_time: datetime = datetime(1970, 1, 1, tzinfo=timezone.utc)
     state_version: int = 0
     enabled: bool = True
+    scope: str | None = None
+
+    @contextmanager
+    def scoped(self, scope: str | None):
+        """Tag the events emitted inside the block with `scope` (None keeps the enclosing scope)."""
+        prev = self.scope
+        if scope is not None:
+            self.scope = scope
+        try:
+            yield
+        finally:
+            self.scope = prev
 
     @abstractmethod
     def emit(self, phase: Phase, kind: str, /, refs: list[str] | None = None, **payload: Any) -> None: ...
@@ -123,7 +143,7 @@ class RecordingTracer(Tracer):
             self._seq += 1
             ev = TraceEvent(seq=self._seq, run_id=self.run_id, phase=Phase(phase), kind=kind,
                             sim_time=self.sim_time, state_version=self.state_version,
-                            refs=[str(r) for r in (refs or [])], payload=_plain(payload))
+                            refs=[str(r) for r in (refs or [])], payload=_plain(payload), scope=self.scope)
             self.events.append(ev)
             if len(self.events) > self.keep:
                 del self.events[: len(self.events) - self.keep]

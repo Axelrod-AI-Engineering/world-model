@@ -7,6 +7,7 @@ entities:
   - id: interest_rates
     name: Interest rates
     kind: macro_factor
+    description: "The price of borrowing. Central banks set short rates and markets set long-term yields; higher rates cool spending and investment."
     category_tags: [MF]
     aliases: [rates, policy rates, yields]
     subentities:
@@ -21,6 +22,7 @@ entities:
   - id: credit_availability
     name: Credit availability
     kind: macro_factor
+    description: "How easily households and firms can borrow. Banks pass on their funding costs and tighten lending when risks rise."
     category_tags: [MF]
     aliases: [credit, lending, bank lending]
     subentities:
@@ -35,6 +37,7 @@ entities:
   - id: debt_cycle
     name: Debt, fin. cycle
     kind: macro_factor
+    description: "The slow build-up and paydown of debt. The more debt there is, the harder rate rises bite."
     category_tags: [MF]
     aliases: [debt, financial cycle, leverage]
     subentities:
@@ -47,6 +50,7 @@ entities:
   - id: dollar_fx
     name: Dollar, FX rates
     kind: market
+    description: "The dollar's value against other currencies. A strong dollar squeezes everyone who borrowed in dollars."
     category_tags: [MF]
     aliases: [dollar, fx, exchange rates, currencies]
     subentities:
@@ -57,6 +61,7 @@ entities:
   - id: capital_flows
     name: Capital flows
     kind: macro_factor
+    description: "Money moving across borders into stocks, bonds, and loans. In a scare it rushes to safety and leaves emerging markets."
     category_tags: [MF]
     aliases: [capital flows, inflows, portfolio flows]
     subentities:
@@ -67,6 +72,7 @@ entities:
   - id: inflation
     name: Inflation
     kind: macro_factor
+    description: "How fast prices rise. Energy and supply shocks push it up; central banks raise rates to bring it down."
     category_tags: [MF]
     aliases: [inflation, prices, CPI]
     subentities:
@@ -77,6 +83,7 @@ entities:
   - id: consumer_spending
     name: Consumer spending
     kind: macro_factor
+    description: "What households buy, the largest part of demand. It falls when credit tightens or confidence drops."
     category_tags: [SD]
     aliases: [consumers, households, consumption]
     subentities:
@@ -89,6 +96,7 @@ entities:
   - id: business_investment
     name: Business investment
     kind: macro_factor
+    description: "What firms spend on equipment, buildings, and software. It answers to borrowing costs, input costs, and expected demand."
     category_tags: [SD]
     aliases: [investment, capex, business spending]
     subentities:
@@ -101,6 +109,7 @@ entities:
   - id: cross_border_trade
     name: Cross-border trade
     kind: macro_factor
+    description: "Goods and services that cross borders, and the finance behind them. Sanctions, controls, and crises can cut it fast."
     category_tags: [SD]
     aliases: [exports, imports, trade]
     subentities:
@@ -111,6 +120,7 @@ entities:
   - id: gov_spending
     name: Gov. spending, taxes
     kind: macro_factor
+    description: "What governments spend and tax. Deficits cushion shocks such as pandemics and disasters."
     category_tags: [SD]
     aliases: [government spending, fiscal policy, taxes]
     subentities:
@@ -123,6 +133,7 @@ entities:
   - id: asset_prices
     name: Asset price swings
     kind: market
+    description: "Prices of stocks and houses, and how much they swing. Booms feed borrowing; busts can start a crisis."
     category_tags: [SH]
     aliases: [stocks, equities, asset prices, house prices]
     subentities:
@@ -135,6 +146,7 @@ entities:
   - id: financial_crises
     name: Financial crises
     kind: external_factor
+    description: "Bank runs, defaults, and frozen markets. Stress spreads through credit and capital flows."
     category_tags: [SH]
     aliases: [banking crisis, financial crisis, bank stress, bank run]
     subentities:
@@ -145,6 +157,7 @@ entities:
   - id: wars
     name: Wars, fragmentation
     kind: external_factor
+    description: "Wars, sanctions, and the world splitting into blocs. They disrupt energy and supply chains and raise uncertainty."
     category_tags: [SH]
     aliases: [war, conflict, geopolitics, sanctions]
     subentities:
@@ -155,6 +168,7 @@ entities:
   - id: medical_crises
     name: Medical crises
     kind: external_factor
+    description: "Epidemics and the lockdowns they bring. They stop work and spending, then reshape government budgets."
     category_tags: [SH]
     aliases: [pandemic, outbreak, epidemic]
     subentities:
@@ -165,6 +179,7 @@ entities:
   - id: inequality_between
     name: Inequality between
     kind: macro_factor
+    description: "Income gaps between rich and poor countries. They widen when dollar funding tightens and capital leaves emerging markets."
     category_tags: [DI]
     aliases: [global inequality, emerging market gap]
     subentities:
@@ -175,6 +190,7 @@ entities:
   - id: inequality_within
     name: Inequality within
     kind: macro_factor
+    description: "How unequally income is shared inside a country. Over time it wears down trust and shapes politics."
     category_tags: [DI]
     aliases: [inequality, income inequality]
     subentities:
@@ -185,6 +201,7 @@ entities:
   - id: resources_energy
     name: Resources, energy
     kind: market
+    description: "Oil, gas, and other commodities. A price spike raises costs across the economy and pushes up inflation."
     category_tags: [SC]
     aliases: [oil, energy, commodities, OPEC]
     subentities:
@@ -195,6 +212,7 @@ entities:
   - id: supply_chains
     name: Supply chains
     kind: macro_factor
+    description: "The networks that move parts and goods between firms. Bottlenecks show up as slower deliveries and dearer shipping."
     category_tags: [SC]
     aliases: [supply chains, shipping, logistics]
     subentities:
@@ -205,6 +223,7 @@ entities:
   - id: market_concentration
     name: Market concentration
     kind: macro_factor
+    description: "How much of a market a few firms control. It shapes prices, innovation, and investment."
     category_tags: [SC]
     aliases: [concentration, market power]
     subentities:
@@ -213,6 +232,7 @@ entities:
   - id: productivity_tech
     name: Productivity, tech
     kind: macro_factor
+    description: "Output per worker, and how fast new technology spreads. The main engine of long-run growth."
     category_tags: [SC]
     aliases: [productivity, technology, tech]
     subentities:
@@ -223,6 +243,7 @@ entities:
   - id: labor_demographics
     name: Labor, demographics
     kind: macro_factor
+    description: "How many people work or look for work, shaped by ageing and migration. It caps what the economy can produce."
     category_tags: [SC]
     aliases: [labor, jobs, employment, demographics]
     subentities:
@@ -233,6 +254,7 @@ entities:
   - id: legal_regulatory
     name: Legal, regulatory
     kind: external_factor
+    description: "Laws, regulation, and trade controls. Export controls can cut off sales of strategic goods overnight."
     category_tags: [DF]
     aliases: [regulation, export controls, trade rules]
     subentities:
@@ -243,6 +265,7 @@ entities:
   - id: geography
     name: Geography
     kind: external_factor
+    description: "Distance, terrain, and location. It sets trade costs and barely changes, so it anchors everything else."
     category_tags: [DF]
     aliases: [geography, distance]
     subentities:
@@ -251,6 +274,7 @@ entities:
   - id: institutions
     name: Institutions
     kind: external_factor
+    description: "Rule of law, property rights, and independent central banks. Strong institutions make policy believable."
     category_tags: [DF]
     aliases: [institutions, rule of law]
     subentities:
@@ -261,6 +285,7 @@ entities:
   - id: culture_trust
     name: Culture, trust
     kind: external_factor
+    description: "How much people trust each other and their institutions. Low trust makes cooperation and reform harder."
     category_tags: [DF]
     aliases: [trust, culture]
     subentities:
@@ -269,6 +294,7 @@ entities:
   - id: climate_change
     name: Climate change
     kind: external_factor
+    description: "Rising temperatures and the policies that answer them, such as carbon prices. A slow force that reshapes energy and investment."
     category_tags: [EN]
     aliases: [climate, warming, carbon]
     subentities:
@@ -279,6 +305,7 @@ entities:
   - id: disasters_weather
     name: Disasters, weather
     kind: external_factor
+    description: "Storms, floods, droughts, and fires. Their losses hit output and bring relief spending."
     category_tags: [EN]
     aliases: [disasters, weather, storms]
     subentities:
@@ -287,6 +314,7 @@ entities:
   - id: confidence
     name: Confidence
     kind: macro_factor
+    description: "How optimistic households and firms feel. Confidence moves spending and hiring before the hard data do."
     category_tags: [EX]
     aliases: [confidence, sentiment]
     subentities:
@@ -297,6 +325,7 @@ entities:
   - id: policy_uncertainty
     name: Policy uncertainty
     kind: macro_factor
+    description: "How unsure people are about future policy. When it is high, firms delay investment and hiring."
     category_tags: [EX]
     aliases: [uncertainty, policy uncertainty]
     subentities:
@@ -306,6 +335,7 @@ entities:
   - id: federal_reserve
     name: Federal Reserve
     kind: agency
+    description: "The US central bank. It sets the policy rate and tends to raise it when inflation runs hot."
     category_tags: [MF]
     features: {region: US, function: monetary_policy}
     aliases: [Fed, FOMC]
@@ -318,30 +348,234 @@ entities:
   - id: ecb
     name: European Central Bank
     kind: agency
+    description: "The euro area's central bank. It sets the deposit rate for the euro area."
     category_tags: [MF]
     features: {region: EA, function: monetary_policy}
     aliases: [ECB]
     subentities:
       - {id: ecb.policy_stance, name: ECB policy decision (deposit rate), attribute_kind: policy_rate, unit: pct,
          family: gaussian, prior: {family: gaussian, mu: 2.00, sigma: 0.25}, scale: 0.25}
-  - id: northwind_semis
-    name: Northwind Semiconductors (fictional)
-    kind: company
-    category_tags: [SC]
-    features: {sector: semiconductors, region: US}
-    aliases: [Northwind]
-    subentities:
-      - {id: northwind_semis.export_revenue, name: Northwind export revenue, attribute_kind: revenue_flow, unit: $bn/qtr,
-         family: lognormal, mean: 12.0, scale: 0.06}
-      - {id: northwind_semis.capex, name: Northwind capex, attribute_kind: spending_flow, unit: $bn/qtr,
-         family: lognormal, mean: 4.0, scale: 0.08}
-      - {id: northwind_semis.share_price, name: Northwind share price, attribute_kind: asset_price, unit: $,
-         family: lognormal, mean: 150.0, scale: 0.08}
   - id: fed_chair
     name: Fed Chair (role)
     kind: person
+    description: "Whoever chairs the Fed, as a role. A more hawkish chair leans the Fed toward higher rates."
     category_tags: [MF]
     aliases: [Fed Chair, chair]
     subentities:
       - {id: fed_chair.hawkishness, name: Hawkishness, attribute_kind: sentiment_index, unit: index,
          family: gaussian, prior: {family: gaussian, mu: 0.0, sigma: 1.0}, scale: 1.0}
+  # -- Real actors (the user asked for concrete, tangible instances). Every number in the demo is
+  # synthetic; the actors, their roles, and the links between them are real. DECISION: NVIDIA takes the
+  # place of the plan's fictional Northwind Semiconductors (same role, same links e46-e48).
+  - id: nvidia
+    name: NVIDIA
+    kind: company
+    description: "Designs the GPUs most AI data centers run on. US export controls cap what it may sell in China."
+    category_tags: [SC]
+    features: {sector: semiconductors, region: US}
+    aliases: [Nvidia, NVDA]
+    subentities:
+      - {id: nvidia.datacenter_revenue, name: NVIDIA data-center revenue, attribute_kind: revenue_flow, unit: $bn/qtr,
+         family: lognormal, mean: 40.0, scale: 0.06}
+      - {id: nvidia.china_revenue, name: NVIDIA China revenue, attribute_kind: revenue_flow, unit: $bn/qtr,
+         family: lognormal, mean: 5.0, scale: 0.08, aliases: [NVIDIA China sales]}
+      - {id: nvidia.gpu_share, name: NVIDIA AI-accelerator share, attribute_kind: share, unit: share,
+         family: beta, mean: 0.85, scale: 0.15}
+      - {id: nvidia.capex, name: NVIDIA capex, attribute_kind: spending_flow, unit: $bn/qtr,
+         family: lognormal, mean: 1.0, scale: 0.08}
+      - {id: nvidia.share_price, name: NVIDIA share price, attribute_kind: asset_price, unit: $,
+         family: lognormal, mean: 140.0, scale: 0.08}
+  - id: amd
+    name: AMD
+    kind: company
+    description: "NVIDIA's main rival in AI accelerators; it gains share when NVIDIA is supply-constrained or shut out."
+    category_tags: [SC]
+    features: {sector: semiconductors, region: US}
+    aliases: [Advanced Micro Devices]
+    subentities:
+      - {id: amd.gpu_share, name: AMD AI-accelerator share, attribute_kind: share, unit: share,
+         family: beta, mean: 0.10, scale: 0.15}
+      - {id: amd.datacenter_revenue, name: AMD data-center revenue, attribute_kind: revenue_flow, unit: $bn/qtr,
+         family: lognormal, mean: 4.0, scale: 0.08}
+      - {id: amd.share_price, name: AMD share price, attribute_kind: asset_price, unit: $,
+         family: lognormal, mean: 150.0, scale: 0.08}
+  - id: tsmc
+    name: TSMC
+    kind: company
+    description: "Manufactures most of the world's advanced chips, including NVIDIA's and AMD's designs."
+    category_tags: [SC]
+    features: {sector: semiconductors, region: Taiwan}
+    aliases: [Taiwan Semiconductor]
+    subentities:
+      - {id: tsmc.revenue, name: TSMC revenue, attribute_kind: revenue_flow, unit: $bn/qtr,
+         family: lognormal, mean: 30.0, scale: 0.05}
+      - {id: tsmc.capex, name: TSMC capex, attribute_kind: spending_flow, unit: $bn/qtr,
+         family: lognormal, mean: 10.0, scale: 0.06}
+      - {id: tsmc.foundry_share, name: TSMC foundry share, attribute_kind: share, unit: share,
+         family: beta, mean: 0.65, scale: 0.1}
+  - id: samsung
+    name: Samsung Electronics
+    kind: company
+    description: "The largest memory maker and TSMC's main foundry rival; AI servers need its high-bandwidth memory."
+    category_tags: [SC]
+    features: {sector: semiconductors, region: South Korea}
+    aliases: [Samsung]
+    subentities:
+      - {id: samsung.foundry_share, name: Samsung foundry share, attribute_kind: share, unit: share,
+         family: beta, mean: 0.12, scale: 0.1}
+      - {id: samsung.memory_revenue, name: Samsung memory revenue, attribute_kind: revenue_flow, unit: $bn/qtr,
+         family: lognormal, mean: 20.0, scale: 0.08}
+  - id: asml
+    name: ASML
+    kind: company
+    description: "The only maker of the EUV machines that print advanced chips; Dutch licensing decides where they ship."
+    category_tags: [SC]
+    features: {sector: semiconductors, region: Netherlands}
+    aliases: []
+    subentities:
+      - {id: asml.orders, name: ASML orders, attribute_kind: spending_flow, unit: $bn/qtr,
+         family: lognormal, mean: 6.0, scale: 0.1}
+      - {id: asml.china_sales, name: ASML China sales, attribute_kind: revenue_flow, unit: $bn/qtr,
+         family: lognormal, mean: 2.0, scale: 0.1}
+      - {id: asml.share_price, name: ASML share price, attribute_kind: asset_price, unit: $,
+         family: lognormal, mean: 700.0, scale: 0.08}
+  - id: tokyo_electron
+    name: Tokyo Electron
+    kind: company
+    description: "Japan's largest chip-equipment maker; Japan's export rules govern what it may sell in China."
+    category_tags: [SC]
+    features: {sector: semiconductors, region: Japan}
+    aliases: [TEL]
+    subentities:
+      - {id: tokyo_electron.orders, name: Tokyo Electron orders, attribute_kind: spending_flow, unit: $bn/qtr,
+         family: lognormal, mean: 4.0, scale: 0.1}
+      - {id: tokyo_electron.china_sales, name: Tokyo Electron China sales, attribute_kind: revenue_flow, unit: $bn/qtr,
+         family: lognormal, mean: 1.5, scale: 0.1}
+  - id: microsoft
+    name: Microsoft
+    kind: company
+    description: "One of the hyperscalers whose AI data-center build-out drives demand for GPUs and memory."
+    category_tags: [SD]
+    features: {sector: cloud, region: US}
+    aliases: [MSFT]
+    subentities:
+      - {id: microsoft.ai_capex, name: Microsoft AI capex, attribute_kind: spending_flow, unit: $bn/qtr,
+         family: lognormal, mean: 20.0, scale: 0.06, aliases: [hyperscaler capex, AI spending]}
+      - {id: microsoft.share_price, name: Microsoft share price, attribute_kind: asset_price, unit: $,
+         family: lognormal, mean: 450.0, scale: 0.06}
+  - id: opec_plus
+    name: OPEC+
+    kind: agency
+    description: "The oil producers' group led by Saudi Arabia and Russia; its output quotas move the oil price."
+    category_tags: [SC]
+    features: {function: production_policy, region: global}
+    aliases: [OPEC, OPEC plus]
+    subentities:
+      - {id: opec_plus.quota, name: OPEC+ output quota, attribute_kind: production_flow, unit: mb/d,
+         family: lognormal, mean: 41.0, scale: 0.02}
+      - {id: opec_plus.spare_capacity, name: OPEC+ spare capacity, attribute_kind: production_flow, unit: mb/d,
+         family: lognormal, mean: 4.0, scale: 0.1}
+  - id: saudi_aramco
+    name: Saudi Aramco
+    kind: company
+    description: "The world's largest oil producer; its output follows OPEC+ quotas and its revenue follows the oil price."
+    category_tags: [SC]
+    features: {sector: energy, region: Saudi Arabia}
+    aliases: [Aramco]
+    subentities:
+      - {id: saudi_aramco.production, name: Aramco oil production, attribute_kind: production_flow, unit: mb/d,
+         family: lognormal, mean: 9.0, scale: 0.03}
+      - {id: saudi_aramco.revenue, name: Aramco revenue, attribute_kind: revenue_flow, unit: $bn/qtr,
+         family: lognormal, mean: 110.0, scale: 0.06}
+  - id: exxonmobil
+    name: ExxonMobil
+    kind: company
+    description: "The largest US oil major; higher prices lift its earnings and, a few quarters later, its drilling."
+    category_tags: [SC]
+    features: {sector: energy, region: US}
+    aliases: [Exxon]
+    subentities:
+      - {id: exxonmobil.earnings, name: ExxonMobil earnings, attribute_kind: revenue_flow, unit: $bn/qtr,
+         family: lognormal, mean: 9.0, scale: 0.08}
+      - {id: exxonmobil.upstream_capex, name: ExxonMobil upstream capex, attribute_kind: spending_flow, unit: $bn/qtr,
+         family: lognormal, mean: 6.0, scale: 0.06}
+      - {id: exxonmobil.share_price, name: ExxonMobil share price, attribute_kind: asset_price, unit: $,
+         family: lognormal, mean: 115.0, scale: 0.06}
+  - id: delta
+    name: Delta Air Lines
+    kind: company
+    description: "A major US airline; jet fuel is its second-largest cost, so oil shocks squeeze its margins."
+    category_tags: [SD]
+    features: {sector: airlines, region: US}
+    aliases: [Delta]
+    subentities:
+      - {id: delta.fuel_cost, name: Delta jet fuel cost, attribute_kind: cost_index, unit: $/gal,
+         family: lognormal, mean: 2.6, scale: 0.08}
+      - {id: delta.operating_margin, name: Delta operating margin, attribute_kind: margin, unit: pct,
+         family: gaussian, prior: {family: gaussian, mu: 10.0, sigma: 2.0}, scale: 2.0}
+      - {id: delta.market_share, name: Delta US market share, attribute_kind: share, unit: share,
+         family: beta, mean: 0.18, scale: 0.08}
+      - {id: delta.share_price, name: Delta share price, attribute_kind: asset_price, unit: $,
+         family: lognormal, mean: 55.0, scale: 0.08}
+  - id: united_airlines
+    name: United Airlines
+    kind: company
+    description: "Delta's closest rival; the two compete for the same travelers on the same routes."
+    category_tags: [SD]
+    features: {sector: airlines, region: US}
+    aliases: [United]
+    subentities:
+      - {id: united_airlines.operating_margin, name: United operating margin, attribute_kind: margin, unit: pct,
+         family: gaussian, prior: {family: gaussian, mu: 8.0, sigma: 2.0}, scale: 2.0}
+      - {id: united_airlines.market_share, name: United US market share, attribute_kind: share, unit: share,
+         family: beta, mean: 0.16, scale: 0.08}
+      - {id: united_airlines.share_price, name: United share price, attribute_kind: asset_price, unit: $,
+         family: lognormal, mean: 80.0, scale: 0.08}
+  - id: jpmorgan
+    name: JPMorgan Chase
+    kind: company
+    description: "The largest US bank; higher policy rates widen its interest margin, and deposits flow to it when smaller banks look shaky."
+    category_tags: [MF]
+    features: {sector: banking, region: US}
+    aliases: [JPMorgan, JPM]
+    subentities:
+      - {id: jpmorgan.net_interest_margin, name: JPMorgan net interest margin, attribute_kind: margin, unit: pct,
+         family: gaussian, prior: {family: gaussian, mu: 2.7, sigma: 0.15}, scale: 0.15}
+      - {id: jpmorgan.deposits, name: JPMorgan deposits, attribute_kind: balance, unit: $tn,
+         family: lognormal, mean: 2.4, scale: 0.03}
+      - {id: jpmorgan.loan_growth, name: JPMorgan loan growth, attribute_kind: growth_rate, unit: pct y/y,
+         family: gaussian, prior: {family: gaussian, mu: 4.0, sigma: 1.0}, scale: 1.0}
+  - id: regional_banks
+    name: US regional banks
+    kind: market
+    description: "Mid-sized US lenders taken together; they lose deposits first when bank stress rises, and lend less after."
+    category_tags: [MF]
+    features: {sector: banking, region: US}
+    aliases: [regional lenders, regional banks]
+    subentities:
+      - {id: regional_banks.deposits, name: Regional bank deposits, attribute_kind: balance, unit: $tn,
+         family: lognormal, mean: 2.8, scale: 0.03}
+      - {id: regional_banks.share_index, name: Regional bank share index, attribute_kind: asset_price, unit: index,
+         family: lognormal, mean: 100.0, scale: 0.08}
+  - id: us_commerce
+    name: US Commerce Dept. (BIS)
+    kind: agency
+    description: "The US agency that writes export controls on advanced chips and chipmaking tools."
+    category_tags: [DF]
+    features: {function: trade_policy, region: US}
+    aliases: [BIS, Commerce Department]
+    subentities:
+      - {id: us_commerce.chip_rule_stringency, name: US chip export rule stringency, attribute_kind: restriction_index,
+         unit: index, family: gaussian, prior: {family: gaussian, mu: 50.0, sigma: 10.0}, scale: 10.0,
+         aliases: [chip rules, chip export rules]}
+  - id: china_mofcom
+    name: China Commerce Ministry
+    kind: agency
+    description: "China's trade ministry; it answers US chip controls with curbs on critical minerals such as gallium and rare earths."
+    category_tags: [DF]
+    features: {function: trade_policy, region: China}
+    aliases: [MOFCOM]
+    subentities:
+      - {id: china_mofcom.mineral_export_curbs, name: China mineral export curbs, attribute_kind: restriction_index,
+         unit: index, family: gaussian, prior: {family: gaussian, mu: 30.0, sigma: 10.0}, scale: 10.0,
+         aliases: [rare earth curbs, mineral curbs]}

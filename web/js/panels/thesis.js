@@ -1,56 +1,151 @@
 // Thesis composer (§13.6): a question; shocks (a subentity picker, the change, its mode, and persistence);
 // optional interventions (a decision variable, hold or change, and a window); a horizon; and targets.
-// "Run" poses the thesis and produces a forecast.
+// DECISION: the tab opens with the question alone, a few examples, and what to forecast as chips that wrap
+// (no scrolling box): any value, actor, idea, sector, superentity, or category, so forecasts come at every
+// granularity. The full shock builder sits one click down.
 import { api } from "../api.js";
+import { CATEGORY_CODES, CATEGORY_NAMES } from "../graph/layouts.js";
 import { emit, on, store } from "../store.js";
 import { errorText, esc } from "../util.js";
 
-const DEFAULT_TARGETS = ["inflation.headline_cpi", "interest_rates.us_policy_rate", "credit_availability.credit_growth",
-  "business_investment.capex_growth", "asset_prices.equity_index", "confidence.consumer_confidence"];
+// examples the template translator (data/construction/templates.yaml) understands
+const EXAMPLES = ["What if oil prices doubled next quarter?", "What if NVIDIA's China sales fall by 30%?",
+  "What if OPEC cuts output by 10%?", "What if the Fed raises rates by 100bp?", "What if jet fuel spikes next month?"];
+const KIND_LABEL = { sub: "value", actor: "actor", idea: "idea", superentity: "superentity", sector: "sector", category: "category" };
+const ACTOR_KINDS = new Set(["agency", "company", "person"]);
 
 export function initThesis({ toast }) {
   const el = document.getElementById("tab-thesis");
   let shocks = [{ sid: "resources_energy.oil_price", delta: 1.0, mode: "relative", persistence: "step" }];
   let interventions = [];
-  let targets = new Set(DEFAULT_TARGETS);
+  let picks = [
+    { kind: "sub", ref: "inflation.headline_cpi" }, { kind: "sub", ref: "interest_rates.us_policy_rate" },
+    { kind: "actor", ref: "delta" }, { kind: "sector", ref: "airlines" }, { kind: "category", ref: "SD" },
+  ];
   let busy = false;
   let counter = 1;
+  let advanced = false;
+  let question = EXAMPLES[0];
+  let horizon = 270;
+  let adding = false;
+  let query = "";
+
+  const view = () => store.graph ?? store.view;
+
+  function catalog() {
+    const v = view();
+    if (!v) return [];
+    const ents = new Map(v.entities.map((e) => [e.id, e]));
+    const out = [];
+    for (const e of v.entities) out.push({ kind: ACTOR_KINDS.has(e.kind) || e.features?.sector ? "actor" : "idea", ref: e.id, name: e.name });
+    for (const s of v.subentities) out.push({ kind: "sub", ref: s.id, name: s.name, sub: ents.get(s.entity_id)?.name });
+    const seen = new Set();
+    for (const h of v.hulls ?? []) {
+      if (h.transient || h.status !== "admitted" || seen.has(h.pattern_id)) continue;
+      seen.add(h.pattern_id);
+      out.push({ kind: "superentity", ref: h.pattern_id, name: h.label });
+    }
+    const sectors = [...new Set(v.entities.map((e) => e.features?.sector).filter(Boolean))].sort();
+    for (const sct of sectors) out.push({ kind: "sector", ref: sct, name: sct.charAt(0).toUpperCase() + sct.slice(1) });
+    for (const c of CATEGORY_CODES) out.push({ kind: "category", ref: c, name: CATEGORY_NAMES[c] });
+    return out;
+  }
+
+  function labelOf(p) {
+    const hit = catalog().find((x) => x.kind === p.kind && x.ref === p.ref);
+    return hit ? hit.name : p.ref;
+  }
+
+  // what the server needs: subentities as targets, the rest as target groups
+  function targetsOf() {
+    const targets = picks.filter((p) => p.kind === "sub").map((p) => p.ref);
+    const groups = picks.filter((p) => p.kind !== "sub").map((p) => ({
+      kind: { actor: "entity", idea: "entity", superentity: "superentity", sector: "sector", category: "category" }[p.kind],
+      ref: p.ref }));
+    return { targets, target_groups: groups };
+  }
+
+  function suggestions() {
+    const q = query.trim().toLowerCase();
+    if (!q) return [];
+    const have = new Set(picks.map((p) => `${p.kind}:${p.ref}`));
+    return catalog().filter((x) => !have.has(`${x.kind}:${x.ref}`)
+      && (x.name.toLowerCase().includes(q) || x.ref.toLowerCase().includes(q) || (x.sub ?? "").toLowerCase().includes(q)))
+      .sort((a, b) => (a.name.toLowerCase().startsWith(q) ? 0 : 1) - (b.name.toLowerCase().startsWith(q) ? 0 : 1))
+      .slice(0, 10);
+  }
 
   function subOptions() {
-    return (store.graph?.subentities ?? []).map((s) => `<option value="${esc(s.id)}">${esc(s.name)}</option>`).join("");
+    return (view()?.subentities ?? []).map((s) => `<option value="${esc(s.id)}">${esc(s.name)}</option>`).join("");
   }
 
   function render() {
-    const subs = store.graph?.subentities ?? [];
+    const subs = view()?.subentities ?? [];
     const decisions = subs.filter((s) => s.decision_variable);
+    const sugg = suggestions();
     el.innerHTML = `
+      <div class="group-label">Ask a what-if</div>
       <h3>Pose a thesis</h3>
-      <p class="small muted">A question becomes a hypothetical event. Shocks are applied, interventions hold a decision
-        variable (do), and the engine forecasts the targets.</p>
-      <div class="section"><label class="small" for="th-q">Question</label>
-        <div class="row"><input id="th-q" type="text" style="flex:1" value="What if oil prices doubled next quarter?">
-          <button id="th-ask" title="Translate the question with the template translator">Ask</button></div></div>
-      <datalist id="sub-list">${subOptions()}</datalist>
-      <div class="section"><h4>Shocks</h4>
-        ${shocks.map((s, i) => `<div class="shock-row" data-i="${i}">
-          <input type="text" list="sub-list" data-f="sid" value="${esc(s.sid)}" aria-label="Subentity">
-          <input type="number" step="0.05" data-f="delta" value="${s.delta}" aria-label="Change">
-          <select data-f="mode" aria-label="Mode">${["relative", "absolute", "standardized"].map((m) => `<option ${m === s.mode ? "selected" : ""}>${m}</option>`).join("")}</select>
-          <select data-f="persistence" aria-label="Persistence">${["step", "pulse"].map((m) => `<option ${m === s.persistence ? "selected" : ""}>${m}</option>`).join("")}</select>
-          <button data-del="${i}" aria-label="Remove shock">✕</button></div>`).join("")}
-        <button id="th-add">+ shock</button>
-        <label class="small" style="margin-left:8px">starts in <input id="th-start" type="number" value="12" style="width:52px"> weeks</label></div>
-      <div class="section"><h4>Interventions</h4>
-        ${interventions.map((v, i) => `<div class="shock-row" data-v="${i}" style="grid-template-columns: 1fr 70px 70px 64px 22px">
-          <select data-f="sid" aria-label="Decision variable">${decisions.map((d) => `<option value="${esc(d.id)}" ${d.id === v.sid ? "selected" : ""}>${esc(d.name)}</option>`).join("")}</select>
-          <select data-f="kind" aria-label="Hold or change"><option ${v.kind === "hold" ? "selected" : ""}>hold</option><option ${v.kind === "change" ? "selected" : ""}>change</option></select>
-          <input type="number" step="0.25" data-f="delta" value="${v.delta}" ${v.kind === "hold" ? "disabled" : ""} aria-label="Change">
-          <input type="number" data-f="window" value="${v.window}" aria-label="Window (days)" title="window (days)">
-          <button data-vdel="${i}" aria-label="Remove intervention">✕</button></div>`).join("")}
-        <button id="th-addv" ${decisions.length ? "" : "disabled"}>+ intervention</button></div>
-      <div class="section"><div class="form-grid"><label for="th-h">Horizon (days)</label><input id="th-h" type="number" value="270"></div></div>
-      <div class="section"><h4>Targets</h4><div class="targets">${subs.map((s) => `<label><input type="checkbox" data-t="${esc(s.id)}" ${targets.has(s.id) ? "checked" : ""}> ${esc(s.name)}</label>`).join("")}</div></div>
-      <div class="row"><button class="hyp" id="th-run">${busy ? "Running…" : "Run"}</button><span class="error" id="th-err"></span></div>`;
+      <p class="lede">Describe something that has not happened. The model treats it like news, runs it through the graph and
+        the superentities it recalls, and forecasts how the economy would respond.</p>
+      <div class="ask-row"><input id="th-q" type="text" value="${esc(question)}" aria-label="Question">
+        <button class="hyp" id="th-ask">${busy ? "Thinking…" : "Ask"}</button></div>
+      <div class="chips" style="margin-top:8px"><span class="faint small">Try</span>
+        ${EXAMPLES.map((q, i) => `<button class="pick ghosted" data-ex="${i}">${esc(q)}</button>`).join("")}</div>
+      <div class="section"><h4>Forecast for</h4>
+        <div class="chips">${picks.map((p, i) => `<span class="pick ${p.kind}"><span class="k">${esc(KIND_LABEL[p.kind])}</span>${esc(labelOf(p))}
+            <button class="x" data-rm="${i}" aria-label="Remove ${esc(labelOf(p))}">✕</button></span>`).join("")}
+          ${adding ? `<input id="th-add-q" class="pick-input" type="text" placeholder="a value, actor, idea, sector…" value="${esc(query)}" aria-label="Add a forecast target">`
+            : `<button class="pick add" id="th-add-t">+ add</button>`}</div>
+        ${adding && sugg.length ? `<div class="chips suggest">${sugg.map((x, i) => `<button class="pick ${x.kind}" data-sg="${i}"><span class="k">${esc(KIND_LABEL[x.kind])}</span>${esc(x.name)}${x.sub ? `<span class="faint"> · ${esc(x.sub)}</span>` : ""}</button>`).join("")}</div>` : ""}
+        ${adding && query && !sugg.length ? `<div class="small faint" style="margin-top:4px">No match.</div>` : ""}
+      </div>
+      <div class="ask-row small"><label for="th-h">Horizon</label><input id="th-h" type="number" value="${horizon}" style="width:76px"> days</div>
+      <div class="error" id="th-err"></div>
+      <details class="section" ${advanced ? "open" : ""} id="th-adv"><summary class="small" style="cursor:pointer">Build the shocks yourself</summary>
+        <datalist id="sub-list">${subOptions()}</datalist>
+        <div class="section"><h4>Shocks</h4>
+          ${shocks.map((s, i) => `<div class="shock-row" data-i="${i}">
+            <input type="text" list="sub-list" data-f="sid" value="${esc(s.sid)}" aria-label="Subentity" class="grow">
+            <input type="number" step="0.05" data-f="delta" value="${s.delta}" aria-label="Change" style="width:72px">
+            <select data-f="mode" aria-label="Mode">${["relative", "absolute", "standardized"].map((m) => `<option ${m === s.mode ? "selected" : ""}>${m}</option>`).join("")}</select>
+            <select data-f="persistence" aria-label="Persistence">${["step", "pulse"].map((m) => `<option ${m === s.persistence ? "selected" : ""}>${m}</option>`).join("")}</select>
+            <button class="ghost" data-del="${i}" aria-label="Remove shock">✕</button></div>`).join("")}
+          <div class="ask-row"><button id="th-add">+ shock</button>
+            <label class="small">starts in <input id="th-start" type="number" value="12" style="width:56px"> weeks</label></div></div>
+        <div class="section"><h4>Interventions</h4>
+          ${interventions.map((v, i) => `<div class="shock-row" data-v="${i}">
+            <select data-f="sid" aria-label="Decision variable" class="grow">${decisions.map((d) => `<option value="${esc(d.id)}" ${d.id === v.sid ? "selected" : ""}>${esc(d.name)}</option>`).join("")}</select>
+            <select data-f="kind" aria-label="Hold or change"><option ${v.kind === "hold" ? "selected" : ""}>hold</option><option ${v.kind === "change" ? "selected" : ""}>change</option></select>
+            <input type="number" step="0.25" data-f="delta" value="${v.delta}" ${v.kind === "hold" ? "disabled" : ""} aria-label="Change" style="width:72px">
+            <input type="number" data-f="window" value="${v.window}" aria-label="Window (days)" title="window (days)" style="width:72px">
+            <button class="ghost" data-vdel="${i}" aria-label="Remove intervention">✕</button></div>`).join("")}
+          <button id="th-addv" ${decisions.length ? "" : "disabled"}>+ intervention</button></div>
+        <div class="ask-row"><button class="hyp" id="th-run">${busy ? "Running…" : "Run"}</button></div>
+      </details>`;
+    el.querySelector("#th-adv").addEventListener("toggle", (ev) => { advanced = ev.target.open; });
+    el.querySelector("#th-q").addEventListener("input", (ev) => { question = ev.target.value; });
+    el.querySelector("#th-q").addEventListener("keydown", (ev) => { if (ev.key === "Enter") ask(); });
+    el.querySelector("#th-h").addEventListener("change", (ev) => { horizon = +ev.target.value || 182; });
+    for (const b of el.querySelectorAll("[data-ex]")) b.addEventListener("click", () => { question = EXAMPLES[+b.dataset.ex]; render(); });
+    for (const b of el.querySelectorAll("[data-rm]")) b.addEventListener("click", () => { picks.splice(+b.dataset.rm, 1); render(); });
+    el.querySelector("#th-add-t")?.addEventListener("click", () => { adding = true; query = ""; render(); el.querySelector("#th-add-q")?.focus(); });
+    const qi = el.querySelector("#th-add-q");
+    if (qi) {
+      qi.addEventListener("input", () => {
+        query = qi.value;
+        const pos = qi.selectionStart;
+        render();
+        const again = el.querySelector("#th-add-q");
+        again?.focus();
+        again?.setSelectionRange(pos, pos);
+      });
+      qi.addEventListener("keydown", (ev) => {
+        if (ev.key === "Escape") { ev.stopPropagation(); adding = false; query = ""; render(); }
+        if (ev.key === "Enter") { const s0 = suggestions()[0]; if (s0) addPick(s0); }
+      });
+    }
+    for (const b of el.querySelectorAll("[data-sg]")) b.addEventListener("click", () => addPick(sugg[+b.dataset.sg]));
     for (const row of el.querySelectorAll("[data-i]")) {
       const i = +row.dataset.i;
       for (const inp of row.querySelectorAll("[data-f]")) {
@@ -73,11 +168,16 @@ export function initThesis({ toast }) {
       interventions.push({ sid: decisions[0]?.id, kind: "hold", delta: 0, window: 270 });
       render();
     });
-    for (const c of el.querySelectorAll("[data-t]")) {
-      c.addEventListener("change", () => { if (c.checked) targets.add(c.dataset.t); else targets.delete(c.dataset.t); });
-    }
     el.querySelector("#th-run").addEventListener("click", run);
     el.querySelector("#th-ask").addEventListener("click", ask);
+  }
+
+  function addPick(x) {
+    if (!x) return;
+    picks.push({ kind: x.kind, ref: x.ref });
+    query = "";
+    adding = false;
+    render();
   }
 
   function nowIso() {
@@ -99,16 +199,17 @@ export function initThesis({ toast }) {
     }
     const id = `T-UI${counter++}`;
     const thesis = {
-      id, question: el.querySelector("#th-q").value || "Custom thesis", mode: "scaffolded",
-      horizon_days: +el.querySelector("#th-h").value || 182, targets: [...targets],
+      id, question: question || "Custom thesis", mode: "scaffolded", horizon_days: horizon || 182, ...targetsOf(),
       event: { id: `GUE-${id}`, kind: "hypothetical", event_type: ops.length ? "supply_shock" : null,
                occurred_at: start.toISOString(), recorded_at: now.toISOString(), produced_by: "human", ops },
     };
     busy = true;
     err.textContent = "";
     el.querySelector("#th-run").textContent = "Running…";
+    emit("ask-started", { question: thesis.question, thesis_id: id });
     try {
       const fv = await api.poseThesis(thesis);
+      emit("asked", fv);
       emit("show-forecast", fv);
       toast(`Forecast ${fv.forecast.id} ready.`, "hyp");
     } catch (e) {
@@ -121,17 +222,52 @@ export function initThesis({ toast }) {
   }
 
   async function ask() {
+    if (busy) return;
     const err = el.querySelector("#th-err");
     err.textContent = "";
+    busy = true;
+    el.querySelector("#th-ask").textContent = "Thinking…";
+    emit("ask-started", { question });
     try {
-      const fv = await api.ask(el.querySelector("#th-q").value, +el.querySelector("#th-h").value || 182);
+      const fv = await api.poseThesis({ question, horizon_days: horizon || 182, ...targetsOf() });
+      emit("asked", fv);
       emit("show-forecast", fv);
     } catch (e) {
-      err.textContent = errorText(e);
+      err.textContent = `${errorText(e)}\nTry one of the examples, or build the shock yourself below.`;
+    } finally {
+      busy = false;
+      const b = el.querySelector("#th-ask");
+      if (b) b.textContent = "Ask";
     }
   }
 
-  on("graph", () => { if (!el.querySelector("#th-q") || !document.activeElement?.closest?.("#tab-thesis")) render(); });
+  // "What if it moves?" from the canvas: one standardized shock on the entity's first subentity
+  function prefill(id) {
+    const v = view();
+    const sub = (v?.subentities ?? []).find((s) => s.id === id) ?? (v?.subentities ?? []).find((s) => s.entity_id === id);
+    if (!sub) return;
+    const name = v.entities.find((e) => e.id === sub.entity_id)?.name ?? sub.entity_id;
+    shocks = [{ sid: sub.id, delta: 1.0, mode: "standardized", persistence: "step" }];
+    interventions = [];
+    question = `What if ${name} (${sub.name}) jumps by one standard deviation?`;
+    advanced = true;
+    render();
+  }
+
+  // "Forecast this" from the canvas: add a target chip of the right kind
+  function forecastFor(kind, ref) {
+    const v = view();
+    let k = kind;
+    if (kind === "entity") {
+      const e = v?.entities.find((x) => x.id === ref);
+      k = e && (ACTOR_KINDS.has(e.kind) || e.features?.sector) ? "actor" : "idea";
+    }
+    if (kind === "subentity") k = "sub";
+    if (!picks.some((p) => p.kind === k && p.ref === ref)) picks.push({ kind: k, ref });
+    render();
+  }
+
+  on("graph", () => { if (!el.contains(document.activeElement)) render(); });
   render();
-  return { render };
+  return { render, prefill, forecastFor };
 }

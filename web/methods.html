@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Methods · Axelrod World Model</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=IBM+Plex+Mono:wght@400;500&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+  <link rel="stylesheet" href="css/tokens.css">
+  <style>
+    /* standalone reading; inside the demo the Methods pane supplies its own styles */
+    body { margin: 0; background: var(--linen); color: var(--ink); font: 15px/1.62 var(--font-ui); }
+    main { max-width: 860px; margin: 0 auto; padding: 32px 28px 64px; background: var(--sheet); min-height: 100vh; box-sizing: border-box; }
+    h1 { font: 700 26px/1.2 var(--font-head); margin: 0 0 6px; }
+    h2 { font: 700 19px var(--font-head); margin: 30px 0 8px; }
+    h3 { font: 600 15.5px var(--font-head); margin: 20px 0 6px; }
+    p { margin: 0 0 10px; }
+    .abstract { background: var(--paper); border: 1px solid var(--rule); border-radius: 10px; padding: 12px 16px; }
+    .eq { font-family: var(--font-mono); font-size: 13px; background: var(--paper); border-left: 3px solid var(--ltm-line); padding: 6px 12px; margin: 8px 0 12px; overflow-x: auto; }
+    table { border-collapse: collapse; width: 100%; font-size: 13px; margin: 8px 0 14px; }
+    th, td { border-bottom: 1px solid var(--rule-soft); padding: 5px 8px; text-align: left; vertical-align: top; }
+    th { color: var(--ink-2); font-weight: 600; border-bottom-color: var(--rule); }
+    code { font-family: var(--font-mono); font-size: 12.5px; background: var(--paper); border: 1px solid var(--rule-soft); border-radius: 4px; padding: 0 4px; }
+    .cite { color: var(--ltm-ink); font-size: 0.92em; }
+    ol.refs { font-size: 13px; padding-left: 22px; }
+    ol.refs li { margin: 4px 0; }
+    .meta { color: var(--ink-2); font-size: 13px; }
+  </style>
+</head>
+<body>
+<main>
+<h1>Proposed implementation and ML stack for a concept-forming causal world model</h1>
+<p class="meta">Technical briefing · Axelrod World Model, v0 demo · October 2026 · Citations verified against publisher, Crossref, arXiv, or proceedings records; the few fields that could only be confirmed on a lab website are marked †.</p>
+
+<div class="abstract">
+<p><b>Abstract.</b> The demo shows a world model that (i) reads news and data, (ii) translates each item into graph-update operations whose referents start fuzzy and become concrete, (iii) grows taxonomies of objects and interactions, (iv) abduces recurring configurations of actors as nested schemas ("superentities"), (v) promotes reliable co-movements to causal links, (vi) maintains a daily belief state by learning from prediction error, and (vii) forecasts hypothetical interventions with calibrated uncertainty, explanations, and value-of-information rankings. The v0 code implements these functions with hand-specified signatures, templates, and Monte Carlo propagation. This briefing proposes how to implement each function at scale and on unseen language, grounding every choice in the cognitive science of concept formation, causal learning, analogy, and memory. Its core proposal is to make incremental, hierarchical, probabilistic concept formation, the Cobweb family as developed by the Teachable AI Lab, the substrate for every taxonomy, schema, and retrieval index in the system. Neural representation learning supplies perceptual inputs (text and series embeddings), and probabilistic state-space and causal-discovery methods carry the dynamics. Language models are confined to parsing and paraphrase under schema constraints; they never author causal claims or numbers.</p>
+</div>
+
+<h2 id="scope">1. Scope and design commitments</h2>
+<p>The functions to be implemented are those visible in the demo. Table 1 lists them with their current v0 mechanism. Three commitments shape every proposal below.</p>
+<p><b>C1 · Concepts are formed incrementally, hierarchically, and probabilistically.</b> Human category learning is incremental and order-sensitive, and it produces a privileged "basic" level of abstraction <span class="cite">(Rosch, 1975; Rosch et al., 1976)</span>. Rational and network accounts treat categorization as prediction of unobserved features <span class="cite">(Anderson, 1991; Love, Medin, &amp; Gureckis, 2004)</span>. Every taxonomy in the system is therefore an incrementally formed concept hierarchy that supports prediction at any level, not a fixed ontology.</p>
+<p><b>C2 · Concepts carry causal theories.</b> Categories cohere because of the theories in which they participate <span class="cite">(Murphy &amp; Medin, 1985)</span>, and people categorize by reasoning over causal models of features <span class="cite">(Rehder, 2003a, 2003b)</span>. The model's entities, interactions, and superentities are therefore causal structures with uncertain strengths and timing, and classification feeds causal priors.</p>
+<p><b>C3 · Learning is driven by prediction error, with complementary fast and slow stores.</b> Associative learning tracks surprise <span class="cite">(Rescorla &amp; Wagner, 1972)</span> and is well described as Bayesian filtering over weights <span class="cite">(Dayan &amp; Kakade, 2001; Kruschke, 2008; Gershman, 2015)</span>. Rapid episodic storage complements slow semantic consolidation <span class="cite">(Tulving, 1972; McClelland, McNaughton, &amp; O'Reilly, 1995; Kumaran, Hassabis, &amp; McClelland, 2016)</span>. This mirrors the demo's working memory, daily consolidation, and long-term memory.</p>
+
+<table>
+  <thead><tr><th>#</th><th>Function (as shown in the demo)</th><th>v0 mechanism</th><th>Proposed mechanism (§4)</th></tr></thead>
+  <tbody>
+    <tr><td>F1</td><td>News → graph-update operations</td><td>Templates and fixtures</td><td>Schema-constrained LLM parsing over Cobweb-retrieved candidates</td></tr>
+    <tr><td>F2</td><td>Fuzzy → real refinement of op ends</td><td>Signature scoring down hand-built taxonomies</td><td>Cobweb categorization: the root-to-leaf path is the refinement trajectory</td></tr>
+    <tr><td>F3</td><td>Taxonomy growth</td><td>Split on shared feature (two children at once)</td><td>Cobweb operators under information-theoretic category utility</td></tr>
+    <tr><td>F4</td><td>Superentities (nested schemas)</td><td>Co-activation components, support counting</td><td>TRESTLE-style structured instances, structure mapping, chunk formation</td></tr>
+    <tr><td>F5</td><td>Analog recall</td><td>Attention over episode signatures</td><td>MAC/FAC: Cobweb retrieval, then structural alignment</td></tr>
+    <tr><td>F6</td><td>Correlation frontier → causal links</td><td>Lagged co-movement with spaced verification</td><td>PCMCI conditional-independence tests; causal support as promotion statistic</td></tr>
+    <tr><td>F7</td><td>Daily belief state and edge learning</td><td>Conjugate updates, kernel recursion</td><td>State-space filtering; Bayesian distributed-lag effects; event segmentation</td></tr>
+    <tr><td>F8</td><td>Forecasts at several granularities</td><td>Monte Carlo over isolated, coupled networks; scenario mixture</td><td>Same skeleton; Bayesian model averaging over Cobweb-recalled schemas; calibration</td></tr>
+    <tr><td>F9</td><td>Explanations and briefs</td><td>Path attribution; templated brief</td><td>Counterfactual ablation; grounded natural-language generation</td></tr>
+    <tr><td>F10</td><td>Hypotheses ranked by value of information</td><td>Forecast sensitivity × 4p(1 − p)</td><td>Expected information gain over watched forecasts</td></tr>
+    <tr><td>F11</td><td>Follow-up questions about a brief</td><td>Mock-up ("not implemented yet")</td><td>Retrieval-augmented answering that must cite trace events</td></tr>
+  </tbody>
+</table>
+
+<h2 id="foundations">2. Cognitive foundations</h2>
+
+<h3 id="concept-formation">2.1 Concept formation as incremental probabilistic clustering</h3>
+<p>COBWEB <span class="cite">(Fisher, 1987)</span> forms a hierarchy of probabilistic concepts from a stream of attribute-value instances. Each node stores counts from which P(A<sub>i</sub> = V<sub>ij</sub> | C) and P(C | parent) follow. Leaves are instances and internal nodes are prototype-like summaries. Placement is chosen to maximize <i>category utility</i> (CU), a measure Gluck and Corter (1985) proposed to explain the basic level:</p>
+<div class="eq">CU({C₁…Cₙ}) = (1/n) Σₖ P(Cₖ) [ Σᵢ Σⱼ P(Aᵢ = Vᵢⱼ | Cₖ)² − Σᵢ Σⱼ P(Aᵢ = Vᵢⱼ)² ]</div>
+<p>The squared terms are expected correct guesses under probability matching. The bracketed difference is a reduction in Gini impurity, and Corter and Gluck (1992) give the information-theoretic counterpart P(c)[H(F) − H(F | c)]. At each node an instance is incorporated by the best of four operators: add to the best child, create a new child, merge the two best children, or split the best child. Merge and split reduce, without removing, sensitivity to presentation order; Fisher (1996) adds iterative re-optimization. CLASSIT and COBWEB/3 extend the scheme to numeric attributes by substituting Gaussian densities, with an acuity floor on σ <span class="cite">(Gennari, Langley, &amp; Fisher, 1989; McKusick &amp; Thompson, 1990)</span>. Iba and Langley (2011) review the family.</p>
+<p>Two recent results matter for this system. First, Cobweb with the information-theoretic objective reproduces classic human category-learning effects. Predicting from leaves behaves exemplar-like and predicting from basic-level nodes behaves prototype-like <span class="cite">(Lian, Varma, &amp; MacLellan, 2024; cf. Medin &amp; Schaffer, 1978; Nosofsky, 1986)</span>. The specificity at which the model answers is therefore a principled, tunable choice, not an artifact. Second, the Cobweb/4V and Cobweb/4L variants learn incrementally from images and text with little catastrophic forgetting, using the information-theoretic objective and multi-node prediction <span class="cite">(Barari, Lian, &amp; MacLellan, 2024, 2026; Lian, Baglodi, &amp; MacLellan, 2024; Lian, Wang, &amp; MacLellan, 2025)</span>. Barari, Kim, and MacLellan (2025) attribute this robustness to adaptive restructuring, sparse updates, and learning from information-theoretic sufficient statistics.</p>
+
+<h3 id="causal-concepts">2.2 Concepts that carry causal theories</h3>
+<p>Causal-model theories of categorization hold that category membership is judged by how well an item's features fit a causal network <span class="cite">(Rehder, 2003a, 2003b)</span>. On this view a superentity such as "credit tightening" is a schema whose roles are linked by causal relations with strengths and delays, not just a cluster of co-occurring entities. The world model's interactions encode the strength of each causal relation separately from the belief that it exists. This is the distinction between causal <i>strength</i> and causal <i>structure</i> that Griffiths and Tenenbaum (2005) show people make. It complements Cheng's (1997) power PC theory of strength estimation and the causal Bayes-net account of children's causal learning <span class="cite">(Gopnik et al., 2004)</span>. Learning differs by direction: predictive and diagnostic learning show different cue competition <span class="cite">(Waldmann &amp; Holyoak, 1992)</span>. That is a reason to keep edge direction explicit and to treat the frontier's lag direction as evidence. Formal treatment of interventions and counterfactuals follows Pearl (2009) and Sloman (2005).</p>
+
+<h3 id="analogy">2.3 Relational structure, analogy, and schema induction</h3>
+<p>Analogy maps relational structure, preferring systems of connected relations over surface attributes <span class="cite">(Gentner, 1983)</span>. The Structure-Mapping Engine computes such mappings <span class="cite">(Falkenhainer, Forbus, &amp; Gentner, 1989)</span>. MAC/FAC retrieves analogs in two stages, first a cheap content-vector filter and then structural evaluation <span class="cite">(Forbus, Gentner, &amp; Law, 1995)</span>. Comparing analogs induces abstract schemas that transfer to new problems <span class="cite">(Gick &amp; Holyoak, 1983)</span>, and the discovery of structural form can itself be framed as Bayesian model selection over graph grammars <span class="cite">(Kemp &amp; Tenenbaum, 2008; Tenenbaum, Kemp, Griffiths, &amp; Goodman, 2011)</span>. Within the Cobweb family, LABYRINTH and TRESTLE bring components and relations into concept formation <span class="cite">(Thompson &amp; Langley, 1991; MacLellan, Harpstead, Aleven, &amp; Koedinger, 2016)</span>:</p>
+<ul>
+  <li>Partial matching maps an instance's components onto a concept's.</li>
+  <li>Relations are flattened into attributes.</li>
+  <li>The result is categorized as in COBWEB/3.</li>
+</ul>
+<p>Two newer pieces of work extend this further. One extends concept formation to <i>chunks</i>, typed entities in a specified relational configuration, implemented as the TRELLIS system <span class="cite">(Singaravadivelan &amp; Langley, 2026)</span>. The other gives structure mapping with tight bounds that scales to large nested domains <span class="cite">(Weitekamp &amp; MacLellan, 2026)</span>. Superentities, rivalries, supply chains, and composites of superentities are exactly such chunks.</p>
+
+<h3 id="prediction-error">2.4 Prediction error, filtering, and event segmentation</h3>
+<p>The Rescorla–Wagner rule updates associations in proportion to surprise. Kalman-filter accounts generalize it, carrying uncertainty about each weight and explaining phenomena such as backward blocking and "explaining away in weight space" <span class="cite">(Dayan &amp; Kakade, 2001; Kakade &amp; Dayan, 2002; Kruschke, 2008; Gershman, 2015)</span>. The demo's fold step already treats an observation as a noisy measurement of a latent deviation and updates edge effects in proportion to their share of the prediction. The proposal makes this explicit as filtering in a state-space model (§4.7). Event segmentation theory places event boundaries at transient spikes in prediction error <span class="cite">(Zacks, Speer, Swallow, Braver, &amp; Reynolds, 2007)</span>. That gives a principled rule for cutting the stream of days into episodes for memory and recall, where v0 uses one episode per calendar day.</p>
+
+<h3 id="memory">2.5 Episodic and semantic memory</h3>
+<p>Tulving's (1972) distinction maps onto prior states (dated episodes) and generalizations (taxonomies, schemas, entity memories). Complementary-learning-systems theory explains why both are needed: fast, pattern-separated storage avoids interference, while slow, interleaved consolidation extracts structure <span class="cite">(McClelland et al., 1995; Kumaran et al., 2016)</span>. Cobweb offers a single substrate for both. Leaves are near-verbatim episodes, internal nodes are consolidated generalizations, and the same tree is the retrieval index (§4.5).</p>
+
+<h3 id="simulation-inquiry">2.6 Simulation and inquiry</h3>
+<p>People predict physical outcomes by running approximate probabilistic simulations <span class="cite">(Battaglia, Hamrick, &amp; Tenenbaum, 2013)</span>. The forecaster is the same kind of engine: noisy, sampled propagation through a causal model, read out as distributions. Human inquiry is well modeled as choosing queries by expected informational value <span class="cite">(Oaksford &amp; Chater, 1994; Nelson, 2005)</span>, though people depart from it in documented ways <span class="cite">(Coenen, Nelson, &amp; Gureckis, 2019)</span>. This grounds the hypotheses board and its ranking. More broadly, compositional, causal, and learning-to-learn ingredients are what distinguish human-like learning from pattern recognition <span class="cite">(Lake, Ullman, Tenenbaum, &amp; Gershman, 2017)</span>.</p>
+
+<h2 id="representations">3. Representations</h2>
+
+<h3 id="instances">3.1 Entities, subentities, and interactions as structured instances</h3>
+<p>Each graph object becomes a TRESTLE-style instance with four attribute types:</p>
+<ul>
+  <li><b>Nominal:</b> kind, sector, region, category tags, attribute kind.</li>
+  <li><b>Numeric:</b> a subentity's current z-score, volatility, observation frequency.</li>
+  <li><b>Component:</b> an entity's subentities as named parts.</li>
+  <li><b>Relational:</b> an interaction as a relation between components, for example <code>(raises ?oil ?cpi)</code> with numeric effect, delay, and lag.</li>
+</ul>
+<p>Partial matching aligns an incoming instance's components with a concept's before categorization. Flattening then turns relations into attributes that category utility can score. Hidden attributes, such as an id or a free-text description, can be stored without entering the objective, as in the <code>concept_formation</code> library's underscore convention.</p>
+
+<h3 id="language">3.2 Language: embeddings organized by concept formation</h3>
+<p>Headlines, bodies, and entity descriptions are encoded with a sentence encoder <span class="cite">(Reimers &amp; Gurevych, 2019; cf. Devlin, Chang, Lee, &amp; Toutanova, 2019; Mikolov, Chen, Corrado, &amp; Dean, 2013)</span>. Because Cobweb/4V assumes conditionally independent dimensions within a concept, embeddings are whitened first. The Teachable AI Lab's <code>cobweb-language-embedding</code> package does exactly this:</p>
+<ul>
+  <li><code>PCAICAWhiteningModel</code> applies PCA and then ICA, 256 dimensions by default.</li>
+  <li>The whitened vectors go into a continuous Cobweb tree, <code>CPPCobwebTree</code>. That class is a PyTorch translation of the C++ <code>CobwebContinuousTree</code> in the lab's core <code>cobweb</code> library, with label tables added.</li>
+</ul>
+<p>On that tree, two applications are reported:</p>
+<ul>
+  <li><b>Hierarchical retrieval</b> <span class="cite">(Gupta, Singaravadivelan, &amp; Wang, 2025)</span>. Matches dot-product search on strong encoders and stays robust on GPT-2 embeddings, where nearest-neighbor search degrades.</li>
+  <li><b>Lifelong hierarchical topic modeling</b> <span class="cite">(CobwebTM; Singaravadivelan, Gupta, Wang, &amp; MacLellan, 2026)</span>. Needs no preset number of topics.</li>
+</ul>
+<p>For this system, the same machinery organizes news into an incrementally growing tree of event types, so that "a kind of thing" in a news item is literally a node in a learned hierarchy. Cobweb/4L offers a complementary symbolic route. Its instances are an anchor word with proximity-weighted context, and it is competitive with CBOW on masked-word prediction in preliminary results <span class="cite">(Lian, Baglodi, &amp; MacLellan, 2024; MacLellan, Matsakis, &amp; Langley, 2022)</span>. That route suits learning the model's own vocabulary of entity aliases incrementally.</p>
+
+<h3 id="hybrid">3.3 Hybrid instances and hierarchy-aware embeddings</h3>
+<p>A single Cobweb node can hold count tables for nominal attributes alongside mean and variance tensors for embedding attributes, as Cobweb/4V does for labels and images. This lets one tree categorize an entity jointly by its symbolic signature and by the embedding of its description. Where geometric embeddings of hierarchies are wanted, for instance for neural edge proposal, three families encode partial order directly:</p>
+<ul>
+  <li>Hyperbolic (Poincaré) embeddings <span class="cite">(Nickel &amp; Kiela, 2017)</span>.</li>
+  <li>Order embeddings <span class="cite">(Vendrov, Kiros, Fidler, &amp; Urtasun, 2016)</span>.</li>
+  <li>Box-lattice embeddings <span class="cite">(Vilnis, Li, Murty, &amp; McCallum, 2018)</span>.</li>
+</ul>
+<p>The lab's neuro-symbolic work bridges the two worlds:</p>
+<ul>
+  <li>Taxonomic networks are one representation shared by a symbolic and a neural learner <span class="cite">(Wang, Haarer, Barari, &amp; MacLellan, 2025)</span>.</li>
+  <li>Deep taxonomic networks discover prototype hierarchies with a tree-structured mixture prior <span class="cite">(Wang, Haarer, Zhu, Dai, &amp; MacLellan, 2025)</span>.</li>
+  <li>The modes of a diffusion model's noisy marginals form a hierarchy corresponding to a Cobweb tree, with the basic level at an intermediate noise level <span class="cite">(Wang, Singaravadivelan, &amp; MacLellan, 2026)</span>.</li>
+</ul>
+<p>These are the natural routes for learning the representation and the hierarchy jointly once data volume justifies it <span class="cite">(Bengio, Courville, &amp; Vincent, 2013; Higgins et al., 2017; van den Oord, Li, &amp; Vinyals, 2018)</span>.</p>
+
+<h3 id="graphs">3.4 The causal graph itself</h3>
+<p>Graph neural networks <span class="cite">(Kipf &amp; Welling, 2017; Battaglia et al., 2018)</span> can provide priors for link proposal: which entity pairs are plausibly connected, given their types and neighborhoods. Causal representation learning <span class="cite">(Schölkopf et al., 2021)</span> frames the longer-term goal of learning the latent variables, the subentities, from raw series rather than specifying them. In this proposal both remain subordinate to explicit, inspectable causal structure: neural models propose; review and evidence decide.</p>
+
+<h2 id="implementation">4. Proposed implementation, function by function</h2>
+
+<h3 id="f1">4.1 F1 · Translating news into graph-update operations</h3>
+<p><b>Retrieve, then parse under constraint.</b> The incoming item is embedded and categorized in the event-type tree (§3.2). Best-first multi-node categorization returns a candidate set of event concepts, entities, and interaction types, each with a score. An instruction-tuned language model then fills a JSON schema identical to the <code>GraphUpdateEvent</code> operation grammar. Generation is restricted by constrained decoding, and every end must be either a retrieved candidate or an explicit "kind of thing" node; the model must also return the text spans that justify each operation. Few-shot examples come from reviewed translations: each approval or edit in the Review panel is a labeled pair, retrieved by the same Cobweb index, so the system improves with use. The language model never sets magnitudes for causal effects. It extracts stated quantities, such as "50 bp" or "+35%", and the model's priors supply everything else.</p>
+
+<h3 id="f2">4.2 F2 · Fuzzy-to-real refinement</h3>
+<p>Each op end is an instance: the span's embedding, its predicted attribute kind, and context such as the other end and the relation. It is sorted down the object or interaction tree, and the root-to-leaf path <i>is</i> the fuzzy-to-real trajectory the walkthrough visualizes. The refiner stops at the deepest node whose posterior exceeds a confidence threshold. Following Cobweb/4V's prediction, nodes are ranked by collocation, which combines cue validity and category validity, and the expanded nodes' predictions are mixed <span class="cite">(Barari et al., 2024)</span>:</p>
+<div class="eq">s(c) = P(c | x) · P(x | c)</div>
+<p>Two rules follow:</p>
+<ul>
+  <li><b>Default specificity:</b> the basic level, the node on the path with the highest category utility <span class="cite">(Corter &amp; Gluck, 1992)</span>. A leaf is used only when evidence is strong.</li>
+  <li><b>Pending refinements:</b> an end that cannot reach a concrete subentity waits at its node with the candidate distribution, as in v0. Later evidence re-sorts it.</li>
+</ul>
+
+<h3 id="f3">4.3 F3 · Growing the taxonomies</h3>
+<p>Object and interaction taxonomies become Cobweb trees updated by the four operators under the information-theoretic objective:</p>
+<div class="eq">CU = (1/n) Σₖ P(Cₖ) [ H(A | parent) − H(A | Cₖ) ],   with H = ½ Σ_d log(2πe σ²_d) for Gaussian attributes</div>
+<p>This replaces v0's hand-written split rule with a learned one. A new node appears exactly when partitioning increases predictive information. Inherited priors stay: an entity classified under "central bank" starts with the central-bank node's effect and timing distributions, a form of hierarchical shrinkage. Periodic re-optimization keeps the tree from drifting with presentation order <span class="cite">(Fisher, 1996)</span>; in the lab's code these are <code>redistribute</code>, <code>insert_node</code>, and <code>remove_node</code>. Every structural change still passes through the demo's single writer and its review policy.</p>
+
+<h3 id="f4">4.4 F4 · Abducing superentities as chunks</h3>
+<p>An active day's subgraph becomes a structured instance:</p>
+<ul>
+  <li><b>Components:</b> the entities that moved.</li>
+  <li><b>Relations:</b> the edges that carried the move.</li>
+  <li><b>Attributes:</b> magnitudes and signs.</li>
+</ul>
+<p>TRESTLE-style partial matching against existing schema concepts, accelerated by bounded structure mapping <span class="cite">(Weitekamp &amp; MacLellan, 2026)</span>, either increments a schema's support or, through CU, forms a new one. Gick and Holyoak's (1983) finding that comparison induces schemas is operationalized directly: a candidate superentity is admitted after repeated, spaced matches, as in v0's support counting. Admission then goes to human review. Nested superentities, such as stagflation built from credit tightening and an energy shock, are chunks whose components are themselves chunks <span class="cite">(Singaravadivelan &amp; Langley, 2026)</span>. Shared members, an entity owned by two superentities, fall out naturally because partial matching allows one entity to fill roles in several schemas. The demo now visualizes this sharing explicitly.</p>
+
+<h3 id="f5">4.5 F5 · Recalling analogs</h3>
+<p>Recall follows MAC/FAC <span class="cite">(Forbus et al., 1995)</span>:</p>
+<ol>
+  <li><b>MAC (fast filter).</b> Best-first categorization of the current episode in the episode tree. This is a hierarchical, prototype-based retriever of the kind evaluated by Gupta et al. (2025).</li>
+  <li><b>FAC (structural evaluation).</b> Align the shortlisted episodes and schemas with the current situation, and rank them by systematicity. Each recalled schema and analog carries its alignment, so the explanation can state <i>why</i> a 2008-like or 2023-like bank run was recalled.</li>
+</ol>
+
+<h3 id="f6">4.6 F6 · From co-movement to causal link</h3>
+<p>The correlation frontier is retained as a hypothesis queue, but its statistic changes. Lagged associations are tested with PCMCI <span class="cite">(Runge, Nowack, Kretschmer, Flaxman, &amp; Sejdinovic, 2019)</span>, which conditions on each series' own past and on common drivers. This controls the autocorrelation and confounding that make raw lagged correlations unreliable <span class="cite">(cf. Granger, 1969)</span>. Promotion uses Bayesian <i>causal support</i>, the evidence for a link's existence rather than its strength <span class="cite">(Griffiths &amp; Tenenbaum, 2005)</span>, which is computed together with strength estimates. A promoted link enters with low existence probability, as in v0, and it accrues or loses belief through the same filtering as every other edge. Human approval remains mandatory, because observational time series cannot settle direction or confounding on their own <span class="cite">(Pearl, 2009)</span>.</p>
+
+<h3 id="f7">4.7 F7 · The daily belief state</h3>
+<p>Subentity deviations are latent states in a linear-Gaussian state-space model, or a particle filter where effects are threshold-moderated. Observations from data releases are noisy measurements with the series' own noise. Edge effects follow a Bayesian distributed-lag model whose kernels are gamma-shaped delays, as in v0. Their posteriors are updated by the filter's prediction error, which recovers Kalman-filter associative learning as a special case <span class="cite">(Dayan &amp; Kakade, 2001; Gershman, 2015)</span>. Daily propagation is the filter's predict step, which is why unobserved values, such as NVIDIA's never-reported capex in the demo, still move. Episode boundaries are placed at prediction-error spikes rather than at midnight <span class="cite">(Zacks et al., 2007)</span>, and each episode is stored as a Cobweb instance for recall.</p>
+
+<h3 id="f8">4.8 F8 · Forecasting at several granularities</h3>
+<p>The v0 skeleton is retained, because it matches the simulation account of prediction <span class="cite">(Battaglia et al., 2013)</span>. The steps are:</p>
+<ol>
+  <li>Isolate the networks the question touches.</li>
+  <li>Predict each by Monte Carlo along kernels.</li>
+  <li>Couple them.</li>
+  <li>Mix over rival structures with weights from track record, which is Bayesian model averaging over schemas.</li>
+</ol>
+<p>The proposal changes two inputs. Which schemas to isolate becomes a Cobweb recall, so unfamiliar questions still find the nearest structures. Scenario weights become posterior model probabilities updated by scored outcomes. Coarse targets, an actor, a sector, a superentity, or a category, are read out as distributions of members' average standardized effects, sample by sample, as the demo already does. Calibration is monitored with CRPS and interval coverage and, where coverage drifts, adjusted by split-conformal recalibration on past forecasts.</p>
+
+<h3 id="f9">4.9 F9 · Explanations and forecast briefs</h3>
+<p>Path attribution, the share of each causal path in an effect, is complemented by counterfactual ablation: rerun the forecast with an edge or schema removed, using common random numbers <span class="cite">(Pearl, 2009)</span>. The brief's facts are computed as they are in the demo:</p>
+<ul>
+  <li>the bottom line;</li>
+  <li>a timeline of onsets and peaks;</li>
+  <li>who is affected;</li>
+  <li>the news that shaped the forecast and the news since, scored by overlap with its drivers;</li>
+  <li>tracking against the forecast's bands;</li>
+  <li>what to watch.</li>
+</ul>
+<p>A language model may only paraphrase these into prose under a checker that every number and entity in the text appears in the computed facts.</p>
+
+<h3 id="f10">4.10 F10 · Ranking hypotheses by value of information</h3>
+<p>The v0 score multiplies forecast sensitivity by an uncertainty term:</p>
+<div class="eq">VOI(h) ≈ sensitivity(h) × 4p(1 − p)</div>
+<p>The proposal generalizes it to expected information gain about the watched forecasts, the Bayesian measure that best fits human question-asking in many tasks <span class="cite">(Nelson, 2005; Oaksford &amp; Chater, 1994)</span>. The board would then suggest which data release or analyst query would most reduce forecast uncertainty. Known departures of human inquiry from this ideal <span class="cite">(Coenen et al., 2019)</span> are useful when presenting suggestions to people.</p>
+
+<h3 id="f11">4.11 F11 · Asking about a brief</h3>
+<p>The chat window answers by retrieval over the brief, the trace events of the question's scope, and the model state. Answers must cite trace events or brief facts and cannot modify the model; questions that require new computation are converted into new theses, which go through F8. Until that is built, the demo's window is a labeled mock-up.</p>
+
+<h2 id="stack">5. ML stack</h2>
+<table>
+  <thead><tr><th>Layer</th><th>Component</th><th>Proposed tools</th><th>Notes</th></tr></thead>
+  <tbody>
+    <tr><td>Concept formation (core)</td><td>Nominal and structured trees (F2, F3)</td><td>Teachable-AI-Lab/<code>cobweb</code>: <code>cobweb_discrete</code> (the Cobweb/4L engine)</td><td>C++17 core with nanobind bindings; information-theoretic objectives; multi-node <code>predict_probs</code></td></tr>
+    <tr><td></td><td>Continuous and embedding trees (F1, F5)</td><td><code>cobweb_continuous</code> and <code>cobweb_torch</code> (Cobweb/4V); <code>cobweb-language-embedding</code>: <code>CPPCobwebTree</code>, <code>CobwebRetriever</code>, <code>CobwebTM</code></td><td>Whiten embeddings first (<code>PCAICAWhiteningModel</code>); best-first or path-sum retrieval</td></tr>
+    <tr><td></td><td>Relational instances, partial matching (F4)</td><td><code>concept_formation</code>: <code>TrestleTree</code>, <code>Cobweb3Tree</code>, structure-mapping preprocessors</td><td>Pure Python reference; port hot paths to the C++ core</td></tr>
+    <tr><td>Analogy</td><td>Alignment for recall and schema matching (F4, F5)</td><td>SME-style or SMTB-style structure mapping</td><td>Bounded search keeps large nested schemas tractable</td></tr>
+    <tr><td>Language</td><td>Encoders</td><td>Sentence-transformers encoders</td><td>Same family the Cobweb retrieval work evaluates</td></tr>
+    <tr><td></td><td>Parsing and paraphrase (F1, F9, F11)</td><td>Instruction-tuned LLM with JSON-schema-constrained decoding</td><td>Parses and paraphrases only; numbers come from the model</td></tr>
+    <tr><td>Causal discovery</td><td>Frontier testing (F6)</td><td>PCMCI (reference implementation in <code>tigramite</code>)</td><td>Conditional independence across lags; partial correlation or nonlinear tests</td></tr>
+    <tr><td>Inference</td><td>State space and distributed lags (F7)</td><td>Kalman or particle filtering; NumPyro or PyMC for edge posteriors</td><td>Prediction-error updates; conjugate where possible</td></tr>
+    <tr><td>Simulation</td><td>Monte Carlo propagation (F8)</td><td>Vectorized NumPy, or JAX for large sample counts</td><td>Common random numbers for counterfactuals</td></tr>
+    <tr><td>Graph learning (optional)</td><td>Link-proposal priors</td><td>Graph convolutional or graph-network models</td><td>Proposes only; never admits an edge</td></tr>
+    <tr><td>Evaluation</td><td>Forecast quality</td><td>CRPS, coverage, omission and commission (as in v0)</td><td>Plus calibration plots per granularity</td></tr>
+  </tbody>
+</table>
+
+<h2 id="evaluation">6. Evaluation plan</h2>
+<p><b>Cognitive fidelity.</b> Does the system show the regularities that motivate the design?</p>
+<ul>
+  <li>Basic-level preference in refinement.</li>
+  <li>Typicality gradients in classification.</li>
+  <li>Exemplar-to-prototype shifts with experience <span class="cite">(Lian et al., 2024)</span>.</li>
+  <li>Schema transfer after comparison <span class="cite">(Gick &amp; Holyoak, 1983)</span>.</li>
+  <li>Graceful learning with little forgetting under distribution shift <span class="cite">(Barari et al., 2026)</span>.</li>
+</ul>
+<p><b>Predictive quality.</b> CRPS, interval coverage, and omission and commission against realized outcomes, reported separately for single values and for actors, sectors, superentities, and categories.</p>
+<p><b>Translation.</b> Accuracy of operations and ends against reviewed gold translations, and the share of ends that reach a concrete subentity at each specificity level.</p>
+<p><b>Human factors.</b> Review load, approval and edit rates, time-to-decision, and whether briefs and walkthroughs improve users' predictions of the model's behavior.</p>
+
+<h2 id="risks">7. Risks and open questions</h2>
+<ul>
+  <li><b>Order effects.</b> Incremental hierarchies depend on presentation order. Merge, split, and periodic re-optimization mitigate this, but replay-based tests are needed <span class="cite">(Fisher, 1996)</span>.</li>
+  <li><b>Distributional assumptions.</b> Diagonal-Gaussian concepts misfit correlated embeddings. Whitening is necessary, and full or low-rank covariances are worth evaluating.</li>
+  <li><b>Causal identifiability.</b> Observational series rarely identify direction or exclude confounding. PCMCI reduces, but does not remove, false links; human review and intervention-like natural experiments remain essential.</li>
+  <li><b>Language-model errors.</b> Constrained decoding prevents malformed operations, not wrong ones. Review and span grounding are the safeguards.</li>
+  <li><b>Scale.</b> Cobweb's cost per instance grows with branching factor and depth. Insert-only modes and branch and depth limits, both available in the lab's code, bound it.</li>
+  <li><b>Data.</b> Everything in the demo is synthetic. Real deployment requires licensed data and an audit of what each source can support.</li>
+</ul>
+
+<h2 id="references">References</h2>
+<ol class="refs">
+  <li>Anderson, J. R. (1991). The adaptive nature of human categorization. <i>Psychological Review, 98</i>(3), 409–429. https://doi.org/10.1037/0033-295X.98.3.409</li>
+  <li>Barari, N., Kim, E., &amp; MacLellan, C. J. (2025). Explaining robustness to catastrophic forgetting through incremental concept formation. <i>Proceedings of the Twelfth Annual Conference on Advances in Cognitive Systems</i>. arXiv:2510.23756.</li>
+  <li>Barari, N., Lian, X., &amp; MacLellan, C. J. (2024). <i>Incremental concept formation over visual images without catastrophic forgetting</i>. arXiv:2402.16933.</li>
+  <li>Barari, N., Lian, X., &amp; MacLellan, C. J. (2026). Robust incremental learning of visual concepts without catastrophic forgetting. <i>Cognitive Systems Research, 96</i>, 101447. https://doi.org/10.1016/j.cogsys.2026.101447</li>
+  <li>Battaglia, P. W., Hamrick, J. B., &amp; Tenenbaum, J. B. (2013). Simulation as an engine of physical scene understanding. <i>Proceedings of the National Academy of Sciences, 110</i>(45), 18327–18332. https://doi.org/10.1073/pnas.1306572110</li>
+  <li>Battaglia, P. W., Hamrick, J. B., Bapst, V., Sanchez-Gonzalez, A., Zambaldi, V., Malinowski, M., Tacchetti, A., Raposo, D., Santoro, A., Faulkner, R., Gulcehre, C., Song, F., Ballard, A., Gilmer, J., Dahl, G., Vaswani, A., Allen, K., Nash, C., Langston, V., Dyer, C., Heess, N., Wierstra, D., Kohli, P., Botvinick, M., Vinyals, O., Li, Y., &amp; Pascanu, R. (2018). <i>Relational inductive biases, deep learning, and graph networks</i>. arXiv:1806.01261.</li>
+  <li>Bengio, Y., Courville, A., &amp; Vincent, P. (2013). Representation learning: A review and new perspectives. <i>IEEE Transactions on Pattern Analysis and Machine Intelligence, 35</i>(8), 1798–1828. https://doi.org/10.1109/TPAMI.2013.50</li>
+  <li>Cheng, P. W. (1997). From covariation to causation: A causal power theory. <i>Psychological Review, 104</i>(2), 367–405. https://doi.org/10.1037/0033-295X.104.2.367</li>
+  <li>Coenen, A., Nelson, J. D., &amp; Gureckis, T. M. (2019). Asking the right questions about the psychology of human inquiry: Nine open challenges. <i>Psychonomic Bulletin &amp; Review, 26</i>(5), 1548–1587. https://doi.org/10.3758/s13423-018-1470-5</li>
+  <li>Corter, J. E., &amp; Gluck, M. A. (1992). Explaining basic categories: Feature predictability and information. <i>Psychological Bulletin, 111</i>(2), 291–303. https://doi.org/10.1037/0033-2909.111.2.291</li>
+  <li>Dayan, P., &amp; Kakade, S. (2001). Explaining away in weight space. In T. K. Leen, T. G. Dietterich, &amp; V. Tresp (Eds.), <i>Advances in Neural Information Processing Systems 13</i> (pp. 451–457). MIT Press.</li>
+  <li>Devlin, J., Chang, M.-W., Lee, K., &amp; Toutanova, K. (2019). BERT: Pre-training of deep bidirectional transformers for language understanding. In <i>Proceedings of NAACL-HLT 2019</i> (pp. 4171–4186). https://doi.org/10.18653/v1/N19-1423</li>
+  <li>Falkenhainer, B., Forbus, K. D., &amp; Gentner, D. (1989). The structure-mapping engine: Algorithm and examples. <i>Artificial Intelligence, 41</i>(1), 1–63. https://doi.org/10.1016/0004-3702(89)90077-5</li>
+  <li>Fisher, D. H. (1987). Knowledge acquisition via incremental conceptual clustering. <i>Machine Learning, 2</i>(2), 139–172. https://doi.org/10.1007/BF00114265</li>
+  <li>Fisher, D. (1996). Iterative optimization and simplification of hierarchical clusterings. <i>Journal of Artificial Intelligence Research, 4</i>, 147–178. https://doi.org/10.1613/jair.276</li>
+  <li>Forbus, K. D., Gentner, D., &amp; Law, K. (1995). MAC/FAC: A model of similarity-based retrieval. <i>Cognitive Science, 19</i>(2), 141–205. https://doi.org/10.1207/s15516709cog1902_1</li>
+  <li>Gennari, J. H., Langley, P., &amp; Fisher, D. (1989). Models of incremental concept formation. <i>Artificial Intelligence, 40</i>(1–3), 11–61. https://doi.org/10.1016/0004-3702(89)90046-5</li>
+  <li>Gentner, D. (1983). Structure-mapping: A theoretical framework for analogy. <i>Cognitive Science, 7</i>(2), 155–170. https://doi.org/10.1207/s15516709cog0702_3</li>
+  <li>Gershman, S. J. (2015). A unifying probabilistic view of associative learning. <i>PLOS Computational Biology, 11</i>(11), e1004567. https://doi.org/10.1371/journal.pcbi.1004567</li>
+  <li>Gick, M. L., &amp; Holyoak, K. J. (1983). Schema induction and analogical transfer. <i>Cognitive Psychology, 15</i>(1), 1–38. https://doi.org/10.1016/0010-0285(83)90002-6</li>
+  <li>Gluck, M. A., &amp; Corter, J. E. (1985). Information, uncertainty, and the utility of categories. In <i>Proceedings of the Seventh Annual Conference of the Cognitive Science Society</i> (pp. 283–287). Lawrence Erlbaum.</li>
+  <li>Gopnik, A., Glymour, C., Sobel, D. M., Schulz, L. E., Kushnir, T., &amp; Danks, D. (2004). A theory of causal learning in children: Causal maps and Bayes nets. <i>Psychological Review, 111</i>(1), 3–32. https://doi.org/10.1037/0033-295X.111.1.3</li>
+  <li>Granger, C. W. J. (1969). Investigating causal relations by econometric models and cross-spectral methods. <i>Econometrica, 37</i>(3), 424–438. https://doi.org/10.2307/1912791</li>
+  <li>Griffiths, T. L., &amp; Tenenbaum, J. B. (2005). Structure and strength in causal induction. <i>Cognitive Psychology, 51</i>(4), 334–384. https://doi.org/10.1016/j.cogpsych.2005.05.004</li>
+  <li>Gupta, A., Singaravadivelan, K., &amp; Wang, Z. (2025). Hierarchical semantic retrieval with Cobweb. <i>Proceedings of the Twelfth Annual Conference on Advances in Cognitive Systems</i>. arXiv:2510.02539.</li>
+  <li>Higgins, I., Matthey, L., Pal, A., Burgess, C., Glorot, X., Botvinick, M., Mohamed, S., &amp; Lerchner, A. (2017). β-VAE: Learning basic visual concepts with a constrained variational framework. <i>International Conference on Learning Representations</i>.</li>
+  <li>Iba, W., &amp; Langley, P. (2011). Cobweb models of categorization and probabilistic concept formation. In E. M. Pothos &amp; A. J. Wills (Eds.), <i>Formal approaches in categorization</i> (pp. 253–273). Cambridge University Press. https://doi.org/10.1017/CBO9780511921322.011</li>
+  <li>Kakade, S., &amp; Dayan, P. (2002). Acquisition and extinction in autoshaping. <i>Psychological Review, 109</i>(3), 533–544. https://doi.org/10.1037/0033-295X.109.3.533</li>
+  <li>Kemp, C., &amp; Tenenbaum, J. B. (2008). The discovery of structural form. <i>Proceedings of the National Academy of Sciences, 105</i>(31), 10687–10692. https://doi.org/10.1073/pnas.0802631105</li>
+  <li>Kipf, T. N., &amp; Welling, M. (2017). Semi-supervised classification with graph convolutional networks. <i>International Conference on Learning Representations</i>. arXiv:1609.02907.</li>
+  <li>Kruschke, J. K. (2008). Bayesian approaches to associative learning: From passive to active learning. <i>Learning &amp; Behavior, 36</i>(3), 210–226. https://doi.org/10.3758/LB.36.3.210</li>
+  <li>Kumaran, D., Hassabis, D., &amp; McClelland, J. L. (2016). What learning systems do intelligent agents need? Complementary learning systems theory updated. <i>Trends in Cognitive Sciences, 20</i>(7), 512–534. https://doi.org/10.1016/j.tics.2016.05.004</li>
+  <li>Lake, B. M., Ullman, T. D., Tenenbaum, J. B., &amp; Gershman, S. J. (2017). Building machines that learn and think like people. <i>Behavioral and Brain Sciences, 40</i>, e253. https://doi.org/10.1017/S0140525X16001837</li>
+  <li>Lian, X., Baglodi, N., &amp; MacLellan, C. J. (2024). <i>Incremental and data-efficient concept formation to support masked word prediction</i>. arXiv:2409.12440.</li>
+  <li>Lian, X., Varma, S., &amp; MacLellan, C. J. (2024). Cobweb: An incremental and hierarchical model of human-like category learning. <i>Proceedings of the 46th Annual Conference of the Cognitive Science Society</i> (pp. 2597–2604)†. arXiv:2403.03835.</li>
+  <li>Lian, X., Wang, Z., &amp; MacLellan, C. J. (2025). Efficient and scalable masked word prediction using concept formation. <i>Cognitive Systems Research, 92</i>, 101371. https://doi.org/10.1016/j.cogsys.2025.101371</li>
+  <li>Love, B. C., Medin, D. L., &amp; Gureckis, T. M. (2004). SUSTAIN: A network model of category learning. <i>Psychological Review, 111</i>(2), 309–332. https://doi.org/10.1037/0033-295X.111.2.309</li>
+  <li>MacLellan, C. J., Harpstead, E., Aleven, V., &amp; Koedinger, K. R. (2016). TRESTLE: A model of concept formation in structured domains. <i>Advances in Cognitive Systems, 4</i>, 131–150. arXiv:2410.10588.</li>
+  <li>MacLellan, C. J., Matsakis, P., &amp; Langley, P. (2022). <i>Efficient induction of language models via probabilistic concept formation</i>. arXiv:2212.11937.</li>
+  <li>McClelland, J. L., McNaughton, B. L., &amp; O'Reilly, R. C. (1995). Why there are complementary learning systems in the hippocampus and neocortex: Insights from the successes and failures of connectionist models of learning and memory. <i>Psychological Review, 102</i>(3), 419–457. https://doi.org/10.1037/0033-295X.102.3.419</li>
+  <li>McKusick, K., &amp; Thompson, K. (1990). <i>COBWEB/3: A portable implementation</i> (Technical Report FIA-90-6-18-2). NASA Ames Research Center.</li>
+  <li>Medin, D. L., &amp; Schaffer, M. M. (1978). Context theory of classification learning. <i>Psychological Review, 85</i>(3), 207–238. https://doi.org/10.1037/0033-295X.85.3.207</li>
+  <li>Mikolov, T., Chen, K., Corrado, G., &amp; Dean, J. (2013). <i>Efficient estimation of word representations in vector space</i>. ICLR 2013 Workshop Track. arXiv:1301.3781.</li>
+  <li>Murphy, G. L., &amp; Medin, D. L. (1985). The role of theories in conceptual coherence. <i>Psychological Review, 92</i>(3), 289–316. https://doi.org/10.1037/0033-295X.92.3.289</li>
+  <li>Nelson, J. D. (2005). Finding useful questions: On Bayesian diagnosticity, probability, impact, and information gain. <i>Psychological Review, 112</i>(4), 979–999. https://doi.org/10.1037/0033-295X.112.4.979</li>
+  <li>Nickel, M., &amp; Kiela, D. (2017). Poincaré embeddings for learning hierarchical representations. In <i>Advances in Neural Information Processing Systems 30</i> (pp. 6338–6347). arXiv:1705.08039.</li>
+  <li>Nosofsky, R. M. (1986). Attention, similarity, and the identification–categorization relationship. <i>Journal of Experimental Psychology: General, 115</i>(1), 39–57. https://doi.org/10.1037/0096-3445.115.1.39</li>
+  <li>Oaksford, M., &amp; Chater, N. (1994). A rational analysis of the selection task as optimal data selection. <i>Psychological Review, 101</i>(4), 608–631. https://doi.org/10.1037/0033-295X.101.4.608</li>
+  <li>Pearl, J. (2009). <i>Causality: Models, reasoning, and inference</i> (2nd ed.). Cambridge University Press. https://doi.org/10.1017/CBO9780511803161</li>
+  <li>Rehder, B. (2003a). A causal-model theory of conceptual representation and categorization. <i>Journal of Experimental Psychology: Learning, Memory, and Cognition, 29</i>(6), 1141–1159. https://doi.org/10.1037/0278-7393.29.6.1141</li>
+  <li>Rehder, B. (2003b). Categorization as causal reasoning. <i>Cognitive Science, 27</i>(5), 709–748. https://doi.org/10.1207/s15516709cog2705_2</li>
+  <li>Reimers, N., &amp; Gurevych, I. (2019). Sentence-BERT: Sentence embeddings using Siamese BERT-networks. In <i>Proceedings of EMNLP-IJCNLP 2019</i> (pp. 3982–3992). https://doi.org/10.18653/v1/D19-1410</li>
+  <li>Rescorla, R. A., &amp; Wagner, A. R. (1972). A theory of Pavlovian conditioning: Variations in the effectiveness of reinforcement and nonreinforcement. In A. H. Black &amp; W. F. Prokasy (Eds.), <i>Classical conditioning II: Current research and theory</i> (pp. 64–99). Appleton-Century-Crofts.</li>
+  <li>Rosch, E. (1975). Cognitive representations of semantic categories. <i>Journal of Experimental Psychology: General, 104</i>(3), 192–233. https://doi.org/10.1037/0096-3445.104.3.192</li>
+  <li>Rosch, E., Mervis, C. B., Gray, W. D., Johnson, D. M., &amp; Boyes-Braem, P. (1976). Basic objects in natural categories. <i>Cognitive Psychology, 8</i>(3), 382–439. https://doi.org/10.1016/0010-0285(76)90013-X</li>
+  <li>Runge, J., Nowack, P., Kretschmer, M., Flaxman, S., &amp; Sejdinovic, D. (2019). Detecting and quantifying causal associations in large nonlinear time series datasets. <i>Science Advances, 5</i>(11), eaau4996. https://doi.org/10.1126/sciadv.aau4996</li>
+  <li>Schölkopf, B., Locatello, F., Bauer, S., Ke, N. R., Kalchbrenner, N., Goyal, A., &amp; Bengio, Y. (2021). Toward causal representation learning. <i>Proceedings of the IEEE, 109</i>(5), 612–634. https://doi.org/10.1109/JPROC.2021.3058954</li>
+  <li>Singaravadivelan, K., Gupta, A., Wang, Z., &amp; MacLellan, C. J. (2026). <i>CobwebTM: Probabilistic concept formation for lifelong and hierarchical topic modeling</i>. arXiv:2604.14489.</li>
+  <li>Singaravadivelan, K., &amp; Langley, P. (2026). <i>A unified account of concepts and chunks</i>. arXiv:2609.30414.</li>
+  <li>Sloman, S. (2005). <i>Causal models: How people think about the world and its alternatives</i>. Oxford University Press. https://doi.org/10.1093/acprof:oso/9780195183115.001.0001</li>
+  <li>Tenenbaum, J. B., Kemp, C., Griffiths, T. L., &amp; Goodman, N. D. (2011). How to grow a mind: Statistics, structure, and abstraction. <i>Science, 331</i>(6022), 1279–1285. https://doi.org/10.1126/science.1192788</li>
+  <li>Thompson, K., &amp; Langley, P. (1991). Concept formation in structured domains. In D. H. Fisher, M. J. Pazzani, &amp; P. Langley (Eds.), <i>Concept formation: Knowledge and experience in unsupervised learning</i> (pp. 127–161). Morgan Kaufmann. https://doi.org/10.1016/B978-1-4832-0773-5.50011-0</li>
+  <li>Tulving, E. (1972). Episodic and semantic memory. In E. Tulving &amp; W. Donaldson (Eds.), <i>Organization of memory</i> (pp. 381–403). Academic Press.</li>
+  <li>van den Oord, A., Li, Y., &amp; Vinyals, O. (2018). <i>Representation learning with contrastive predictive coding</i>. arXiv:1807.03748.</li>
+  <li>Vendrov, I., Kiros, R., Fidler, S., &amp; Urtasun, R. (2016). Order-embeddings of images and language. <i>International Conference on Learning Representations</i>. arXiv:1511.06361.</li>
+  <li>Vilnis, L., Li, X., Murty, S., &amp; McCallum, A. (2018). Probabilistic embedding of knowledge graphs with box lattice measures. In <i>Proceedings of the 56th Annual Meeting of the ACL</i> (pp. 263–272). https://doi.org/10.18653/v1/P18-1025</li>
+  <li>Waldmann, M. R., &amp; Holyoak, K. J. (1992). Predictive and diagnostic learning within causal models: Asymmetries in cue competition. <i>Journal of Experimental Psychology: General, 121</i>(2), 222–236. https://doi.org/10.1037/0096-3445.121.2.222</li>
+  <li>Wang, Z., Haarer, E. L., Barari, N., &amp; MacLellan, C. J. (2025). Taxonomic networks: A representation for neuro-symbolic pairing. <i>Proceedings of the 2nd International Conference on Neuro-symbolic Systems</i>, PMLR 288, 459–471. arXiv:2505.24601.</li>
+  <li>Wang, Z., Haarer, E., Zhu, T., Dai, Z., &amp; MacLellan, C. J. (2025). Deep taxonomic networks for unsupervised hierarchical prototype discovery. <i>Advances in Neural Information Processing Systems</i>. arXiv:2509.23602.</li>
+  <li>Wang, Z., Singaravadivelan, K., &amp; MacLellan, C. J. (2026). <i>Diffusion models and concept formation</i>. arXiv:2609.13047.</li>
+  <li>Weitekamp, D., &amp; MacLellan, C. (2026). <i>SMTB: Fast structure-mapping with tight bounds</i>. arXiv:2609.25508.</li>
+  <li>Zacks, J. M., Speer, N. K., Swallow, K. M., Braver, T. S., &amp; Reynolds, J. R. (2007). Event perception: A mind–brain perspective. <i>Psychological Bulletin, 133</i>(2), 273–293. https://doi.org/10.1037/0033-2909.133.2.273</li>
+</ol>
+<p class="meta">† Page numbers confirmed only on the lab's publication list.</p>
+</main>
+</body>
+</html>

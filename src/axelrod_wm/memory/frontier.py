@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 from abc import ABC, abstractmethod
-from datetime import date, datetime
+from datetime import datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
@@ -77,22 +77,22 @@ class CoMovement(BaseModel):
     id: str
     earlier_id: str                    # subentity that moved first
     later_id: str                      # subentity with the unexplained move
-    lag_steps: int
+    lag_days: int
     sign: int                          # +1 same direction, -1 opposite
-    support: float = 0.0               # decayed count of consistent episodes
+    support: float = 0.0               # decayed count of independent consistent verifications
     consistent: int = 0
     inconsistent: int = 0
     corr: RunningCorr = RunningCorr()        # (window change of a at s - lag, window innovation of b at s)
     response: RunningCorr = RunningCorr()    # (window change of a at s - lag, window change of b at s): effect units
     first_seen: datetime
     last_seen: datetime
-    last_episode_day: date | None = None
+    last_verified_day: int | None = None     # for evidence spacing
     status: CoMovementStatus = CoMovementStatus.HOLDING
     ambiguous_direction: bool = False
     seeded: bool = False                     # from frontier_seeds; does not decay until first verified
     hypothesis_id: str | None = None
     proposal_id: str | None = None
-    verified_days: list[date] = []
+    verified_days: list[int] = []            # day indices of counted verifications (the last 20)
 
 
 def pair_key(a: str, b: str) -> str:
@@ -147,20 +147,23 @@ class PromotionTest(ABC):
     def passes(self, co: CoMovement, recognition: float, cfg: dict) -> bool: ...
 
 
-def comovement_pair(dev, earlier: str, later: str, lag: int, step: int, width: int) -> tuple[float, float, float]:
-    """(window change of the earlier subentity at step - lag, window innovation of the later one at
-    step, window change of the later one at step)."""
-    x = dev.window_change(earlier, step - lag, width)
-    y = dev.window_innovation(later, step, width)
-    r = dev.window_change(later, step, width)
+def comovement_pair(dev, earlier: str, later: str, lag: int, day: int, width: int) -> tuple[float, float, float]:
+    """(window change of the earlier subentity at day - lag, window innovation of the later one at
+    day, window change of the later one at day)."""
+    x = dev.window_change(earlier, day - lag, width)
+    y = dev.window_innovation(later, day, width)
+    r = dev.window_change(later, day, width)
     return x, y, r
 
 
-def backfilled(co: CoMovement, dev, step: int, width: int, n: int) -> CoMovement:
-    """A copy of `co` with corr and response filled from the last `n` steps up to `step`."""
+def backfilled(co: CoMovement, dev, day: int, width: int, backfill_days: int) -> CoMovement:
+    """A copy of `co` with corr and response filled with one pair every `width` days (non-overlapping
+    windows) over the last `backfill_days` before `day`."""
     out = co.model_copy(deep=True)
-    for s in range(step - n + 1, step + 1):
-        x, y, r = comovement_pair(dev, co.earlier_id, co.later_id, co.lag_steps, s, width)
+    width = max(1, int(width))
+    days = list(range(day - width, day - int(backfill_days) - 1, -width))[::-1]
+    for d in days:
+        x, y, r = comovement_pair(dev, co.earlier_id, co.later_id, co.lag_days, d, width)
         if x == 0.0 and y == 0.0 and r == 0.0:
             continue
         out.corr.push(x, y)

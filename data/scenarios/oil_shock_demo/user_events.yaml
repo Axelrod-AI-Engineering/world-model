@@ -1,0 +1,12 @@
+# Graph update events the user draws during the scenario (§14.6). They apply as model edits.
+graph_update_events:
+  - id: UG-01
+    kind: real
+    occurred_at: 2026-03-02T11:00:00Z
+    produced_by: human
+    ops:
+      - op: add_interaction
+        source: {kind: concrete, subentity_id: fed_chair.hawkishness}
+        target: {kind: concrete, subentity_id: interest_rates.long_term_yields}
+        label: moves yields
+        polarity: 1

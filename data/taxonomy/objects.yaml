@@ -7,12 +7,20 @@ nodes:
   - {id: gen:obj:central_bank, name: Central bank, parent: gen:obj:monetary_authority, signature: {any_of: {attribute_kinds: [policy_rate]}}, instances: [federal_reserve, ecb]}
   - {id: gen:obj:currency_board, name: Currency board, parent: gen:obj:monetary_authority, signature: {required: {regime: [currency_board]}}}
   - {id: gen:obj:fiscal_authority, name: Fiscal authority, parent: gen:obj:actor, signature: {required: {function: [fiscal_policy]}}}
-  - {id: gen:obj:firm, name: Firm, parent: gen:obj:actor, signature: {required: {kind: [company]}}, instances: [northwind_semis]}
+  - {id: gen:obj:firm, name: Firm, parent: gen:obj:actor, signature: {required: {kind: [company]}}}
+  # firms by sector (real actors; addition): the sector feature places a new firm
+  - {id: gen:obj:chipmaker, name: Chipmaker, parent: gen:obj:firm, signature: {required: {sector: [semiconductors]}}, instances: [nvidia, amd, tsmc, samsung, asml, tokyo_electron]}
+  - {id: gen:obj:cloud_platform, name: Cloud platform, parent: gen:obj:firm, signature: {required: {sector: [cloud]}}, instances: [microsoft]}
+  - {id: gen:obj:energy_producer, name: Energy producer, parent: gen:obj:firm, signature: {required: {sector: [energy]}}, instances: [saudi_aramco, exxonmobil]}
+  - {id: gen:obj:airline, name: Airline, parent: gen:obj:firm, signature: {required: {sector: [airlines]}}, instances: [delta, united_airlines]}
+  - {id: gen:obj:bank, name: Bank, parent: gen:obj:firm, signature: {required: {sector: [banking]}}, instances: [jpmorgan]}
   - {id: gen:obj:official, name: Official, parent: gen:obj:actor, signature: {required: {kind: [person]}}, instances: [fed_chair]}
+  - {id: gen:obj:trade_authority, name: Trade authority, parent: gen:obj:actor, signature: {required: {function: [trade_policy]}}, instances: [us_commerce, china_mofcom]}
+  - {id: gen:obj:producer_group, name: Producer group, parent: gen:obj:actor, signature: {required: {function: [production_policy]}}, instances: [opec_plus]}
   - {id: gen:obj:financial_condition, name: Financial condition, parent: gen:obj:root, signature: {required: {kind: [macro_factor, market]}, any_of: {attribute_kinds: [interest_rate, borrowing_cost, fx_rate, capital_flow]}}}
   - {id: gen:obj:price_of_credit, name: Price and supply of credit, parent: gen:obj:financial_condition, instances: [interest_rates, credit_availability, debt_cycle]}
   - {id: gen:obj:external_finance, name: External finance, parent: gen:obj:financial_condition, instances: [dollar_fx, capital_flows]}
-  - {id: gen:obj:market_stress, name: Market stress, parent: gen:obj:root, instances: [asset_prices, financial_crises]}
+  - {id: gen:obj:market_stress, name: Market stress, parent: gen:obj:root, instances: [asset_prices, financial_crises, regional_banks]}
   - {id: gen:obj:price_level, name: Price level, parent: gen:obj:root, instances: [inflation]}
   - {id: gen:obj:demand_flow, name: Demand flow, parent: gen:obj:root, instances: [consumer_spending, business_investment, cross_border_trade, gov_spending]}
   - {id: gen:obj:supply_factor, name: Supply factor, parent: gen:obj:root, instances: [resources_energy, supply_chains, market_concentration, productivity_tech, labor_demographics]}
@@ -25,5 +33,9 @@ nodes:
   - {id: gen:obj:bank_run, name: Bank run, parent: gen:obj:financial_stress_config, instances: [HP1, HP2]}
   - {id: gen:obj:funding_squeeze, name: Funding squeeze, parent: gen:obj:financial_stress_config, instances: [S3]}
   - {id: gen:obj:policy_config, name: Policy configuration, parent: gen:obj:configuration, instances: [S1, S8, S9]}
-  - {id: gen:obj:shock_config, name: Shock configuration, parent: gen:obj:configuration, instances: [S2, S7]}
+  - {id: gen:obj:shock_config, name: Shock configuration, parent: gen:obj:configuration, instances: [S2, S7, S10]}
+  # sectors and competitive play among real actors (addition)
+  - {id: gen:obj:market_config, name: Market configuration, parent: gen:obj:configuration}
+  - {id: gen:obj:supply_chain_config, name: Supply chain, parent: gen:obj:market_config, instances: [S11, S14]}
+  - {id: gen:obj:rivalry_config, name: Rivalry, parent: gen:obj:market_config, instances: [S12, S13, S15, S16, S17]}
   - {id: gen:obj:structural_config, name: Structural configuration, parent: gen:obj:configuration, instances: [S4, S5, S6]}

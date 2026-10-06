@@ -14,6 +14,7 @@ from axelrod_wm.memory.working import WorkingMemory
 
 if TYPE_CHECKING:
     from axelrod_wm.control.mutator import GraphMutator
+    from axelrod_wm.core.taxonomy import AttributeVocabulary
     from axelrod_wm.engine.config import EngineConfig
     from axelrod_wm.memory.long_term import LongTermMemory
     from axelrod_wm.trace import Tracer
@@ -65,7 +66,10 @@ class ProcessContext:
     now: datetime
     state_version: int
     mutator: GraphMutator
+    vocab: AttributeVocabulary                 # from the construction spec (§6.13)
     learn: bool                                # True for real events, False for hypothetical ones
+    processing_day: int | None = None          # the day an update run is processing (§7.8)
+    initializing: bool = False                 # True during the history replay (§8.13)
     overlay: Optional[GraphOverlay] = None     # transient objects for a scaffolded thesis
     engine: Any = None
     scope: str = ""                            # thesis id for performance runs
@@ -89,12 +93,23 @@ class ProcessContext:
         return self.engine.ltm
 
     @property
-    def initializing(self) -> bool:
-        return bool(getattr(self.engine, "initializing", False))
+    def step_days(self) -> float:
+        return float(self.config.time.step_days)
 
     @property
-    def step_days(self) -> float:
-        return float(self.config.time.propagation_step_days)
+    def day(self) -> int:
+        """The day being processed, or the next day to process outside an update run."""
+        if self.processing_day is not None:
+            return int(self.processing_day)
+        return int(self.wm.last_processed_day) + 1
+
+    @property
+    def today(self) -> int:
+        """"Now" (day 0 of a propagation): the day being processed inside an update run, else the
+        last processed day."""
+        if self.processing_day is not None:
+            return int(self.processing_day)
+        return int(self.wm.last_processed_day)
 
     @property
     def recall_threshold(self) -> float:

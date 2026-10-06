@@ -1,14 +1,17 @@
 """The synthetic world: ground truth for the demo and tests (§11.1).
 
-It runs the same equations as ``mc_impulse`` with one draw of true parameters, plus hidden
-interactions, AR(1) noise, and decision rules. It is a MarketEventSource: it emits DATA events on
-its release calendar and applies NEWS events' scripted shocks.
+It steps the same daily equations as `mc_impulse` with one draw of true parameters, plus hidden
+subentities and interactions, AR(1) noise, and decision rules. It knows the scenario's scripted
+world shocks in advance and applies each one when its clock passes the shock's occurred_at. The
+`synthetic_data_feed` source polls it for data releases.
 
-# DECISION: the world uses the model's kernel window (104 steps) so it runs exactly the model's
-# equations. Steps run Monday to Sunday from the history start; weekly and monthly releases are
-# published at the end of each step (Sunday 23:00 UTC), so a release reflects everything that
-# happened during its step and nothing later. Decision variables change only through decisions
-# at meetings (19:00 UTC); channels into them (e43, e49) are replaced by the decision rules.
+# DECISION: day 0 is the history's first day, as in the model. A day is simulated as a whole once
+# the clock reaches it; a shock that occurs during day k moves z from day k on, and channels read
+# their sources through day k - 1 (the minimum delay of one day), so a change reaches its children
+# from day k + 1, exactly as in the model.
+# DECISION: decision variables change only through decisions at meetings (19:00 UTC); channels into
+# them are replaced by the decision rules. A rule reads its source's window change over the
+# `window_days` days ending `lag_days` before the meeting (defaults 42 and 0), on 7-day averages.
 # DECISION: the history is re-centered so each decision variable ends the history at its
 # construction anchor (decisions depend on inflation, not on the stance's level, so the paths are
 # otherwise unchanged). That keeps ME-01 ("to 4.75%") consistent with the world.
@@ -16,43 +19,48 @@ its release calendar and applies NEWS events' scripted shocks.
 
 from __future__ import annotations
 
-import math
 from datetime import UTC, date, datetime, time, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from pydantic import BaseModel, ConfigDict
 
-from axelrod_wm.core.distributions import Link, family_link, from_link, to_link
-from axelrod_wm.core.temporal import step_response
-from axelrod_wm.engine.propagation import ShockInput
+from axelrod_wm.core.distributions import Link, family_link, from_link, parse_distribution, to_link
+from axelrod_wm.core.temporal import kernel_days
+from axelrod_wm.engine.registry import register
 from axelrod_wm.engine.rng import make_rng
-from axelrod_wm.events.market import MarketEvent, MarketEventKind
-from axelrod_wm.ingest.sources import MarketEventSource
+from axelrod_wm.events.market import MarketEvent, MarketEventChannel, MarketEventKind
+from axelrod_wm.ingest.sources import MarketEventSource, in_window
 
 if TYPE_CHECKING:
+    from axelrod_wm.core.taxonomy import AttributeVocabulary
     from axelrod_wm.engine.initialize import ConstructionSpec
 
-RELEASE_TIME = time(23, 0)
+RELEASE_TIME = time(21, 0)
 MEETING_TIME = time(19, 0)
+REGIME_TIME = time(12, 0)
+DEFAULT_RULE_WINDOW_DAYS = 42
+# DECISION: a rule compares 7-day averages, as a central bank reacts to smoothed inflation rather than to
+# one day's noise.
+DEFAULT_RULE_SMOOTH_DAYS = 7
 
 
 class TruthSpec(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     effect_multiplier_sd: float = 0.2      # true effect = model prior mean * N(1, sd), drawn once
-    ar_coefficient: float = 0.5
-    noise_sd: dict[str, float] = {}        # subentity -> standardized noise sd per step; "default" key
+    ar_coefficient: float = 0.5            # per day
+    noise_sd: dict[str, float] = {}        # subentity -> standardized observation noise; default: the model's obs_noise for its kind
     history_noise_sd: float = 0.3          # noise used by generate_history
     hidden_subentities: list[dict] = []    # exist in the world before the model knows them
     hidden_interactions: list[dict] = []   # same fields as interactions.yaml, plus "active_from"
     decision_rules: list[dict] = []        # e.g. the Fed reaction rule (§14.9)
-    release_calendar: dict[str, list[str]] = {}   # "weekly" | "monthly" -> subentity ids; "default" = all others
+    release_calendar: dict[str, Any] = {}  # "daily" | "weekly" | "monthly" | "never" -> subentity ids;
+                                           # "default" names the frequency for all others
     meetings: dict[str, list[date]] = {}   # decision variable -> meeting dates in the demo window
     history_meeting_every_days: int = 42   # meeting spacing used by generate_history
     effect_overrides: dict[str, float] = {}      # interaction id -> true effect (tuning)
-    kernel_overrides: dict[str, dict] = {}       # interaction id -> {delay_days, lag_days, duration_days}
-    decision_window_steps: int = 6               # window for a rule's window_change condition
+    kernel_overrides: dict[str, dict] = {}       # interaction id -> {delay_days, lag_days, duration_days} (tuning)
 
     @classmethod
     def load(cls, path: str) -> TruthSpec:
@@ -64,127 +72,169 @@ class TruthSpec(BaseModel):
 
 
 class _Sub:
-    def __init__(self, sid: str, anchor: float, scale: float, link: Link, decision: bool) -> None:
+    def __init__(self, sid: str, anchor: float, scale: float, link: Link, decision: bool, noise: float) -> None:
         self.id = sid
         self.anchor = anchor
         self.scale = scale
         self.link = link
         self.decision = decision
+        self.noise = noise
 
 
 class _Chan:
-    def __init__(self, cid: str, src: str, tgt: str, beta: float, g: np.ndarray, mods: list[tuple[str, str, float, float | None]],
-                 active_from: int = 0) -> None:
+    def __init__(self, cid: str, src: int, tgt: int, beta: float, d: int, l: int, lam: float,
+                 mods: list[tuple[int, str, float, float | None]], active_from: int = -10**9) -> None:
         self.id = cid
         self.src = src
         self.tgt = tgt
         self.beta = beta
-        self.g_rev = g[1:][::-1]
+        self.d = d
+        self.l = l
+        self.lam = lam
         self.mods = mods
         self.active_from = active_from
+        self.S = 0.0
+        self.T = 0.0
 
 
-class SyntheticWorld(MarketEventSource):
-    def __init__(self, construction: ConstructionSpec, truth: TruthSpec, seed: int, *,
-                 origin: datetime | None = None, step_days: float = 7.0, window: int = 104,
-                 clip: tuple[float, float] = (0.0, 3.0)) -> None:
+def default_noise(attribute_kind: str | None, vocab: AttributeVocabulary | None) -> float:
+    from axelrod_wm.core.taxonomy import default_obs_noise
+
+    return default_obs_noise(attribute_kind or "", vocab)
+
+
+class SyntheticWorld:
+    """Ground truth for the demo and tests (see the module docstring)."""
+
+    def __init__(self, construction: ConstructionSpec, truth: TruthSpec, seed: int,
+                 scripted_shocks: list[tuple[datetime, list[dict]]] | None = None, *,
+                 origin: date | None = None, vocab: AttributeVocabulary | None = None,
+                 clip: tuple[float, float] = (0.0, 3.0), min_delay_days: int = 1) -> None:
         self.truth = truth
         self.seed = int(seed)
-        self.step_days = float(step_days)
-        self.W = int(window)
         self.clip = clip
-        self.origin = origin or datetime(2023, 1, 2, tzinfo=UTC)
+        self.origin = origin or date(2023, 1, 2)
         self.decision_vars = set(construction.decision_variables)
         self.subs: dict[str, _Sub] = {}
         for e in construction.entities:
             for s in e.subentities:
-                fam = s.family or (s.prior or {}).get("family") or "gaussian"
+                fam = s.family or (s.prior or {}).get("family") or (vocab.family(s.attribute_kind) if vocab else "gaussian")
                 link = family_link(fam)
                 if s.prior is not None:
-                    from axelrod_wm.core.distributions import parse_distribution
-
                     d = dict(s.prior)
                     d.setdefault("family", fam)
                     anchor = parse_distribution(d).link_moments()[0]
                 else:
                     anchor = float(to_link(s.mean, link)) if s.mean is not None else 0.0
-                self.subs[s.id] = _Sub(s.id, anchor, float(s.scale or 1.0), link, s.id in self.decision_vars)
+                noise = float(truth.noise_sd.get(s.id, truth.noise_sd.get("default", default_noise(s.attribute_kind, vocab))))
+                self.subs[s.id] = _Sub(s.id, anchor, float(s.scale or 1.0), link, s.id in self.decision_vars, noise)
         for h in truth.hidden_subentities:
             link = family_link(h.get("family", "gaussian"))
+            noise = float(truth.noise_sd.get(h["id"], truth.noise_sd.get("default",
+                                                                          default_noise(h.get("attribute_kind"), vocab))))
             self.subs[h["id"]] = _Sub(h["id"], float(to_link(h.get("anchor_value", 0.0), link)), float(h["scale"]),
-                                      link, False)
-        rng = make_rng(self.seed, "world", "parameters")
+                                      link, False, noise)
+        self.sids = sorted(self.subs)
+        self.idx = {s: i for i, s in enumerate(self.sids)}
+        # DECISION: each random draw of the world comes from a stream keyed by what it is for (one
+        # interaction's true effect, one series' noise), so adding an actor or a link never re-deals the
+        # draws of the others and the demo's story stays put as the world grows.
         self.channels: list[_Chan] = []
         for i in construction.interactions:
             if i.target in self.decision_vars:
                 continue
+            rng = make_rng(self.seed, "world", "parameters", i.id)
             mu = float((i.effect or {}).get("mu", 0.0))
-            beta = truth.effect_overrides.get(i.id, mu * float(rng.normal(1.0, truth.effect_multiplier_sd)))
-            k = truth.kernel_overrides.get(i.id, i.kernel or {})
-            g = self._kernel(k)
-            mods = [(p.moderator, str(p.form), float(p.coefficient.get("mu", 0.0)), p.threshold) for p in i.parameters]
-            self.channels.append(_Chan(i.id, i.source, i.target, beta, g, mods))
-            if i.reverse is not None:
+            beta = float(truth.effect_overrides.get(i.id, mu * float(rng.normal(1.0, truth.effect_multiplier_sd))))
+            d, l, lam = self._kernel(truth.kernel_overrides.get(i.id, i.kernel or {}), min_delay_days)
+            mods = [(self.idx[p.moderator], str(p.form), float(p.coefficient.get("mu", 0.0)), p.threshold)
+                    for p in i.parameters if p.moderator in self.idx]
+            self.channels.append(_Chan(i.id, self.idx[i.source], self.idx[i.target], beta, d, l, lam, mods))
+            if i.reverse is not None and i.source not in self.decision_vars:
                 rmu = float(i.reverse.effect.get("mu", 0.0))
                 rbeta = rmu * float(rng.normal(1.0, truth.effect_multiplier_sd))
-                self.channels.append(_Chan(i.id + "~r", i.target, i.source, rbeta, self._kernel(i.reverse.kernel), []))
+                rd, rl, rlam = self._kernel(i.reverse.kernel, min_delay_days)
+                self.channels.append(_Chan(i.id + ":rev", self.idx[i.target], self.idx[i.source], rbeta, rd, rl, rlam, []))
         for h in truth.hidden_interactions:
-            g = self._kernel({"delay_days": h.get("delay_days", 7), "lag_days": h.get("lag_days", 14),
-                              "duration_days": h.get("duration_days")})
+            d, l, lam = self._kernel({"delay_days": h.get("delay_days", 7), "lag_days": h.get("lag_days", 14),
+                                      "duration_days": h.get("duration_days")}, min_delay_days)
             af = h.get("active_from")
-            start = self.step_of(datetime.combine(af, time(0), tzinfo=UTC)) if af else -10**9
-            self.channels.append(_Chan(h["id"], h["source"], h["target"], float(h["effect"]), g, [], start))
-        self.sids = sorted(self.subs)
+            start = self.day_of_date(af if isinstance(af, date) else date.fromisoformat(str(af))) if af else -10**9
+            self.channels.append(_Chan(h["id"], self.idx[h["source"]], self.idx[h["target"]], float(h["effect"]),
+                                       d, l, lam, [], start))
+        self.scripted: list[tuple[datetime, list[dict]]] = sorted(scripted_shocks or [], key=lambda x: x[0])
         self.reset_state()
 
     # -- set-up --------------------------------------------------------------------------------
-    def _kernel(self, k: dict) -> np.ndarray:
+    @staticmethod
+    def _kernel(k: dict, min_delay_days: int) -> tuple[int, int, float]:
         d = float(k.get("delay_days", 0.0) or 0.0)
         lag = float(k.get("lag_days", 0.0) or 0.0)
         dur = k.get("duration_days")
-        d = max(d / self.step_days, 1.0) * self.step_days
-        return step_response(d, lag, float(dur) if dur is not None else None, self.W, self.step_days)
+        return kernel_days(d, lag, float(dur) if dur is not None else None, min_delay_days)
 
     def reset_state(self) -> None:
-        self.z: dict[str, list[float]] = {s: [] for s in self.sids}
-        self.dz: dict[str, list[float]] = {s: [] for s in self.sids}
-        self.level: dict[str, float] = {s: 0.0 for s in self.sids}
-        self.u: dict[str, float] = {s: 0.0 for s in self.sids}
-        self.offsets: dict[str, float] = {}
-        self.steps_done = 0
-        self.scheduled: list[tuple[datetime, ShockInput | dict]] = []
-        self.pending_events: list[MarketEvent] = []
-        self.emitted_until: datetime = self.origin - timedelta(seconds=1)
-        self.noise_rng = make_rng(self.seed, "world", "noise")
-        self.decision_rng = make_rng(self.seed, "world", "decisions")
+        n = len(self.sids)
+        self._buf = np.zeros((256, n))                 # [capacity, subentities]; z is its first days_done rows
+        self.ar = np.zeros(n)                          # AR(1) noise state
+        self.u = np.zeros(n)                           # accumulated step shocks
+        self.decided_offset = np.zeros(n)              # accumulated decisions (decision variables)
+        self.offsets = np.zeros(n)                     # history re-centering
+        for ch in self.channels:
+            ch.S = ch.T = 0.0
+        self.days_done = 0
         self.history_mode = False
+        self.noise_streams = [make_rng(self.seed, "world", "noise", sid) for sid in self.sids]
+        self._eps = np.zeros((0, len(self.sids)))     # pre-drawn noise, one column per series' own stream
+        self._eps_from = 0                             # the day of the buffer's first row
+        self.decision_rng = make_rng(self.seed, "world", "decisions")
         self.meetings: dict[str, list[date]] = {k: sorted(v) for k, v in self.truth.meetings.items()}
         self.scripted_decisions: dict[tuple[str, date], float] = {}
         self.decision_log: list[tuple[str, date, float]] = []
-        self.decided: dict[tuple[str, date], float] = {}
-        self.pending_decisions: dict[tuple[str, int], float] = {}
+        self.pending: dict[int, list[dict]] = {}        # day -> native shocks
+        for at, shocks in self.scripted:
+            self._schedule(at, shocks)
 
-    def step_of(self, t: datetime) -> int:
-        return int(math.floor((t - self.origin).total_seconds() / (self.step_days * 86400.0)))
+    def _schedule(self, at: datetime, shocks: list[dict]) -> None:
+        day = self.day_of(at)
+        for sh in shocks:
+            sid = sh["subentity"]
+            if sid in self.decision_vars:
+                self.scripted_decisions[(sid, at.date())] = float(sh["delta"])
+            else:
+                self.pending.setdefault(day, []).append(dict(sh))
 
-    def step_end(self, k: int) -> datetime:
-        start = self.origin + timedelta(days=self.step_days * k)
-        return datetime.combine((start + timedelta(days=self.step_days - 1)).date(), RELEASE_TIME, tzinfo=UTC)
+    # -- days ----------------------------------------------------------------------------------
+    def day_of(self, t: datetime) -> int:
+        if t.tzinfo is None:
+            t = t.replace(tzinfo=UTC)
+        return (t.astimezone(UTC).date() - self.origin).days
+
+    def day_of_date(self, d: date) -> int:
+        return (d - self.origin).days
+
+    def date_of(self, day: int) -> date:
+        return self.origin + timedelta(days=int(day))
+
+    @property
+    def z(self) -> np.ndarray:
+        """[days simulated, subentities]"""
+        return self._buf[: self.days_done]
 
     # -- values --------------------------------------------------------------------------------
-    def z_at(self, sid: str, k: int) -> float:
-        zs = self.z[sid]
-        if not zs:
-            return self.offsets.get(sid, 0.0)
-        return zs[min(max(k, 0), len(zs) - 1)]
+    def z_at(self, sid: str, day: int) -> float:
+        i = self.idx[sid]
+        if self.days_done == 0 or day < 0:
+            return float(self.offsets[i])
+        return float(self.z[min(day, self.days_done - 1), i])
 
     def native(self, sid: str, z: float) -> float:
         s = self.subs[sid]
         return float(from_link(s.anchor + s.scale * z, s.link))
 
-    def size_of(self, sid: str, mode: str, delta: float, k: int) -> float:
+    def size_of(self, sid: str, mode: str, delta: float, day: int) -> float:
         s = self.subs[sid]
-        eta = s.anchor + s.scale * self.z_at(sid, k)
+        eta = s.anchor + s.scale * self.z_at(sid, day)
         x = float(from_link(eta, s.link))
         if mode == "absolute":
             return (float(to_link(x + delta, s.link)) - eta) / s.scale
@@ -192,195 +242,180 @@ class SyntheticWorld(MarketEventSource):
             return (float(to_link(x * (1.0 + delta), s.link)) - eta) / s.scale
         return float(delta)
 
-    # -- shocks --------------------------------------------------------------------------------
-    def inject(self, shocks: list[ShockInput], at: datetime, market_event: MarketEvent | None = None) -> None:
-        """Schedule world shocks (standardized sizes) at a time."""
-        for sh in shocks:
-            self.scheduled.append((at, sh))
-        if market_event is not None:
-            self.pending_events.append(market_event)
-
-    def inject_native(self, shocks: list[dict], at: datetime) -> None:
-        """Schedule world shocks given as {subentity, mode, delta}; sizes are fixed when applied."""
-        for sh in shocks:
-            sid = sh["subentity"]
-            if sid in self.decision_vars:
-                self.scripted_decisions[(sid, at.date())] = float(sh["delta"])
-            self.scheduled.append((at, dict(sh)))
-
     # -- simulation ----------------------------------------------------------------------------
-    def _meeting_time(self, d: date) -> datetime:
-        if self.history_mode and d.weekday() == 6:
-            return datetime.combine(d, RELEASE_TIME, tzinfo=UTC)
-        return datetime.combine(d, MEETING_TIME, tzinfo=UTC)
-
     def _decide(self, var: str, d: date) -> float:
-        """The decision (native change) at a meeting, from completed steps only."""
+        """The decision (native change) at a meeting, from days before the meeting only."""
         if (var, d) in self.scripted_decisions:
             return self.scripted_decisions[(var, d)]
-        k = self.step_of(self._meeting_time(d))
+        day = self.day_of_date(d)
         change = 0.0
         for rule in self.truth.decision_rules:
             if rule["decision"] != var:
                 continue
             cond = rule.get("condition", {})
             src = cond.get("subentity")
-            w = int(cond.get("window_steps", self.truth.decision_window_steps))
-            lag = int(cond.get("lag_steps", 0))        # read the source as an edge with this delay would
-            end = k - 1 - lag
-            wc = self.z_at(src, end) - self.z_at(src, end - w) if src else 0.0
+            w = int(cond.get("window_days", DEFAULT_RULE_WINDOW_DAYS))
+            lag = int(cond.get("lag_days", 0))
+            sm = max(1, int(cond.get("smooth_days", DEFAULT_RULE_SMOOTH_DAYS)))
+            end = day - 1 - lag
+            wc = self._smoothed(src, end, sm) - self._smoothed(src, end - w, sm) if src else 0.0
             fire = ("window_change_gt" in cond and wc > float(cond["window_change_gt"])) or \
                    ("window_change_lt" in cond and wc < float(cond["window_change_lt"]))
             if fire and self.decision_rng.random() < float(rule.get("probability", 1.0)):
                 change += float(rule.get("change", 0.0))
         return change
 
-    def _ensure_decisions(self, until: datetime) -> None:
-        for var, dates in sorted(self.meetings.items()):
-            for d in dates:
-                t = self._meeting_time(d)
-                if t > until or (var, d) in self.decided:
-                    continue
-                change = self._decide(var, d)
-                k = self.step_of(t)
-                self.decided[(var, d)] = change
-                self.pending_decisions[(var, k)] = self.pending_decisions.get((var, k), 0.0) + change
-                self.decision_log.append((var, d, change))
+    def _smoothed(self, sid: str, day: int, days: int) -> float:
+        """Mean of z over the `days` days ending on `day`."""
+        return float(np.mean([self.z_at(sid, d) for d in range(day - days + 1, day + 1)]))
 
-    def _step(self, k: int) -> None:
-        """Simulate step k (k == steps_done) once it has ended."""
-        start = self.origin + timedelta(days=self.step_days * k)
-        end = start + timedelta(days=self.step_days)
-        due = [(t, sh) for t, sh in self.scheduled if start <= t < end]
-        self.scheduled = [(t, sh) for t, sh in self.scheduled if not (start <= t < end)]
-        rho = float(self.truth.ar_coefficient)
-        default_sd = float(self.truth.noise_sd.get("default", 0.15))
-        hist_sd = float(self.truth.history_noise_sd)
-        shock_now: dict[str, float] = {}
-        for _t, sh in sorted(due, key=lambda x: x[0]):
-            if isinstance(sh, ShockInput):
-                sid, size = sh.subentity_id, sh.size
-            else:
-                sid = sh["subentity"]
-                if sid in self.decision_vars:
-                    continue           # applied as a scripted decision
-                size = self.size_of(sid, sh.get("mode", "standardized"), float(sh["delta"]), k - 1)
-            shock_now[sid] = shock_now.get(sid, 0.0) + size
-        decided: dict[str, float] = {}
-        for sid in self.sids:
-            sub = self.subs[sid]
-            prev = self.z[sid][-1] if self.z[sid] else self.offsets.get(sid, 0.0)
-            if sub.decision:
-                decided[sid] = prev + self.pending_decisions.pop((sid, k), 0.0) / sub.scale
-                continue
-            sd = hist_sd if self.history_mode else float(self.truth.noise_sd.get(sid, default_sd))
-            self.level[sid] = rho * self.level[sid] + float(self.noise_rng.normal(0.0, sd))
-            self.u[sid] += shock_now.get(sid, 0.0)
-        contrib: dict[str, float] = {}
-        # every channel reads its source's increments through step k - 1 (the model's minimum delay of
-        # one step); a decision taken in step k reaches its children from step k + 1
+    def _step(self) -> None:
+        """Simulate day k = days_done."""
+        k = self.days_done
+        n = len(self.sids)
+        buf = self._buf
+        z_prev = buf[k - 1] if k > 0 else self.offsets.copy()
+        # channels: advance each running sum from day k - 1 to day k, reading z through day k - 1
+        # (z is 0 before the history; channels read decision variables without their re-centering
+        # offset, so re-centering never changes what the world does)
+        contrib = np.zeros(n)
+        add = np.zeros(n)
         for ch in self.channels:
+            if k > 0:
+                a = k - ch.d
+                b = k - ch.d - ch.l
+                za = buf[a, ch.src] - self.offsets[ch.src] if 0 <= a < k else 0.0
+                zb = buf[b, ch.src] - self.offsets[ch.src] if 0 <= b < k else 0.0
+                ch.S += za - zb
+                ch.T = ch.lam * ch.T - (1.0 - ch.lam) * zb
             if k < ch.active_from:
                 continue
-            inc = self.dz[ch.src]
-            n = min(self.W, len(inc))
-            if n == 0:
-                continue
-            window = np.asarray(inc[-n:], dtype=float)
-            val = float(np.dot(ch.g_rev[-n:], window))
-            m, add = 1.0, 0.0
-            for mod, form, gam, thr in ch.mods:
-                zm = self.z_at(mod, k - 1)
+            m = 1.0
+            for mi, form, gam, thr in ch.mods:
+                zm = z_prev[mi]
                 if form == "multiplicative":
                     m *= min(max(1.0 + gam * zm, self.clip[0]), self.clip[1])
                 elif form == "threshold":
                     m *= 1.0 if zm > (thr or 0.0) else 0.0
                 else:
-                    add += gam * zm
-            contrib[ch.tgt] = contrib.get(ch.tgt, 0.0) + ch.beta * m * val + add
-        for sid in self.sids:
-            sub = self.subs[sid]
-            if sub.decision:
-                prev = self.z[sid][-1] if self.z[sid] else None
-                self.z[sid].append(decided[sid])
-                self.dz[sid].append(decided[sid] - prev if prev is not None else 0.0)
-                continue
-            prev = self.z[sid][-1] if self.z[sid] else None
-            znew = self.offsets.get(sid, 0.0) + self.level[sid] + self.u[sid] + contrib.get(sid, 0.0)
-            self.z[sid].append(znew)
-            self.dz[sid].append(znew - prev if prev is not None else 0.0)
-        self.steps_done = k + 1
+                    add[ch.tgt] += gam * zm
+            contrib[ch.tgt] += ch.beta * m * (ch.S / ch.l + ch.T)
+        # shocks that occur today
+        for sh in self.pending.pop(k, []):
+            sid = sh["subentity"]
+            self.u[self.idx[sid]] += self.size_of(sid, sh.get("mode", "standardized"), float(sh["delta"]), k - 1)
+        # decisions at today's meetings
+        d = self.date_of(k)
+        for var, dates in sorted(self.meetings.items()):
+            if d in dates:
+                change = self._decide(var, d)
+                self.decision_log.append((var, d, change))
+                self.decided_offset[self.idx[var]] += change / self.subs[var].scale
+        rho = float(self.truth.ar_coefficient)
+        sd = (np.full(n, float(self.truth.history_noise_sd)) if self.history_mode
+              else np.array([self.subs[s].noise for s in self.sids]))
+        self.ar = rho * self.ar + sd * self._noise(k)
+        znew = self.offsets + self.ar + self.u + contrib + add
+        dec = self._decision_mask()
+        znew[dec] = self.offsets[dec] + self.decided_offset[dec]
+        if k >= buf.shape[0]:
+            grown = np.zeros((buf.shape[0] * 2, n))
+            grown[: buf.shape[0]] = buf
+            self._buf = buf = grown
+        buf[k] = znew
+        self.days_done = k + 1
+
+    def _noise(self, k: int) -> np.ndarray:
+        """Day k's standard normal draw for every series, each from the series' own stream (drawn in
+        blocks; a stream's values do not depend on the block size)."""
+        if k - self._eps_from >= self._eps.shape[0]:
+            self._eps_from += self._eps.shape[0]
+            self._eps = np.stack([g.standard_normal(512) for g in self.noise_streams], axis=1)
+        return self._eps[k - self._eps_from]
+
+    def _decision_mask(self) -> np.ndarray:
+        if not hasattr(self, "_dec_mask"):
+            self._dec_mask = np.array([self.subs[s].decision for s in self.sids], dtype=bool)
+        return self._dec_mask
 
     def advance(self, to: datetime) -> None:
-        """Simulate every step that has ended by `to`, and make the decisions of meetings held by `to`."""
-        while self.step_end(self.steps_done) <= to:
-            self._ensure_decisions(self.step_end(self.steps_done))
-            self._step(self.steps_done)
-        self._ensure_decisions(to)
+        """Simulate every day up to and including the day of `to`."""
+        last = self.day_of(to)
+        while self.days_done <= last:
+            self._step()
 
     # -- releases ------------------------------------------------------------------------------
-    def _release_sets(self, include: set[str]) -> tuple[list[str], list[str]]:
+    def _calendar(self) -> dict[str, str]:
+        """subentity -> frequency ("daily", "weekly", "monthly", or "never"); decision variables are
+        released at their meetings instead."""
         cal = self.truth.release_calendar
-        weekly = [s for s in cal.get("weekly", []) if s in include]
-        monthly_spec = cal.get("monthly", ["default"])
-        if "default" in monthly_spec:
-            monthly = [s for s in self.sids if s in include and s not in weekly and s not in self.decision_vars]
-        else:
-            monthly = [s for s in monthly_spec if s in include]
-        return weekly, monthly
+        default = cal.get("default", "monthly")
+        if isinstance(default, list):
+            default = default[0] if default else "monthly"
+        out: dict[str, str] = {}
+        for freq in ("daily", "weekly", "monthly", "never"):
+            for sid in cal.get(freq, []) or []:
+                if sid in self.subs:
+                    out[sid] = freq
+        for sid in self.sids:
+            if sid not in out and sid not in self.decision_vars:
+                out[sid] = str(default)
+        return out
 
-    def _releases_between(self, a: datetime, b: datetime) -> list[MarketEvent]:
-        """Scheduled data releases and decisions published in (a, b]; requires steps simulated."""
+    @staticmethod
+    def released_on(freq: str, d: date) -> bool:
+        if freq == "daily":
+            return d.weekday() < 5
+        if freq == "weekly":
+            return d.weekday() == 4
+        if freq == "monthly":
+            return d.day == 15
+        return False
+
+    def releases(self, since: datetime | None, until: datetime) -> list[MarketEvent]:
+        """Scheduled data releases (21:00 UTC) and decisions (19:00 UTC on meeting days) published in
+        (since, until]. Requires the days simulated."""
+        cal = self._calendar()
         out: list[MarketEvent] = []
-        weekly, monthly = self._release_sets(set(self.sids))
-        k0 = max(0, self.step_of(a) - 1)
-        k1 = self.step_of(b)
-        seen_months: set[tuple[int, int]] = set()
-        for k in range(0, k1 + 1):
-            t = self.step_end(k)
-            ym = (t.year, t.month)
-            first_of_month = ym not in seen_months
-            seen_months.add(ym)
-            if k < k0 or not (a < t <= b) or k >= self.steps_done:
-                continue
-            series = list(weekly) + (list(monthly) if first_of_month else [])
-            data = {sid: round(self.native(sid, self.z[sid][k]), 10) for sid in series}
-            out.append(MarketEvent(id=f"ME-D-{t.strftime('%Y%m%d')}", kind=MarketEventKind.DATA,
-                                   source="Synthetic statistics office", headline=f"Scheduled data release ({len(data)} series)",
-                                   published_at=t, occurred_at=t, data=data, synthetic=True))
+        first = 0 if since is None else max(0, self.day_of(since))
+        last = min(self.day_of(until), self.days_done - 1)
+        for k in range(first, last + 1):
+            d = self.date_of(k)
+            t = datetime.combine(d, RELEASE_TIME, tzinfo=UTC)
+            if in_window(t, since, until):
+                data = {sid: round(self.native(sid, float(self.z[k, self.idx[sid]])), 10)
+                        for sid in self.sids if sid in cal and self.released_on(cal[sid], d)}
+                if data:
+                    out.append(MarketEvent(id=f"ME-D-{d.strftime('%Y%m%d')}", kind=MarketEventKind.DATA,
+                                           channel=MarketEventChannel.DATA_FEED, source="Synthetic statistics office",
+                                           headline=f"Scheduled data release ({len(data)} series)",
+                                           published_at=t, occurred_at=t, data=data, event_type="data_release",
+                                           synthetic=True))
         for var, d, change in self.decision_log:
-            t = self._meeting_time(d)
-            if not (a < t <= b) or (var, d) in self.scripted_decisions:
+            t = datetime.combine(d, MEETING_TIME, tzinfo=UTC)
+            if not in_window(t, since, until):
                 continue
-            k = self.step_of(t)
+            k = self.day_of_date(d)
             ent = var.split(".")[0]
-            z_before = self.z_at(var, k - 1) if k > 0 else self.offsets.get(var, 0.0)
-            value = self.native(var, z_before + change / self.subs[var].scale)
+            value = self.native(var, float(self.z[k, self.idx[var]]))
             verb = "raises" if change > 0 else ("cuts" if change < 0 else "holds")
-            out.append(MarketEvent(id=f"ME-D-{t.strftime('%Y%m%d')}-{ent}", kind=MarketEventKind.DATA,
-                                   source="Synthetic central bank feed", event_type="policy_decision",
+            out.append(MarketEvent(id=f"ME-D-{d.strftime('%Y%m%d')}-{ent}", kind=MarketEventKind.DATA,
+                                   channel=MarketEventChannel.DATA_FEED, source="Synthetic central bank feed",
+                                   event_type="policy_decision",
                                    headline=f"{ent.replace('_', ' ').title()} {verb} its policy rate ({value:.2f}%)",
                                    published_at=t, occurred_at=t, data={var: round(value, 10)}, synthetic=True))
         return sorted(out, key=lambda e: (e.published_at, e.id))
 
-    def poll(self, until: datetime) -> list[MarketEvent]:
-        self.advance(until)
-        events = self._releases_between(self.emitted_until, until)
-        events += [e for e in self.pending_events if e.published_at <= until]
-        self.pending_events = [e for e in self.pending_events if e.published_at > until]
-        self.emitted_until = max(self.emitted_until, until)
-        return sorted(events, key=lambda e: (e.published_at, e.id))
-
     def realized(self, subentity_id: str, start: datetime, end: datetime) -> list[float]:
-        k0, k1 = self.step_of(start), self.step_of(end)
         self.advance(end)
-        return [self.native(subentity_id, self.z[subentity_id][k]) for k in range(max(k0, 0), k1 + 1)]
+        k0, k1 = max(self.day_of(start), 0), self.day_of(end)
+        return [self.native(subentity_id, float(self.z[k, self.idx[subentity_id]])) for k in range(k0, k1 + 1)]
 
     # -- history -------------------------------------------------------------------------------
     def _history_meetings(self, start: date, end: date) -> dict[str, list[date]]:
-        # DECISION: history meetings fall on the weekly release day (Sunday), so a decision and the
-        # data it moves land in one daily episode and abduction can see them together.
-        first = start + timedelta(days=(6 - start.weekday()) % 7)            # first Sunday
+        # DECISION: history meetings fall on Wednesdays (the demo's meeting weekday), one week apart
+        # per decision variable, every history_meeting_every_days.
+        first = start + timedelta(days=(2 - start.weekday()) % 7)
         out: dict[str, list[date]] = {}
         for i, var in enumerate(sorted(self.decision_vars)):
             d = first + timedelta(days=7 * i)
@@ -393,44 +428,78 @@ class SyntheticWorld(MarketEventSource):
 
     def generate_history(self, start: date, end: date, regimes: list[dict]) -> list[MarketEvent]:
         """Simulate the history and return its dated market events (data releases, decisions, and
-        regime events). Leaves the world positioned at `end`, ready for the demo."""
-        demo_meetings = {k: list(v) for k, v in self.truth.meetings.items()}
+        regime events). Leaves the world positioned at the end of `end`, ready for the demo."""
         until = datetime.combine(end, time(23, 59, 59), tzinfo=UTC)
-        offsets: dict[str, float] = {}
-        regime_events: list[tuple[datetime, dict]] = []
+        offsets = np.zeros(len(self.sids))
+        regime_at: list[tuple[datetime, dict]] = []
         for attempt in range(2):
             self.reset_state()
-            if attempt == 1:
-                self.offsets = offsets
+            self.offsets = offsets.copy()
             self.history_mode = True
+            demo_meetings = self.meetings
             self.meetings = self._history_meetings(start, end)
-            regime_events = []
+            regime_at = []
             for r in regimes:
                 at = datetime.combine(r["at"] if isinstance(r["at"], date) else date.fromisoformat(str(r["at"])),
-                                      time(12, 0), tzinfo=UTC)
-                self.inject_native(r.get("shocks", []), at)
-                regime_events.append((at, r))
+                                      REGIME_TIME, tzinfo=UTC)
+                self._schedule(at, r.get("shocks", []))
+                regime_at.append((at, r))
             self.advance(until)
+            self.meetings = demo_meetings
             if attempt == 0:
-                offsets = {}
+                last = self.days_done - 1
+                offsets = np.zeros(len(self.sids))
                 for var in self.decision_vars:
-                    if self.z[var]:
-                        offsets[var] = -self.z[var][-1]
-        events = self._releases_between(self.origin - timedelta(seconds=1), until)
-        for at, r in regime_events:
-            k = self.step_of(at)
-            data = {sh["subentity"]: round(self.native(sh["subentity"], self.z[sh["subentity"]][k]), 10)
-                    for sh in r.get("shocks", [])}
-            events.append(MarketEvent(id=f"ME-H-{at.strftime('%Y%m%d')}", kind=MarketEventKind.DATA, source="Synthetic history",
-                                      headline=r.get("headline", "Synthetic regime shift"), published_at=at, occurred_at=at,
-                                      data=data, tags=list(r.get("tags", [])), event_type=r.get("event_type"),
-                                      synthetic=True))
+                    offsets[self.idx[var]] = -float(self.z[last, self.idx[var]])
+        events = self.releases(None, until)
+        for at, r in regime_at:
+            k = self.day_of(at)
+            data = {sh["subentity"]: round(self.native(sh["subentity"], float(self.z[k, self.idx[sh["subentity"]]])), 10)
+                    for sh in r.get("shocks", []) if sh["subentity"] in self.idx}
+            events.append(MarketEvent(id=f"ME-H-{at.strftime('%Y%m%d')}", kind=MarketEventKind.DATA,
+                                      channel=MarketEventChannel.DATA_FEED, source="Synthetic history",
+                                      headline=r.get("headline", "Synthetic regime shift"), published_at=at,
+                                      occurred_at=at, data=data, tags=list(r.get("tags", [])),
+                                      event_type=r.get("event_type"), synthetic=True))
         self.history_mode = False
-        self.meetings = {k: sorted(v) for k, v in demo_meetings.items()}
-        self.scripted_decisions = {}
         self.decision_log = []
-        self.decided = {}
-        self.pending_decisions = {}
-        self.emitted_until = until
         return sorted(events, key=lambda e: (e.published_at, e.id))
 
+
+@register("source", "synthetic_data_feed")
+class SyntheticDataFeed(MarketEventSource):
+    """Registered as `synthetic_data_feed`. poll(since, until) advances the world to `until` and
+    returns its data releases in the window: one DATA market event per day with releases
+    (id ME-D-<YYYYMMDD>, channel DATA_FEED, published 21:00 UTC), keyed by subentity id, following
+    the release calendar. A decision variable's release on a meeting day is its own event,
+    published 19:00 UTC. A scripted data event (such as ME-01) replaces that event's id and adds
+    its headline."""
+
+    name = "synthetic_data_feed"
+
+    def __init__(self, world: SyntheticWorld | None = None, scripted: list[MarketEvent] | None = None,
+                 config: Any = None, **_: Any) -> None:
+        if world is None:
+            raise ValueError("synthetic_data_feed needs a SyntheticWorld (the scenario runner registers it)")
+        self.world = world
+        self.scripted = sorted(scripted or [], key=lambda e: (e.published_at, e.id))
+
+    def poll(self, since: datetime | None, until: datetime) -> list[MarketEvent]:
+        self.world.advance(until)
+        events = self.world.releases(since, until)
+        by_slot = {}
+        for e in self.scripted:
+            if in_window(e.published_at, since, until):
+                by_slot[(e.published_at.date(), tuple(sorted(e.data)))] = e
+        out = []
+        for e in events:
+            sc = by_slot.pop((e.published_at.date(), tuple(sorted(e.data))), None)
+            if sc is not None:
+                out.append(e.model_copy(update={"id": sc.id, "headline": sc.headline, "body": sc.body,
+                                                "mentions": list(sc.mentions), "tags": list(sc.tags),
+                                                "event_type": sc.event_type or e.event_type,
+                                                "published_at": sc.published_at, "occurred_at": sc.occurred_at}))
+            else:
+                out.append(e)
+        out.extend(by_slot.values())       # scripted data events with no matching release
+        return sorted(out, key=lambda e: (e.published_at, e.id))

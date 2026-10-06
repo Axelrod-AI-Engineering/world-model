@@ -19,26 +19,39 @@ from axelrod_wm.memory.working import WorkingMemory
 
 def test_counts(m1_engine):
     g = m1_engine.wm.graph
-    assert len(g.entities) == 33
-    assert len(g.subentities) == 69
-    assert sorted(g.interactions) == [f"e{i:02d}" for i in range(1, 50)]
+    assert len(g.entities) == 48          # Figure 1's 33 (NVIDIA in Northwind's place) plus 15 real actors
+    assert len(g.subentities) == 107
+    assert sorted(g.interactions) == [f"e{i:02d}" for i in range(1, 91)]
     assert not any(i.edge_type == "learned_causal" for i in g.interactions.values())
 
 
 def test_seed_patterns_and_instances(m1_engine):
-    pats = m1_engine.ltm.patterns.patterns
-    assert sorted(pats) == sorted([f"S{i}" for i in range(1, 10)] + ["HP1", "HP2"])
+    pats = m1_engine.ltm.object_generalizations.patterns
+    assert sorted(pats) == sorted([f"S{i}" for i in range(1, 18)] + ["HP1", "HP2"])
     assert all(p.status == SuperentityStatus.ADMITTED and p.origin == "seed" for p in pats.values())
     insts = {i.pattern_id for i in m1_engine.wm.graph.instances.values()}
-    assert insts == {f"S{i}" for i in range(1, 10)}
+    assert insts == {f"S{i}" for i in range(1, 18)}
     assert pats["S8"].rival_ids == {"S9"} and pats["S9"].rival_ids == {"S8"}
     assert [r.present for r in pats["S9"].relations] == [True, False]
+
+
+def test_seeded_composite_nests_two_superentities_and_an_entity(m1_engine):
+    g = m1_engine.wm.graph
+    s10 = m1_engine.ltm.object_generalizations.patterns["S10"]
+    assert s10.sub_pattern_ids == ["S2", "S1"]
+    inst = g.instances["inst-S10"]
+    assert inst.child_instance_ids == ["inst-S2", "inst-S1"]
+    parts = g.members("inst-S2") | g.members("inst-S1")
+    assert g.members("inst-S10") == parts | {"federal_reserve"}
+    # no super-interaction joins a composite to its own parts
+    for s in g.super_interactions.values():
+        assert {s.source_instance_id, s.target_instance_id} not in ({"inst-S10", "inst-S2"}, {"inst-S10", "inst-S1"})
 
 
 def test_loose_entities(m1_engine):
     g = m1_engine.wm.graph
     loose = {e for e in g.entities if not g.instances_of_entity(e)}
-    assert loose == {"market_concentration", "geography", "ecb", "northwind_semis", "fed_chair"}
+    assert loose == {"market_concentration", "geography", "ecb", "fed_chair"}
 
 
 def _supers(engine):
@@ -64,7 +77,7 @@ def test_super_interactions(m1_engine):
 
 
 def test_every_nonleaf_has_two_children(m1_engine):
-    for tax in (m1_engine.ltm.object_taxonomy, m1_engine.ltm.interaction_taxonomy):
+    for tax in (m1_engine.ltm.object_generalizations.taxonomy, m1_engine.ltm.interaction_generalizations.taxonomy):
         for node in tax.nodes.values():
             assert len(node.child_ids) == 0 or len(node.child_ids) >= 2, node.id
 
@@ -73,7 +86,7 @@ def test_taxonomy_homes(m1_engine):
     g = m1_engine.wm.graph
     assert g.entities["federal_reserve"].generalization_id == "gen:obj:central_bank"
     assert g.interactions["e01"].generalization_id == "gen:int:policy_rate_to_bank_funding"
-    assert m1_engine.ltm.patterns.patterns["HP1"].generalization_id == "gen:obj:bank_run"
+    assert m1_engine.ltm.object_generalizations.patterns["HP1"].generalization_id == "gen:obj:bank_run"
 
 
 def test_entity_links_use_figure1_labels(m1_engine):
@@ -125,7 +138,7 @@ def test_serialization_round_trips(m1_engine):
         for obj in coll.values():
             again = cls.model_validate_json(obj.model_dump_json())
             assert again == obj
-    for p in m1_engine.ltm.patterns.patterns.values():
+    for p in m1_engine.ltm.object_generalizations.patterns.values():
         assert SuperentityPattern.model_validate_json(p.model_dump_json()) == p
     for d in ({"family": "gaussian", "mu": 1, "sigma": 2}, {"family": "beta", "alpha": 2, "beta": 3},
               {"family": "lognormal", "mu": 0.1, "sigma": 0.2}, {"family": "gamma", "k": 2, "theta": 3}):

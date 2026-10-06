@@ -1,58 +1,62 @@
-// Layout presets (§13.3): "gravity" starts from Figure 1's positions and lets the forces run;
-// "figure1" pins every pill at its Figure 1 position and draws the seed hulls with the figure's shapes.
+// Layout presets (§13.3). "Figure 1" (the default here) holds every pill near its Figure 1 position and
+// only lets nodes move to make room; "Gravity" starts there and lets the forces run.
 
 export const FIG_PILL = { width: 164, height: 30 };
-export const DEMO_COLUMN_X = 1290;
+export const GRID = { dx: 216, dy: 52, x0: 168, y0: 251 };
 
 export function figurePosition(layout, entityId) {
   const p = layout?.entities?.[entityId];
   return p ? { x: p[0], y: p[1] } : null;
 }
 
-// A start position for an entity with no Figure 1 position: next to its first neighbor, or in the
-// demo-additions column.
-export function fallbackPosition(entityId, view, positions, index = 0) {
+// A home for an entity that Figure 1 does not place (one created during a run): the free grid slot
+// nearest its neighbors, outside the regions the seeded superentities cover.
+// DECISION: new entities snap to Figure 1's grid, so the tidy first view stays tidy as the graph grows.
+export function slotPosition(entityId, view, homes, regions) {
   const neighbors = [];
   for (const l of view?.entity_links ?? []) {
-    if (l.source === entityId && positions.has(l.target)) neighbors.push(positions.get(l.target));
-    if (l.target === entityId && positions.has(l.source)) neighbors.push(positions.get(l.source));
+    if (l.source === entityId && homes.has(l.target)) neighbors.push(homes.get(l.target));
+    if (l.target === entityId && homes.has(l.source)) neighbors.push(homes.get(l.source));
   }
-  if (neighbors.length) {
-    const x = neighbors.reduce((s, p) => s + p.x, 0) / neighbors.length;
-    const y = neighbors.reduce((s, p) => s + p.y, 0) / neighbors.length;
-    return { x: x + 40 + 13 * (index % 5), y: y + 46 };
+  const target = neighbors.length
+    ? { x: neighbors.reduce((s, p) => s + p.x, 0) / neighbors.length, y: neighbors.reduce((s, p) => s + p.y, 0) / neighbors.length }
+    : { x: 1290, y: 520 };
+  const taken = [...homes.values()];
+  const free = (x, y) => taken.every((p) => Math.abs(p.x - x) > GRID.dx / 2 || Math.abs(p.y - y) > GRID.dy * 0.8)
+    && regions.every((r) => x < r.x0 - 90 || x > r.x1 + 90 || y < r.y0 - 22 || y > r.y1 + 22);
+  let best = null;
+  for (let i = -3; i <= 7; i++) {
+    for (let j = -3; j <= 12; j++) {
+      const x = GRID.x0 + i * GRID.dx;
+      const y = GRID.y0 + j * GRID.dy;
+      if (!free(x, y)) continue;
+      const d = Math.hypot((x - target.x) / 1.4, y - target.y);
+      if (!best || d < best.d) best = { x, y, d };
+    }
   }
-  return { x: DEMO_COLUMN_X, y: 470 + 52 * (index % 8) };
-}
-
-// Figure 1's own hull shapes, as SVG path strings in the figure's frame.
-export function figureHullPath(layout, patternId) {
-  const h = layout?.hulls?.[patternId];
-  if (!h) return null;
-  if (h.path) return h.path;
-  if (h.rect) {
-    const [x, y, w, hh] = h.rect;
-    return `M${x} ${y}H${x + w}V${y + hh}H${x}Z`;
-  }
-  return null;
-}
-
-export function figureHullAnchor(layout, patternId) {
-  const h = layout?.hulls?.[patternId];
-  if (!h) return null;
-  if (h.rect) return { x: h.rect[0] + 8, y: h.rect[1] - 6 };
-  const m = /^M\s*([\d.]+)[ ,]([\d.]+)/.exec(h.path ?? "");
-  return m ? { x: +m[1] + 8, y: +m[2] - 6 } : null;
+  return best ? { x: best.x, y: best.y } : { x: target.x + 60, y: target.y + 60 };
 }
 
 export const CATEGORY_CODES = ["SD", "MF", "SC", "DI", "DF", "EN", "EX", "SH"];
 export const CATEGORY_NAMES = {
-  SD: "spending and demand", MF: "money and finance", SC: "supply and capacity", DI: "distribution",
-  DF: "deep foundations", EN: "environment", EX: "expectations", SH: "shocks",
+  SD: "Spending and demand", MF: "Money and finance", SC: "Supply and capacity", DI: "Distribution",
+  DF: "Deep foundations", EN: "Environment", EX: "Expectations", SH: "Shocks",
+};
+// One plain sentence per category, shown in the key and in tooltips.
+export const CATEGORY_BLURBS = {
+  SD: "Who buys what: households, firms, governments, and foreigners. Demand sets output in the short run.",
+  MF: "The price and supply of money: interest rates, inflation, credit, debt, the dollar, and capital flows.",
+  SC: "What the economy can produce: technology, workers, energy and commodities, supply chains, and competition.",
+  DI: "Who gets the gains: inequality within countries and between them.",
+  DF: "The slow rules of the game: institutions, law and regulation, geography, culture and trust.",
+  EN: "The physical world: a changing climate and extreme weather.",
+  EX: "What people believe about the future: confidence and policy uncertainty. Beliefs move spending today.",
+  SH: "Sudden breaks: epidemics, wars, financial crises, and asset price swings.",
 };
 
-// "Group by category": eight fixed anchors on a circle, one per category tag.
-export function categoryAnchors(cx = 640, cy = 440, r = 420) {
+// "Group by category": eight fixed anchors on a circle, one per category tag. It shows that tags are
+// labels, not structure.
+export function categoryAnchors(cx = 600, cy = 440, r = 440) {
   const out = {};
   CATEGORY_CODES.forEach((c, i) => {
     const a = (i / CATEGORY_CODES.length) * Math.PI * 2 - Math.PI / 2;

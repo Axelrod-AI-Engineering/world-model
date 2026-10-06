@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict
 from axelrod_wm.core.distributions import Beta, Distribution, Gaussian, from_link_moments
 from axelrod_wm.core.evidence import Origin
 from axelrod_wm.core.interaction import EdgeDynamics
+from axelrod_wm.core.superentity import TrackRecord
 from axelrod_wm.core.temporal import KernelSpec, gamma_from_mean
 
 if TYPE_CHECKING:
@@ -41,6 +42,8 @@ class AttributeKind(BaseModel):
 
 
 class AttributeVocabulary(BaseModel):
+    """Designer-provided; part of ConstructionSpec, not of long-term memory (§6.13)."""
+
     model_config = ConfigDict(extra="forbid")
 
     kinds: dict[str, AttributeKind]
@@ -169,10 +172,14 @@ class GeneralizationStats(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     support: float = 0.0                        # observations classified through this node
-    attribute_level: dict[str, RunningStats] = {}    # objects: link-space level per attribute kind
-    attribute_scale: dict[str, RunningStats] = {}    # objects: scale per attribute kind
-    effect: RunningStats = RunningStats()       # interactions: effect means seen
-    existence_alpha: float = 1.0                # interactions: beta pseudo-counts
+    attribute_level: dict[str, RunningStats] = {}    # entity nodes: link-space level per attribute kind
+    attribute_scale: dict[str, RunningStats] = {}    # entity nodes: scale per attribute kind
+    relation_effects: dict[str, RunningStats] = {}   # configuration nodes: effect means of member patterns'
+                                                     # realized relations, keyed "<source_attr>><target_attr>:<polarity>"
+    track_hits: float = 0.0                     # configuration nodes: pooled track record of member patterns
+    track_misses: float = 0.0
+    effect: RunningStats = RunningStats()       # interaction nodes: effect means seen
+    existence_alpha: float = 1.0                # interaction nodes: beta pseudo-counts
     existence_beta: float = 1.0
     delay_days: RunningStats = RunningStats()
     lag_days: RunningStats = RunningStats()
@@ -189,8 +196,10 @@ class GeneralizationStats(BaseModel):
             lag_days=self.lag_days.merged(other.lag_days),
             duration_days=self.duration_days.merged(other.duration_days),
             duration_permanent=self.duration_permanent + other.duration_permanent,
+            track_hits=self.track_hits + other.track_hits,
+            track_misses=self.track_misses + other.track_misses,
         )
-        for name in ("attribute_level", "attribute_scale"):
+        for name in ("attribute_level", "attribute_scale", "relation_effects"):
             mine: dict[str, RunningStats] = getattr(self, name)
             theirs: dict[str, RunningStats] = getattr(other, name)
             merged = {k: v.model_copy() for k, v in mine.items()}
@@ -240,6 +249,28 @@ class Generalization(BaseModel):
                             duration=gamma_from_mean(duration) if duration is not None else None)
         dyn = EdgeDynamics(effect=Gaussian(mu=mu, sigma=sd), kernel=kernel)
         return dyn, Beta(alpha=max(st.existence_alpha, 1e-3), beta=max(st.existence_beta, 1e-3))
+
+    def prior_for_pattern(self) -> tuple[dict[str, Distribution], TrackRecord]:
+        """For a new superentity classified under this configuration node: an effect prior for each
+        relation key (from relation_effects), and a starting track record (the pooled hit rate,
+        scaled to two pseudo-observations)."""
+        st = self.stats
+        priors: dict[str, Distribution] = {}
+        for key, rs in sorted(st.relation_effects.items()):
+            if rs.n > 0:
+                priors[key] = Gaussian(mu=rs.mean, sigma=math.sqrt(rs.var() + DEFAULT_EFFECT_SD**2))
+        trials = st.track_hits + st.track_misses
+        if trials > 0:
+            rate = (st.track_hits + 1.0) / (trials + 2.0)
+            record = TrackRecord(hits=2.0 * rate, misses=2.0 * (1.0 - rate))
+        else:
+            record = TrackRecord()
+        return priors, record
+
+
+def relation_key(source_attr: str, target_attr: str, polarity: int) -> str:
+    """The relation_effects key: "<source_attr>><target_attr>:<polarity>"."""
+    return f"{source_attr}>{target_attr}:{1 if polarity >= 0 else -1}"
 
 
 class Taxonomy(BaseModel):

@@ -17,8 +17,12 @@ app = typer.Typer(help="Axelrod World Model command-line interface.", no_args_is
 PASS, FAIL = "✓", "✗"
 
 
+SESSION_FILE = "session.json"
+
+
 def _runner(scenario: str, *, headless: bool = True, auto_approve: bool = False, seed: Optional[int] = None,
-            trace: bool = True):
+            trace: bool = True, storage=None, config: Optional[str] = None):
+    from axelrod_wm.memory.snapshots import MemoryBackend
     from axelrod_wm.sim.runner import build_runner
     from axelrod_wm.trace import RecordingTracer
 
@@ -26,17 +30,111 @@ def _runner(scenario: str, *, headless: bool = True, auto_approve: bool = False,
     if trace:
         tracer = RecordingTracer(run_id=f"run-{datetime.now(UTC).strftime('%Y%m%d-%H%M%S')}",
                                  directory=Path("var/axelrod/traces"))
-    return build_runner(scenario, interactive=not headless, auto_approve=auto_approve, seed=seed, tracer=tracer)
+    # DECISION: scenario runs, theses, and evaluations from the CLI keep their state in memory, so they
+    # never overwrite the session that `axelrod init` and `axelrod update` keep under var/axelrod.
+    return build_runner(scenario, interactive=not headless, auto_approve=auto_approve, seed=seed, tracer=tracer,
+                        storage=storage if storage is not None else MemoryBackend(), config_path=config)
+
+
+def _session_storage(config: Optional[str], scenario: str):
+    from axelrod_wm.engine.config import load_config
+    from axelrod_wm.memory.snapshots import FilesBackend
+    from axelrod_wm.sim.scenario import ScenarioScript
+
+    script = ScenarioScript.load(scenario)
+    overrides = [script.config_overrides] if script.config_overrides else []
+    cfg = load_config(config, overrides=overrides) if config else load_config(overrides=overrides)
+    return Path(cfg.storage.path), FilesBackend(path=cfg.storage.path)
+
+
+def _write_session(runner, path: Path) -> None:
+    runner.controller.engine.storage.close()        # the session file must point at durable versions
+    rec = runner.session_record()
+    (path / SESSION_FILE).write_text(json.dumps(rec, indent=2))
 
 
 @app.command("init")
-def init_cmd(scenario: str = typer.Argument("oil_shock_demo")) -> None:
-    """Build and cache the init snapshot."""
+def init_cmd(scenario: str = typer.Argument("oil_shock_demo"),
+             seed: Optional[int] = typer.Option(None, "--seed", help="Override the scenario's seed."),
+             config: Optional[str] = typer.Option(None, "--config")) -> None:
+    """Build and cache the init snapshot, and start a session under var/axelrod (session.json)."""
     t = time.time()
-    r = _runner(scenario, trace=False)
+    path, storage = _session_storage(config, scenario)
+    r = _runner(scenario, seed=seed, trace=False, storage=storage, config=config)
     st = r.load()
+    _write_session(r, path)
+    wm = r.controller.engine.wm
     typer.echo(f"{scenario}: initialized at version {st.version} from {r.init_info.get('history_events')} history "
-               f"events in {time.time() - t:.1f}s (cache: {r._init_cache_path()})")
+               f"events over {r.init_info.get('days')} days in {time.time() - t:.1f}s")
+    typer.echo(f"  last processed day {wm.deviations.date_of(wm.last_processed_day)}; cache {r._init_cache_path()}")
+    typer.echo(f"  session: {path / SESSION_FILE}")
+
+
+@app.command("update")
+def update_cmd(until: Optional[str] = typer.Option(None, "--until", help="Last day to process (YYYY-MM-DD); "
+                                                                           "default: the day after the last processed day."),
+               event: list[str] = typer.Option([], "--event", help="A typed user market event (JSON file)."),
+               draw: list[str] = typer.Option([], "--draw", help="A drawn model edit (GraphUpdateEvent JSON file)."),
+               auto_approve: bool = typer.Option(False, "--auto-approve", help="Use the auto_approve_all policy."),
+               config: Optional[str] = typer.Option(None, "--config")) -> None:
+    """Run one update (§7.8) against the session in var/axelrod, using its scenario and config."""
+    from datetime import date as _date
+    from datetime import time as _time
+
+    from axelrod_wm.control.updates import UpdateRequest, UpdateState, UserMarketEventInput
+    from axelrod_wm.events.graph_update import GraphUpdateEvent
+
+    t = time.time()
+    path = Path("var/axelrod")
+    if config is None:
+        sess_file = path / SESSION_FILE
+    else:
+        sess_file = _session_storage(config, "oil_shock_demo")[0] / SESSION_FILE
+    if not sess_file.exists():
+        typer.echo("no session: run `axelrod init <scenario>` first", err=True)
+        raise typer.Exit(code=1)
+    session = json.loads(sess_file.read_text())
+    cfg_path = config or session.get("config")
+    path, storage = _session_storage(cfg_path, session["scenario"])
+    r = _runner(session["scenario"], auto_approve=auto_approve, seed=session.get("seed"), trace=True,
+                storage=storage, config=cfg_path)
+    r.resume(session)
+    ctl = r.controller
+    wm = ctl.engine.wm
+    day = _date.fromisoformat(until) if until else wm.deviations.date_of(wm.last_processed_day + 1)
+    # DECISION: a CLI update is requested at the end of its last day (simulated time), so it collects
+    # everything published through that day.
+    at = datetime.combine(day, _time(23, 59, 59), tzinfo=UTC)
+    events = [UserMarketEventInput.model_validate(json.loads(Path(f).read_text())) for f in event]
+    draws = [GraphUpdateEvent.model_validate(json.loads(Path(f).read_text())) for f in draw]
+    run = ctl.request_update(UpdateRequest(requested_by="user", until=day, requested_at=at,
+                                           user_market_events=events, user_graph_update_events=draws))
+    while run.state == UpdateState.AWAITING_REVIEW:
+        # DECISION: without --auto-approve the CLI defers what needs review (reported below), so the run
+        # always finishes; deferred items can be approved later and then fold in late.
+        p = ctl.proposals[run.waiting_on]
+        typer.echo(f"  deferred {p.id} ({p.kind}, {p.market_event_id or p.event.id}): {', '.join(p.review_reasons)}")
+        run = ctl.continue_update(run.id)
+    _write_session(r, path)
+    rep = run.report
+    typer.echo(f"{run.id}: {run.state} through {day} in {time.time() - t:.1f}s; version "
+               f"{rep.version_before if rep else '?'} -> {rep.version_after if rep else ctl.engine.version}")
+    if rep is not None:
+        typer.echo(f"  days {rep.days}; collected {rep.collected}; duplicates dropped {rep.duplicates_dropped}; "
+                   f"late {rep.late_collected}")
+        typer.echo(f"  translated {rep.translated}; auto-applied {rep.auto_applied}; approved {rep.approved}; "
+                   f"rejected {rep.rejected}; deferred {rep.deferred}; late folded {rep.late_folded}")
+        if rep.not_translated:
+            typer.echo(f"  no translation: {', '.join(rep.not_translated[:10])}")
+        if rep.model_edits_proposed:
+            typer.echo(f"  model edits proposed: {', '.join(rep.model_edits_proposed[:10])}")
+        if rep.biggest_moves:
+            typer.echo("  biggest moves: " + ", ".join(f"{s} {m:+.2f}" for s, m in rep.biggest_moves[:6]))
+        if rep.reposed_theses:
+            typer.echo(f"  re-posed: {', '.join(rep.reposed_theses)}")
+    pending = ctl.pending_proposals()
+    if pending:
+        typer.echo(f"  {len(pending)} proposals await review")
 
 
 @app.command("run-scenario")

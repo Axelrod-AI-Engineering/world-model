@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
-from axelrod_wm.core.distributions import from_link, summarize_samples
+from axelrod_wm.core.distributions import from_link, summarize_columns, summarize_samples
 from axelrod_wm.core.hypothesis import HypothesisKind, HypothesisStatus
 from axelrod_wm.core.interaction import base_interaction_id
 from axelrod_wm.engine.performance.records import Forecast, ForecastScenario, NetworkSummary
@@ -50,8 +50,9 @@ class PatternAndSignRivalDetector(RivalDetector):
         self.config = config
 
     def _rivals(self, a: Network, b: Network, ltm: LongTermMemory) -> bool:
-        pa = ltm.patterns.patterns.get(a.pattern_id) if a.pattern_id else None
-        pb = ltm.patterns.patterns.get(b.pattern_id) if b.pattern_id else None
+        patterns = ltm.object_generalizations.patterns
+        pa = patterns.get(a.pattern_id) if a.pattern_id else None
+        pb = patterns.get(b.pattern_id) if b.pattern_id else None
         if pa is not None and pb is not None and (pb.id in pa.rival_ids or pa.id in pb.rival_ids):
             return True
         sign_a = {(c.source_id, c.target_id): np.sign(c.dynamics.effect.mean()) for c in a.channels}
@@ -85,35 +86,59 @@ class PatternAndSignRivalDetector(RivalDetector):
 
 
 def network_log_fit(net: Network, wm: WorkingMemory, ltm: LongTermMemory, ctx: ProcessContext) -> float:
-    """-0.5 * sum e^2 over standardized one-step errors of the network's channel targets in the last
-    fit_window_steps, recomputed with the network's dynamics and forced edges."""
-    from axelrod_wm.engine.kernel_update import target_fit_sse
-    from axelrod_wm.engine.regressors import regressor_cache
+    """log_fit(N) = -0.5 * sum e^2 over the standardized one-step errors of N's channel targets in the
+    last fit_window_days, recomputed with N's dynamics and forced edges (§8.9.4). Errors are taken on
+    the changes between consecutive observed days, as in kernel learning."""
+    from axelrod_wm.engine.daily import in_channel_index
+    from axelrod_wm.engine.kernel_update import phi_path
+    from axelrod_wm.engine.regressors import clip_of, min_delay_of, moderator_terms
 
     dev = wm.deviations
-    now_step = dev.step_of(ctx.now)
-    window = int(ctx.config.unify.fit_window_steps)
-    overrides: dict[str, tuple[float, bool]] = {}
+    today = ctx.today
+    start = max(today - int(ctx.config.unify.fit_window_days) + 1, dev.first_kept_day)
+    min_delay = min_delay_of(ctx)
+    clip = clip_of(ctx)
+    cache: dict[tuple, dict[int, float]] = ctx.notes.setdefault("phi_paths", {})
     absent = set(net.forced_absent)
-    for ch in net.channels:
-        overrides[ch.channel_key] = (ch.dynamics.effect.mean(), ch.interaction_id not in absent)
-    cache = regressor_cache(wm, ctx)
+    mine = {ch.channel_key: ch for ch in net.channels}
+    index = in_channel_index(wm.graph)
     total = 0.0
     for tgt in sorted({ch.target_id for ch in net.channels}):
         sub = wm.graph.subentities.get(tgt)
         if sub is None:
             continue
-        steps = [s for s in sorted(dev.z.get(tgt, {})) if now_step - window < s <= now_step]
-        sse, n = target_fit_sse(wm, ctx, tgt, steps, None, cache, overrides)
-        if n == 0:
+        days = dev.observed_days(tgt, start, today)
+        if len(days) < 2:
             continue
-        sigma2 = level_noise_of(sub, ctx) ** 2 + 2 * obs_noise_of(sub, wm, ltm) ** 2
-        total += -0.5 * sse / max(sigma2, 1e-9)
+        terms = []
+        for ch in index.get(tgt, []):
+            own = mine.get(ch.key)
+            dyn = own.dynamics if own is not None else ch.dyn
+            on = not (own is not None and own.interaction_id in absent)
+            if not on:
+                continue
+            ck = (ch.key, dyn.kernel.shorthand()["delay_days"], dyn.kernel.shorthand()["lag_days"],
+                  dyn.kernel.shorthand()["duration_days"], start, today)
+            if ck not in cache:
+                cache[ck] = phi_path(wm, ch.source, dyn.kernel, start, today, min_delay)
+            mods = {d: moderator_terms(ch.params, dev, d, clip)[0] for d in days} if ch.params else {}
+            terms.append((dyn.effect.mean(), cache[ck], mods))
+        q_a = level_noise_of(sub, ctx)
+        r = obs_noise_of(sub, wm, ctx.vocab)
+        for a, b in zip(days[:-1], days[1:]):
+            dz = dev.z(tgt, b) - dev.z(tgt, a)
+            pred = sum(mu * (m.get(b, 1.0) * path.get(b, 0.0) - m.get(a, 1.0) * path.get(a, 0.0))
+                       for mu, path, m in terms)
+            var = q_a * q_a * (b - a) + 2.0 * r * r
+            total += -0.5 * (dz - pred) ** 2 / max(var, 1e-9)
     return total
 
 
-@register("scenario_weighter", "support_fit_reliability")
-class SupportFitReliabilityWeighter(ScenarioWeighter):
+@register("scenario_weighter", "support_fit_track")
+class SupportFitTrackWeighter(ScenarioWeighter):
+    """w(s) is proportional to the product over rival groups of prior(N) * fit(N) * track(N), times p or
+    1 - p per branched hypothesis (§8.9.4). track(N) is the pattern's track_record.mean()."""
+
     def __init__(self, config: Any = None) -> None:
         self.config = config
 
@@ -121,29 +146,30 @@ class SupportFitReliabilityWeighter(ScenarioWeighter):
                 ltm: LongTermMemory, ctx: ProcessContext) -> list[float]:
         by_id = {n.id: n for n in networks}
         groups: dict[str, list[str]] = ctx.notes.get("rival_groups", {})
-        prior, fit, rel = {}, {}, {}
+        prior, fit, track = {}, {}, {}
+        patterns = ltm.object_generalizations.patterns
         for gkey, members in groups.items():
             sup = {}
             logf = {}
             for nid in members:
                 n = by_id[nid]
-                p = ltm.patterns.patterns.get(n.pattern_id) if n.pattern_id else None
+                p = patterns.get(n.pattern_id) if n.pattern_id else None
                 sup[nid] = (p.support if p is not None else 0.0) + 1.0
                 logf[nid] = network_log_fit(n, wm, ltm, ctx)
-                rel[nid] = ltm.reliability.mean(n.pattern_id) if n.pattern_id else 0.5
+                track[nid] = p.track_record.mean() if p is not None else 0.5
             tot = sum(sup.values())
             mx = max(logf.values())
             lse = mx + math.log(sum(math.exp(v - mx) for v in logf.values()))
             for nid in members:
                 prior[nid] = sup[nid] / tot
                 fit[nid] = math.exp(logf[nid] - lse)
-        ctx.notes["weight_terms"] = {nid: {"prior": prior[nid], "fit": fit[nid], "reliability": rel[nid]}
+        ctx.notes["weight_terms"] = {nid: {"prior": prior[nid], "fit": fit[nid], "track": track[nid]}
                                      for nid in prior}
         out = []
         for s in scenarios:
             w = 1.0
             for _gkey, nid in s.rival_choices.items():
-                w *= prior.get(nid, 1.0) * fit.get(nid, 1.0) * rel.get(nid, 0.5)
+                w *= prior.get(nid, 1.0) * fit.get(nid, 1.0) * track.get(nid, 0.5)
             for hid, on in s.branched_hypothesis_ids.items():
                 h = wm.hypotheses.get(hid)
                 p = h.probability if h is not None else 0.5
@@ -187,7 +213,7 @@ class ChannelsAndRivalsUnifier(ForecastUnifier):
                  scenario_weighter: ScenarioWeighter | None = None) -> None:
         self.config = config
         self.detector = rival_detector or PatternAndSignRivalDetector(config)
-        self.weighter = scenario_weighter or SupportFitReliabilityWeighter(config)
+        self.weighter = scenario_weighter or SupportFitTrackWeighter(config)
 
     def _branches(self, networks: list[Network], wm: WorkingMemory, ctx: ProcessContext) -> list[tuple[str, str]]:
         cfg = ctx.config.unify
@@ -272,9 +298,9 @@ class ChannelsAndRivalsUnifier(ForecastUnifier):
         wm = ctx.wm
         graph = wm.graph
         S = int(ctx.config.propagation.samples)
-        H = int(ctx.notes.get("horizon_steps", ctx.config.time.horizon_steps))
+        H = int(ctx.notes.get("horizon_days", ctx.config.time.horizon_days))
         dev = wm.deviations
-        step_now = dev.step_of(ctx.now)
+        today = ctx.today
         weights = [s.weight for s in scenarios]
         counts = largest_remainder(S, weights) if scenarios else []
 
@@ -284,7 +310,7 @@ class ChannelsAndRivalsUnifier(ForecastUnifier):
                 if z.shape[1] < H + 1:
                     z = np.pad(z, ((0, 0), (0, H + 1 - z.shape[1])), mode="edge")
                 return z[:, : H + 1]
-            z0 = dev.z_at(sid, step_now) or 0.0
+            z0 = dev.z_at(sid, today) or 0.0
             return np.full((n, H + 1), z0)
 
         def mixture(sid: str) -> tuple[np.ndarray, np.ndarray]:
@@ -298,7 +324,7 @@ class ChannelsAndRivalsUnifier(ForecastUnifier):
                 lv.append(lvl)
                 ef.append(lvl - base)
             if not lv:
-                z0 = dev.z_at(sid, step_now) or 0.0
+                z0 = dev.z_at(sid, today) or 0.0
                 return np.full((1, H + 1), z0), np.zeros((1, H + 1))
             return np.concatenate(lv, axis=0), np.concatenate(ef, axis=0)
 
@@ -321,9 +347,15 @@ class ChannelsAndRivalsUnifier(ForecastUnifier):
             lv, ef = cache.get(sid) or mixture(sid)
             sub = graph.subentities[sid]
             native = np.asarray(from_link(sub.anchor + sub.scale * lv, sub.posterior.link), dtype=float)
-            summary[sid] = [summarize_samples(native[:, t]) for t in range(H + 1)]
-            effect_summary[sid] = [summarize_samples(ef[:, t]) for t in range(H + 1)]
-            z_summary[sid] = [summarize_samples(lv[:, t]) for t in range(H + 1)]
+            summary[sid] = summarize_columns(native)
+            effect_summary[sid] = summarize_columns(ef)
+            z_summary[sid] = summarize_columns(lv)
+        # DECISION: scenario paths are summarized on the frame days (at most propagation.max_frames, always
+        # including day 0 and the horizon) rather than every day, which keeps forecasts small; the
+        # mixture's own summaries are daily.
+        from axelrod_wm.engine.regressors import frame_days
+
+        sdays = frame_days(H, int(ctx.config.propagation.max_frames))
         new_scen = []
         for s in scenarios:
             ssum, esum = {}, {}
@@ -331,10 +363,10 @@ class ChannelsAndRivalsUnifier(ForecastUnifier):
                 sub = graph.subentities[sid]
                 lvl = levels(coupled[s.id], sid, coupled[s.id].n_samples)
                 base = levels(baseline[s.id], sid, baseline[s.id].n_samples)
-                native = np.asarray(from_link(sub.anchor + sub.scale * lvl, sub.posterior.link), dtype=float)
-                ssum[sid] = [summarize_samples(native[:, t]) for t in range(H + 1)]
-                esum[sid] = [summarize_samples((lvl - base)[:, t]) for t in range(H + 1)]
-            new_scen.append(s.model_copy(update={"summary": ssum, "effect_summary": esum}))
+                native = np.asarray(from_link(sub.anchor + sub.scale * lvl[:, sdays], sub.posterior.link), dtype=float)
+                ssum[sid] = summarize_columns(native)
+                esum[sid] = summarize_columns((lvl - base)[:, sdays])
+            new_scen.append(s.model_copy(update={"summary": ssum, "effect_summary": esum, "summary_days": sdays}))
         # decomposition in the top-weighted scenario
         isolated: dict[str, dict[str, Any]] = {}
         decomposition: dict[str, dict[str, float]] = {}
@@ -343,7 +375,7 @@ class ChannelsAndRivalsUnifier(ForecastUnifier):
             pred = local.get(n.id)
             if pred is None:
                 continue
-            isolated[n.id] = {sid: summarize_samples(pred.result.z_of(sid)[:, min(H, pred.result.horizon_steps)])
+            isolated[n.id] = {sid: summarize_samples(pred.result.z_of(sid)[:, min(H, pred.result.horizon_days)])
                               for sid in targets if pred.result.has(sid)}
         if top is not None:
             eff_top = coupled[top.id].minus(baseline[top.id])
@@ -353,7 +385,7 @@ class ChannelsAndRivalsUnifier(ForecastUnifier):
                     pred = local.get(nid)
                     v = 0.0
                     if pred is not None and pred.result.has(sid):
-                        v = float(np.median(pred.result.z_of(sid)[:, min(H, pred.result.horizon_steps)]))
+                        v = float(np.median(pred.result.z_of(sid)[:, min(H, pred.result.horizon_days)]))
                     parts[nid] = v
                 coupled_med = eff_top.median_z(sid, H) if eff_top.has(sid) else 0.0
                 parts["coupling"] = coupled_med - sum(parts.values())
@@ -368,10 +400,10 @@ class ChannelsAndRivalsUnifier(ForecastUnifier):
         is_baseline = bool(ctx.notes.get("is_baseline", False))
         return Forecast(id=ctx.notes.get("forecast_id", f"FC-{thesis.id}-1"), thesis_id=thesis.id,
                         based_on_version=ctx.state_version, config_hash=ctx.config.config_hash(), seed=int(ctx.config.seed),
-                        created_at=ctx.now, step_days=ctx.step_days, horizon_steps=H, targets=targets, summary=summary,
+                        created_at=ctx.now, horizon_days=H, targets=targets, summary=summary,
                         effect_summary=effect_summary, scenarios=new_scen, isolated=isolated, decomposition=decomposition,
                         networks=net_summaries, dropped_mass=float(ctx.notes.get("dropped_mass", 0.0)),
-                        z_summary=z_summary, question=thesis.question, is_baseline=is_baseline)
+                        z_summary=z_summary, question=thesis.question, is_baseline=is_baseline, start_day=today)
 
 
 @register("unifier", "weighted_mixture")

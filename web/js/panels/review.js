@@ -14,14 +14,18 @@ const KIND_LABEL = {
 
 export function initReview({ openModal, toast }) {
   const body = document.getElementById("review-body");
-  const count = document.getElementById("review-count");
+  const counts = [document.getElementById("review-count"), document.getElementById("review-count-tab")];
   let focused = null;
 
   function render() {
     const ps = store.proposals ?? [];
-    count.textContent = String(ps.length);
+    for (const c of counts) {
+      c.textContent = String(ps.length);
+      c.classList.toggle("hot", ps.length > 0);
+    }
     if (!ps.length) {
-      body.innerHTML = `<p class="muted small">Nothing waits for review.</p>`;
+      body.innerHTML = `<p class="empty">Nothing waits for review. Changes to the graph's structure (new entities, new links,
+        promotions, new superentities) stop here for your approval.</p>`;
       focused = null;
       return;
     }
@@ -100,7 +104,7 @@ export function initReview({ openModal, toast }) {
     if (!holder) return;
     try {
       const s = await api.frontierSeries(pv.proposal.subject_id);
-      holder.innerHTML = `<div class="small muted">${esc(s.earlier)} → ${esc(s.later)}, lag ${s.lag_steps} steps, corr ${fmt(s.corr)}</div>`;
+      holder.innerHTML = `<div class="small muted">${esc(s.earlier)} → ${esc(s.later)}, lag ${s.lag_days} days, corr ${fmt(s.corr)}</div>`;
       holder.appendChild(scatter(s.pairs, { xLabel: "earlier move", yLabel: "later innovation" }));
       const entry = store.view?.frontier?.find((f) => f.id === pv.proposal.subject_id);
       if (entry?.ambiguous_direction) {

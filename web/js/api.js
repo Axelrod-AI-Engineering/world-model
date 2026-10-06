@@ -45,8 +45,14 @@ export const api = {
   poseHypothesis: (id, baseThesisId) => post(`/hypotheses/${q(id)}/pose`, { base_thesis_id: baseThesisId ?? null }),
   setHypothesisStatus: (id, status) => post(`/hypotheses/${q(id)}/status`, { status }),
   marketEvent: (id) => get(`/market-events/${q(id)}`),
-  submitMarketEvent: (ev) => post("/market-events", ev),
+  marketEvents: (updateId) => get(updateId ? `/market-events?update_id=${q(updateId)}` : "/market-events"),
   submitGraphUpdate: (ev) => post("/graph-update-events", ev),
+  // update runs (§7.8): the only way news and data enter the model
+  requestUpdate: (body) => post("/updates", body ?? {}),
+  updates: () => get("/updates"),
+  update: (id) => get(`/updates/${q(id)}`),
+  continueUpdate: (id) => post(`/updates/${q(id)}/continue`),
+  cancelUpdate: (id) => post(`/updates/${q(id)}/cancel`),
   proposals: (status) => get(status ? `/proposals?status=${status}` : "/proposals"),
   approve: (id, by = "human", note = null) => post(`/proposals/${q(id)}/approve`, { by, note }),
   reject: (id, note, by = "human") => post(`/proposals/${q(id)}/reject`, { by, note }),
@@ -57,7 +63,6 @@ export const api = {
   forecasts: () => get("/forecasts"),
   forecast: (id) => get(`/forecasts/${q(id)}`),
   explanation: (id) => get(`/explanations/${q(id)}`),
-  consolidate: (day) => post("/consolidate", day ? { day } : {}),
   evaluate: (req) => post("/evaluate", req),
   decisions: () => get("/decisions"),
   recordDecision: (d) => post("/decisions", d),
@@ -67,11 +72,14 @@ export const api = {
   layout: () => get("/layouts/figure1"),
   load: (scenario, interactive = true) => post("/sim/load", { scenario, interactive }),
   step: () => post("/sim/step"),
+  script: () => get("/sim/script"),
+  brief: (id) => get(`/forecasts/${q(id)}/brief`),
   play: (until_step) => post("/sim/play", until_step == null ? {} : { until_step }),
   pause: () => post("/sim/pause"),
   reset: () => post("/sim/reset"),
   status: () => get("/sim/status"),
   trace: (since_seq = 0, limit) => get(`/trace?since_seq=${since_seq}${limit ? `&limit=${limit}` : ""}`),
+  traceScope: (scope) => get(`/trace?since_seq=0&scope=${q(scope)}`),
 };
 
 // The /ws stream (§12.3): {"type": "hello", "since_seq": n}, then trace and status messages.

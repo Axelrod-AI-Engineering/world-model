@@ -1,8 +1,4 @@
-"""Superentities: binding and abduction (§8.8, D9).
-
-Records and interfaces. The default binder and inducer live in ``engine.abduction_impl`` and
-are registered when the engine loads its defaults.
-"""
+"""Superentities: binding and abduction (§8.8, D9)."""
 
 from __future__ import annotations
 
@@ -21,7 +17,6 @@ if TYPE_CHECKING:
     from axelrod_wm.engine.context import ProcessContext
     from axelrod_wm.engine.interfaces import RecallResult
     from axelrod_wm.engine.shared import ParsedEvent
-    from axelrod_wm.memory.episodes import Episode
     from axelrod_wm.memory.long_term import LongTermMemory
     from axelrod_wm.memory.working import WorkingMemory
 
@@ -63,10 +58,11 @@ class SuperentityInducer(ABC):
         retired. Bindings made for hypothetical events are transient."""
 
     @abstractmethod
-    def count(self, episode: Episode, wm: WorkingMemory, ltm: LongTermMemory,
+    def count(self, day: int, wm: WorkingMemory, ltm: LongTermMemory,
               ctx: ProcessContext, txn: MutationTxn) -> InductionResult:
-        """At consolidation: count support from the episode's activity, form candidates,
-        propose admissions and dissolutions, and find compositions."""
+        """At the daily consolidation: count support from the activity of the last
+        abduction.window_days, form candidates, propose admissions and dissolutions, and find
+        compositions."""
 
 
 registry("binder", PatternBinder)
@@ -83,25 +79,31 @@ from typing import Any  # noqa: E402
 import networkx as nx  # noqa: E402
 
 from axelrod_wm.core.evidence import Origin  # noqa: E402
+from axelrod_wm.core.interaction import base_interaction_id  # noqa: E402
 from axelrod_wm.core.superentity import (  # noqa: E402
     RoleSpec,
     SuperentityInstance,
     SuperentityPattern,
     SuperentityStatus,
 )
+from axelrod_wm.core.taxonomy import AttributeVocabulary, relation_key  # noqa: E402
 from axelrod_wm.core.temporal import Bitemporal, TimeState  # noqa: E402
 from axelrod_wm.engine.registry import register  # noqa: E402
-from axelrod_wm.memory.patterns import SuperInteractionBuilder  # noqa: E402
+from axelrod_wm.memory.long_term import SuperInteractionBuilder  # noqa: E402
 from axelrod_wm.trace import Phase  # noqa: E402
 
 EXTRA_PALETTE = ["#E9DDB5", "#D8E2C8", "#F0D9C4", "#D4DFEA", "#E8D5DF", "#D5E8E4", "#EDE3CC", "#DCD9E6"]
+PATTERNS = "ltm.object_generalizations.patterns"
+INSTANCES = "wm.graph.instances"
+MAX_PATTERN_HISTORY = 260
 
 
 def entity_path(entity_id: str, graph: CausalGraph, ltm: LongTermMemory) -> list[str]:
+    tax = ltm.object_generalizations.taxonomy
     ent = graph.entities.get(entity_id)
-    if ent is None or not ent.generalization_id or ent.generalization_id not in ltm.object_taxonomy.nodes:
-        return [ltm.object_taxonomy.root_id] if ltm.object_taxonomy.root_id else []
-    return ltm.object_taxonomy.path_from_root(ent.generalization_id)
+    if ent is None or not ent.generalization_id or ent.generalization_id not in tax.nodes:
+        return [tax.root_id] if tax.root_id else []
+    return tax.path_from_root(ent.generalization_id)
 
 
 def deepest_supported_up(tax: Any, gen_id: str | None, threshold: float) -> str:
@@ -132,16 +134,28 @@ def realizations(rel: PatternRelation, src_entity: str, tgt_entity: str, graph: 
     return out
 
 
+def _vocab_of(engine: Any) -> AttributeVocabulary:
+    vocab = getattr(engine, "vocab", None)
+    return vocab if vocab is not None else AttributeVocabulary(kinds={})
+
+
 @register("binder", "bfs_role_filling")
 class BfsRoleFillingBinder(PatternBinder):
-    def __init__(self, config: Any = None, min_binding_coverage: float | None = None) -> None:
+    def __init__(self, config: Any = None, engine: Any = None, min_binding_coverage: float | None = None,
+                 vocab: AttributeVocabulary | None = None) -> None:
         ab = getattr(config, "abduction", None)
+        self.engine = engine
+        self._vocab = vocab
         self.min_cov = float(min_binding_coverage if min_binding_coverage is not None
                              else getattr(ab, "min_binding_coverage", 0.6))
 
+    @property
+    def vocab(self) -> AttributeVocabulary:
+        return self._vocab if self._vocab is not None else _vocab_of(self.engine)
+
     def _partner(self, entity: str, rel: PatternRelation, outward: bool, role: RoleSpec, used: set[str],
                  graph: CausalGraph, ltm: LongTermMemory) -> str | None:
-        vocab = ltm.attributes
+        vocab = self.vocab
         best: tuple[float, str] | None = None
         mine = set(_subs_of_kind(entity, rel.source_attr if outward else rel.target_attr, graph, vocab))
         for inter in graph.active_interactions():
@@ -202,10 +216,11 @@ class BfsRoleFillingBinder(PatternBinder):
         absent: list[str] = []
         missing: list[PatternRelation] = []
         n_ok = 0
+        vocab = self.vocab
         for rel in pattern.relations:
             if rel.source_role not in bindings or rel.target_role not in bindings:
                 continue
-            ids = realizations(rel, bindings[rel.source_role], bindings[rel.target_role], graph, ltm.attributes)
+            ids = realizations(rel, bindings[rel.source_role], bindings[rel.target_role], graph, vocab)
             if rel.present:
                 if ids:
                     n_ok += 1
@@ -221,11 +236,13 @@ class BfsRoleFillingBinder(PatternBinder):
 
 
 def relation_tuple(rel: PatternRelation, roles: dict[str, RoleSpec], ltm: LongTermMemory, thr: float) -> tuple:
-    src_gen = deepest_supported_up(ltm.object_taxonomy, roles[rel.source_role].generalization_id
+    otax = ltm.object_generalizations.taxonomy
+    itax = ltm.interaction_generalizations.taxonomy
+    src_gen = deepest_supported_up(otax, roles[rel.source_role].generalization_id
                                    if rel.source_role in roles else None, thr)
-    tgt_gen = deepest_supported_up(ltm.object_taxonomy, roles[rel.target_role].generalization_id
+    tgt_gen = deepest_supported_up(otax, roles[rel.target_role].generalization_id
                                    if rel.target_role in roles else None, thr)
-    int_gen = deepest_supported_up(ltm.interaction_taxonomy, rel.interaction_generalization_id, thr)
+    int_gen = deepest_supported_up(itax, rel.interaction_generalization_id, thr)
     return (src_gen, rel.source_attr, int_gen, tgt_gen, rel.target_attr, str(rel.polarity))
 
 
@@ -240,12 +257,14 @@ def absent_tuples(p: SuperentityPattern, ltm: LongTermMemory, thr: float) -> set
 
 
 def interaction_tuple(iid: str, graph: CausalGraph, ltm: LongTermMemory, thr: float) -> tuple:
+    otax = ltm.object_generalizations.taxonomy
+    itax = ltm.interaction_generalizations.taxonomy
     inter = graph.interactions[iid]
     src = graph.subentities[inter.source_id]
     tgt = graph.subentities[inter.target_id]
-    src_gen = deepest_supported_up(ltm.object_taxonomy, graph.entities[src.entity_id].generalization_id, thr)
-    tgt_gen = deepest_supported_up(ltm.object_taxonomy, graph.entities[tgt.entity_id].generalization_id, thr)
-    int_gen = deepest_supported_up(ltm.interaction_taxonomy, inter.generalization_id, thr)
+    src_gen = deepest_supported_up(otax, graph.entities[src.entity_id].generalization_id, thr)
+    tgt_gen = deepest_supported_up(otax, graph.entities[tgt.entity_id].generalization_id, thr)
+    int_gen = deepest_supported_up(itax, inter.generalization_id, thr)
     return (src_gen, src.attribute_kind, int_gen, tgt_gen, tgt.attribute_kind, str(inter.polarity()))
 
 
@@ -265,12 +284,32 @@ def _boundary_edges(graph: CausalGraph, a: str, b: str) -> set[str]:
     return out
 
 
+def _kernel_span(inter: Any) -> int:
+    d, l, _ = inter.forward.kernel.means()
+    return max(1, int(math.ceil(d + l)))
+
+
+def spaced_count(days: list[int], spacing: int) -> int:
+    """How many of the (sorted) days count under the evidence-spacing rule."""
+    n, last = 0, None
+    for d in sorted(days):
+        if last is None or d - last >= spacing:
+            n += 1
+            last = d
+    return n
+
+
 @register("inducer", "co_activation")
 class CoActivationInducer(SuperentityInducer):
-    def __init__(self, config: Any = None, binder: PatternBinder | None = None) -> None:
+    def __init__(self, config: Any = None, binder: PatternBinder | None = None, engine: Any = None) -> None:
         self.config = config
-        self.binder = binder or BfsRoleFillingBinder(config)
+        self.engine = engine
+        self.binder = binder or BfsRoleFillingBinder(config, engine)
         self.builder = SuperInteractionBuilder()
+
+    @property
+    def vocab(self) -> AttributeVocabulary:
+        return _vocab_of(self.engine)
 
     # -- bind (during prefill) ---------------------------------------------------------------
     def bind(self, parsed: ParsedEvent, recall: RecallResult, wm: WorkingMemory, ltm: LongTermMemory,
@@ -282,27 +321,28 @@ class CoActivationInducer(SuperentityInducer):
             return res
         real = txn is not None
         graph = wm.graph
+        og = ltm.object_generalizations
         changed = False
         if real:
             for iid in sorted(graph.instances):
                 inst = graph.instances[iid]
-                pat = ltm.patterns.patterns.get(inst.pattern_id)
+                pat = og.patterns.get(inst.pattern_id)
                 retired = any(graph.interactions.get(i) is None or graph.interactions[i].retired_at is not None
                               for i in inst.interaction_ids)
                 if pat is None or pat.status == SuperentityStatus.DISSOLVED or retired:
-                    txn.remove("instances", iid)
+                    txn.remove(INSTANCES, iid)
                     res.dissolved_instance_ids.append(iid)
                     changed = True
                     ctx.tracer.emit(Phase.PREFILL, "induce.dissolved", refs=[iid, inst.pattern_id], instance_id=iid,
                                     pattern_id=inst.pattern_id, transient=False)
         if real and parsed.is_routine():
             if changed:
-                self.builder.rebuild(graph, ltm.patterns, txn)
+                self.builder.rebuild(graph, og, txn)
             return res
         touched = set(parsed.touched_entity_ids)
         thr = ctx.recall_threshold
         for s in recall.superentities:
-            p = ltm.patterns.patterns.get(s.pattern_id)
+            p = og.patterns.get(s.pattern_id)
             if p is None or p.status != SuperentityStatus.ADMITTED or p.sub_pattern_ids:
                 continue
             if near_instance(p.id, wm, touched):
@@ -314,7 +354,7 @@ class CoActivationInducer(SuperentityInducer):
                 iid = txn.new_id("inst")
                 inst = SuperentityInstance(id=iid, pattern_id=p.id, bindings=b.bindings, interaction_ids=b.interaction_ids,
                                            absent_interaction_ids=b.absent_interaction_ids)
-                txn.add("instances", inst)
+                txn.add(INSTANCES, inst)
                 changed = True
                 self._missing_relations(p, b, wm, ltm, ctx, txn, res, thr)
             else:
@@ -327,18 +367,25 @@ class CoActivationInducer(SuperentityInducer):
                             instance_id=iid, pattern_id=p.id, members=sorted(set(b.bindings.values())),
                             coverage=round(b.coverage, 3), transient=not real)
         if real and changed:
-            self.builder.rebuild(graph, ltm.patterns, txn)
+            self.builder.rebuild(graph, og, txn)
         return res
 
     def _missing_relations(self, p: SuperentityPattern, b: Binding, wm: WorkingMemory, ltm: LongTermMemory,
                            ctx: ProcessContext, txn: MutationTxn, res: InductionResult, thr: float) -> None:
+        from axelrod_wm.core.distributions import Gaussian
+        from axelrod_wm.core.interaction import EdgeDynamics
         from axelrod_wm.events.graph_update import AddInteraction, ConcreteTarget, EventKind, GraphUpdateEvent
 
         cool = float(ctx.config.abduction.missing_relation_cooldown_days)
         graph = wm.graph
+        vocab = self.vocab
+        itax = ltm.interaction_generalizations.taxonomy
+        otax = ltm.object_generalizations.taxonomy
+        pattern_node = otax.nodes.get(p.generalization_id) if p.generalization_id else None
+        pattern_priors = pattern_node.prior_for_pattern()[0] if pattern_node is not None else {}
         for rel in b.missing_relations:
             gid = rel.interaction_generalization_id
-            node = ltm.interaction_taxonomy.nodes.get(gid) if gid else None
+            node = itax.nodes.get(gid) if gid else None
             if node is None or node.stats.support <= thr:
                 continue
             idx = p.relations.index(rel)
@@ -346,46 +393,60 @@ class CoActivationInducer(SuperentityInducer):
             last = wm.missing_relation_log.get(key)
             if last is not None and (ctx.now - last).total_seconds() < cool * 86400:
                 continue
-            srcs = _subs_of_kind(b.bindings[rel.source_role], rel.source_attr, graph, ltm.attributes)
-            tgts = _subs_of_kind(b.bindings[rel.target_role], rel.target_attr, graph, ltm.attributes)
+            srcs = _subs_of_kind(b.bindings[rel.source_role], rel.source_attr, graph, vocab)
+            tgts = _subs_of_kind(b.bindings[rel.target_role], rel.target_attr, graph, vocab)
             if not srcs or not tgts:
                 continue
             dyn, existence = node.prior_dynamics()
-            from axelrod_wm.core.distributions import Gaussian
-            from axelrod_wm.core.interaction import EdgeDynamics
-
-            mu = float(rel.polarity) * max(abs(dyn.effect.mean()), 0.1)
-            dyn = EdgeDynamics(effect=Gaussian(mu=mu, sigma=dyn.effect.sd()), kernel=dyn.kernel)
+            prior = pattern_priors.get(relation_key(rel.source_attr, rel.target_attr, rel.polarity))
+            if prior is not None:
+                # the pattern's configuration node supplies priors for relations without concrete edges (§8.8)
+                effect = prior
+            else:
+                mu = float(rel.polarity) * max(abs(dyn.effect.mean()), 0.1)
+                effect = Gaussian(mu=mu, sigma=dyn.effect.sd())
+            dyn = EdgeDynamics(effect=effect, kernel=dyn.kernel)
             ev = GraphUpdateEvent(
                 id=f"GUE-MR-{p.id}-{idx}-{ctx.now.strftime('%Y%m%d')}", kind=EventKind.REAL, event_type="missing_relation",
                 occurred_at=ctx.now, recorded_at=ctx.now, produced_by="engine", confidence=0.5,
                 ops=[AddInteraction(source=ConcreteTarget(subentity_id=srcs[0]), target=ConcreteTarget(subentity_id=tgts[0]),
                                     label=rel.label, polarity=rel.polarity, interaction_generalization_id=gid,
                                     dynamics=dyn, existence=existence)])
-            txn.merge("wm.missing_relation_log", {key: ctx.now})
+            txn.put("wm.missing_relation_log", key, ctx.now)
             res.proposal_events.append({"kind": "missing_relation", "event": ev.model_dump(mode="json"),
                                         "reason": f"pattern {p.id} ({p.name}) predicts {rel.label}"})
 
-    # -- count (at consolidation) ------------------------------------------------------------
-    def count(self, episode: Episode, wm: WorkingMemory, ltm: LongTermMemory,
-              ctx: ProcessContext, txn: MutationTxn) -> InductionResult:
-        res = InductionResult()
-        cfg = ctx.config.abduction
-        rec = ctx.recognition
-        thr = ctx.recall_threshold
-        init = ctx.initializing
+    # -- count (at the daily consolidation) --------------------------------------------------
+    def _active_edges(self, day: int, wm: WorkingMemory, width: int) -> dict[str, Any]:
+        """Interaction id -> its latest activity record in the window, for channels whose contribution
+        change has the same sign as the target's move over the same window (§8.8 step 1)."""
         graph = wm.graph
-        now = ctx.now
-        instances_changed = False
-
-        # 1-2. active edges and their components
-        active: dict[str, list[Any]] = {}
-        for r in wm.activity_log:
-            inter = graph.interactions.get(r.interaction_id)
+        latest: dict[str, Any] = {}
+        for r in wm.activity_log.values():
+            if r.day <= day - width or r.day > day:
+                continue
+            cur = latest.get(r.channel_id)
+            if cur is None or r.day > cur.day:
+                latest[r.channel_id] = r
+        active: dict[str, Any] = {}
+        for key in sorted(latest):
+            r = latest[key]
+            iid = base_interaction_id(key)
+            inter = graph.interactions.get(iid)
             if inter is None or inter.retired_at is not None:
                 continue
-            if r.target_move is None or r.contribution * r.target_move > 0:   # unobserved counts as agreeing
-                active.setdefault(r.interaction_id, []).append(r)
+            if r.contribution_change * r.target_move > 0:
+                prev = active.get(iid)
+                if prev is None or abs(r.contribution_change) > abs(prev.contribution_change):
+                    active[iid] = r
+        return active
+
+    def _components(self, active: dict[str, Any], wm: WorkingMemory, ltm: LongTermMemory, ctx: ProcessContext,
+                    ) -> list[dict]:
+        """Steps 2-3: components of the active edges, scored, then the greedy best explanation."""
+        graph = wm.graph
+        thr = ctx.recall_threshold
+        mdl = float(ctx.config.abduction.mdl_lambda)
         g = nx.Graph()
         for iid in sorted(active):
             inter = graph.interactions[iid]
@@ -396,67 +457,99 @@ class CoActivationInducer(SuperentityInducer):
             edges = sorted(i for i in active if graph.interactions[i].source_id in node_set)
             if len(edges) < 2:
                 continue
-            contrib = sum(abs(r.contribution) for i in edges for r in active[i])
-            moves: dict[tuple[str, int], float] = {}
+            contrib = sum(abs(active[i].contribution_change) for i in edges)
+            moves: dict[str, float] = {}
             for i in edges:
-                for r in active[i]:
-                    if r.target_move is not None:
-                        moves[(r.target_id or graph.interactions[i].target_id, r.step)] = abs(r.target_move)
-            total_move = sum(moves.values())
-            explained = min(1.0, contrib / total_move) if total_move > 1e-9 else 0.5
-            score = explained - float(cfg.mdl_lambda) * len(edges)
-            if score > 0:
-                comps.append({"edges": edges, "explained": explained,
-                              "entities": sorted({graph.subentities[s].entity_id for s in node_set}),
-                              "tuples": {interaction_tuple(i, graph, ltm, thr) for i in edges}})
+                r = active[i]
+                moves[r.target_id or graph.interactions[i].target_id] = abs(r.target_move)
+            total = sum(moves.values())
+            explained = min(1.0, contrib / total) if total > 1e-9 else 0.0
+            comps.append({"edges": edges, "explained": explained, "score": explained - mdl * len(edges),
+                          "entities": sorted({graph.subentities[s].entity_id for s in node_set}),
+                          "tuples": {interaction_tuple(i, graph, ltm, thr) for i in edges}})
+        kept, used = [], set()
+        for c in sorted(comps, key=lambda c: (-c["score"], c["edges"])):
+            if c["score"] <= 0 or set(c["entities"]) & used:
+                continue
+            kept.append(c)
+            used |= set(c["entities"])
+        return kept
 
-        # 8 (first). decay supports by the time since the last consolidation
-        days = 1.0
-        if wm.last_consolidated is not None:
-            days = max((episode.end.date() - wm.last_consolidated).days, 0)
-        half = float(cfg.support_half_life_days)
+    def count(self, day: int, wm: WorkingMemory, ltm: LongTermMemory,
+              ctx: ProcessContext, txn: MutationTxn) -> InductionResult:
+        res = InductionResult()
+        cfg = ctx.config.abduction
+        rec = ctx.recognition
+        thr = ctx.recall_threshold
+        init = ctx.initializing
+        graph = wm.graph
+        og = ltm.object_generalizations
+        patterns = og.patterns
+        dev = wm.deviations
+        now = ctx.now
+        width = int(cfg.window_days)
+        spacing = int(cfg.evidence_spacing_days)
+        episode_id = ctx.notes.get("episode_id")
+        instances_changed = False
+        updater = self.engine.components.get("generalization_updater") if self.engine is not None else None
+
+        active = self._active_edges(day, wm, width)
+        comps = self._components(active, wm, ltm, ctx)
+
+        # 8 (first). every pattern's support decays by one day; seeds do not decay during initialization
+        factor = 0.5 ** (1.0 / float(cfg.support_half_life_days))
         supports: dict[str, float] = {}
-        for pid, p in sorted(ltm.patterns.patterns.items()):
+        for pid, p in sorted(patterns.items()):
             if p.status == SuperentityStatus.DISSOLVED:
                 continue
-            s = p.support
-            if not (init and p.origin == Origin.SEED) and days > 0:
-                s = s * 0.5 ** (days / half)
-            supports[pid] = s
+            supports[pid] = p.support if (init and p.origin == Origin.SEED) else p.support * factor
+        counted: set[str] = set()
 
-        # 6. evidence of absence (computed before matching so a rival can be suppressed)
+        def count_once(pid: str) -> bool:
+            """support += 1, at most once per evidence_spacing_days (§8.8 step 5)."""
+            p = patterns[pid]
+            if pid in counted or (p.last_counted_day is not None and day - p.last_counted_day < spacing):
+                return False
+            counted.add(pid)
+            supports[pid] = supports.get(pid, p.support) + 1.0
+            if init:
+                txn.update(PATTERNS, pid, last_counted_day=day)
+            else:
+                txn.update(PATTERNS, pid, last_counted_day=day, counted_days=(list(p.counted_days) + [day])[-52:])
+            res.supported_pattern_ids.append(pid)
+            if updater is not None and p.generalization_id and hasattr(updater, "update_pattern"):
+                updater.update_pattern(pid, ltm, ctx, txn, count_support=True)
+            return True
+
+        # 6. evidence of absence (before matching, so that a rival can be suppressed)
         suppressed: set[tuple[str, str]] = set()
         absence_hits: set[str] = set()
-        dev = wm.deviations
-        step = episode.step if episode.step is not None else dev.step_of(episode.end)
-        w = int(ctx.config.frontier.window_steps)
         for iid, inst in sorted(graph.instances.items()):
-            p = ltm.patterns.patterns.get(inst.pattern_id)
+            p = patterns.get(inst.pattern_id)
             if p is None or p.status == SuperentityStatus.DISSOLVED or not inst.absent_interaction_ids:
                 continue
             for aid in inst.absent_interaction_ids:
                 inter = graph.interactions.get(aid)
                 if inter is None:
                     continue
-                d, l, _ = inter.forward.kernel.means()
-                kw = max(1, int(math.ceil((d + l) / ctx.step_days)))
-                # DECISION: judge the target over the kernel window *after* the source moved, so a slow
+                kw = _kernel_span(inter)
+                # DECISION: judge the target over the kernel's span *after* the source moved, so a slow
                 # channel is not counted as absent during its own delay.
-                if abs(dev.window_change(inter.source_id, step - kw, w)) >= 1.0 and \
-                        abs(dev.window_change(inter.target_id, step, kw)) < 0.25:
+                if abs(dev.window_change(inter.source_id, day - kw, width)) >= 1.0 and \
+                        abs(dev.window_change(inter.target_id, day, kw)) < 0.25:
                     absence_hits.add(p.id)
                     for rid in sorted(p.rival_ids):
                         suppressed.add((rid, aid))
         # DECISION: the symmetric counterpart of evidence of absence, for rival pairs that disagree on
-        # a relation's presence: the pattern that asserts the relation gains support in an episode
-        # where the source moved by at least 1 standard unit and the target then moved the predicted
-        # way by at least 0.25 within the kernel window. That is the evidence that separates them.
+        # a relation's presence: the pattern that asserts the relation gains support when the source
+        # moved by at least 1 standard unit and the target then moved the predicted way by at least
+        # 0.25 within the kernel's span. That is the evidence that separates them.
         rival_absent: dict[str, set[str]] = {}
         for iid, inst in sorted(graph.instances.items()):
             for aid in inst.absent_interaction_ids:
                 rival_absent.setdefault(aid, set()).add(inst.pattern_id)
         for iid, inst in sorted(graph.instances.items()):
-            p = ltm.patterns.patterns.get(inst.pattern_id)
+            p = patterns.get(inst.pattern_id)
             if p is None or p.status == SuperentityStatus.DISSOLVED or p.id in absence_hits:
                 continue
             for pid_iid in inst.interaction_ids:
@@ -464,19 +557,17 @@ class CoActivationInducer(SuperentityInducer):
                 inter = graph.interactions.get(pid_iid)
                 if not rivals or inter is None:
                     continue
-                d, l, _ = inter.forward.kernel.means()
-                kw = max(1, int(math.ceil((d + l) / ctx.step_days)))
-                sc = dev.window_change(inter.source_id, step - kw, w)
-                tc = dev.window_change(inter.target_id, step, kw)
+                kw = _kernel_span(inter)
+                sc = dev.window_change(inter.source_id, day - kw, width)
+                tc = dev.window_change(inter.target_id, day, kw)
                 if abs(sc) >= 1.0 and abs(tc) >= 0.25 and sc * tc * inter.polarity() > 0:
                     absence_hits.add(p.id)
                     break
         for pid in sorted(absence_hits):
-            supports[pid] = supports.get(pid, 0.0) + 1.0
-            res.supported_pattern_ids.append(pid)
+            count_once(pid)
 
         # 5. match or create
-        living = [p for _, p in sorted(ltm.patterns.patterns.items())
+        living = [p for _, p in sorted(patterns.items())
                   if p.status != SuperentityStatus.DISSOLVED and not p.sub_pattern_ids]
         tuples_of = {p.id: pattern_tuples(p, ltm, thr) for p in living}
         absent_of = {p.id: absent_tuples(p, ltm, thr) for p in living}
@@ -499,57 +590,69 @@ class CoActivationInducer(SuperentityInducer):
                         continue
                     matched.append(p)
             for p in matched:
-                if p.id in res.supported_pattern_ids:
-                    continue
-                supports[p.id] = supports.get(p.id, 0.0) + 1.0
-                res.supported_pattern_ids.append(p.id)
-                txn.update("patterns", p.id, last_seen=now,
-                           episode_ids=(list(p.episode_ids) + [episode.id])[-50:])
-                if not init and not any(set(comp["entities"]) <= graph.members(i)
-                                        for i in graph.instances if graph.instances[i].pattern_id == p.id):
+                fields: dict[str, Any] = {"last_seen": now}
+                if episode_id and episode_id not in p.episode_ids:
+                    fields["episode_ids"] = (list(p.episode_ids) + [episode_id])[-50:]
+                txn.update(PATTERNS, p.id, **fields)
+                own = [graph.instances[i] for i in sorted(graph.instances)
+                       if graph.instances[i].pattern_id == p.id and not graph.instances[i].transient]
+                if not init and not any(set(comp["entities"]) <= graph.members(i.id) for i in own):
                     b = self.binder.bind(p, comp["entities"], graph, ltm)
-                    if b is not None:
+                    # DECISION: a binding that an instance of the pattern already holds is that instance
+                    # recurring, not a new one; otherwise a component with one extra entity re-binds the
+                    # same roles every day and identical instances pile up.
+                    if b is not None and not any(dict(i.bindings) == dict(b.bindings) for i in own):
                         iid = txn.new_id("inst")
-                        txn.add("instances", SuperentityInstance(
+                        txn.add(INSTANCES, SuperentityInstance(
                             id=iid, pattern_id=p.id, bindings=b.bindings, interaction_ids=b.interaction_ids,
                             absent_interaction_ids=b.absent_interaction_ids))
                         instances_changed = True
-                ctx.tracer.emit(Phase.ABDUCE, "abduce.support", refs=[p.id] + comp["entities"], pattern_id=p.id,
-                                support=round(supports[p.id], 3), members=comp["entities"])
+                if count_once(p.id):
+                    ctx.tracer.emit(Phase.ABDUCE, "abduce.support", refs=[p.id] + comp["entities"], pattern_id=p.id,
+                                    support=round(supports[p.id], 3), members=comp["entities"])
             if not matched and not init:
-                pid = self._create_candidate(comp, episode, wm, ltm, ctx, txn)
+                pid = self._create_candidate(comp, day, episode_id, wm, ltm, ctx, txn)
                 new_candidates.append(pid)
                 supports[pid] = 1.0
+                counted.add(pid)
                 instances_changed = True
+                # DECISION: later components on the same day can match the new candidate, so one
+                # configuration realized twice in a day makes one candidate rather than two
+                if pid in patterns:
+                    living.append(patterns[pid])
+                    tuples_of[pid] = pattern_tuples(patterns[pid], ltm, thr)
+                    absent_of[pid] = absent_tuples(patterns[pid], ltm, thr)
 
-        # composites: once per episode in which both parts are active across a boundary edge
+        # composites earn support when both parts are active across a boundary edge (same spacing)
         if not init:
-            active_now = set(episode.active_pattern_ids)
-            active_edges = set(episode.active_interaction_ids)
-            for pid, p in sorted(ltm.patterns.patterns.items()):
+            active_patterns = {i.pattern_id for i in graph.instances.values() if i.activation > 0 and not i.transient}
+            for pid, p in sorted(patterns.items()):
                 if not p.sub_pattern_ids or p.status == SuperentityStatus.DISSOLVED:
                     continue
-                if not set(p.sub_pattern_ids) <= active_now:
+                if not set(p.sub_pattern_ids) <= active_patterns:
                     continue
                 inst = next((i for i in graph.instances.values() if i.pattern_id == pid), None)
                 if inst is None or len(inst.child_instance_ids) < 2:
                     continue
                 a, b = inst.child_instance_ids[:2]
-                if a in graph.instances and b in graph.instances and _boundary_edges(graph, a, b) & active_edges:
-                    supports[pid] = supports.get(pid, p.support) + 1.0
-                    res.supported_pattern_ids.append(pid)
-        # write supports and history
+                if a in graph.instances and b in graph.instances and _boundary_edges(graph, a, b) & set(active):
+                    count_once(pid)
+
+        # write supports, and a weekly time state with the support
+        from axelrod_wm.engine.daily import time_state_due
+
         for pid, s in sorted(supports.items()):
-            p = ltm.patterns.patterns[pid]
-            ts = TimeState(at=Bitemporal(valid_at=episode.end, recorded_at=now), values={"support": round(s, 6)},
-                           source_event_id=episode.id)
+            p = patterns[pid]
             if abs(p.support - s) > 1e-12:
-                txn.update("patterns", pid, support=s)
-            txn.append_to("patterns", pid, "history", ts, keep_last=156)
+                txn.update(PATTERNS, pid, support=s)
+            if time_state_due(p.history, wm, day):
+                ts = TimeState(at=Bitemporal(valid_at=dev.day_end(day), recorded_at=now),
+                               values={"support": round(s, 6)}, source_event_id=episode_id)
+                txn.append_to(PATTERNS, pid, "history", ts, keep_last=MAX_PATTERN_HISTORY)
 
         if not init:
-            # 7. admission
-            for pid, p in sorted(ltm.patterns.patterns.items()):
+            for pid, p in sorted(patterns.items()):
+                # 7. admission
                 if p.status == SuperentityStatus.CANDIDATE and p.support > rec and p.proposed_at is None:
                     self._propose_admission(p, wm, ctx, txn, res)
                 # 8. dissolution
@@ -557,23 +660,24 @@ class CoActivationInducer(SuperentityInducer):
                         and p.proposed_at is None:
                     self._propose_dissolution(p, ctx, txn, res)
             # 9. composition
-            instances_changed |= self._compose(episode, wm, ltm, ctx, txn, res)
+            instances_changed |= self._compose(day, episode_id, active, wm, ltm, ctx, txn, res)
             # 10. rivals
             self._rivals(wm, ltm, txn)
         res.candidate_pattern_ids = new_candidates + [c for c in res.candidate_pattern_ids if c not in new_candidates]
         if instances_changed:
-            self.builder.rebuild(graph, ltm.patterns, txn)
+            self.builder.rebuild(graph, og, txn)
         return res
 
-    def _create_candidate(self, comp: dict, episode: Episode, wm: WorkingMemory, ltm: LongTermMemory,
-                          ctx: ProcessContext, txn: MutationTxn) -> str:
+    def _create_candidate(self, comp: dict, day: int, episode_id: str | None, wm: WorkingMemory,
+                          ltm: LongTermMemory, ctx: ProcessContext, txn: MutationTxn) -> str:
         graph = wm.graph
         thr = ctx.recall_threshold
+        og = ltm.object_generalizations
         roles = []
         for e in comp["entities"]:
             ent = graph.entities[e]
             kinds = sorted({graph.subentities[s].attribute_kind for s in ent.subentity_ids})
-            roles.append(RoleSpec(name=e, generalization_id=deepest_supported_up(ltm.object_taxonomy, ent.generalization_id, thr),
+            roles.append(RoleSpec(name=e, generalization_id=deepest_supported_up(og.taxonomy, ent.generalization_id, thr),
                                   attribute_kinds=kinds))
         relations = []
         for iid in comp["edges"]:
@@ -586,23 +690,30 @@ class CoActivationInducer(SuperentityInducer):
         top = max(comp["edges"], key=lambda i: (graph.interactions[i].significance_mean(), i))
         ti = graph.interactions[top]
         name = f"{graph.subentities[ti.source_id].name} → {graph.subentities[ti.target_id].name}"
+        # DECISION: a candidate named after its strongest edge says how many more relations it has, so
+        # two configurations that share that edge do not read as duplicates
+        if len(relations) > 1:
+            more = len(relations) - 1
+            name += f" + {more} more relation{'s' if more > 1 else ''}"
         pid = txn.new_id("pat")
-        n_pat = sum(1 for p in ltm.patterns.patterns.values() if p.origin != Origin.SEED)
+        n_pat = sum(1 for p in og.patterns.values() if p.origin != Origin.SEED)
         palette_key = f"x{n_pat % len(EXTRA_PALETTE) + 1}"
-        if palette_key not in ltm.patterns.palettes:
+        if palette_key not in og.palettes:
             color = EXTRA_PALETTE[n_pat % len(EXTRA_PALETTE)]
-            txn.merge("ltm.patterns.palettes", {palette_key: {"fill": color, "line": "#8A7F70"}})
+            txn.set("ltm.object_generalizations.palettes",
+                    {**og.palettes, palette_key: {"fill": color, "line": "#8A7F70"}})
         pattern = SuperentityPattern(id=pid, name=name, roles=roles, relations=relations, support=1.0,
-                                     status=SuperentityStatus.CANDIDATE, episode_ids=[episode.id],
+                                     status=SuperentityStatus.CANDIDATE,
+                                     episode_ids=[episode_id] if episode_id else [],
                                      origin=Origin.INFERENCE, palette=palette_key, created_at=ctx.now,
-                                     last_seen=ctx.now)
-        txn.add("patterns", pattern)
+                                     last_seen=ctx.now, last_counted_day=day)
+        txn.add(PATTERNS, pattern)
         iid = txn.new_id("inst")
         bindings = {e: e for e in comp["entities"]}
         realized = self.binder.evaluate(pattern, bindings, graph, ltm).interaction_ids \
             if hasattr(self.binder, "evaluate") else list(comp["edges"])
-        txn.add("instances", SuperentityInstance(id=iid, pattern_id=pid, bindings=bindings,
-                                                 interaction_ids=sorted(set(realized) | set(comp["edges"]))))
+        txn.add(INSTANCES, SuperentityInstance(id=iid, pattern_id=pid, bindings=bindings,
+                                               interaction_ids=sorted(set(realized) | set(comp["edges"]))))
         ctx.tracer.emit(Phase.ABDUCE, "abduce.candidate", refs=[pid, iid] + comp["entities"], pattern_id=pid,
                         instance_id=iid, name=name, support=1.0, members=comp["entities"], edges=comp["edges"])
         return pid
@@ -616,7 +727,7 @@ class CoActivationInducer(SuperentityInducer):
         ev = GraphUpdateEvent(id=f"GUE-ADMIT-{p.id}", kind=EventKind.REAL, event_type="superentity_admission",
                               occurred_at=ctx.now, recorded_at=ctx.now, produced_by="engine", confidence=0.6,
                               ops=[ProposeSuperentity(pattern=p, bindings=bindings)])
-        txn.update("patterns", p.id, proposed_at=ctx.now)
+        txn.update(PATTERNS, p.id, proposed_at=ctx.now)
         res.proposal_events.append({"kind": "superentity_admission", "event": ev.model_dump(mode="json"),
                                     "reason": f"support {p.support:.2f} exceeds the recognition threshold"})
         ctx.tracer.emit(Phase.ABDUCE, "abduce.admission_proposed", refs=[p.id] + sorted(set(bindings.values())),
@@ -630,26 +741,29 @@ class CoActivationInducer(SuperentityInducer):
                               event_type="superentity_dissolution", occurred_at=ctx.now, recorded_at=ctx.now,
                               produced_by="engine", confidence=0.6,
                               ops=[DissolveSuperentity(pattern_id=p.id, reason=f"support fell to {p.support:.2f}")])
-        txn.update("patterns", p.id, proposed_at=ctx.now)
+        txn.update(PATTERNS, p.id, proposed_at=ctx.now)
         res.proposal_events.append({"kind": "superentity_dissolution", "event": ev.model_dump(mode="json"),
                                     "reason": f"support {p.support:.2f} below the dissolve threshold"})
         ctx.tracer.emit(Phase.ABDUCE, "abduce.dissolution_proposed", refs=[p.id], pattern_id=p.id,
                         support=round(p.support, 3), members=[])
 
-    def _compose(self, episode: Episode, wm: WorkingMemory, ltm: LongTermMemory, ctx: ProcessContext,
-                 txn: MutationTxn, res: InductionResult) -> bool:
+    def _compose(self, day: int, episode_id: str | None, active: dict[str, Any], wm: WorkingMemory,
+                 ltm: LongTermMemory, ctx: ProcessContext, txn: MutationTxn, res: InductionResult) -> bool:
+        """Step 9: two admitted patterns whose instances were both counted active, under the spacing
+        rule, more than `recognition` times, with a boundary edge between them, form a candidate."""
         graph = wm.graph
+        og = ltm.object_generalizations
         rec = ctx.recognition
-        admitted = [p for p in ltm.patterns.admitted() if not p.sub_pattern_ids]
+        spacing = int(ctx.config.abduction.evidence_spacing_days)
+        admitted = [p for p in og.admitted() if not p.sub_pattern_ids]
         inst_of = {}
         for p in admitted:
             for iid in sorted(graph.instances):
                 if graph.instances[iid].pattern_id == p.id and not graph.instances[iid].transient:
                     inst_of[p.id] = iid
                     break
-        existing = {tuple(sorted(p.sub_pattern_ids)) for p in ltm.patterns.patterns.values() if p.sub_pattern_ids}
+        existing = {tuple(sorted(p.sub_pattern_ids)) for p in og.patterns.values() if p.sub_pattern_ids}
         changed = False
-        eps = sorted(ltm.episodes.episodes.values(), key=lambda e: e.id)
         for i, p in enumerate(admitted):
             for q in admitted[i + 1:]:
                 if p.id not in inst_of or q.id not in inst_of:
@@ -657,26 +771,29 @@ class CoActivationInducer(SuperentityInducer):
                 pair = tuple(sorted((p.id, q.id)))
                 if pair in existing or p.id in q.rival_ids:
                     continue
+                # DECISION: "both counted active" means count() added support to both on the same day,
+                # and only live counts are kept (counted_days), so composites form on screen from what
+                # happens after initialization rather than all at once from three years of history.
+                together = sorted(set(p.counted_days) & set(q.counted_days))
+                if spaced_count(together, spacing) <= rec:
+                    continue
                 boundary = _boundary_edges(graph, inst_of[p.id], inst_of[q.id])
                 if not boundary:
                     continue
-                n = sum(1 for e in eps if p.id in e.active_pattern_ids and q.id in e.active_pattern_ids
-                        and boundary & set(e.active_interaction_ids))
-                if n <= rec:
-                    continue
-                # DECISION: a composite starts like any candidate (support 1) and earns support once per
-                # later episode in which both are active across a boundary edge (see _composite_support).
+                # DECISION: a composite starts like any candidate (support 1) and earns support under
+                # the same spacing rule whenever both parts are active across a boundary edge.
                 pid = txn.new_id("pat")
                 roles = list({r.name: r for r in p.roles + q.roles}.values())
                 relations = p.relations + [r for r in q.relations if r not in p.relations]
                 comp = SuperentityPattern(id=pid, name=f"{p.name} + {q.name}", roles=roles, relations=relations,
                                           sub_pattern_ids=[p.id, q.id], support=1.0,
                                           status=SuperentityStatus.CANDIDATE, origin=Origin.INFERENCE,
-                                          created_at=ctx.now, last_seen=ctx.now, episode_ids=[episode.id])
-                txn.add("patterns", comp)
+                                          created_at=ctx.now, last_seen=ctx.now, last_counted_day=day,
+                                          episode_ids=[episode_id] if episode_id else [])
+                txn.add(PATTERNS, comp)
                 ip, iq = graph.instances[inst_of[p.id]], graph.instances[inst_of[q.id]]
                 iid = txn.new_id("inst")
-                txn.add("instances", SuperentityInstance(
+                txn.add(INSTANCES, SuperentityInstance(
                     id=iid, pattern_id=pid, bindings={**ip.bindings, **iq.bindings},
                     interaction_ids=sorted(set(ip.interaction_ids) | set(iq.interaction_ids) | boundary),
                     absent_interaction_ids=sorted(set(ip.absent_interaction_ids) | set(iq.absent_interaction_ids)),
@@ -691,6 +808,7 @@ class CoActivationInducer(SuperentityInducer):
 
     def _rivals(self, wm: WorkingMemory, ltm: LongTermMemory, txn: MutationTxn) -> None:
         graph = wm.graph
+        patterns = ltm.object_generalizations.patterns
         by_members: dict[tuple[str, ...], list[str]] = {}
         for iid in sorted(graph.instances):
             inst = graph.instances[iid]
@@ -701,7 +819,7 @@ class CoActivationInducer(SuperentityInducer):
             pids = sorted(set(pids))
             for i, a in enumerate(pids):
                 for b in pids[i + 1:]:
-                    pa, pb = ltm.patterns.patterns.get(a), ltm.patterns.patterns.get(b)
+                    pa, pb = patterns.get(a), patterns.get(b)
                     if pa is None or pb is None or b in pa.rival_ids:
                         continue
                     ra = {(r.source_role, r.source_attr, r.target_role, r.target_attr): (r.present, r.polarity)
@@ -709,6 +827,5 @@ class CoActivationInducer(SuperentityInducer):
                     rb = {(r.source_role, r.source_attr, r.target_role, r.target_attr): (r.present, r.polarity)
                           for r in pb.relations}
                     if any(k in rb and rb[k] != v for k, v in ra.items()):
-                        txn.update("patterns", a, rival_ids=set(pa.rival_ids) | {b})
-                        txn.update("patterns", b, rival_ids=set(pb.rival_ids) | {a})
-
+                        txn.update(PATTERNS, a, rival_ids=set(pa.rival_ids) | {b})
+                        txn.update(PATTERNS, b, rival_ids=set(pb.rival_ids) | {a})

@@ -5,7 +5,7 @@ theses:
     question: Where is the economy heading if nothing else happens?
     mode: open_ended
     horizon_days: 182
-    event: {kind: hypothetical, occurred_at: 2026-04-06T00:00:00Z, ops: []}
+    event: {kind: hypothetical, occurred_at: 2026-05-04T21:00:00Z, ops: []}
   - id: T-01
     question: What if oil prices doubled next quarter?
     mode: scaffolded
@@ -13,6 +13,12 @@ theses:
     targets: [inflation.headline_cpi, interest_rates.us_policy_rate, credit_availability.credit_growth,
               business_investment.capex_growth, asset_prices.equity_index, confidence.consumer_confidence,
               productivity_tech.tfp_growth]
+    # coarser targets (addition): one actor, one sector, one superentity, one idea
+    target_groups:
+      - {kind: entity, ref: exxonmobil}
+      - {kind: sector, ref: airlines}
+      - {kind: superentity, ref: S10}
+      - {kind: category, ref: SD}
     event:
       kind: hypothetical
       event_type: supply_shock

@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any, Union
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from axelrod_wm.core.serialization import canonical_json, sha256_text
 
@@ -17,9 +17,8 @@ class _Section(BaseModel):
 
 
 class TimeConfig(_Section):
-    state_step_days: float = 1
-    propagation_step_days: float = 7
-    horizon_steps: int = 26
+    step_days: float = 1          # everything runs on a daily grid (D13); every other time parameter is in days
+    horizon_days: int = 182       # default forecast horizon; a thesis's horizon_days overrides it
 
 
 class ThresholdsConfig(_Section):
@@ -29,32 +28,52 @@ class ThresholdsConfig(_Section):
 
 class PropagationConfig(_Section):
     samples: int = 400
-    min_delay_steps: float = 1
+    min_delay_days: int = 1
     moderator_clip: list[float] = [0.0, 3.0]
-    kernel_window_steps: int = 104
     include_level_noise: bool = True
+    max_frames: int = 60          # propagation.frame trace events per run, evenly spaced over the horizon
 
 
 class LearningConfig(_Section):
-    effect_process_noise: float = 0.02
-    level_process_noise: float = 0.10
+    effect_process_noise: float = 0.0075    # random-walk sd for effects, per day (about 0.02 per week)
+    level_process_noise: float = 0.04       # random-walk sd for each subentity's local level, per day
     existence_learning_rate: float = 0.5
     min_regressor: float = 0.05
-    min_change_noise: float = 0.05
+    min_change_noise: float = 0.05          # floor on the noise of a real change_value (standardized)
+
+
+class HistoryConfig(_Section):
+    keep_days: Union[int, str] = "auto"     # at least the longest delay + lag over all channels, plus 30; never below 760
 
 
 class KernelUpdateConfig(_Section):
+    every_days: int = 7
     min_observations: int = 8
-    window_steps: int = 26
+    window_days: int = 182
     multipliers: list[float] = [0.5, 1.0, 2.0]
     step: float = 0.5
     cv_shrink: float = 0.9
     min_cv: float = 0.15
-    min_log_lik_gain: float = 2.0   # evidence a rescaled kernel needs over the current one
+    min_log_lik_gain: float = 2.0   # DECISION: evidence a rescaled kernel needs over the current one
 
 
 class PrefillConfig(_Section):
-    drift_damping: float = 0.9
+    trend_window_days: int = 28
+    max_drift_per_day: float = 0.03
+    drift_damping: float = 0.985    # drift on forecast day t is drift * damping**t (half-life about 46 days)
+
+
+class EpisodesConfig(_Section):
+    min_abs_z: float = 0.5          # a subentity enters an episode's deltas if it moved at least this much
+    analog_span_days: int = 42      # a non-routine episode's response window, used by analog recall
+
+
+class EntityMemoryConfig(_Section):
+    entry_every_days: int = 7
+
+
+class SnapshotsConfig(_Section):
+    every_days: int = 30            # plus one at the end of every update run
 
 
 class AttentionConfig(_Section):
@@ -76,24 +95,27 @@ class UnifyConfig(_Section):
     max_scenarios: int = 8
     branch_hypothesis_min_voi: float = 0.15
     branch_probability_range: list[float] = [0.15, 0.85]
-    fit_window_steps: int = 8
+    fit_window_days: int = 56
 
 
 class FrontierConfig(_Section):
-    window_steps: int = 4
-    max_lag_steps: int = 4
+    window_days: int = 14
+    lag_grid_days: list[int] = [0, 1, 2, 3, 5, 7, 10, 14, 21, 28]
     min_innovation: float = 1.5
     min_source_move: float = 0.5
     max_candidates_per_target: int = 5
     min_corr: float = 0.3
     min_consistency: float = 0.75
+    evidence_spacing_days: int = 14     # a co-movement is verified at most once per this many days
     half_life_days: float = 30
     remove_below: float = 0.5
     reject_cooldown_days: float = 60
-    backfill_steps: int = 26
+    backfill_days: int = 182
 
 
 class AbductionConfig(_Section):
+    window_days: int = 28               # activity window that components are built from
+    evidence_spacing_days: int = 14     # a pattern's support grows at most once per this many days
     min_edge_contribution: float = 0.2
     match_jaccard: float = 0.75
     min_binding_coverage: float = 0.6
@@ -125,10 +147,6 @@ class HypothesesConfig(_Section):
     }
 
 
-class ConsolidationConfig(_Section):
-    episode_min_abs_z: float = 0.5
-
-
 class EvaluationConfig(_Section):
     significant_effect: float = 0.5
     sign_probability: float = 0.7
@@ -138,6 +156,16 @@ class ReviewConfig(_Section):
     policy: str = "default"
     min_auto_confidence: float = 0.8
     auto_approve_human: bool = True
+
+
+class UpdateConfig(_Section):
+    sources: list[str] = ["mock_web_scraper"]   # names in the `source` registry (§8.16)
+    pause_for_review: bool = True               # a world event awaiting review pauses the run at its day (D14)
+    repose_pinned: bool = True                  # re-pose pinned theses after every update
+    auto_daily: bool = False                    # when true, the server requests an update every day at daily_at
+    daily_at: str = "18:00"
+    timezone: str = "America/New_York"
+    source_params: dict[str, dict[str, Any]] = {}   # per-source params (e.g. the mock scraper's latency)
 
 
 class ComponentSpec(_Section):
@@ -158,6 +186,7 @@ DEFAULT_COMPONENTS: dict[str, str] = {
     "prefiller": "analog_empirical_bayes",
     "propagator": "mc_impulse",
     "analyzer": "propagation",
+    "daily_propagator": "kalman_predict",
     "posterior_updater": "link_kalman",
     "folder": "kalman_edge",
     "kernel_updater": "grid_rescale",
@@ -169,7 +198,7 @@ DEFAULT_COMPONENTS: dict[str, str] = {
     "network_predictor": "mc_network",
     "coupler": "union_graph",
     "rival_detector": "pattern_and_sign",
-    "scenario_weighter": "support_fit_reliability",
+    "scenario_weighter": "support_fit_track",
     "unifier": "channels_and_rivals",
     "hypothesis_scorer": "forecast_sensitivity_voi",
     "consolidator": "daily",
@@ -179,8 +208,12 @@ DEFAULT_COMPONENTS: dict[str, str] = {
     "review_policy": "default",
 }
 
-DEFAULT_TRANSLATORS: dict[str, str] = {"news": "hand_drawn", "data": "data_feed",
-                                       "filing": "hand_drawn", "analyst": "hand_drawn"}
+DEFAULT_TRANSLATORS: dict[str, list[str]] = {
+    "news": ["hand_drawn", "template"],
+    "data": ["data_feed"],
+    "filing": ["hand_drawn", "template"],
+    "analyst": ["hand_drawn", "template"],
+}
 
 
 class StorageConfig(_Section):
@@ -194,8 +227,12 @@ class EngineConfig(_Section):
     thresholds: ThresholdsConfig = ThresholdsConfig()
     propagation: PropagationConfig = PropagationConfig()
     learning: LearningConfig = LearningConfig()
+    history: HistoryConfig = HistoryConfig()
     kernel_update: KernelUpdateConfig = KernelUpdateConfig()
     prefill: PrefillConfig = PrefillConfig()
+    episodes: EpisodesConfig = EpisodesConfig()
+    entity_memory: EntityMemoryConfig = EntityMemoryConfig()
+    snapshots: SnapshotsConfig = SnapshotsConfig()
     attention: AttentionConfig = AttentionConfig()
     isolation: IsolationConfig = IsolationConfig()
     unify: UnifyConfig = UnifyConfig()
@@ -203,12 +240,20 @@ class EngineConfig(_Section):
     abduction: AbductionConfig = AbductionConfig()
     refinement: RefinementConfig = RefinementConfig()
     hypotheses: HypothesesConfig = HypothesesConfig()
-    consolidation: ConsolidationConfig = ConsolidationConfig()
     evaluation: EvaluationConfig = EvaluationConfig()
     review: ReviewConfig = ReviewConfig()
-    translators: dict[str, ComponentRef] = Field(default_factory=lambda: dict(DEFAULT_TRANSLATORS))
+    update: UpdateConfig = UpdateConfig()
+    translators: dict[str, list[ComponentRef]] = Field(default_factory=lambda: {k: list(v) for k, v in DEFAULT_TRANSLATORS.items()})
     components: dict[str, ComponentRef] = Field(default_factory=lambda: dict(DEFAULT_COMPONENTS))
     storage: StorageConfig = StorageConfig()
+
+    @field_validator("translators", mode="before")
+    @classmethod
+    def _translator_lists(cls, v: Any) -> Any:
+        """A single translator name is a list of one."""
+        if isinstance(v, dict):
+            return {k: (x if isinstance(x, list) else [x]) for k, x in v.items()}
+        return v
 
     def component(self, slot: str) -> tuple[str, dict[str, Any]]:
         """(name, params) for a slot."""
@@ -219,11 +264,27 @@ class EngineConfig(_Section):
             return ref.name, dict(ref.params)
         return ref, {}
 
+    def translator_chain(self, kind: str) -> list[tuple[str, dict[str, Any]]]:
+        """The translators tried in order for a market event kind (§7.4)."""
+        refs = self.translators.get(kind, DEFAULT_TRANSLATORS.get(kind, ["hand_drawn", "template"]))
+        out = []
+        for ref in refs:
+            if isinstance(ref, ComponentSpec):
+                out.append((ref.name, dict(ref.params)))
+            else:
+                out.append((ref, {}))
+        return out
+
     def translator(self, kind: str) -> tuple[str, dict[str, Any]]:
-        ref = self.translators.get(kind, DEFAULT_TRANSLATORS.get(kind, "hand_drawn"))
-        if isinstance(ref, ComponentSpec):
-            return ref.name, dict(ref.params)
-        return ref, {}
+        """The first translator for a kind."""
+        return self.translator_chain(kind)[0]
+
+    def keep_days(self, longest_span_days: float = 0.0) -> int:
+        """history.keep_days, resolving "auto" (§8.2)."""
+        kd = self.history.keep_days
+        if isinstance(kd, str):
+            return max(760, int(longest_span_days) + 30)
+        return max(int(kd), 1)
 
     def config_hash(self) -> str:
         return sha256_text(canonical_json(self.model_dump(mode="json")))

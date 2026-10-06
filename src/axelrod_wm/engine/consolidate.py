@@ -10,17 +10,21 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 from pydantic import BaseModel, ConfigDict
 
-from axelrod_wm.core.entity import DecisionProfile, EntityMemory, EntityMemoryEntry, action_of
 from axelrod_wm.core.hypothesis import HypothesisStatus
+from axelrod_wm.core.interaction import base_interaction_id
 from axelrod_wm.engine.frontier_test import decay_frontier
+from axelrod_wm.engine.kernels import mean_kernel_days
 from axelrod_wm.engine.registry import register, registry
-from axelrod_wm.engine.voi import context_bucket
 from axelrod_wm.events.ledger import LedgerKind
-from axelrod_wm.memory.episodes import Episode
+from axelrod_wm.memory.entity_memory import EntityMemory, EntityMemoryEntry
+from axelrod_wm.memory.long_term import Episode
+from axelrod_wm.memory.working import point_key, split_point_key
 from axelrod_wm.trace import Phase
 
 if TYPE_CHECKING:
+    from axelrod_wm.control.mutator import MutationTxn
     from axelrod_wm.engine.context import ProcessContext
+    from axelrod_wm.memory.working import WorkingMemory
 
 
 class ConsolidationReport(BaseModel):
@@ -32,51 +36,61 @@ class ConsolidationReport(BaseModel):
     proposals: list[str]
     frontier_decayed: list[str]
     hypotheses_expired: list[str]
-    snapshot_version: int
+    version: int                       # state version after this consolidation
     proposal_events: list[dict] = []
     kernels_updated: list[str] = []
     candidates: list[str] = []
+    pruned_points: int = 0
 
 
 class Consolidator(ABC):
     @abstractmethod
-    def run(self, day: date, ctx: ProcessContext) -> ConsolidationReport: ...
+    def run(self, day: int, ctx: ProcessContext) -> ConsolidationReport: ...
 
 
 registry("consolidator", Consolidator)
 
 LEVEL_NOISE_BOUNDS = (0.02, 1.0)
+WEEKS = 52
+MIN_WEEKS = 8
 
 
-def build_episode(ep_id: str, wm: Any, cfg: Any) -> Episode:
+def build_episode(ep_id: str, day: int, wm: WorkingMemory, cfg: Any) -> Episode:
+    """Today's Episode from the episode buffer (§8.12 step 1)."""
     buf = wm.episode_buffer
-    start = min(e.at for e in buf)
-    end = max(e.at for e in buf)
+    dev = wm.deviations
     sig = {k for e in buf for k in e.signature if not k.startswith(("tag:", "etype:"))}
     non_routine = [e for e in buf if not e.routine] or list(buf)
     key_sig = {k for e in non_routine for k in e.signature if not k.startswith(("tag:", "etype:"))}
-    z_start: dict[str, float] = {}
-    z_end: dict[str, float] = {}
-    for e in buf:
-        for sid, z in e.z_before.items():
-            z_start.setdefault(sid, z)
-        for sid, z in e.z_after.items():
-            z_end[sid] = z
-            z_start.setdefault(sid, e.z_before.get(sid, z))
-    deltas = {sid: (z_start[sid], z_end[sid]) for sid in sorted(z_end)
-              if abs(z_end[sid] - z_start[sid]) >= float(cfg.consolidation.episode_min_abs_z)}
-    active = sorted({r.interaction_id for r in wm.activity_log})
+    min_z = float(cfg.episodes.min_abs_z)
+    deltas = {}
+    for sid in sorted(wm.graph.subentities):
+        z0, z1 = dev.z(sid, day - 1), dev.z(sid, day)
+        if abs(z1 - z0) >= min_z:
+            deltas[sid] = (z0, z1)
+    active = sorted({base_interaction_id(r.channel_id) for r in wm.activity_log.values() if r.day == day})
     effects = {}
-    for iid, (spy, sp2) in sorted(wm.fold_accumulators.items()):
+    for key, (spy, sp2) in sorted(wm.fold_accumulators.items()):
         if sp2 > 1e-9:
-            effects[iid] = (spy / sp2, sp2)
+            effects[key] = (spy / sp2, sp2)
     patterns = sorted({i.pattern_id for i in wm.graph.instances.values() if i.activation > 0 and not i.transient})
     tags = sorted({t for e in buf for t in e.tags} | set(wm.pending_episode_tags))
-    return Episode(id=ep_id, start=start, end=end, trigger_event_ids=[e.event_id for e in buf],
+    return Episode(id=ep_id, day=dev.date_of(day), day_index=day, trigger_event_ids=[e.event_id for e in buf],
+                   routine=all(e.routine for e in buf),
                    event_types=sorted({e.event_type for e in buf if e.event_type}), signature=sig,
                    key_signature=key_sig, deltas=deltas, active_interaction_ids=active, edge_effects=effects,
                    active_pattern_ids=patterns, explanation_ids=[e.explanation_id for e in buf if e.explanation_id],
-                   tags=tags, step=wm.deviations.step_of(end))
+                   tags=tags)
+
+
+def pool(stored: tuple[float, float] | None, today: tuple[float, float]) -> tuple[float, float]:
+    """Precision pooling of (implied effect, weight) pairs (§8.12 step 2)."""
+    if stored is None:
+        return today
+    b, w = stored
+    b_d, w_d = today
+    w2 = w + w_d
+    return ((b * w + b_d * w_d) / w2 if w2 > 0 else b, w2)
 
 
 @register("consolidator", "daily")
@@ -85,161 +99,218 @@ class DailyConsolidator(Consolidator):
         self.config = config
         self.engine = engine
 
-    def run(self, day: date, ctx: ProcessContext) -> ConsolidationReport:
+    def run(self, day: int, ctx: ProcessContext) -> ConsolidationReport:
         eng = self.engine
         comp = eng.components
         cfg = ctx.config
         wm, ltm = eng.wm, eng.ltm
-        report = ConsolidationReport(day=day, episode_id=None, patterns_supported=[], proposals=[],
-                                     frontier_decayed=[], hypotheses_expired=[], snapshot_version=eng.version)
-        with ctx.mutator.begin(f"consolidation:{day.isoformat()}", now=ctx.now) as txn:
-            if ctx.now > wm.clock:
-                txn.set("wm.clock", ctx.now)
+        dev = wm.deviations
+        d_date = dev.date_of(day)
+        report = ConsolidationReport(day=d_date, episode_id=None, patterns_supported=[], proposals=[],
+                                     frontier_decayed=[], hypotheses_expired=[], version=eng.version)
+        with ctx.mutator.begin(f"consolidation:{d_date.isoformat()}", at=ctx.now) as txn:
+            # 1. episode
             episode = None
-            touched_today: set[str] = set()
+            non_routine_touched: set[str] = set()
             if wm.episode_buffer:
-                episode = build_episode(txn.new_id("EP"), wm, cfg)
-                txn.add("episodes", episode)
+                episode = build_episode(txn.new_id("EP"), day, wm, cfg)
+                txn.add("ltm.prior_states.episodes", episode)
                 report.episode_id = episode.id
+                ctx.notes["episode_id"] = episode.id
                 for e in wm.episode_buffer:
-                    touched_today.update(e.touched_entity_ids)
-            # 2. forecast explanations move into long-term memory
+                    if not e.routine:
+                        non_routine_touched.update(e.touched_entity_ids)
+            # 2. analog responses
+            self._analog_responses(day, episode, ctx, txn)
+            # 3. forecast explanations move into long-term memory
+            stored = ltm.prior_states.explanations
             for tid in sorted(wm.forecast_layer.by_thesis):
                 ex = wm.forecast_layer.by_thesis[tid].explanation
-                if ex.id not in ltm.explanations.explanations:
-                    txn.add("explanations", ex)
-            # 3. superentity support
-            if episode is not None:
-                ind = comp["inducer"].count(episode, wm, ltm, ctx, txn)
-                report.patterns_supported = list(ind.supported_pattern_ids)
-                report.candidates = list(ind.candidate_pattern_ids)
-                report.proposal_events.extend(ind.proposal_events)
-            # 4. kernels
-            report.kernels_updated = comp["kernel_updater"].update(wm, ltm, ctx, txn)
-            # 5. entity memories
-            for eid in sorted(touched_today):
-                self._entity_memory(eid, episode, ctx, txn)
-            # 6. decay
-            report.frontier_decayed = decay_frontier(wm, ltm, ctx, txn, wm.last_consolidated)
+                if ex.id not in stored:
+                    txn.add("ltm.prior_states.explanations", ex)
+            # 4. superentity support
+            ind = comp["inducer"].count(day, wm, ltm, ctx, txn)
+            report.patterns_supported = list(ind.supported_pattern_ids)
+            report.candidates = list(ind.candidate_pattern_ids)
+            report.proposal_events.extend(ind.proposal_events)
+            # 5. kernels
+            every = max(1, int(cfg.kernel_update.every_days))
+            if (day + 1) % every == 0:
+                report.kernels_updated = comp["kernel_updater"].update(wm, ltm, ctx, txn)
+            # 6. entity memories
+            every_em = max(1, int(cfg.entity_memory.entry_every_days))
+            if (day + 1) % every_em == 0:
+                self._entity_memories(day, episode, ctx, txn)
+            # 7. hypotheses
+            # DECISION: hypotheses are not re-scored during the history replay (§8.13); their VOI
+            # needs forecasts, and nothing reads them until the replay ends.
+            if non_routine_touched and not ctx.initializing and comp.get("hypothesis_scorer") is not None:
+                comp["hypothesis_scorer"].rescore_touched(non_routine_touched, wm, ltm, ctx, txn)
             for hid in sorted(wm.hypotheses):
                 h = wm.hypotheses[hid]
                 if h.status != HypothesisStatus.OPEN:
                     continue
                 age = (ctx.now - (h.created_at or h.scored_at)).total_seconds() / 86400.0
                 if h.current_value(ctx.now) < 0.01 and age > 4 * h.half_life_days and not h.comovement_id:
-                    txn.update("hypotheses", hid, status=HypothesisStatus.EXPIRED)
+                    txn.update("wm.hypotheses", hid, status=HypothesisStatus.EXPIRED)
                     report.hypotheses_expired.append(hid)
+            # 8. decay (pattern supports decay in inducer.count)
+            report.frontier_decayed = decay_frontier(day, wm, ltm, ctx, txn)
             for pid in sorted(wm.pending_refinements):
                 if wm.pending_refinements[pid].expires_at <= ctx.now:
-                    txn.remove("pending_refinements", pid)
-            # 7. taxonomy growth on the nodes touched today
+                    txn.remove("wm.pending_refinements", pid)
+            # 9. taxonomy growth on the nodes touched today
             if episode is not None and comp.get("taxonomy_grower") is not None:
                 for gid in sorted(episode.signature):
-                    for tax in (ltm.object_taxonomy, ltm.interaction_taxonomy):
+                    for tax in (ltm.object_generalizations.taxonomy, ltm.interaction_generalizations.taxonomy):
                         if gid in tax.nodes:
                             comp["taxonomy_grower"].maybe_split(tax, gid, ctx, txn)
-            # 8. reset
-            if wm.activity_log:
-                txn.set("wm.activity_log", [])
-            if wm.fold_accumulators:
-                txn.set("wm.fold_accumulators", {})
-            if wm.episode_buffer:
-                txn.set("wm.episode_buffer", [])
-            if wm.pending_episode_tags:
-                txn.set("wm.pending_episode_tags", [])
-            for iid in sorted(wm.graph.instances):
-                if wm.graph.instances[iid].activation != 0.0:
-                    txn.update("instances", iid, activation=0.0)
-            unpinned = [t for t in sorted(wm.forecast_layer.by_thesis) if t not in wm.forecast_layer.pinned]
-            for tid in unpinned:
-                txn.remove("forecast_layer", tid)
-            if unpinned:
-                txn.set("forecast_layer.order", [t for t in wm.forecast_layer.order if t not in unpinned])
-            txn.set("wm.last_consolidated", day)
-        # 9. snapshot
-        if eng.snapshot_on_consolidation and not eng.initializing:
-            eng.save_snapshot()
-        report.snapshot_version = eng.version
+            # 10. reset and prune
+            report.pruned_points = self._reset_and_prune(day, ctx, txn)
+            txn.set("wm.clock", dev.day_end(day))
+            txn.set("wm.last_processed_day", day)
+        report.version = eng.version
+        report.proposals = [p.get("event", {}).get("id", "") for p in report.proposal_events]
         eng.ledger.append(LedgerKind.CONSOLIDATION, report.model_dump(mode="json", exclude={"proposal_events"}),
                           recorded_at=ctx.now)
         ctx.tracer.emit(Phase.CONSOLIDATE, "consolidation.done", refs=[report.episode_id] if report.episode_id else [],
-                        report={"day": day.isoformat(), "episode_id": report.episode_id,
+                        report={"day": d_date.isoformat(), "episode_id": report.episode_id,
                                 "patterns_supported": report.patterns_supported,
                                 "frontier_decayed": report.frontier_decayed,
                                 "hypotheses_expired": report.hypotheses_expired,
                                 "kernels_updated": report.kernels_updated, "candidates": report.candidates,
-                                "snapshot_version": report.snapshot_version,
-                                "episodes": len(ltm.episodes.episodes)})
+                                "version": report.version,
+                                "episodes": len(ltm.prior_states.episodes)})
         return report
 
-    def _entity_memory(self, eid: str, episode: Episode | None, ctx: ProcessContext, txn: Any) -> None:
+    # -- step 2 ------------------------------------------------------------------------------
+    def _analog_responses(self, day: int, episode: Episode | None, ctx: ProcessContext, txn: MutationTxn) -> None:
+        """Pool today's edge effects into the response of every non-routine episode from the last
+        episodes.analog_span_days days, including today's, and update its response deltas."""
+        wm, ltm = self.engine.wm, self.engine.ltm
+        dev = wm.deviations
+        span = int(ctx.config.episodes.analog_span_days)
+        min_z = float(ctx.config.episodes.min_abs_z)
+        today_effects = {}
+        for key, (spy, sp2) in sorted(wm.fold_accumulators.items()):
+            if sp2 > 1e-9:
+                today_effects[key] = (spy / sp2, sp2)
+        for eid, ep in sorted(ltm.prior_states.episodes.items()):
+            if ep.routine:
+                continue
+            ep_day = ep.day_index if ep.day_index is not None else dev.day_of_date(ep.day)
+            if not (day - span < ep_day <= day):
+                continue
+            fields: dict[str, Any] = {}
+            if today_effects:
+                re = dict(ep.response_effects)
+                for key, val in today_effects.items():
+                    re[key] = pool(re.get(key), val)
+                fields["response_effects"] = re
+            # the change in z since the trigger day began, for subentities that moved by at least
+            # episodes.min_abs_z over the span so far
+            rd = dict(ep.response_deltas)
+            keys = set(ep.deltas) | set(rd)
+            for sid in sorted(wm.graph.subentities):
+                change = dev.z(sid, day) - dev.z(sid, ep_day - 1)
+                if sid in keys or abs(change) >= min_z:
+                    rd[sid] = round(change, 6)
+            if rd != ep.response_deltas:
+                fields["response_deltas"] = rd
+            if fields:
+                txn.update("ltm.prior_states.episodes", eid, **fields)
+
+    # -- step 6 ------------------------------------------------------------------------------
+    def _entity_memories(self, day: int, episode: Episode | None, ctx: ProcessContext, txn: MutationTxn) -> None:
+        """A weekly EntityMemoryEntry for every entity, and each subentity's level noise from the
+        weekly changes in its local level over the last 52 weeks (§8.12 step 6)."""
         eng = self.engine
         wm, ltm = eng.wm, eng.ltm
-        ent = wm.graph.entities.get(eid)
-        if ent is None:
-            return
         dev = wm.deviations
-        step = dev.step_of(ctx.now)
-        summaries = {}
-        zs = {}
-        for sid in ent.subentity_ids:
-            sub = wm.graph.subentities.get(sid)
-            if sub is None:
-                continue
-            summaries[sid] = sub.posterior.summary()
-            z = dev.z_at(sid, step)
-            if z is not None:
-                zs[sid] = z
-        entry = EntityMemoryEntry(at=episode.end if episode is not None else ctx.now, subentity_summaries=summaries,
-                                  event_ids=[e for e in (episode.trigger_event_ids if episode else [])][:20], z=zs)
-        mem = ltm.entity_memories.get(eid)
-        keep = EntityMemory.MAX_ENTRIES
-        if mem is None:
-            mem_new = EntityMemory(entity_id=eid, entries=[entry])
-            txn.add("entity_memories", mem_new)
-            decisions = []
-        else:
-            txn.append_to("entity_memories", eid, "entries", entry, keep_last=keep)
-            decisions = list(mem.decisions)
-        # fold decision observations into profiles
-        if decisions:
-            profiles: dict[str, DecisionProfile] = {}
-            for d in decisions:
-                sub = wm.graph.subentities.get(d.subentity_id)
-                scale_native = sub.scale if sub is not None and sub.posterior.link == "identity" else (
-                    abs(float(np.exp(sub.anchor + sub.scale) - np.exp(sub.anchor))) if sub is not None else 1.0)
-                action = action_of(d.change, scale_native)
-                prof = profiles.setdefault(d.subentity_id, DecisionProfile())
-                bucket = context_bucket(d.context)
-                counts = prof.by_context.setdefault(bucket, [0, 0, 0])
-                counts[("raised", "cut", "held").index(action)] += 1
-            if mem is None or {k: v.by_context for k, v in mem.profiles.items()} != {k: v.by_context for k, v in profiles.items()}:
-                txn.update("entity_memories", eid, profiles=profiles)
-        # level noise: the realized volatility of each subentity over its last 52 observations
-        # DECISION: computed from the observed standardized values (y), not the filtered z, whose changes
-        # understate volatility and feed back into ever-smaller level noise.
-        for sid in ent.subentity_ids:
-            sub0 = wm.graph.subentities.get(sid)
-            if sub0 is None:
-                continue
-            obs: dict[int, float] = {}
-            for ts in sub0.history:
-                if "y" in ts.values and "step" in ts.values:
-                    obs[int(ts.values["step"])] = float(ts.values["y"])
-            steps_sorted = sorted(obs)[-53:]
-            pts = [(k, obs[k]) for k in steps_sorted]
-            changes = []
-            for (s0, z0), (s1, z1) in zip(pts[:-1], pts[1:]):
-                if s1 > s0:
-                    changes.append((z1 - z0) / math.sqrt(s1 - s0))
-            if len(changes) >= 8:
-                sd = float(np.std(changes))
+        every = max(1, int(ctx.config.entity_memory.entry_every_days))
+        floor_decision = float(ctx.config.learning.level_process_noise)
+        triggers = list(episode.trigger_event_ids)[:20] if episode is not None else []
+        end = dev.day_end(day)
+        for eid in sorted(wm.graph.entities):
+            ent = wm.graph.entities[eid]
+            summaries, zs = {}, {}
+            for sid in ent.subentity_ids:
+                sub = wm.graph.subentities.get(sid)
+                if sub is None:
+                    continue
+                summaries[sid] = sub.posterior.summary()
+                zs[sid] = round(dev.z(sid, day), 6)
+            touched = [t for t in triggers]
+            entry = EntityMemoryEntry(at=end, subentity_summaries=summaries, event_ids=touched, z=zs)
+            if eid in ltm.entity_memories:
+                txn.append_to("ltm.entity_memories", eid, "entries", entry, keep_last=EntityMemory.MAX_ENTRIES)
+            else:
+                txn.add("ltm.entity_memories", EntityMemory(entity_id=eid, entries=[entry]))
+            for sid in ent.subentity_ids:
+                sub = wm.graph.subentities.get(sid)
+                if sub is None:
+                    continue
+                changes = []
+                for k in range(WEEKS):
+                    a, b = dev.point(sid, day - every * (k + 1)), dev.point(sid, day - every * k)
+                    if a is None or b is None:
+                        break
+                    changes.append(b.level - a.level)
+                if len(changes) < MIN_WEEKS:
+                    continue
+                sd = float(np.std(changes)) / math.sqrt(every)
                 lo = LEVEL_NOISE_BOUNDS[0]
                 if sid in wm.decision_variables:
                     # DECISION: decision variables move in discrete jumps; a level noise learned from a run
                     # of holds would make the fold ignore the next real decision.
-                    lo = max(lo, float(ctx.config.learning.level_process_noise))
+                    lo = max(lo, floor_decision)
                 sd = min(max(sd, lo), LEVEL_NOISE_BOUNDS[1])
-                sub = wm.graph.subentities[sid]
                 if sub.level_noise is None or abs(sub.level_noise - sd) > 1e-9:
-                    txn.update("subentities", sid, level_noise=sd)
+                    txn.update("wm.graph.subentities", sid, level_noise=sd)
+
+    # -- step 10 -----------------------------------------------------------------------------
+    def _reset_and_prune(self, day: int, ctx: ProcessContext, txn: MutationTxn) -> int:
+        wm = self.engine.wm
+        dev = wm.deviations
+        if wm.fold_accumulators:
+            txn.clear("wm.fold_accumulators")
+        if wm.episode_buffer:
+            txn.clear("wm.episode_buffer")
+        if wm.pending_episode_tags:
+            txn.clear("wm.pending_episode_tags")
+        fl = wm.forecast_layer
+        unpinned = [t for t in sorted(fl.by_thesis) if t not in fl.pinned]
+        for tid in unpinned:
+            txn.remove("wm.forecast_layer.by_thesis", tid)
+        if unpinned:
+            txn.set("wm.forecast_layer.order", [t for t in fl.order if t not in unpinned])
+        # the activity window
+        width = int(ctx.config.abduction.window_days)
+        for key in sorted(wm.activity_log):
+            if wm.activity_log[key].day <= day - width:
+                txn.remove("wm.activity_log", key)
+        for key in sorted(wm.channel_phi):
+            if int(key.rpartition("|")[2]) <= day - width:
+                txn.remove("wm.channel_phi", key)
+        # deviation points older than history.keep_days
+        longest = 0
+        min_delay = max(1, int(ctx.config.propagation.min_delay_days))
+        for _key, _inter, _s, _t, dyn in wm.graph.channel_items():
+            d, l, _lam = mean_kernel_days(dyn.kernel, min_delay)
+            longest = max(longest, d + l)
+        keep = ctx.config.keep_days(longest)
+        cutoff = day - keep
+        pruned = 0
+        if cutoff >= dev.first_kept_day:
+            sids = sorted(wm.graph.subentities)
+            for d in range(dev.first_kept_day, cutoff + 1):
+                for sid in sids:
+                    k = point_key(sid, d)
+                    if k in dev.points:
+                        txn.remove("wm.deviations.points", k)
+                        pruned += 1
+            txn.set("wm.deviations.first_kept_day", cutoff + 1)
+        return pruned
+
+
+__all__ = ["ConsolidationReport", "Consolidator", "DailyConsolidator", "build_episode", "split_point_key"]

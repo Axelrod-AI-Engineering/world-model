@@ -1,9 +1,23 @@
-"""The scenario runner (§11.3): load (with a cached init snapshot), step, play, pause, reset."""
+"""The scenario runner (§11.3): load (with a cached init snapshot), step, play, pause, reset.
+
+A step with `update` requests an update run (§7.8) with `until` = the date of `at` and
+`requested_at` = `at`; the mock scraper and the synthetic data feed find the step's news and data
+on their own, and the world advances as the data feed is polled. When the update finishes, the
+step runs its action (a thesis, an evaluation, a decision, ...).
+
+# DECISION: initialization is built once in a files backend under var/<scenario>/init and cached
+# with its snapshot (init_snapshot.json.gz), keyed by the specs, config, code, and seed. A files
+# session copies the history's ledger, versions, and snapshots, so every version stays restorable;
+# a memory session (tests, headless runs) starts from the init snapshot and numbers its ledger after
+# the history's entries, so versions before the init snapshot cannot be restored there.
+"""
 
 from __future__ import annotations
 
 import gzip
 import json
+import os
+import shutil
 import threading
 from datetime import UTC, datetime, time, timedelta
 from pathlib import Path
@@ -13,20 +27,36 @@ import yaml
 from pydantic import BaseModel, ConfigDict
 
 from axelrod_wm.control.controller import WorldModelController
+from axelrod_wm.control.updates import UpdateRequest, UpdateState
 from axelrod_wm.core.hypothesis import Hypothesis
 from axelrod_wm.core.serialization import canonical_json, sha256_text
 from axelrod_wm.engine.config import EngineConfig, load_config
 from axelrod_wm.engine.engine import build_engine, make_storage
-from axelrod_wm.engine.initialize import REPO_ROOT, ConstructionSpec, Initializer, SeedFile, resolve_path
+from axelrod_wm.engine.initialize import (
+    REPO_ROOT,
+    ConstructionSpec,
+    Initializer,
+    SeedFile,
+    load_vocabulary,
+    resolve_path,
+)
 from axelrod_wm.evaluation.backtest import EvaluationRequest
-from axelrod_wm.events.ledger import LedgerEntry
-from axelrod_wm.ingest.sources import JsonlReplaySource
-from axelrod_wm.memory.snapshots import MemoryBackend, StateVersion, StorageBackend, dump_state, load_state
-from axelrod_wm.sim.scenario import ScenarioScript, load_decisions, load_theses, thesis_from_spec
-from axelrod_wm.sim.world import SyntheticWorld, TruthSpec
+from axelrod_wm.events.graph_update import GraphUpdateEvent
+from axelrod_wm.events.market import MarketEventChannel
+from axelrod_wm.ingest.scrapers import MockWebScraper
+from axelrod_wm.ingest.sources import HistoryReplaySource, JsonlReplaySource
+from axelrod_wm.memory.snapshots import FilesBackend, StateVersion, StorageBackend, load_state
+from axelrod_wm.sim.scenario import (
+    ScenarioScript,
+    load_decisions,
+    load_theses,
+    load_user_events,
+    thesis_from_spec,
+)
+from axelrod_wm.sim.world import SyntheticDataFeed, SyntheticWorld, TruthSpec
 from axelrod_wm.trace import NullTracer, Phase, Tracer
 
-INIT_FORMAT = 3
+INIT_FORMAT = 4
 
 
 class RunnerStatus(BaseModel):
@@ -37,11 +67,13 @@ class RunnerStatus(BaseModel):
     total_steps: int
     sim_time: datetime
     state: Literal["idle", "running", "awaiting_review", "done"]
+    update_id: str | None = None          # the active update run, if any
     pending_proposals: int
     caption: str | None = None
     version: int = 0
     loaded: bool = False
     error: str | None = None
+    next_step_at: datetime | None = None  # the next scripted step: the Update dialog's default "until"
 
 
 class StepReport(BaseModel):
@@ -49,11 +81,11 @@ class StepReport(BaseModel):
 
     step_index: int
     at: datetime
+    update_id: str | None
     market_event_ids: list[str]
     proposal_ids: list[str]
     forecast_ids: list[str]
     caption: str | None = None
-    consolidations: list[str] = []
     notes: list[str] = []
 
 
@@ -63,7 +95,8 @@ def _hash_files(paths: list[Path]) -> str:
         if p.is_dir():
             for f in sorted(p.rglob("*")):
                 if f.is_file() and "__pycache__" not in f.parts:
-                    parts.append(f"{f.relative_to(REPO_ROOT) if f.is_relative_to(REPO_ROOT) else f}:{sha256_text(f.read_text())}")
+                    rel = f.relative_to(REPO_ROOT) if f.is_relative_to(REPO_ROOT) else f
+                    parts.append(f"{rel}:{sha256_text(f.read_text())}")
         elif p.exists():
             parts.append(f"{p.name}:{sha256_text(p.read_text())}")
     return sha256_text("\n".join(parts))
@@ -98,8 +131,10 @@ class ScenarioRunner:
         self.init_version = 0
         self.init_info: dict[str, Any] = {}
         self.recorder: Any = None
-        self.playing = False          # a play loop is running; between steps the state stays "running"
+        self.playing = False
         self.error: str | None = None
+        self.pending_step: dict[str, Any] | None = None    # a step whose update paused for review
+        self.update_ids: list[str] = []
 
     # -- configuration -------------------------------------------------------------------------
     @property
@@ -120,76 +155,127 @@ class ScenarioRunner:
         ini = self.script.initialization
         hist = ini.history_spec()
         files = [resolve_path(ini.construction_dir), resolve_path(ini.taxonomy_dir), resolve_path(ini.seeds),
-                 resolve_path(hist.regimes), resolve_path(self.script.world.truth)]
-        # DECISION: the key also covers the package's engine source, so a code change rebuilds the cache.
+                 resolve_path(hist.regimes), resolve_path(self.script.world.truth),
+                 self.scenario_dir / "market_events.jsonl"]
+        # DECISION: the key also covers the package's source, so a code change rebuilds the cache.
         src = Path(__file__).resolve().parents[1]
         code = [src / d for d in ("core", "memory", "events", "ingest", "control", "engine", "evaluation", "sim")]
         # DECISION: the history replay always auto-approves, so the review policy is left out of the key
-        # (otherwise a headless --auto-approve run and the interactive demo rebuild each other's cache)
         keyed = cfg.model_copy(deep=True)
         keyed.review.policy = "default"
         keyed.components.pop("review_policy", None)
+        keyed.storage.backend = "files"
+        keyed.storage.path = ""
         payload = {"format": INIT_FORMAT, "files": _hash_files(files), "code": _hash_files(code),
                    "config": keyed.config_hash(), "seed": cfg.seed,
                    "history": [hist.from_.isoformat(), hist.to.isoformat()]}
         return sha256_text(canonical_json(payload))
 
-    # -- initialization ------------------------------------------------------------------------
+    # -- the world -----------------------------------------------------------------------------
+    def _scripted_events(self) -> JsonlReplaySource:
+        return JsonlReplaySource(self.scenario_dir / "market_events.jsonl")
+
     def _build_world(self, cfg: EngineConfig) -> tuple[SyntheticWorld, list]:
         ini = self.script.initialization
         hist = ini.history_spec()
         spec = ConstructionSpec.load(ini.construction_dir)
         truth = TruthSpec.load(self.script.world.truth)
-        world = SyntheticWorld(spec, truth, cfg.seed, origin=datetime.combine(hist.from_, time(0), tzinfo=UTC),
-                               step_days=float(cfg.time.propagation_step_days),
-                               window=int(cfg.propagation.kernel_window_steps))
+        vocab = load_vocabulary(ini.taxonomy_dir)
+        scripted = self._scripted_events()
+        shocks = [(e.occurred_at, scripted.extras.get(e.id, {}).get("world_shocks", [])) for e in scripted.events]
+        world = SyntheticWorld(spec, truth, cfg.seed, [s for s in shocks if s[1]], origin=hist.from_, vocab=vocab,
+                               min_delay_days=int(cfg.propagation.min_delay_days))
         regimes = (yaml.safe_load(resolve_path(hist.regimes).read_text()) or {}).get("regimes", [])
         history = world.generate_history(hist.from_, hist.to, regimes)
         return world, history
 
-    def _build_init(self, cfg: EngineConfig, history: list) -> dict:
-        ini = self.script.initialization
-        hist = ini.history_spec()
-        eng = build_engine(cfg, MemoryBackend(), NullTracer())
-        init = Initializer(eng)
-        start = datetime.combine(hist.from_, time(0), tzinfo=UTC)
-        spec = ConstructionSpec.load(ini.construction_dir)
-        init.construct(spec, ini.taxonomy_dir, start=start)
-        seeds = SeedFile.load(ini.seeds)
-        init.load_seeds(seeds, now=start)
-        ctl = WorldModelController(eng, scenario_dir=self.scenario_dir)
-        init.replay_history(ctl, history)
-        end = datetime.combine(hist.to, time(23, 59, 59), tzinfo=UTC)
-        ctl.set_time(end)
-        init.load_frontier_seeds(seeds, now=end)
-        sv = eng.version_info()
-        return {"format": INIT_FORMAT, "version": eng.version,
-                "control_ids": dict(ctl.ids.counters),
-                "ledger": [e.model_dump(mode="json") for e in eng.ledger.entries],
-                "versions": [v.model_dump(mode="json") for v in eng.storage.versions()],
-                "state": json.loads(gzip.decompress(dump_state(eng.wm, eng.ltm)).decode("utf-8")),
-                "state_hash": sv.state_hash if sv else eng.state_hash,
-                "history_events": len(history)}
+    # -- initialization ------------------------------------------------------------------------
+    def _init_dir(self) -> Path:
+        return self.cache_dir / "init"
 
     def _init_cache_path(self) -> Path:
         return self.cache_dir / "init_snapshot.json.gz"
 
+    def _build_init(self, cfg: EngineConfig, history: list, key: str) -> dict:
+        """Construction, seeds, the history replay as one long update run (§8.13), frontier seeds,
+        and cursors, in a files backend under the cache directory."""
+        # the replay approves everything; it runs on its own copy of the config, so the session that
+        # loads afterwards keeps the configured review policy
+        cfg = cfg.model_copy(deep=True)
+        ini = self.script.initialization
+        hist = ini.history_spec()
+        init_dir = self._init_dir()
+        storage = FilesBackend(path=init_dir)
+        storage.reset()
+        vocab = load_vocabulary(ini.taxonomy_dir)
+        eng = build_engine(cfg, storage, NullTracer(), vocab=vocab)
+        init = Initializer(eng)
+        spec = ConstructionSpec.load(ini.construction_dir)
+        init.construct(spec, ini.taxonomy_dir, start=hist.from_, vocab=vocab)
+        seeds = SeedFile.load(ini.seeds)
+        init.load_seeds(seeds, now=eng.wm.clock)
+        ctl = WorldModelController(eng, scenario_dir=self.scenario_dir)
+        ctl.register_source("history_replay", HistoryReplaySource(history))
+        ctl.set_review_policy("auto_approve_all")
+        eng.initializing = True
+        try:
+            run = ctl.request_update(UpdateRequest(requested_by="init", until=hist.to, sources=["history_replay"],
+                                                   requested_at=datetime.combine(hist.to, time(23, 59, 59), tzinfo=UTC)))
+        finally:
+            eng.initializing = False
+        if run.state != UpdateState.DONE:
+            raise RuntimeError(f"the history replay ended in state {run.state}: {run.error}")
+        end = eng.wm.clock
+        init.load_frontier_seeds(seeds, now=end)
+        init.set_cursors(list(cfg.update.sources), end)
+        sv = eng.save_snapshot()
+        storage.flush()
+        return {"format": INIT_FORMAT, "key": key, "version": eng.version, "seq": eng.ledger.next_seq - 1,
+                "control_ids": dict(ctl.ids.counters), "version_info": sv.model_dump(mode="json") if sv else None,
+                "state_hash": eng.state_hash, "history_events": len(history),
+                "days": int(eng.wm.last_processed_day) + 1}
+
     def _load_or_build_init(self, cfg: EngineConfig, history: list) -> dict:
         key = self._init_key(cfg)
         path = self._init_cache_path()
-        if self.use_cache and path.exists():
+        if self.use_cache and path.exists() and (self._init_dir() / "ledger.jsonl").exists():
             try:
-                data = json.loads(gzip.decompress(path.read_bytes()).decode("utf-8"))
-                if data.get("key") == key and data.get("format") == INIT_FORMAT:
-                    return data
+                meta = json.loads(gzip.decompress(path.read_bytes()).decode("utf-8"))
+                if meta.get("key") == key and meta.get("format") == INIT_FORMAT:
+                    return meta
             except (OSError, ValueError):
                 pass
-        data = self._build_init(cfg, history)
-        data["key"] = key
-        if self.use_cache:
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_bytes(gzip.compress(json.dumps(data).encode("utf-8"), compresslevel=5, mtime=0))
-        return data
+        meta = self._build_init(cfg, history, key)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(gzip.compress(json.dumps(meta).encode("utf-8"), compresslevel=5, mtime=0))
+        return meta
+
+    def _session_storage(self, cfg: EngineConfig, meta: dict) -> StorageBackend:
+        """The session's storage, holding the init state: a files session copies the history's
+        ledger, versions, and snapshots; a memory session gets only the init snapshot."""
+        storage = self.storage if self.storage is not None else make_storage(cfg)
+        storage.reset()
+        init_dir = self._init_dir()
+        version = int(meta["version"])
+        sv = StateVersion.model_validate(meta["version_info"])
+        blob = (init_dir / "snapshots" / f"v{version:06d}.json.gz").read_bytes()
+        if isinstance(storage, FilesBackend):
+            storage.flush()
+            storage._close()
+            shutil.copyfile(init_dir / "ledger.jsonl", storage.ledger_path)
+            shutil.copyfile(init_dir / "versions.jsonl", storage.versions_path)
+            for snap in sorted((init_dir / "snapshots").glob("v*.json.gz")):
+                dst = storage.path / "snapshots" / snap.name
+                try:
+                    os.link(snap, dst)
+                except OSError:
+                    shutil.copyfile(snap, dst)
+            storage._versions_cache = None
+            storage._last_seq = None
+        else:
+            storage.append_version(sv)
+            storage.save_snapshot(sv, blob)
+        return storage
 
     def load(self) -> RunnerStatus:
         """Initialization, using the cached init snapshot."""
@@ -198,27 +284,29 @@ class ScenarioRunner:
             if self.auto_approve:
                 cfg.review.policy = "auto_approve_all"
             world, history = self._build_world(cfg)
-            data = self._load_or_build_init(cfg, history)
-            storage = self.storage if self.storage is not None else make_storage(cfg)
-            storage.reset()
-            eng = build_engine(cfg, storage, self.tracer)
-            entries = [LedgerEntry.model_validate(e) for e in data["ledger"]]
-            eng.ledger.adopt(entries)
-            for v in data["versions"]:
-                storage.append_version(StateVersion.model_validate(v))
-            blob = gzip.compress(json.dumps(data["state"]).encode("utf-8"), mtime=0)
-            wm, ltm = load_state(blob)
-            eng.load_state(wm, ltm, int(data["version"]))
-            info = eng.version_info()
-            if info is not None:
-                storage.save_snapshot(info, dump_state(wm, ltm))
-            ctl = WorldModelController(eng, scenario_dir=self.scenario_dir, control_ids=data.get("control_ids"))
+            meta = self._load_or_build_init(cfg, history)
+            storage = self._session_storage(cfg, meta)
+            vocab = load_vocabulary(self.script.initialization.taxonomy_dir)
+            eng = build_engine(cfg, storage, self.tracer, vocab=vocab)
+            eng.ledger.set_base(int(meta["seq"]))
+            version = int(meta["version"])
+            wm, ltm = load_state(storage.load_snapshot(version))
+            eng.load_state(wm, ltm, version)
+            ctl = WorldModelController(eng, scenario_dir=self.scenario_dir, control_ids=meta.get("control_ids"))
             ctl.set_review_policy(cfg.review.policy)
+            scripted = self._scripted_events()
+            ctl.register_source("mock_web_scraper", MockWebScraper(path=self.scenario_dir / "market_events.jsonl",
+                                                                   **cfg.update.source_params.get("mock_web_scraper", {})))
+            ctl.register_source("synthetic_data_feed", SyntheticDataFeed(
+                world, scripted=[e for e in scripted.events if e.channel == MarketEventChannel.DATA_FEED]))
             self.controller = ctl
             self.world = world
-            self.init_version = int(data["version"])
-            self.init_info = {"history_events": data.get("history_events"), "version": self.init_version}
-            self.market_source = JsonlReplaySource(self.scenario_dir / "market_events.jsonl")
+            self.market_source = scripted
+            self.user_events = load_user_events(self.scenario_dir)
+            self.init_version = version
+            self.init_seq = int(meta["seq"])
+            self.init_info = {"history_events": meta.get("history_events"), "version": version,
+                              "days": meta.get("days")}
             self.theses_spec, self.hypotheses_spec = load_theses(self.scenario_dir)
             self.decisions_spec = load_decisions(self.scenario_dir)
             self.step_index = 0
@@ -226,13 +314,19 @@ class ScenarioRunner:
             self.forecasts_by_thesis = {}
             self.thesis_aliases = {}
             self.reports = []
+            self.pending_step = None
+            self.update_ids = []
             self.loaded = True
+            self.error = None
             start = datetime.combine(self.script.start, time(0), tzinfo=UTC)
-            ctl.set_time(start)
+            ctl.advance_now(start)
             for h in self.hypotheses_spec.values():
                 hyp = Hypothesis.model_validate({**h, "probability": h.get("probability", 0.5),
                                                  "scored_at": start.isoformat()})
                 ctl.add_hypothesis(hyp)
+            eng.ledger.append(_ledger_kind("UPDATE"), {"scenario": self.script.id, "seed": cfg.seed,
+                                                        "state": "loaded", "init_version": version},
+                              recorded_at=ctl.now)
             if self.recorder is not None:
                 self.recorder.attach(self)
             self.tracer.emit(Phase.INIT, "scenario.loaded", refs=[self.script.id], scenario_id=self.script.id,
@@ -244,87 +338,217 @@ class ScenarioRunner:
         """Back to the init snapshot."""
         return self.load()
 
-    # -- stepping ------------------------------------------------------------------------------
-    def _advance(self, at: datetime, scripted: list[Any]) -> list[str]:
+    # -- sessions (axelrod init / axelrod update) ---------------------------------------------
+    def session_record(self) -> dict:
+        """What `axelrod update` needs to continue this runner's state from its files backend."""
         ctl = self.controller
-        world = self.world
-        for ev in scripted:
-            extra = self.market_source.extras.get(ev.id, {})
-            world.inject_native(extra.get("world_shocks", []), ev.occurred_at)
-        events = world.poll(at) + [e for e in scripted if e.published_at <= at]
-        ids = []
-        for ev in sorted(events, key=lambda e: (e.published_at, e.id)):
-            ctl.ingest(ev)
-            ids.append(ev.id)
-        ctl.set_time(at)
-        return ids
+        return {"scenario": self.script.id, "config": getattr(self, "config_path", None),
+                "seed": int(ctl.engine.config.seed), "init_version": self.init_version,
+                "init_seq": int(getattr(self, "init_seq", 0)),
+                "version": ctl.engine.version, "control_ids": dict(ctl.ids.counters), "now": ctl.now.isoformat(),
+                "storage": str(getattr(ctl.engine.storage, "path", "")), "step_index": self.step_index}
 
-    def step(self) -> StepReport:
+    def resume(self, session: dict) -> RunnerStatus:
+        """Continue a session: restore the latest version from the files backend (its newest snapshot
+        plus the change sets after it), rebuild the world (deterministic from the seed), and rebuild
+        the controller's view of the market events already collected."""
+        from axelrod_wm.memory.snapshots import SnapshotStore  # noqa: F401  (documentation)
+
+        with self.lock:
+            cfg = self.effective_config()
+            if self.auto_approve:
+                cfg.review.policy = "auto_approve_all"
+            world, _history = self._build_world(cfg)
+            storage = self.storage if self.storage is not None else make_storage(cfg)
+            vocab = load_vocabulary(self.script.initialization.taxonomy_dir)
+            eng = build_engine(cfg, storage, self.tracer, vocab=vocab)
+            versions = storage.versions()
+            if not versions:
+                raise RuntimeError("the session has no versions; run `axelrod init` first")
+            latest = versions[-1].version
+            wm, ltm = eng.restore(latest)
+            eng.load_state(wm, ltm, latest)
+            ctl = WorldModelController(eng, scenario_dir=self.scenario_dir, control_ids=session.get("control_ids"))
+            ctl.set_review_policy(cfg.review.policy)
+            scripted = self._scripted_events()
+            ctl.register_source("mock_web_scraper", MockWebScraper(path=self.scenario_dir / "market_events.jsonl",
+                                                                   **cfg.update.source_params.get("mock_web_scraper", {})))
+            ctl.register_source("synthetic_data_feed", SyntheticDataFeed(
+                world, scripted=[e for e in scripted.events if e.channel == MarketEventChannel.DATA_FEED]))
+            from axelrod_wm.events.ledger import LedgerKind
+            from axelrod_wm.events.market import MarketEvent
+
+            last_day = int(wm.last_processed_day)
+            for e in eng.ledger.of_kind(LedgerKind.MARKET_EVENT, int(session.get("init_seq", 0))):
+                me = MarketEvent.model_validate(e.payload)
+                ctl.remember_market_event(me)
+                if wm.deviations.day_of(me.published_at) <= last_day:
+                    ctl.market_status[me.id] = "applied"
+            self.controller = ctl
+            self.world = world
+            self.market_source = scripted
+            self.user_events = load_user_events(self.scenario_dir)
+            self.init_version = int(session.get("init_version", 0))
+            self.init_seq = int(session.get("init_seq", 0))
+            self.theses_spec, self.hypotheses_spec = load_theses(self.scenario_dir)
+            self.decisions_spec = load_decisions(self.scenario_dir)
+            self.step_index = int(session.get("step_index", 0))
+            self.loaded = True
+            now = datetime.fromisoformat(session["now"]) if session.get("now") else wm.clock
+            ctl.advance_now(max(now, wm.clock))
+            return self.status()
+
+    # -- stepping ------------------------------------------------------------------------------
+    def _update_request(self, st: Any) -> UpdateRequest:
+        spec = st.update
+        mes = []
+        for mid in spec.user_market_events:
+            ev = self.market_source.get(mid)
+            if ev is None:
+                raise KeyError(f"unknown user market event {mid}")
+            mes.append(ev)
+        gues = []
+        for gid in spec.user_graph_update_events:
+            raw = dict(self.user_events[gid])
+            raw.setdefault("recorded_at", st.at.isoformat())
+            gues.append(GraphUpdateEvent.model_validate(raw))
+        return UpdateRequest(requested_by="scenario", until=st.at.date(), requested_at=st.at,
+                             user_market_events=mes, user_graph_update_events=gues, sources=spec.sources)
+
+    def _placeholder(self, ctx: dict, note: str) -> StepReport:
+        return StepReport(step_index=self.step_index, at=ctx["step"].at, update_id=ctx["update_id"],
+                          market_event_ids=[], proposal_ids=[], forecast_ids=[], caption=ctx["step"].caption,
+                          notes=[note])
+
+    def step(self, drive: bool = True) -> StepReport:
+        """Run the next step. With drive=False (the API), a step's update is only started: the caller
+        processes its days (releasing the lock between days) and calls step() again to finish it."""
         with self.lock:
             if not self.loaded:
                 self.load()
+            if self.pending_step is not None:
+                return self._resume_pending(drive)
             if self.step_index >= len(self.script.steps):
                 self.state = "done"
-                return self.reports[-1] if self.reports else StepReport(step_index=self.step_index, at=self.controller.now,
-                                                                         market_event_ids=[], proposal_ids=[], forecast_ids=[])
+                return self.reports[-1] if self.reports else StepReport(
+                    step_index=self.step_index, at=self.controller.now, update_id=None, market_event_ids=[],
+                    proposal_ids=[], forecast_ids=[])
             self.state = "running"
             ctl = self.controller
             st = self.script.steps[self.step_index]
-            scripted = [self.market_source.get(i) for i in st.market_events]
-            missing = [i for i, e in zip(st.market_events, scripted) if e is None]
-            if missing:
-                raise KeyError(f"unknown market events {missing}")
-            at = max([st.at] + [e.published_at for e in scripted])
-            before_props = set(ctl.proposals)
-            before_fc = set(ctl.forecasts)
-            before_cons = len(ctl.consolidations)
             self.caption = st.caption
             if st.caption:
                 self.tracer.emit(Phase.SCENARIO, "scenario.caption", refs=[], text=st.caption, step_index=self.step_index)
-            ids = self._advance(at, scripted)
-            notes: list[str] = []
-            for tid in st.theses():
-                spec = self.theses_spec[tid]
-                fc = ctl.pose_thesis(thesis_from_spec(spec, ctl.now))
-                self.forecasts_by_thesis[tid] = fc.id
-            if st.pose_hypothesis is not None:
-                fc = ctl.pose_hypothesis(st.pose_hypothesis.hypothesis, st.pose_hypothesis.base_thesis)
-                self.forecasts_by_thesis[fc.thesis_id] = fc.id
-                # the demo calls the first posed decision hypothesis T-02 (§14.6 step 13)
-                alias = "T-02" if "T-02" not in self.thesis_aliases else f"T-{len(self.thesis_aliases) + 2:02d}"
-                self.forecasts_by_thesis[alias] = fc.id
-                self.thesis_aliases[alias] = fc.thesis_id
-            if st.evaluate is not None:
-                req = EvaluationRequest.model_validate(st.evaluate)
-                rep = ctl.evaluate(req)
-                notes.append(f"evaluation {rep.id}")
-            if st.decision is not None:
-                rec = self._record_decision(st.decision)
-                notes.append(f"decision {rec.id} at version {rec.state_version}")
-            if st.resolve_decision is not None:
-                out = ctl.resolve_decision(st.resolve_decision)
-                notes.append(f"outcome crps {out.crps:.3f}")
-            if st.consolidate:
-                days = self.controller.engine.wm.touched_days()
-                if days:
-                    ctl.consolidate(days[-1])
-            report = StepReport(step_index=self.step_index, at=at, market_event_ids=ids,
-                                proposal_ids=[p for p in ctl.proposals if p not in before_props],
-                                forecast_ids=[f for f in ctl.forecasts if f not in before_fc], caption=st.caption,
-                                consolidations=[str(r.day) for r in ctl.consolidations[before_cons:]], notes=notes)
-            self.reports.append(report)
-            self.step_index += 1
-            pending = len(ctl.pending_proposals())
-            if self.step_index >= len(self.script.steps):
-                self.state = "done"
-            elif self.interactive and pending and (st.pause_for_review is None or st.pause_for_review):
-                self.state = "awaiting_review"
+            ctx = {"step": st, "before_props": set(ctl.proposals), "before_fc": set(ctl.forecasts),
+                   "before_me": set(ctl.market_events), "update_id": None}
+            if st.update is not None:
+                run = ctl.request_update(self._update_request(st), run_to_end=drive)
+                ctx["update_id"] = run.id
+                self.update_ids.append(run.id)
+                if run.state == UpdateState.RUNNING and not drive:
+                    self.pending_step = ctx
+                    self.state = "running"
+                    self._broadcast()
+                    return self._placeholder(ctx, "updating")
+                if run.state == UpdateState.AWAITING_REVIEW:
+                    if self.interactive:
+                        self.pending_step = ctx
+                        self.state = "awaiting_review"
+                        self._broadcast()
+                        return self._placeholder(ctx, "awaiting review")
+                    # DECISION: a headless run without --auto-approve defers what needs review, so the
+                    # scenario keeps moving; deferred events can still be approved and fold in late.
+                    while run.state == UpdateState.AWAITING_REVIEW:
+                        run = ctl.continue_update(run.id)
             else:
-                self.state = "running" if self.playing and not self._pause.is_set() else "idle"
-            for fn in list(self.listeners):
-                fn("step", report=report)
-            self._broadcast()
-            return report
+                ctl.advance_now(st.at)
+            return self._finish_step(ctx)
+
+    def _resume_pending(self, drive: bool = True) -> StepReport:
+        ctx = self.pending_step
+        ctl = self.controller
+        run = ctl.get_update(ctx["update_id"])
+        if run.state == UpdateState.RUNNING and drive:
+            ctl.continue_update(run.id)
+            run = ctl.get_update(run.id)
+        if run.state == UpdateState.AWAITING_REVIEW:
+            if not self.interactive:
+                while run.state == UpdateState.AWAITING_REVIEW:
+                    run = ctl.continue_update(run.id)
+            else:
+                self.state = "awaiting_review"
+                return self._placeholder(ctx, "awaiting review")
+        if run.state == UpdateState.RUNNING:
+            self.state = "running"
+            return self._placeholder(ctx, "updating")
+        self.pending_step = None
+        self.state = "running"
+        return self._finish_step(ctx)
+
+    def pending_update(self) -> str | None:
+        """The update id of a step that has started but not finished."""
+        return self.pending_step["update_id"] if self.pending_step is not None else None
+
+    def resume_after_review(self) -> RunnerStatus:
+        """Called after a review decision: if the paused step's update has finished, run its action."""
+        with self.lock:
+            if self.pending_step is not None:
+                run = self.controller.get_update(self.pending_step["update_id"])
+                if run.state not in (UpdateState.AWAITING_REVIEW, UpdateState.RUNNING):
+                    self._resume_pending()
+            return self.status()
+
+    def _finish_step(self, ctx: dict) -> StepReport:
+        ctl = self.controller
+        st = ctx["step"]
+        ctl.advance_now(st.at)
+        notes: list[str] = []
+        for tid in st.theses():
+            spec = self.theses_spec[tid]
+            fc = ctl.pose_thesis(thesis_from_spec(spec, ctl.now))
+            self.forecasts_by_thesis[tid] = fc.id
+        for tid in st.pin:
+            ctl.pin_thesis(tid, True)
+            notes.append(f"pinned {tid}")
+        if st.pose_hypothesis is not None:
+            fc = ctl.pose_hypothesis(st.pose_hypothesis.hypothesis, st.pose_hypothesis.base_thesis)
+            self.forecasts_by_thesis[fc.thesis_id] = fc.id
+            # the demo calls the first posed decision hypothesis T-02 (§14.6 step 14)
+            alias = "T-02" if "T-02" not in self.thesis_aliases else f"T-{len(self.thesis_aliases) + 2:02d}"
+            self.forecasts_by_thesis[alias] = fc.id
+            self.thesis_aliases[alias] = fc.thesis_id
+        if st.evaluate is not None:
+            rep = ctl.evaluate(EvaluationRequest.model_validate(st.evaluate))
+            notes.append(f"evaluation {rep.id}")
+        if st.decision is not None:
+            rec = self._record_decision(st.decision)
+            notes.append(f"decision {rec.id} at version {rec.state_version}")
+        if st.resolve_decision is not None:
+            out = ctl.resolve_decision(st.resolve_decision)
+            notes.append(f"outcome crps {out.crps:.3f}")
+        if ctx["update_id"]:
+            run = ctl.get_update(ctx["update_id"])
+            if run.report is not None:
+                notes.append(f"{ctx['update_id']}: {run.state}, {run.report.days} days, "
+                             f"collected {sum(run.report.collected.values())}")
+        report = StepReport(step_index=self.step_index, at=st.at, update_id=ctx["update_id"],
+                            market_event_ids=[m for m in ctl.market_events if m not in ctx["before_me"]],
+                            proposal_ids=[p for p in ctl.proposals if p not in ctx["before_props"]],
+                            forecast_ids=[f for f in ctl.forecasts if f not in ctx["before_fc"]],
+                            caption=st.caption, notes=notes)
+        self.reports.append(report)
+        self.step_index += 1
+        pending = len(ctl.pending_proposals())
+        if self.step_index >= len(self.script.steps):
+            self.state = "done"
+        elif self.interactive and pending:
+            self.state = "awaiting_review"
+        else:
+            self.state = "running" if self.playing and not self._pause.is_set() else "idle"
+        for fn in list(self.listeners):
+            fn("step", report=report)
+        self._broadcast()
+        return report
 
     def _record_decision(self, decision_id: str) -> Any:
         ctl = self.controller
@@ -344,8 +568,10 @@ class ScenarioRunner:
         self.playing = True
         try:
             while self.step_index < last and not self._pause.is_set():
-                if self.state == "awaiting_review" and self.controller.pending_proposals():
-                    break
+                if self.state == "awaiting_review" and (self.pending_step is not None or self.controller.pending_proposals()):
+                    if self.pending_step is None or self.controller.get_update(
+                            self.pending_step["update_id"]).state == UpdateState.AWAITING_REVIEW:
+                        break
                 self.step()
                 if self.state in ("awaiting_review", "done"):
                     break
@@ -367,14 +593,17 @@ class ScenarioRunner:
         ctl = self.controller
         pending = len(ctl.pending_proposals()) if ctl is not None else 0
         state = self.state
-        if state == "awaiting_review" and pending == 0:
+        if state == "awaiting_review" and pending == 0 and self.pending_step is None:
             state = "idle" if self.step_index < len(self.script.steps) else "done"
             self.state = state
+        active = ctl.active_update if ctl is not None else None
         return RunnerStatus(scenario_id=self.script.id, step_index=self.step_index, total_steps=len(self.script.steps),
                             sim_time=ctl.now if ctl is not None else datetime.combine(self.script.start, time(0), tzinfo=UTC),
-                            state=state, pending_proposals=pending, caption=self.caption,
+                            state=state, update_id=active, pending_proposals=pending, caption=self.caption,
                             version=ctl.engine.version if ctl is not None else 0, loaded=self.loaded,
-                            error=self.error)
+                            error=self.error,
+                            next_step_at=self.script.steps[self.step_index].at
+                            if self.step_index < len(self.script.steps) else None)
 
     def _broadcast(self) -> None:
         fn = getattr(self.tracer, "broadcast", None)
@@ -388,6 +617,12 @@ class ScenarioRunner:
         return self.recorder.evaluate(self)
 
 
+def _ledger_kind(name: str) -> Any:
+    from axelrod_wm.events.ledger import LedgerKind
+
+    return LedgerKind[name]
+
+
 def build_runner(scenario: str = "oil_shock_demo", *, interactive: bool = False, auto_approve: bool = False,
                  seed: int | None = None, config_path: str | None = None, storage: StorageBackend | None = None,
                  tracer: Tracer | None = None, record_checklist: bool = True, use_cache: bool = True,
@@ -399,9 +634,9 @@ def build_runner(scenario: str = "oil_shock_demo", *, interactive: bool = False,
         cfg = load_config(config_path, overrides=overrides)
     runner = ScenarioRunner(None, None, script, interactive, config=cfg, storage=storage, tracer=tracer,
                             auto_approve=auto_approve, seed=seed, use_cache=use_cache, cache_dir=cache_dir)
+    runner.config_path = config_path
     if record_checklist:
         from axelrod_wm.sim.checklist import ChecklistRecorder
 
         runner.recorder = ChecklistRecorder()
     return runner
-

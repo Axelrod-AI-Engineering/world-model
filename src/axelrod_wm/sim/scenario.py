@@ -48,17 +48,24 @@ class PoseHypothesisStep(_M):
     base_thesis: str | None = None
 
 
+class UpdateStepSpec(_M):
+    """An update request (§11.2): user_market_events are ids from market_events.jsonl with channel
+    "user", user_graph_update_events ids from user_events.yaml."""
+
+    user_market_events: list[str] = []
+    user_graph_update_events: list[str] = []
+    sources: list[str] | None = None
+
+
 class ScenarioStep(_M):
     at: datetime
-    market_events: list[str] = []
-    data_tick: bool = False
+    update: UpdateStepSpec | None = None
     thesis: str | list[str] | None = None
     pose_hypothesis: PoseHypothesisStep | None = None
     evaluate: dict[str, Any] | None = None
     decision: str | None = None
     resolve_decision: str | None = None
-    consolidate: bool | date | None = None
-    pause_for_review: bool | None = None
+    pin: list[str] = []
     caption: str | None = None
 
     @field_validator("at", mode="before")
@@ -132,6 +139,15 @@ def thesis_from_spec(spec: dict, posed_at: datetime, posed_by: str = "scenario")
     data.setdefault("posed_by", posed_by)
     data.setdefault("posed_at", posed_at.isoformat())
     return Thesis.model_validate(data)
+
+
+def load_user_events(scenario_dir: Path) -> dict[str, dict]:
+    """Raw graph update events the user draws during the scenario (user_events.yaml)."""
+    p = scenario_dir / "user_events.yaml"
+    if not p.exists():
+        return {}
+    raw = yaml.safe_load(p.read_text()) or {}
+    return {e["id"]: e for e in raw.get("graph_update_events", [])}
 
 
 def load_decisions(scenario_dir: Path) -> dict[str, DecisionSpec]:

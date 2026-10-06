@@ -1,51 +1,38 @@
-"""Helpers shared by the fold, the frontier, kernel learning, and propagation set-up.
+"""Helpers shared by the daily model, the fold, the frontier, kernel learning, and propagation set-up.
 
-phi_c(t) = sum_{tau >= 1} gbar_c(tau) * dz_src(t - tau) times the moderator multiplier at its mean
-(§8.6), where gbar is the step response at mean kernel parameters.
+phi_c(t) is the channel's regressor at its mean kernel, kept current by its ChannelState (§6.4); the
+moderator multiplier m_c uses the moderator's z on day t - 1 (§8.6.1).
 """
 
 from __future__ import annotations
 
-import math
+from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
 from axelrod_wm.core.interaction import EdgeDynamics, Interaction, ParameterBinding, ParameterForm
 from axelrod_wm.core.taxonomy import default_obs_noise
-from axelrod_wm.core.temporal import step_response
+from axelrod_wm.engine.kernels import KernelRecursion, mean_kernel_days
 from axelrod_wm.engine.propagation import Channel, InitialState, PropagationSystem
 
 if TYPE_CHECKING:
     from axelrod_wm.core.entity import Subentity
+    from axelrod_wm.core.taxonomy import AttributeVocabulary
     from axelrod_wm.engine.context import ProcessContext
-    from axelrod_wm.memory.long_term import LongTermMemory
     from axelrod_wm.memory.working import DeviationHistory, WorkingMemory
 
 
-def mean_kernel(dyn: EdgeDynamics, n_steps: int, step_days: float, min_delay_steps: float,
-                multiplier: float = 1.0) -> np.ndarray:
-    d, l, dur = dyn.kernel.means()
-    d, l = d * multiplier, l * multiplier
-    dur = dur * multiplier if dur is not None else None
-    d = max(d / step_days, min_delay_steps) * step_days
-    return step_response(d, l, dur, n_steps, step_days, dyn.kernel.shape)
+def min_delay_of(ctx: ProcessContext) -> int:
+    return max(1, int(ctx.config.propagation.min_delay_days))
 
 
-def phi_from_increments(g: np.ndarray, incs: np.ndarray) -> float:
-    """incs are dz for steps t-W..t-1 (oldest first); g[tau] for tau = 0..W."""
-    n = min(len(incs), len(g) - 1)
-    if n <= 0:
-        return 0.0
-    return float(np.dot(g[1: n + 1], incs[::-1][:n]))
-
-
-def moderator_terms(params: list[ParameterBinding], dev: DeviationHistory, step: int,
+def moderator_terms(params: list[ParameterBinding], dev: DeviationHistory, day: int,
                     clip: tuple[float, float]) -> tuple[float, float]:
-    """(multiplier, additive input) at mean coefficients, from moderators' deviations at step - 1."""
+    """(multiplier, additive input) at mean coefficients, from moderators' z on day - 1."""
     mult, add = 1.0, 0.0
     for p in params:
-        z = dev.z_at(p.moderator_id, step - 1) or 0.0
+        z = dev.z(p.moderator_id, day - 1)
         gam = p.coefficient.mean()
         if p.form == ParameterForm.MULTIPLICATIVE:
             mult *= min(max(1.0 + gam * z, clip[0]), clip[1])
@@ -56,53 +43,42 @@ def moderator_terms(params: list[ParameterBinding], dev: DeviationHistory, step:
     return mult, add
 
 
-class RegressorCache:
-    """Caches mean kernels and increment histories within one event."""
-
-    def __init__(self, dev: DeviationHistory, window: int, step_days: float, min_delay_steps: float,
-                 clip: tuple[float, float]) -> None:
-        self.dev = dev
-        self.window = window
-        self.step_days = step_days
-        self.min_delay = min_delay_steps
-        self.clip = clip
-        self._incs: dict[tuple[str, int], np.ndarray] = {}
-        self._kern: dict[tuple[str, float], np.ndarray] = {}
-
-    def increments(self, sid: str, end_step: int) -> np.ndarray:
-        key = (sid, end_step)
-        v = self._incs.get(key)
-        if v is None:
-            v = self._incs[key] = self.dev.increments(sid, end_step, self.window)
-        return v
-
-    def kernel(self, key: str, dyn: EdgeDynamics, multiplier: float = 1.0) -> np.ndarray:
-        k = (key, multiplier)
-        g = self._kern.get(k)
-        if g is None:
-            g = self._kern[k] = mean_kernel(dyn, self.window, self.step_days, self.min_delay, multiplier)
-        return g
-
-    def phi(self, channel_key: str, source_id: str, dyn: EdgeDynamics, params: list[ParameterBinding],
-            step: int, multiplier: float = 1.0) -> tuple[float, float]:
-        """(phi including the moderator multiplier, additive moderator input) at `step`."""
-        g = self.kernel(channel_key, dyn, multiplier)
-        raw = phi_from_increments(g, self.increments(source_id, step - 1))
-        mult, add = moderator_terms(params, self.dev, step, self.clip)
-        return raw * mult, add
+def clip_of(ctx: ProcessContext) -> tuple[float, float]:
+    c = ctx.config.propagation.moderator_clip
+    return float(c[0]), float(c[1])
 
 
-def regressor_cache(wm: WorkingMemory, ctx: ProcessContext) -> RegressorCache:
-    cfg = ctx.config
-    clip = (float(cfg.propagation.moderator_clip[0]), float(cfg.propagation.moderator_clip[1]))
-    return RegressorCache(wm.deviations, int(cfg.propagation.kernel_window_steps), ctx.step_days,
-                          float(cfg.propagation.min_delay_steps), clip)
+def warm_recursion(dyn: EdgeDynamics, source_id: str, wm: WorkingMemory, day: int, min_delay: int = 1,
+                   multiplier: float = 1.0) -> KernelRecursion:
+    d, l, lam = mean_kernel_days(dyn.kernel, min_delay, multiplier)
+    return KernelRecursion.warm_start(d, l, lam, wm.deviations.series(source_id), day)
 
 
-def obs_noise_of(sub: Subentity, wm: WorkingMemory, ltm: LongTermMemory | None) -> float:
+def phi_at(wm: WorkingMemory, channel_id: str, source_id: str, dyn: EdgeDynamics, day: int,
+           min_delay: int = 1) -> float:
+    """The regressor phi_c(day) at the channel's mean kernel: from its ChannelState when it is at that
+    day, else from the recorded channel_phi, else by a warm start from the history."""
+    cs = wm.channels.get(channel_id)
+    if cs is not None and cs.day == day:
+        return cs.recursion.phi()
+    rec = wm.channel_phi.get(f"{channel_id}|{day}")
+    if rec is not None:
+        return float(rec)
+    return warm_recursion(dyn, source_id, wm, day, min_delay).phi()
+
+
+def channel_regressor(wm: WorkingMemory, inter: Interaction, channel_id: str, source_id: str,
+                      dyn: EdgeDynamics, day: int, ctx: ProcessContext) -> tuple[float, float]:
+    """(m_c * phi_c(day), additive moderator input) for one channel on `day`."""
+    params = list(inter.parameters) if channel_id == inter.id else []
+    phi = phi_at(wm, channel_id, source_id, dyn, day, min_delay_of(ctx))
+    mult, add = moderator_terms(params, wm.deviations, day, clip_of(ctx))
+    return phi * mult, add
+
+
+def obs_noise_of(sub: Subentity, wm: WorkingMemory, vocab: AttributeVocabulary | None) -> float:
     if sub.obs_noise is not None:
         return float(sub.obs_noise)
-    vocab = ltm.attributes if ltm is not None else None
     return default_obs_noise(sub.attribute_kind, vocab, sub.id in wm.decision_variables)
 
 
@@ -133,22 +109,19 @@ def graph_channels(wm: WorkingMemory, keys: set[str] | None = None) -> dict[str,
 
 def initial_states(subentity_ids: list[str], wm: WorkingMemory, ctx: ProcessContext,
                    drifts: dict[str, float] | None = None) -> dict[str, InitialState]:
+    """Today's deviation (filtered or predicted) for each subentity, its trend, and its level noise."""
     dev = wm.deviations
-    step = dev.step_of(ctx.now)
-    window = int(ctx.config.propagation.kernel_window_steps)
+    today = ctx.today
     out: dict[str, InitialState] = {}
     for sid in subentity_ids:
         sub = wm.graph.subentities.get(sid)
-        z = dev.z_at(sid, step)
-        incs = dev.increments(sid, step, window) if z is not None else np.zeros(0)
-        out[sid] = InitialState(z_now=float(z) if z is not None else 0.0,
+        out[sid] = InitialState(z_now=dev.z(sid, today),
                                 drift=float((drifts or {}).get(sid, 0.0)),
-                                level_noise=float(sub.level_noise) if sub is not None and sub.level_noise is not None else None,
-                                past_dz=[float(x) for x in incs] if len(incs) else [])
+                                level_noise=float(sub.level_noise) if sub is not None and sub.level_noise is not None else None)
     return out
 
 
-def build_system(channels: list[Channel], wm: WorkingMemory, ctx: ProcessContext, horizon_steps: int,
+def build_system(channels: list[Channel], wm: WorkingMemory, ctx: ProcessContext, horizon_days: int,
                  extra_subentities: list[str] | None = None, drifts: dict[str, float] | None = None) -> PropagationSystem:
     sids: list[str] = []
     for ch in channels:
@@ -161,35 +134,53 @@ def build_system(channels: list[Channel], wm: WorkingMemory, ctx: ProcessContext
     for s in extra_subentities or []:
         if s not in sids and s in wm.graph.subentities:
             sids.append(s)
-    return PropagationSystem(subentity_ids=sids, channels=channels, step_days=ctx.step_days,
-                             horizon_steps=int(horizon_steps), initial=initial_states(sids, wm, ctx, drifts))
+    return PropagationSystem(subentity_ids=sids, channels=channels, horizon_days=int(horizon_days),
+                             initial=initial_states(sids, wm, ctx, drifts), history=wm.deviations,
+                             today=ctx.today, min_delay_days=min_delay_of(ctx))
 
 
 def horizon_for(ctx: ProcessContext) -> int:
-    h = ctx.notes.get("horizon_steps")
-    return int(h) if h is not None else int(ctx.config.time.horizon_steps)
+    h = ctx.notes.get("horizon_days")
+    return int(h) if h is not None else int(ctx.config.time.horizon_days)
 
 
-def steps_until(ctx: ProcessContext, at, minimum: int = 1) -> int:
-    days = (at - ctx.now).total_seconds() / 86400.0
-    return max(minimum, int(math.ceil(days / ctx.step_days - 1e-9)))
+def days_until(ctx: ProcessContext, at: datetime | None, minimum: int = 1) -> int:
+    """Whole days from now (day 0) to `at`; a time at or before now starts on day 1."""
+    if at is None:
+        return minimum
+    dev = ctx.wm.deviations
+    return max(minimum, dev.day_of(at) - ctx.today)
 
 
-def frame_payload(result: Any, step: int, threshold: float = 0.05) -> tuple[dict[str, float], dict[str, float]]:
-    """Median z per subentity and median flow per channel at a step, above a threshold."""
-    zs = np.median(result.z[:, :, step], axis=0)
+def frame_days(horizon: int, max_frames: int) -> list[int]:
+    """At most max_frames days, evenly spaced over 0..horizon, always including the first and last."""
+    if horizon <= 0:
+        return [0]
+    n = max(2, int(max_frames))
+    if horizon + 1 <= n:
+        return list(range(horizon + 1))
+    out = sorted({int(round(i * horizon / (n - 1))) for i in range(n)})
+    return out
+
+
+def frame_payload(result: Any, day: int, threshold: float = 0.05) -> tuple[dict[str, float], dict[str, float]]:
+    """Median z per subentity and median flow per channel on a day, above a threshold."""
+    zs = np.median(result.z[:, :, day], axis=0)
     z = {sid: round(float(zs[i]), 4) for sid, i in result.subentity_index.items() if abs(zs[i]) >= threshold}
     flow: dict[str, float] = {}
     if result.channel_contrib is not None:
-        fs = np.median(result.channel_contrib[:, :, step], axis=0)
+        fs = np.median(result.channel_contrib[:, :, day], axis=0)
         flow = {k: round(float(fs[c]), 4) for k, c in result.channel_index.items() if abs(fs[c]) >= threshold}
     return z, flow
 
 
 def emit_frames(ctx: ProcessContext, phase: Any, run_id: str, result: Any, refs: list[str] | None = None) -> None:
-    """propagation.frame events, at most horizon_steps + 1 per run."""
-    if result is None or not getattr(ctx.tracer, "enabled", True):
+    """propagation.frame events, at most propagation.max_frames per run (§10)."""
+    if result is None or not getattr(ctx.tracer, "enabled", True) or getattr(ctx.tracer, "muted", 0):
         return
-    for t in range(result.z.shape[2]):
+    if type(ctx.tracer).__name__ == "NullTracer":
+        return
+    H = result.z.shape[2] - 1
+    for t in frame_days(H, int(ctx.config.propagation.max_frames)):
         z, flow = frame_payload(result, t)
-        ctx.tracer.emit(phase, "propagation.frame", refs=refs or [], run_id=run_id, step=t, z=z, flow=flow)
+        ctx.tracer.emit(phase, "propagation.frame", refs=refs or [], run_id=run_id, day=t, z=z, flow=flow)

@@ -1,8 +1,8 @@
 """Time, kernels, and time states (§6.4).
 
-The kernel answers the notes' "lag, delay, duration": delay is the dead time before any
-effect, lag is the time from onset to peak, and duration is how long the effect lasts after
-its peak.
+The kernel answers the notes' "lag, delay, duration": delay is the dead time before any effect
+(at least one day), lag is the time from onset to peak, and duration is how long the effect takes
+to fade after its peak (about 95% gone after one duration). Everything is on a daily grid (D13).
 """
 
 from __future__ import annotations
@@ -16,7 +16,6 @@ from pydantic import BaseModel, ConfigDict, model_validator
 from axelrod_wm.core.distributions import Distribution, Gamma, parse_distribution
 
 KERNEL_CV = 0.3
-ZERO_LAG = 1e-6   # steps; a shorter lag counts as zero ("l = 0 jumps straight to 1")
 
 
 class Bitemporal(BaseModel):
@@ -44,8 +43,8 @@ def gamma_from_mean(mean_days: float, cv: float = KERNEL_CV) -> Gamma:
 
 
 class KernelSpec(BaseModel):
-    """Step response of one channel, in days. It is zero before `delay`, rises to 1 over
-    `lag`, then fades to 0 over `duration`. duration=None means the effect is permanent."""
+    """Step response of one channel, in days. It is zero before `delay`, rises linearly over
+    `lag`, then fades over `duration`. duration=None means the effect is permanent."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -97,61 +96,35 @@ def parse_kernel(data: Any) -> KernelSpec:
     return KernelSpec.model_validate(data)
 
 
-def smoothstep(s: np.ndarray) -> np.ndarray:
-    s = np.clip(s, 0.0, 1.0)
-    return s * s * (3.0 - 2.0 * s)
+def kernel_days(delay: float, lag: float, duration: float | None, min_delay: int = 1) -> tuple[int, int, float]:
+    """(d, l, lam) on the daily grid: delay and lag rounded to whole days and floored at
+    `min_delay` and 1, and lam = exp(-3 / duration), or 1 for a permanent effect (§6.4)."""
+    d = max(int(min_delay), int(round(float(delay))))
+    l = max(1, int(round(float(lag))))
+    if duration is None or not np.isfinite(duration):
+        lam = 1.0
+    else:
+        lam = float(np.exp(-3.0 / max(float(duration), 1e-9)))
+    return d, l, lam
 
 
-def step_response(delay: float, lag: float, duration: float | None,
-                  n_steps: int, step_days: float, shape: str = "ramp_decay") -> np.ndarray:
-    """Return g[tau] for tau = 0..n_steps. Convert d, l, D from days to steps first.
-    Default shape:
-        g = 0                            for tau < d
-        g = smoothstep((tau - d) / l)    for d <= tau < d + l   (l = 0 jumps straight to 1)
-        g = exp(-3 * (tau - d - l) / D)  for tau >= d + l, when D is given
-        g = 1                            for tau >= d + l, when D is None
+def step_response(d: int, l: int, D: float | None, n_days: int) -> np.ndarray:
+    """Reference definition, used by tests. Returns g[tau] for tau = 0..n_days, with integer
+    days d >= 1 and l >= 1 (sampled values are rounded and floored at 1):
+        g = 0                                   for tau < d
+        g = (tau - d + 1) / l                   for d <= tau <= d + l - 1   (peak 1 at tau = d + l - 1)
+        g = lam ** (tau - (d + l - 1))          for tau >= d + l, lam = exp(-3 / D), when D is given
+        g = 1                                   for tau >= d + l, when D is None (lam = 1)
     """
-    if shape != "ramp_decay":
-        raise ValueError(f"unknown kernel shape: {shape}")
-    tau = np.arange(n_steps + 1, dtype=float)
-    d = float(delay) / step_days
-    l = float(lag) / step_days
-    g = np.zeros_like(tau)
-    if l > ZERO_LAG:
-        rising = (tau >= d) & (tau < d + l)
-        g[rising] = smoothstep((tau[rising] - d) / l)
-    if l <= ZERO_LAG:
-        l = 0.0
+    d = max(1, int(d))
+    l = max(1, int(l))
+    lam = 1.0 if D is None else float(np.exp(-3.0 / max(float(D), 1e-9)))
+    tau = np.arange(n_days + 1)
+    g = np.zeros(n_days + 1)
+    rising = (tau >= d) & (tau <= d + l - 1)
+    g[rising] = (tau[rising] - d + 1) / l
     after = tau >= d + l
-    if duration is None:
-        g[after] = 1.0
-    else:
-        dd = max(float(duration) / step_days, 1e-9)
-        g[after] = np.exp(-3.0 * (tau[after] - d - l) / dd)
-    return g
-
-
-def step_response_batch(delay_steps: np.ndarray, lag_steps: np.ndarray, dur_steps: np.ndarray | None,
-                        n_steps: int) -> np.ndarray:
-    """Vectorized step responses. Inputs are in steps, shape [k]; dur_steps may contain inf for
-    permanent effects. Returns [k, n_steps + 1]."""
-    tau = np.arange(n_steps + 1, dtype=float)[None, :]
-    d = np.asarray(delay_steps, dtype=float)[:, None]
-    l = np.asarray(lag_steps, dtype=float)[:, None]
-    g = np.zeros((d.shape[0], n_steps + 1))
-    l = np.where(l > ZERO_LAG, l, 0.0)
-    with np.errstate(divide="ignore", invalid="ignore"):
-        s = np.where(l > 0, (tau - d) / np.where(l > 0, l, 1.0), 1.0)
-    rising = (tau >= d) & (tau < d + l)
-    g = np.where(rising, smoothstep(s), g)
-    after = tau >= d + l
-    if dur_steps is None:
-        decay = np.ones_like(g)
-    else:
-        dd = np.asarray(dur_steps, dtype=float)[:, None]
-        with np.errstate(over="ignore", invalid="ignore"):
-            decay = np.where(np.isinf(dd), 1.0, np.exp(-3.0 * (tau - d - l) / np.maximum(dd, 1e-9)))
-    g = np.where(after, decay, g)
+    g[after] = lam ** (tau[after] - (d + l - 1)).astype(float)
     return g
 
 
@@ -160,9 +133,8 @@ __all__ = [
     "TimeState",
     "KernelSpec",
     "gamma_from_mean",
+    "kernel_days",
     "parse_kernel",
     "parse_distribution",
     "step_response",
-    "step_response_batch",
-    "smoothstep",
 ]

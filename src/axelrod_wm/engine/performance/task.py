@@ -100,7 +100,7 @@ class PerformanceTask:
         ctx = eng.context(learn=False, now=now)
         ctx.scope = thesis.id
         ctx.overlay = GraphOverlay(eng.wm, scope=thesis.id)
-        ctx.notes["horizon_steps"] = max(1, int(math.ceil(thesis.horizon_days / ctx.step_days - 1e-9)))
+        ctx.notes["horizon_days"] = max(1, int(math.ceil(thesis.horizon_days - 1e-9)))
         ctx.notes["targets"] = list(thesis.targets)
         n_posed = eng.wm.forecast_layer.pose_counts.get(thesis.id, 0) + 1
         ctx.notes["forecast_id"] = f"FC-{thesis.id}-{n_posed}"
@@ -123,6 +123,16 @@ class PerformanceTask:
             ctx.tracer.emit(Phase.COUPLE, "couple.done", refs=[s.id] + s.network_ids, scenario_id=s.id, name=s.name,
                             weight=round(s.weight, 6))
         forecast = comp["unifier"].combine(thesis, scenarios, coupled, baseline, local, networks, ctx)  # goal 3
+        # coarser targets (entities, superentities, sectors, categories) from the same scenario mixture
+        from axelrod_wm.engine.performance.groups import EffectMixture, group_forecasts, movers
+
+        mix = EffectMixture(scenarios, coupled, baseline, int(ctx.config.propagation.samples),
+                            int(ctx.notes["horizon_days"]))
+        groups, densities = group_forecasts(thesis, list(forecast.targets), mix, wm, ltm)
+        shocked = {op.target.subentity_id for op in thesis.event.ops
+                   if getattr(op, "op", "") == "change_value" and getattr(op.target, "kind", "") == "concrete"}
+        forecast = forecast.model_copy(update={"groups": groups, "effect_density": densities,
+                                               "movers": movers(mix, coupled, shocked)})
         if scenarios:
             from axelrod_wm.engine.regressors import emit_frames
 
@@ -142,7 +152,7 @@ class PerformanceTask:
             on = coupler.couple(mem, forced, shocks, shared.model, ctx, n_samples=n)
             off = coupler.couple(mem, forced, [], shared.model, ctx, n_samples=n)
             eff = on.minus(off)
-            H = eff.horizon_steps
+            H = eff.horizon_days
             return {t: eff.median_z(t, H) for t in forecast.targets if eff.has(t)}
 
         ctx.notes["ablate"] = ablate
@@ -161,7 +171,7 @@ class PerformanceTask:
         layer = eng.wm.forecast_layer
         view = ForecastStateView(thesis_id=thesis.id, forecast=forecast, explanation=explanation,
                                  thesis=thesis.model_dump(mode="json"))
-        with eng.mutator.begin(f"pose:{thesis.id}", now=ctx.now) as txn:
+        with eng.mutator.begin(f"pose:{thesis.id}", at=ctx.now) as txn:
             if thesis.id in layer.by_thesis:
                 txn.remove("forecast_layer", thesis.id)
             txn.add("forecast_layer", view)

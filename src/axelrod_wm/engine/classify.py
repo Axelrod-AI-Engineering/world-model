@@ -11,6 +11,7 @@ from axelrod_wm.core.evidence import Origin
 from axelrod_wm.core.ids import slugify
 from axelrod_wm.core.interaction import EdgeDynamics
 from axelrod_wm.core.taxonomy import (
+    AttributeVocabulary,
     Generalization,
     Signature,
     Taxonomy,
@@ -30,7 +31,8 @@ if TYPE_CHECKING:
 
 
 def collection_for(kind: TaxonomyKind) -> str:
-    return "generalizations.object" if kind == TaxonomyKind.OBJECT else "generalizations.interaction"
+    return ("ltm.object_generalizations.taxonomy.nodes" if kind == TaxonomyKind.OBJECT
+            else "ltm.interaction_generalizations.taxonomy.nodes")
 
 
 def item_of(kind: TaxonomyKind, item_id: str, graph: CausalGraph, ltm: LongTermMemory) -> Any:
@@ -38,7 +40,7 @@ def item_of(kind: TaxonomyKind, item_id: str, graph: CausalGraph, ltm: LongTermM
         return graph.interactions[item_id]
     if item_id in graph.entities:
         return graph.entities[item_id]
-    return ltm.patterns.patterns[item_id]
+    return ltm.object_generalizations.patterns[item_id]
 
 
 def item_features(kind: TaxonomyKind, item_id: str, graph: CausalGraph, ltm: LongTermMemory) -> dict[str, list[str]]:
@@ -58,14 +60,15 @@ def node_signature(tax: Taxonomy, gen_id: str, graph: CausalGraph, ltm: LongTerm
 
 
 def descend(tax: Taxonomy, feats: dict[str, list[str]], graph: CausalGraph, ltm: LongTermMemory,
-            start: str | None = None, min_score: float = 0.5) -> list[str]:
+            start: str | None = None, min_score: float = 0.5, vocab: AttributeVocabulary | None = None) -> list[str]:
     """Greedy descent: argmax over children of signature.match (ties: support, then id)."""
+    vocab = vocab if vocab is not None else AttributeVocabulary(kinds={})
     node = start or tax.root_id
     path = tax.path_from_root(node)
     while tax.nodes[node].child_ids:
         best: tuple[float, float, str] | None = None
         for child in tax.children(node):
-            score = node_signature(tax, child.id, graph, ltm).match(feats, ltm.attributes)
+            score = node_signature(tax, child.id, graph, ltm).match(feats, vocab)
             key = (score, child.stats.support, child.id)
             if best is None or key[0] > best[0] or (key[0] == best[0] and (key[1] > best[1] or (
                     key[1] == best[1] and key[2] < best[2]))):
@@ -95,7 +98,7 @@ class TaxonomyDescentClassifier(Classifier):
             path = tax.path_from_root(stored)
         else:
             feats = features_of(item, graph)
-            path = descend(tax, feats, graph, ltm)
+            path = descend(tax, feats, graph, ltm, vocab=ctx.vocab)
             node = path[-1]
             self._attach(taxonomy, item_id, node, ctx, txn)
         prior_source = tax.deepest_supported(path, ctx.recall_threshold)
@@ -114,12 +117,12 @@ class TaxonomyDescentClassifier(Classifier):
     def _attach(self, kind: TaxonomyKind, item_id: str, node: str, ctx: ProcessContext,
                 txn: MutationTxn | None) -> None:
         graph = ctx.wm.graph
-        coll = {TaxonomyKind.INTERACTION: "interactions"}.get(kind)
+        coll = {TaxonomyKind.INTERACTION: "wm.graph.interactions"}.get(kind)
         if coll is None:
-            coll = "entities" if item_id in graph.entities else "patterns"
+            coll = "wm.graph.entities" if item_id in graph.entities else "ltm.object_generalizations.patterns"
         if txn is None:
-            if ctx.overlay is not None and coll in ("entities", "interactions"):
-                target = ctx.overlay.graph.entities if coll == "entities" else ctx.overlay.graph.interactions
+            if ctx.overlay is not None and coll in ("wm.graph.entities", "wm.graph.interactions"):
+                target = ctx.overlay.graph.entities if coll == "wm.graph.entities" else ctx.overlay.graph.interactions
                 target[item_id] = target[item_id].model_copy(update={"generalization_id": node})
             return
         tax = ctx.ltm.taxonomy(kind)
@@ -136,7 +139,7 @@ class TaxonomyDescentClassifier(Classifier):
         provided: dict[str, list[str]] = ctx.notes.get("new_subentities", {})
         graph = ctx.wm.graph
         ltm = ctx.ltm
-        tax = ltm.object_taxonomy
+        tax = ltm.object_generalizations.taxonomy
         filled: set[str] = ctx.notes.setdefault("filled_subentities", set())
         for sid in entity.subentity_ids:
             if sid not in provided or sid in filled or sid not in graph.subentities:
@@ -144,7 +147,7 @@ class TaxonomyDescentClassifier(Classifier):
             filled.add(sid)
             given = set(provided[sid])
             sub = graph.subentities[sid]
-            family = sub.posterior.family if "prior" in given or "family" in given else ltm.attributes.family(sub.attribute_kind)
+            family = sub.posterior.family if "prior" in given or "family" in given else ctx.vocab.family(sub.attribute_kind)
             prior, scale, source = None, None, None
             # 2. the entity's generalization: deepest supported node with statistics for the kind
             for gid in reversed(path):
@@ -180,14 +183,14 @@ class TaxonomyDescentClassifier(Classifier):
             fields["anchor"] = final_prior.link_moments()[0]
             fields["prior_source_id"] = source if "prior" not in given else "op"
             if txn is not None:
-                txn.update("subentities", sid, **fields)
+                txn.update("wm.graph.subentities", sid, **fields)
             elif ctx.overlay is not None:
                 ctx.overlay.graph.subentities[sid] = sub.model_copy(update=fields)
 
     def _fill_interaction(self, iid: str, prior_source: str, ctx: ProcessContext, txn: MutationTxn | None) -> None:
         provided: dict[str, list[str]] = ctx.notes.get("new_interactions", {})
         given = set(provided.get(iid, []))
-        tax = ctx.ltm.interaction_taxonomy
+        tax = ctx.ltm.interaction_generalizations.taxonomy
         node = tax.nodes[prior_source]
         dyn, existence = node.prior_dynamics()
         inter = ctx.wm.graph.interactions[iid]
@@ -204,7 +207,7 @@ class TaxonomyDescentClassifier(Classifier):
         if "existence" not in given:
             fields["existence"] = existence
         if txn is not None:
-            txn.update("interactions", iid, **fields)
+            txn.update("wm.graph.interactions", iid, **fields)
         elif ctx.overlay is not None:
             ctx.overlay.graph.interactions[iid] = inter.model_copy(update=fields)
 
@@ -260,34 +263,53 @@ class SplitOnSharedFeatureGrower(TaxonomyGrower):
             return []
         candidates.sort(key=lambda x: (-x[0], x[1]))
         _, (key, value) = candidates[0]
-        group = sorted(members[(key, value)])
+        splits = [(key, value, sorted(members[(key, value)]))]
+        # DECISION: every non-leaf node keeps two or more children (§14.5), so a node's first split waits
+        # until a second, disjoint group of its remaining instances also shares a feature value; then both
+        # children are created together.
+        if not node.child_ids:
+            rest = [i for i in node.instance_ids if i not in splits[0][2]]
+            second = None
+            for _, kv in candidates[1:]:
+                g2 = sorted(i for i in members[kv] if i in rest)
+                if len(g2) >= rec + 1:
+                    second = (kv[0], kv[1], g2)
+                    break
+            if second is None:
+                return []
+            splits.append(second)
         prefix = "gen:obj:" if taxonomy.kind == TaxonomyKind.OBJECT else "gen:int:"
         tail = gen_id.split(":")[-1]
-        new_id = f"{prefix}{tail}__{slugify(key)}_{slugify(value)}"
-        k = 2
-        while new_id in taxonomy.nodes:
-            new_id = f"{prefix}{tail}__{slugify(key)}_{slugify(value)}_{k}"
-            k += 1
-        share = len(group) / max(len(node.instance_ids), 1)
-        stats = node.stats.model_copy(deep=True)
-        stats.support = node.stats.support * share
-        child = Generalization(id=new_id, kind=taxonomy.kind, name=f"{node.name} ({key}={value})", parent_id=gen_id,
-                               signature=Signature(required={key: [value]}), stats=stats, instance_ids=group,
-                               origin=Origin.INFERENCE)
         coll = collection_for(taxonomy.kind)
-        txn.add(coll, child)
-        txn.update(coll, gen_id, child_ids=list(node.child_ids) + [new_id],
-                   instance_ids=[i for i in node.instance_ids if i not in group])
-        for iid in group:
-            if taxonomy.kind == TaxonomyKind.INTERACTION:
-                txn.update("interactions", iid, generalization_id=new_id)
-            elif iid in graph.entities:
-                txn.update("entities", iid, generalization_id=new_id)
-            elif iid in ltm.patterns.patterns:
-                txn.update("patterns", iid, generalization_id=new_id)
-        ctx.tracer.emit(Phase.GENERALIZE, "generalize.split", refs=[gen_id, new_id], parent=gen_id, child=new_id,
-                        feature=f"{key}={value}", instances=group)
-        return [new_id]
+        created = []
+        moved: set[str] = set()
+        for key, value, group in splits:
+            new_id = f"{prefix}{tail}__{slugify(key)}_{slugify(value)}"
+            k = 2
+            while new_id in taxonomy.nodes or new_id in created:
+                new_id = f"{prefix}{tail}__{slugify(key)}_{slugify(value)}_{k}"
+                k += 1
+            share = len(group) / max(len(node.instance_ids), 1)
+            stats = node.stats.model_copy(deep=True)
+            stats.support = node.stats.support * share
+            child = Generalization(id=new_id, kind=taxonomy.kind, name=f"{node.name} ({key}={value})", parent_id=gen_id,
+                                   signature=Signature(required={key: [value]}), stats=stats, instance_ids=group,
+                                   origin=Origin.INFERENCE)
+            txn.add(coll, child)
+            for iid in group:
+                if taxonomy.kind == TaxonomyKind.INTERACTION:
+                    txn.update("wm.graph.interactions", iid, generalization_id=new_id)
+                elif iid in graph.entities:
+                    txn.update("wm.graph.entities", iid, generalization_id=new_id)
+                elif iid in ltm.object_generalizations.patterns:
+                    txn.update("ltm.object_generalizations.patterns", iid, generalization_id=new_id)
+            ctx.tracer.emit(Phase.GENERALIZE, "generalize.split", refs=[gen_id, new_id], parent=gen_id, child=new_id,
+                            feature=f"{key}={value}", instances=group)
+            created.append(new_id)
+            moved |= set(group)
+        txn.update(coll, gen_id, child_ids=list(node.child_ids) + created,
+                   instance_ids=[i for i in node.instance_ids if i not in moved])
+        return created
 
 
 @register("taxonomy_grower", "none")

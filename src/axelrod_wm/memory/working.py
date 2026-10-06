@@ -1,11 +1,10 @@
-"""Working memory: the current state of the graph (§6.12)."""
+"""Working memory: the current state of the graph and the daily state of every subentity (§6.12)."""
 
 from __future__ import annotations
 
 import math
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 
-import numpy as np
 from pydantic import BaseModel, ConfigDict
 
 from axelrod_wm.core.evidence import Evidence
@@ -14,94 +13,144 @@ from axelrod_wm.core.hypothesis import Hypothesis
 from axelrod_wm.core.ids import IdFactory
 from axelrod_wm.core.serialization import StrSet
 from axelrod_wm.engine.explain_records import Explanation
+from axelrod_wm.engine.kernels import KernelRecursion
 from axelrod_wm.engine.performance.records import Forecast
 from axelrod_wm.events.graph_update import GraphOp, Specificity
 
 
+def point_key(subentity_id: str, day: int) -> str:
+    return f"{subentity_id}|{day}"
+
+
+def split_point_key(key: str) -> tuple[str, int]:
+    sid, _, day = key.rpartition("|")
+    return sid, int(day)
+
+
+class DeviationPoint(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    z: float                          # filtered if observed that day, predicted otherwise
+    var: float                        # variance of z (standardized units squared)
+    level: float                      # the local level a_j at the end of the day
+    innovation: float | None = None   # standardized; None when not observed that day
+    observed: bool = False
+
+
+class DeviationSeries:
+    """Read-only view of one subentity's z by day; returns 0.0 before the history starts."""
+
+    __slots__ = ("hist", "sid", "_prefix")
+
+    def __init__(self, hist: DeviationHistory, subentity_id: str) -> None:
+        self.hist = hist
+        self.sid = subentity_id
+        self._prefix = subentity_id + "|"
+
+    @property
+    def first_day(self) -> int:
+        return self.hist.first_kept_day
+
+    def __getitem__(self, day: int) -> float:
+        p = self.hist.points.get(self._prefix + str(day))
+        return p.z if p is not None else 0.0
+
+    def get(self, day: int) -> DeviationPoint | None:
+        return self.hist.points.get(self._prefix + str(day))
+
+
 class DeviationHistory(BaseModel):
-    """Standardized deviations and innovations per subentity on the propagation grid."""
+    """The daily state of every subentity (D13). Every processed day has a point for every
+    subentity, observed or predicted. Keyed "<subentity id>|<day>" so that a change set records only
+    the points it adds; days older than history.keep_days are pruned at consolidation."""
 
     model_config = ConfigDict(extra="forbid")
 
-    origin_date: datetime
-    step_days: float
-    z: dict[str, dict[int, float]] = {}             # subentity -> step -> deviation
-    innovation: dict[str, dict[int, float]] = {}    # subentity -> step -> standardized innovation
+    origin_date: date                 # day 0
+    points: dict[str, DeviationPoint] = {}
+    first_kept_day: int = 0           # the oldest day still kept after pruning
 
-    def step_of(self, t: datetime) -> int:
-        return int(math.floor((t - self.origin_date).total_seconds() / (self.step_days * 86400.0)))
+    # -- days ---------------------------------------------------------------------------------
+    def day_of(self, t: datetime) -> int:
+        """Day index of a UTC timestamp (day 0 is origin_date)."""
+        if t.tzinfo is None:
+            t = t.replace(tzinfo=UTC)
+        return (t.astimezone(UTC).date() - self.origin_date).days
 
-    def step_start(self, step: int) -> datetime:
-        return self.origin_date + timedelta(days=self.step_days * step)
+    def date_of(self, day: int) -> date:
+        return self.origin_date + timedelta(days=int(day))
 
-    def observed_steps(self, subentity_id: str) -> list[int]:
-        return sorted(self.z.get(subentity_id, {}))
+    def day_of_date(self, d: date) -> int:
+        return (d - self.origin_date).days
 
-    def last_step(self, subentity_id: str) -> int | None:
-        d = self.z.get(subentity_id)
-        return max(d) if d else None
+    def day_start(self, day: int) -> datetime:
+        return datetime.combine(self.date_of(day), time(0, 0, 0), tzinfo=UTC)
 
-    def z_at(self, subentity_id: str, step: int) -> float | None:
-        """Forward-filled deviation at `step`; before the first observation, the first value.
-        None if the subentity was never observed."""
-        d = self.z.get(subentity_id)
-        if not d:
-            return None
-        best_step, best = None, None
-        first_step = None
-        for s in d:
-            if first_step is None or s < first_step:
-                first_step = s
-            if s <= step and (best_step is None or s > best_step):
-                best_step, best = s, d[s]
-        if best is None:
-            return d[first_step]  # type: ignore[index]
-        return best
+    def day_end(self, day: int) -> datetime:
+        return datetime.combine(self.date_of(day), time(23, 59, 59), tzinfo=UTC)
 
-    def current_z(self, subentity_id: str) -> float:
-        d = self.z.get(subentity_id)
-        if not d:
-            return 0.0
-        return d[max(d)]
+    # -- points -------------------------------------------------------------------------------
+    def point(self, subentity_id: str, day: int) -> DeviationPoint | None:
+        return self.points.get(point_key(subentity_id, day))
 
-    def dense(self, subentity_id: str, start_step: int, end_step: int) -> np.ndarray:
-        """Forward-filled deviations for steps start..end inclusive (backfilled before the first
-        observation, zeros if never observed)."""
-        n = end_step - start_step + 1
-        out = np.zeros(max(n, 0))
-        d = self.z.get(subentity_id)
-        if not d or n <= 0:
-            return out
-        steps = sorted(d)
-        vals = [d[s] for s in steps]
-        j = -1
-        cur = vals[0]
-        for k in range(n):
-            s = start_step + k
-            while j + 1 < len(steps) and steps[j + 1] <= s:
-                j += 1
-                cur = vals[j]
-            out[k] = cur if j >= 0 else vals[0]
+    def z(self, subentity_id: str, day: int) -> float:
+        p = self.points.get(point_key(subentity_id, day))
+        return p.z if p is not None else 0.0
+
+    def z_at(self, subentity_id: str, day: int) -> float | None:
+        """z on that day, or None if there is no point (a day not processed, or pruned)."""
+        p = self.points.get(point_key(subentity_id, day))
+        return p.z if p is not None else None
+
+    def series(self, subentity_id: str) -> DeviationSeries:
+        return DeviationSeries(self, subentity_id)
+
+    def window_change(self, subentity_id: str, day: int, width_days: int) -> float:
+        """z(day) - z(day - width_days)."""
+        return self.z(subentity_id, day) - self.z(subentity_id, day - width_days)
+
+    def window_innovation(self, subentity_id: str, day: int, width_days: int) -> float:
+        """Sum of the innovations observed in (day - width_days, day], divided by the square root
+        of their count; 0 if there are none."""
+        total, n = 0.0, 0
+        for k in range(int(width_days)):
+            p = self.points.get(point_key(subentity_id, day - k))
+            if p is not None and p.observed and p.innovation is not None:
+                total += p.innovation
+                n += 1
+        return total / math.sqrt(n) if n else 0.0
+
+    def observed_days(self, subentity_id: str, start: int, end: int) -> list[int]:
+        """Days in [start, end] on which the subentity was observed."""
+        out = []
+        for d in range(int(start), int(end) + 1):
+            p = self.points.get(point_key(subentity_id, d))
+            if p is not None and p.observed:
+                out.append(d)
         return out
 
-    def increments(self, subentity_id: str, end_step: int, n: int) -> np.ndarray:
-        """dz for steps end-n+1..end (oldest first). Steps with no observation count as zero change,
-        and the first observation counts as no change."""
-        dense = self.dense(subentity_id, end_step - n, end_step)
-        return np.diff(dense) if dense.size > 1 else np.zeros(max(n, 0))
+    def array(self, subentity_id: str, start: int, end: int) -> list[float]:
+        """z for days start..end inclusive (0.0 where there is no point)."""
+        pre = subentity_id + "|"
+        pts = self.points
+        out = []
+        for d in range(int(start), int(end) + 1):
+            p = pts.get(pre + str(d))
+            out.append(p.z if p is not None else 0.0)
+        return out
 
-    def window_change(self, subentity_id: str, step: int, width: int) -> float:
-        a = self.z_at(subentity_id, step)
-        b = self.z_at(subentity_id, step - width)
-        if a is None or b is None:
-            return 0.0
-        return a - b
 
-    def window_innovation(self, subentity_id: str, step: int, width: int) -> float:
-        """Sum of the last `width` innovations divided by sqrt(width)."""
-        d = self.innovation.get(subentity_id, {})
-        total = sum(d.get(step - k, 0.0) for k in range(width))
-        return total / math.sqrt(max(width, 1))
+class ChannelState(BaseModel):
+    """A channel's regressor at its mean kernel, kept current day by day (§6.4). Every interaction
+    has one per direction from the moment it is created: construction, an add_interaction op, a
+    promotion, or a refinement builds it with KernelRecursion.warm_start() at the current day.
+    After record(day), the recursion is at day + 1."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    channel_id: str                   # interaction id, or "<interaction id>:rev" for a reverse channel
+    recursion: KernelRecursion
+    day: int = 0                      # the day the recursion's phi refers to
 
 
 class PendingRefinement(BaseModel):
@@ -154,12 +203,15 @@ class ForecastLayer(BaseModel):
 class ActivityRecord(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    step: int
-    interaction_id: str
-    contribution: float               # standardized contribution mu * phi
-    target_move: float | None         # observed window change of the target, if observed
-    channel_key: str | None = None
+    day: int
+    channel_id: str
+    contribution_change: float        # change in mu * m * phi over the last abduction.window_days
+    target_move: float                # the target's window change over the same days (observed or predicted)
     target_id: str | None = None
+
+
+def activity_key(day: int, channel_id: str) -> str:
+    return f"{day}|{channel_id}"
 
 
 class EpisodeEntry(BaseModel):
@@ -173,29 +225,36 @@ class EpisodeEntry(BaseModel):
     tags: list[str]
     signature: StrSet                 # from signature_of(), including tag: and etype: keys
     routine: bool                     # True for event_type "data_release" with no move of 1 standard unit or more
-    explanation_id: str | None
-    z_before: dict[str, float] = {}   # deviations of observed subentities before the event
-    z_after: dict[str, float] = {}
     touched_entity_ids: list[str] = []
+    explanation_id: str | None = None
 
 
 class WorkingMemory(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    clock: datetime
+    clock: datetime                   # the end of the last processed day
+    last_processed_day: int = -1      # day index of the clock
     graph: CausalGraph
     deviations: DeviationHistory
+    channels: dict[str, ChannelState] = {}       # channel id -> regressor state
+    channel_phi: dict[str, float] = {}           # "<channel id>|<day>" -> phi; pruned with the activity log
     hypotheses: dict[str, Hypothesis] = {}
     pending_refinements: dict[str, PendingRefinement] = {}
     forecast_layer: ForecastLayer = ForecastLayer()
-    activity_log: list[ActivityRecord] = []    # active edges since the last consolidation (§8.6)
-    fold_accumulators: dict[str, tuple[float, float]] = {}   # interaction id -> (sum phi*y, sum phi^2) this episode
-    episode_buffer: list[EpisodeEntry] = []    # applied real events since the last consolidation
+    activity_log: dict[str, ActivityRecord] = {}   # "<day>|<channel id>" -> record; rolling window (§8.8)
+    fold_accumulators: dict[str, tuple[float, float]] = {}   # interaction id -> (sum phi*y, sum phi^2) today
+    episode_buffer: list[EpisodeEntry] = []      # applied real events today
+    source_cursors: dict[str, datetime] = {}     # source name -> end of the last window already collected
+    late_queue: dict[str, int] = {}              # proposal id -> day it was due; folded first on the next processed day
     ids: IdFactory = IdFactory()
-    decision_variables: list[str] = []         # from construction (§14.1)
-    pending_episode_tags: list[str] = []       # tags for the next episode, e.g. "decision-outcome"
-    last_consolidated: date | None = None
+    decision_variables: list[str] = []           # from construction (§14.1)
+    pending_episode_tags: list[str] = []         # tags for the next episode, e.g. "decision-outcome"
     missing_relation_log: dict[str, datetime] = {}   # "<pattern>#<relation index>" -> last proposed
 
-    def touched_days(self) -> list[date]:
-        return sorted({e.at.date() for e in self.episode_buffer})
+    def processing_day(self) -> int:
+        """The next day an update run will process."""
+        return self.last_processed_day + 1
+
+    def phi(self, channel_id: str) -> float:
+        cs = self.channels.get(channel_id)
+        return cs.recursion.phi() if cs is not None else 0.0

@@ -15,7 +15,7 @@ from axelrod_wm.core.temporal import Bitemporal, KernelSpec, TimeState, gamma_fr
 from axelrod_wm.engine.interfaces import EventParser
 from axelrod_wm.engine.propagation import ShockInput
 from axelrod_wm.engine.registry import register
-from axelrod_wm.engine.regressors import obs_noise_of, regressor_cache, steps_until
+from axelrod_wm.engine.regressors import clip_of, days_until, moderator_terms, obs_noise_of
 from axelrod_wm.engine.shared import ParsedEvent
 from axelrod_wm.events.graph_update import (
     AbstractTarget,
@@ -161,7 +161,8 @@ class DefaultParser(EventParser):
         real = event.kind == EventKind.REAL
         if real and txn is None:
             raise ValueError("a real event needs a transaction")
-        step = dev.step_of(event.occurred_at)
+        day = dev.day_of(event.occurred_at)
+        processing_day = ctx.day
         temp_map: dict[str, str] = {}
         taken = set(graph.entities) | set(graph.subentities)
         new_entities: list[str] = []
@@ -199,7 +200,7 @@ class DefaultParser(EventParser):
                 final = self._final_id(f"{eid}.{slug}", taken)
                 taken.add(final)
                 temp_map[op.temp_id] = final
-                family = op.family or ltm.attributes.family(op.attribute_kind)
+                family = op.family or ctx.vocab.family(op.attribute_kind)
                 if op.prior is not None:
                     prior = op.prior
                     if op.prior.family != family:
@@ -304,21 +305,22 @@ class DefaultParser(EventParser):
             elif isinstance(op, ObserveValue):
                 sid = self._concrete(op.target, temp_map, ctx.wm.graph, f"op {idx}")
                 sub = ctx.wm.graph.subentities[sid]
-                noise = op.noise_sd if op.noise_sd is not None else obs_noise_of(sub, ctx.wm, ltm)
+                noise = op.noise_sd if op.noise_sd is not None else obs_noise_of(sub, ctx.wm, ctx.vocab)
                 observations.append((sid, op.value, float(noise), op.observed_at))
             elif isinstance(op, ChangeValue):
                 sid = self._concrete(op.target, temp_map, ctx.wm.graph, f"op {idx}")
                 sub = ctx.wm.graph.subentities[sid]
                 size, size_sd = change_size(sub, op.mode, op.delta, op.delta_sd)
+                # a shock at or before now starts on day 1, because day 0 is the current state
                 if real:
                     start = 1
                     hold = None
                 else:
-                    start = steps_until(ctx, op.at, 1)
-                    hold = (int(math.ceil(op.window_days / ctx.step_days)) if op.window_days else None)
-                shocks.append(ShockInput(subentity_id=sid, size=size, size_sd=size_sd, start_step=start,
+                    start = days_until(ctx, op.at, 1)
+                    hold = int(math.ceil(op.window_days)) if op.window_days else None
+                shocks.append(ShockInput(subentity_id=sid, size=size, size_sd=size_sd, start_day=start,
                                          persistence=op.persistence, intervention=bool(op.intervention and not real),
-                                         hold_steps=hold))
+                                         hold_days=hold))
                 if real:
                     r_sd = max(size_sd, float(cfg.learning.min_change_noise))
                     change_obs.append((sid, size, r_sd, op.at))
@@ -350,14 +352,18 @@ class DefaultParser(EventParser):
         touched_ints: list[str] = list(dict.fromkeys(named_ints))
         z_before: dict[str, float] = {}
         if observations or change_obs:
-            cache = regressor_cache(ctx.wm, ctx)
+            from axelrod_wm.engine.daily import channel_phi_today
+
             min_reg = float(cfg.learning.min_regressor)
+            clip = clip_of(ctx)
             for sid, *_ in observations + change_obs:
                 for key, inter, s, _t, dyn in graph.in_channel_items(sid):
-                    phi, _ = cache.phi(key, s, dyn, inter.parameters if key == inter.id else [], step)
+                    params = inter.parameters if key == inter.id else []
+                    mult = moderator_terms(params, dev, processing_day, clip)[0] if params else 1.0
+                    phi = mult * channel_phi_today(ctx.wm, key, processing_day)
                     if abs(phi) >= min_reg and inter.id not in touched_ints and inter.id not in new_ints:
                         touched_ints.append(inter.id)
-                z = dev.z_at(sid, step)
+                z = dev.z_at(sid, processing_day)
                 if z is not None:
                     z_before[sid] = z
         for sid, value, _noise, _at in observations:
@@ -376,7 +382,8 @@ class DefaultParser(EventParser):
                 touched_entities.append(e)
 
         parsed = ParsedEvent(
-            event_id=event.id, kind=event.kind, event_type=event.event_type, step=step, shocks=shocks,
+            event_id=event.id, kind=event.kind, event_type=event.event_type, day=day,
+            processing_day=processing_day, shocks=shocks,
             observations=observations, touched_subentity_ids=touched_subs, touched_entity_ids=touched_entities,
             new_entity_ids=new_entities, new_interaction_ids=new_ints, touched_interaction_ids=touched_ints,
             tags=list(event.tags), mentions=list(event.mentions), new_subentity_ids=new_subs,
@@ -393,22 +400,20 @@ class DefaultParser(EventParser):
         """An interaction created between a frontier pair closes the entry (§8.7 step 7)."""
         if txn is None:
             return
-        for co in ctx.ltm.frontier.for_pair(src, tgt):
+        for co in ctx.ltm.correlation_frontier.for_pair(src, tgt):
             if co.hypothesis_id and co.hypothesis_id in ctx.wm.hypotheses:
                 txn.update("hypotheses", co.hypothesis_id, status=HypothesisStatus.SUPPORTED)
-            txn.remove("frontier", co.id)
+            txn.remove("ltm.correlation_frontier.entries", co.id)
             ctx.tracer.emit(Phase.FRONTIER, "frontier.closed", refs=[co.id], comovement_id=co.id,
                             earlier=co.earlier_id, later=co.later_id)
 
 
 def _append_evidence(w: _Writer, inter: Interaction, evid: Evidence) -> None:
     """Keep the 50 most recent records and count older ones (§6.7)."""
-    cur = inter.evidence
-    if len(cur) + 1 > MAX_EVIDENCE:
-        w.update("interactions", inter.id, evidence=(list(cur) + [evid])[-MAX_EVIDENCE:],
-                 evidence_dropped=inter.evidence_dropped + len(cur) + 1 - MAX_EVIDENCE)
-    else:
-        w.append_to("interactions", inter.id, "evidence", evid)
+    over = len(inter.evidence) + 1 - MAX_EVIDENCE
+    w.append_to("interactions", inter.id, "evidence", evid, keep_last=MAX_EVIDENCE)
+    if over > 0:
+        w.update("interactions", inter.id, evidence_dropped=inter.evidence_dropped + over)
 
 
 append_evidence = _append_evidence

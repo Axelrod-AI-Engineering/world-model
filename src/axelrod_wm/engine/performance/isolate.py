@@ -30,9 +30,9 @@ def network_seeds(shared: SharedResult, wm: WorkingMemory, ctx: ProcessContext) 
     if shocks:
         seeds = list(dict.fromkeys(shocks + sorted(shared.analysis.expected_moves)))
     else:
-        step = wm.deviations.step_of(ctx.now)
-        w = int(ctx.config.frontier.window_steps)
-        seeds = [s for s in sorted(wm.graph.subentities) if abs(wm.deviations.window_change(s, step, w)) >= 0.5]
+        today = ctx.today
+        w = int(ctx.config.frontier.window_days)
+        seeds = [s for s in sorted(wm.graph.subentities) if abs(wm.deviations.window_change(s, today, w)) >= 0.5]
     return [s for s in seeds if s in wm.graph.subentities]
 
 
@@ -97,7 +97,7 @@ def residual_network(shared: SharedResult, kept: list[Network], seeds: list[str]
     keys: list[str] = []
     res = shared.analysis.result
     if res is not None and res.channel_contrib is not None:
-        med = np.median(res.channel_contrib, axis=0)                   # [channels, steps]
+        med = np.median(res.channel_contrib, axis=0)                   # [channels, days]
         for key, c in sorted(res.channel_index.items()):
             if key not in covered and float(np.max(np.abs(med[c]))) >= float(cfg.residual_min_significance):
                 keys.append(key)
@@ -126,8 +126,10 @@ class BoundSuperentityIsolator(NetworkIsolator):
     def _candidate(self, pattern_id: str, attention: float, seeds: list[str], seed_entities: set[str],
                    dist: dict[str, float], wm: WorkingMemory, ltm: LongTermMemory, ctx: ProcessContext,
                    model: PrefilledModel, prefer_members: set[str] | None = None) -> dict | None:
-        p = ltm.patterns.patterns.get(pattern_id)
-        if p is None or p.status != SuperentityStatus.ADMITTED:
+        p = ltm.object_generalizations.patterns.get(pattern_id)
+        # DECISION: a composite is not a network of its own; its parts are, and the coupler joins them
+        # across the boundary edges, so isolating the composite too would count its parts twice
+        if p is None or p.status != SuperentityStatus.ADMITTED or p.sub_pattern_ids:
             return None
         graph = wm.graph
         inst = None
@@ -168,7 +170,8 @@ class BoundSuperentityIsolator(NetworkIsolator):
         reach = max((math.exp(-dist[s]) for s in subs if s in dist), default=0.0)
         eps = set(model.network_episodes.get(inst.id, []))
         if not eps:
-            eps = {e for e in model.recalled_episode_ids if p.id in ltm.episodes.episodes[e].active_pattern_ids}
+            episodes = ltm.prior_states.episodes
+            eps = {e for e in model.recalled_episode_ids if e in episodes and p.id in episodes[e].active_pattern_ids}
         return {"pattern": p, "instance": inst, "attention": attention, "reach": reach,
                 "relevance": 0.5 * attention + 0.5 * reach, "episodes": eps}
 

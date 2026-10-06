@@ -19,7 +19,7 @@ AT = datetime(2026, 2, 9, 14, 0, tzinfo=timezone.utc)
 def ctl():
     c = make_controller()
     warm_taxonomies(c.engine)
-    c.set_time(AT)
+    c.advance_now(AT)
     return c
 
 
@@ -30,7 +30,7 @@ def _me03_event(ctl):
 def _tctx(ctl):
     from axelrod_wm.ingest.translators import TranslationContext
 
-    return TranslationContext(ctl.engine.wm, ctl.engine.ltm, ctl.now)
+    return TranslationContext(ctl.engine.wm, ctl.engine.ltm, ctl.engine.vocab, ctl.now)
 
 
 def test_refiner_writes_nothing_and_reports_specificity(ctl):
@@ -96,10 +96,11 @@ def test_relation_fills_attribute_kind_and_filters_candidates(ctl):
 
 
 def test_default_policy_review_rules(ctl):
-    data = ctl.ingest(market_event("ME-01"))      # a data observation applies automatically
-    assert data[0].status == ProposalStatus.AUTO_APPLIED
-    news = ctl.ingest(market_event("ME-02"))      # translated from text
-    assert news[0].status == ProposalStatus.PENDING and "translated from text" in news[0].review_reasons
+    data = ctl.pipeline.ingest(market_event("ME-01"), AT)    # a data release needs no review...
+    assert data[0].world_event and not data[0].needs_review
+    assert data[0].status == ProposalStatus.PENDING           # ...but a world event waits for its day
+    news = ctl.pipeline.ingest(market_event("ME-02"), AT)    # translated from text
+    assert news[0].needs_review and "translated from text" in news[0].review_reasons
     struct = ctl.submit_graph_update(real_event([{"op": "add_entity", "temp_id": "new:x", "name": "X",
                                                   "kind": "other"}], "GUE-x", AT, produced_by="analyst_bot"), "kim")
     assert struct.status == ProposalStatus.PENDING and "structural change" in struct.review_reasons
@@ -109,13 +110,15 @@ def test_default_policy_review_rules(ctl):
 
 
 def test_approve_reject_edit_defer_write_ledger_entries(ctl):
-    p1 = ctl.ingest(market_event("ME-02"))[0]
-    p2 = ctl.ingest(market_event("ME-05"))[0]
-    p3 = ctl.ingest(market_event("ME-07"))[0]
-    p4 = ctl.ingest(market_event("ME-08"))[0]
+    p1 = ctl.pipeline.ingest(market_event("ME-02"), AT)[0]
+    p2 = ctl.pipeline.ingest(market_event("ME-05"), AT)[0]
+    p3 = ctl.pipeline.ingest(market_event("ME-07"), AT)[0]
+    p4 = ctl.pipeline.ingest(market_event("ME-08"), AT)[0]
     n = len(ctl.engine.ledger.of_kind(LedgerKind.REVIEW_DECISION))
-    cs = ctl.approve(p1.id, "kim", "ok")
-    assert cs is not None and p1.status == ProposalStatus.APPROVED and p1.changeset_id == cs.id
+    v = ctl.engine.version
+    ctl.approve(p1.id, "kim", "ok")
+    # a world event is approved now and folded on its day by an update run (§7.6)
+    assert p1.status == ProposalStatus.APPROVED and p1.folded_day is None and ctl.engine.version == v
     ctl.reject(p2.id, "kim", "not convinced")
     edited = GraphUpdateEvent.model_validate({**p3.event.model_dump(mode="json"), "confidence": 0.95})
     ctl.edit(p3.id, edited, "kim")
@@ -127,3 +130,20 @@ def test_approve_reject_edit_defer_write_ledger_entries(ctl):
     assert entries[2].payload["diff"]["before"]["confidence"] == 0.85
     ctl.approve(p4.id, "kim")                     # deferred proposals can still be approved
     assert p4.status == ProposalStatus.APPROVED
+
+
+def test_model_edits_apply_on_approval(ctl):
+    p = ctl.submit_graph_update(real_event([{"op": "add_entity", "temp_id": "new:x", "name": "X", "kind": "other"}],
+                                           "GUE-x", AT, produced_by="analyst_bot"), "kim")
+    assert p.status == ProposalStatus.PENDING and not p.world_event
+    cs = ctl.approve(p.id, "kim")
+    assert cs is not None and p.changeset_id == cs.id and "x" in ctl.engine.wm.graph.entities
+
+
+def test_drawn_events_with_world_ops_are_refused(ctl):
+    from axelrod_wm.control.controller import ControllerError
+
+    with pytest.raises(ControllerError):
+        ctl.submit_graph_update(real_event([{"op": "observe_value", "target": {"kind": "concrete",
+                                             "subentity_id": "inflation.headline_cpi"}, "value": 3.0,
+                                             "observed_at": AT.isoformat()}], "GUE-w", AT), "kim")

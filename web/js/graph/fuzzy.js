@@ -84,11 +84,12 @@ export function drawRibbons(layer, items, anchor, colors, { animate = true, dura
 
 // Short-lived flashes of candidate entities with their scores (each refine step).
 export function flashCandidates(layer, candidates, position, duration = 700) {
-  const pts = (candidates ?? []).map(([id, score]) => ({ id, score, p: position(id) })).filter((d) => d.p);
+  const pts = (candidates ?? []).map((c) => (Array.isArray(c) ? c : [c, null]))
+    .map(([id, score]) => ({ id, score, p: position(id) })).filter((d) => d.p);
   const g = layer.append("g").attr("class", "cand-flash");
   g.selectAll("text").data(pts).join("text").attr("x", (d) => d.p.x).attr("y", (d) => d.p.y - 20)
     .attr("text-anchor", "middle").attr("font-size", 11).attr("font-weight", 700).attr("fill", "#4A3590")
-    .text((d) => d.score.toFixed(2));
+    .text((d) => (d.score == null ? "" : d.score.toFixed(2)));
   g.selectAll("circle").data(pts).join("circle").attr("cx", (d) => d.p.x).attr("cy", (d) => d.p.y).attr("r", 10)
     .attr("fill", "none").attr("stroke", "#7C64C4").attr("stroke-width", 2)
     .transition().duration(duration).attr("r", 34).style("opacity", 0);

@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Any
 
 from axelrod_wm.control.mutator import ChangeSet, GraphMutator, MutationTxn
+from axelrod_wm.core.taxonomy import AttributeVocabulary
 from axelrod_wm.engine.config import DEFAULT_COMPONENTS, EngineConfig
 from axelrod_wm.engine.context import ProcessContext
 from axelrod_wm.engine.registry import REGISTRIES, registry
@@ -29,6 +30,7 @@ from axelrod_wm.trace import NullTracer, Phase, Tracer
 
 class Engine:
     config: EngineConfig
+    vocab: AttributeVocabulary
     wm: WorkingMemory
     ltm: LongTermMemory
     storage: StorageBackend
@@ -38,32 +40,33 @@ class Engine:
     tracer: Tracer
     components: dict[str, Any]                 # slot name -> component
 
-    def __init__(self, config: EngineConfig, storage: StorageBackend, tracer: Tracer) -> None:
+    def __init__(self, config: EngineConfig, storage: StorageBackend, tracer: Tracer,
+                 vocab: AttributeVocabulary | None = None) -> None:
         self.config = config
         self.storage = storage
         self.tracer = tracer
-        self.wm, self.ltm = empty_state(float(config.time.propagation_step_days))
+        self.vocab = vocab or AttributeVocabulary(kinds={})
+        self.wm, self.ltm = empty_state()
         self.version = 0
         self.ledger = EventLedger(storage, clock=lambda: self.wm.clock, version=lambda: self.version)
-        self.snapshots = SnapshotStore(storage, self.ledger,
-                                       lambda: empty_state(float(config.time.propagation_step_days)))
+        self.snapshots = SnapshotStore(storage, self.ledger, empty_state)
         self.mutator = GraphMutator(self)
         self.hasher = StateHasher()
         self.state_hash = self.hasher.full(self.wm, self.ltm)
         self.components = {}
         self.initializing = False
-        self.snapshot_on_consolidation = True
         self.shared: Any = None
         self.learning: Any = None
         self.performance: Any = None
         self.structural: Any = None
 
     # -- context ---------------------------------------------------------------------------
-    def context(self, *, learn: bool, now: datetime) -> ProcessContext:
+    def context(self, *, learn: bool, now: datetime, processing_day: int | None = None) -> ProcessContext:
         self.tracer.set_context(sim_time=now, state_version=self.version)
         return ProcessContext(config=self.config, rng=make_rng(self.config.seed, self.version, "ctx"),
                               tracer=self.tracer, now=now, state_version=self.version, mutator=self.mutator,
-                              learn=learn, engine=self)
+                              vocab=self.vocab, learn=learn, processing_day=processing_day,
+                              initializing=self.initializing, engine=self)
 
     def component(self, slot: str) -> Any:
         return self.components[slot]
@@ -80,8 +83,14 @@ class Engine:
                           recorded_at=cs.recorded_at, cause=cs.cause)
         self.storage.append_version(sv)
         self.tracer.set_context(state_version=self.version)
-        phase = Phase.CONSOLIDATE if cs.cause.startswith("consolidation") else (
-            Phase.INIT if self.initializing or cs.cause in ("construction", "seeds") else Phase.FOLD)
+        if cs.cause.startswith("consolidation"):
+            phase = Phase.CONSOLIDATE
+        elif cs.cause.startswith(("predict:", "record:")):
+            phase = Phase.DAILY
+        elif self.initializing or cs.cause in ("construction", "seeds"):
+            phase = Phase.INIT
+        else:
+            phase = Phase.FOLD
         self.tracer.emit(phase, "state.version", refs=[cs.id], version=self.version, cause=cs.cause,
                          changes=len(cs.changes))
 
@@ -159,7 +168,7 @@ def _create(slot: str, config: EngineConfig, engine: Engine, made: dict[str, Any
 
 
 def build_engine(config: EngineConfig, storage: StorageBackend | None = None,
-                 tracer: Tracer | None = None) -> Engine:
+                 tracer: Tracer | None = None, vocab: AttributeVocabulary | None = None) -> Engine:
     """Create the components in dependency order and wire the tasks."""
     from axelrod_wm.engine import load_defaults
 
@@ -169,7 +178,7 @@ def build_engine(config: EngineConfig, storage: StorageBackend | None = None,
     from axelrod_wm.engine.shared import SharedProcess
 
     storage = storage if storage is not None else make_storage(config)
-    engine = Engine(config, storage, tracer or NullTracer())
+    engine = Engine(config, storage, tracer or NullTracer(), vocab=vocab)
     made: dict[str, Any] = {}
     for slot in all_slots(config):
         _create(slot, config, engine, made, [])

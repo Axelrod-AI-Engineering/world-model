@@ -49,6 +49,7 @@ class Hypothesis(BaseModel):
     from_thesis: str | None = None            # set when a hypothetical event proposed it
     comovement_id: str | None = None          # the frontier entry that owns it, if any
     sensitivity: float = 0.0                  # the last computed forecast sensitivity
+    sensitivity_at: datetime | None = None    # when it was computed (None: never)
 
     @model_validator(mode="after")
     def _fill(self) -> Hypothesis:

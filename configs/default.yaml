@@ -1,41 +1,54 @@
 # Engine configuration (§8.2). A component can be given as a name or as {name: ..., params: {...}}.
 seed: 7                 # precedence: --seed flag, then the scenario's seed, then this value
 time:
-  state_step_days: 1
-  propagation_step_days: 7
-  horizon_steps: 26     # default horizon; a thesis's horizon_days overrides it
+  step_days: 1          # everything runs on a daily grid (D13); every other time parameter is in days
+  horizon_days: 182     # default forecast horizon; a thesis's horizon_days overrides it
 thresholds:
   recognition: 3        # a candidate must exceed this support to be admitted or promoted
   recall: 4             # a generalization must exceed this support to supply priors or analogs
 propagation:
   samples: 400
-  min_delay_steps: 1
+  min_delay_days: 1
   moderator_clip: [0.0, 3.0]
-  kernel_window_steps: 104
   include_level_noise: true
+  max_frames: 60        # propagation.frame trace events per run, evenly spaced over the horizon
 learning:
-  effect_process_noise: 0.02      # random-walk sd for effects, per step
-  level_process_noise: 0.10       # random-walk sd for each subentity's local level, per step
+  effect_process_noise: 0.0075    # random-walk sd for effects, per day (about 0.02 per week)
+  level_process_noise: 0.04       # random-walk sd for each subentity's local level, per day (about 0.10 per week)
   existence_learning_rate: 0.5
   min_regressor: 0.05
   min_change_noise: 0.05          # floor on the noise of a real change_value (standardized)
+history:
+  keep_days: auto       # at least the longest delay + lag over all channels, plus 30; never below 760
 kernel_update:
+  every_days: 7
   min_observations: 8
-  window_steps: 26
+  window_days: 182
   multipliers: [0.5, 1.0, 2.0]
   step: 0.5                       # how far a kernel mean moves toward the best multiplier (geometric)
   cv_shrink: 0.9
   min_cv: 0.15
   min_log_lik_gain: 2.0           # DECISION: a rescale must beat the current kernel by this much log likelihood
 prefill:
-  drift_damping: 0.9              # drift at step t is drift * damping**t
+  trend_window_days: 28
+  max_drift_per_day: 0.03
+  drift_damping: 0.985            # drift on forecast day t is drift * damping**t (half-life about 46 days)
+episodes:
+  min_abs_z: 0.5                  # a subentity enters an episode's deltas if it moved at least this much
+  analog_span_days: 42            # a non-routine episode's response window, used by analog recall
+entity_memory:
+  entry_every_days: 7
+snapshots:
+  every_days: 30                  # plus one at the end of every update run
 attention:
-  top_k_superentities: 6
+  # DECISION: 8 rather than 6, since memory now holds 17 seeded superentities (the real actors' sectors and
+  # rivalries joined Figure 1's); with 6, an oil shock's own producer group crowded the S8/S9 rivals out
+  top_k_superentities: 8
   top_k_analogs: 5
   temperature: 0.5
   min_attention: 0.02
 isolation:
-  max_networks: 6
+  max_networks: 8                 # DECISION: raised with top_k_superentities, for the same reason
   min_relevance: 0.05
   reach_hops: 2
   residual_hops: 2
@@ -44,20 +57,23 @@ unify:
   max_scenarios: 8
   branch_hypothesis_min_voi: 0.15
   branch_probability_range: [0.15, 0.85]
-  fit_window_steps: 8
+  fit_window_days: 56
 frontier:
-  window_steps: 4
-  max_lag_steps: 4
+  window_days: 14
+  lag_grid_days: [0, 1, 2, 3, 5, 7, 10, 14, 21, 28]
   min_innovation: 1.5
   min_source_move: 0.5
   max_candidates_per_target: 5
   min_corr: 0.3
   min_consistency: 0.75
+  evidence_spacing_days: 14       # a co-movement is verified at most once per this many days
   half_life_days: 30
   remove_below: 0.5
   reject_cooldown_days: 60
-  backfill_steps: 26
+  backfill_days: 182
 abduction:
+  window_days: 28                 # activity window that components are built from
+  evidence_spacing_days: 14       # a pattern's support grows at most once per this many days
   min_edge_contribution: 0.2
   match_jaccard: 0.75
   min_binding_coverage: 0.6
@@ -82,8 +98,6 @@ hypotheses:
     asset_prices.equity_index: 1.0
     confidence.consumer_confidence: 0.6
     productivity_tech.tfp_growth: 0.5
-consolidation:
-  episode_min_abs_z: 0.5
 evaluation:
   significant_effect: 0.5
   sign_probability: 0.7
@@ -91,11 +105,18 @@ review:
   policy: default
   min_auto_confidence: 0.8
   auto_approve_human: true
-translators:
-  news: hand_drawn
-  data: data_feed
-  filing: hand_drawn
-  analyst: hand_drawn
+update:
+  sources: [mock_web_scraper]     # names in the `source` registry (§8.16); the demo adds synthetic_data_feed
+  pause_for_review: true          # a world event awaiting review pauses the run at its day (D14)
+  repose_pinned: true             # re-pose pinned theses after every update
+  auto_daily: false               # when true, the server requests an update every day at daily_at
+  daily_at: "18:00"
+  timezone: America/New_York
+translators:                      # tried in order until one returns events
+  news: [hand_drawn, template]
+  data: [data_feed]
+  filing: [hand_drawn, template]
+  analyst: [hand_drawn, template]
 components:
   parser: default
   classifier: taxonomy_descent
@@ -107,6 +128,7 @@ components:
   prefiller: analog_empirical_bayes
   propagator: mc_impulse
   analyzer: propagation
+  daily_propagator: kalman_predict
   posterior_updater: link_kalman
   folder: kalman_edge
   kernel_updater: grid_rescale
@@ -118,7 +140,7 @@ components:
   network_predictor: mc_network
   coupler: union_graph
   rival_detector: pattern_and_sign
-  scenario_weighter: support_fit_reliability
+  scenario_weighter: support_fit_track
   unifier: channels_and_rivals
   hypothesis_scorer: forecast_sensitivity_voi
   consolidator: daily

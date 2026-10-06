@@ -13,6 +13,8 @@ from axelrod_wm.engine.propagation import (
     PropagationResult,
     Propagator,
     ShockInput,
+    contribution_paths,
+    source_history,
 )
 from axelrod_wm.engine.registry import register
 from axelrod_wm.engine.regressors import build_system, graph_channels, horizon_for
@@ -78,8 +80,8 @@ class UnionGraphCoupler(NetworkCoupler):
 @register("coupler", "iterative_block")
 class IterativeBlockCoupler(NetworkCoupler):
     """Block Gauss-Seidel over networks in order of relevance. Each block propagates its own
-    channels with the thesis shocks plus boundary inputs from the latest paths of other blocks,
-    until the inputs change by less than 1e-3 (at most 10 rounds)."""
+    channels with the thesis shocks plus boundary inputs computed from the latest paths of the
+    upstream blocks, until the inputs change by less than 1e-3 (at most 10 rounds)."""
 
     def __init__(self, config: Any = None, propagator: Propagator | None = None, tol: float = 1e-3,
                  max_rounds: int = 10) -> None:
@@ -104,26 +106,19 @@ class IterativeBlockCoupler(NetworkCoupler):
             owner.setdefault(ch.target_id, 0)
             owner.setdefault(ch.source_id, owner[ch.target_id])
         blocks = sorted(set(owner.values()))
-        rng = ctx.child_rng("couple", ctx.scope)
-        drawer = McImpulsePropagator(ctx.config)
-        if isinstance(self.propagator, McImpulsePropagator):
-            drawer = self.propagator
+        drawer = self.propagator if isinstance(self.propagator, McImpulsePropagator) else McImpulsePropagator(ctx.config)
         full = build_system(chans, ctx.wm, ctx, H, drifts=model.drifts)
         idx = {s: i for i, s in enumerate(full.subentity_ids)}
-        params = drawer._draw(full, idx, 1 if drawer.deterministic else n, rng)
-        W = drawer.window
         S = 1 if drawer.deterministic else n
+        # the same substreams as the blocks' own draws, so cross channels use the same parameters
+        params = drawer._draw(full, idx, S, ctx.child_rng("couple", ctx.scope))
         cross = [c for c, ch in enumerate(chans) if owner[ch.source_id] != owner[ch.target_id]]
+        hist = {chans[c].source_id: source_history(full, chans[c].source_id,
+                                                   full.initial[chans[c].source_id].z_now
+                                                   if chans[c].source_id in full.initial else 0.0)
+                for c in cross}
         paths: dict[str, np.ndarray] = {}
         results: dict[int, PropagationResult] = {}
-        hist: dict[str, np.ndarray] = {}
-        for s in full.subentity_ids:
-            init = full.initial.get(s)
-            past = np.zeros(W)
-            if init is not None and init.past_dz:
-                arr = np.asarray(init.past_dz[-W:], dtype=float)
-                past[W - arr.size:] = arr
-            hist[s] = past
         prev_inputs: dict[str, np.ndarray] = {}
         for _round in range(self.max_rounds):
             delta = 0.0
@@ -139,15 +134,8 @@ class IterativeBlockCoupler(NetworkCoupler):
                     z0 = full.initial[ch.source_id].z_now if ch.source_id in full.initial else 0.0
                     if src_path is None:
                         src_path = np.full((S, H + 1), z0)
-                    dz_future = np.diff(src_path, axis=1)                       # [S, H], times 1..H
-                    # index i <-> time i - W: a leading zero, the history (times -W+1..0), then the future
-                    dz_all = np.concatenate([np.zeros((S, 1)), np.broadcast_to(hist[ch.source_id], (S, W)),
-                                             dz_future], axis=1)
-                    contrib = np.zeros((S, H + 1))
-                    for t in range(H + 1):
-                        window = dz_all[:, t: t + W]                             # times t-W..t-1: tau = W..1
-                        contrib[:, t] = params.exists[:, c] * params.beta[:, c] * np.sum(window * params.g_rev[:, c, :], axis=1)
-                    add = contrib - contrib[:, :1]
+                    contrib = contribution_paths(params, c, hist[ch.source_id], src_path)
+                    add = contrib - contrib[:, :1]      # the level absorbs the contribution at day 0
                     exo[ch.target_id] = exo.get(ch.target_id, 0.0) + add
                 for key, val in exo.items():
                     old = prev_inputs.get(key)
@@ -158,7 +146,8 @@ class IterativeBlockCoupler(NetworkCoupler):
                     prev_inputs[key] = val
                 block_shocks = [s for s in shocks if owner.get(s.subentity_id) == b]
                 system = build_system(own, ctx.wm, ctx, H, extra_subentities=members, drifts=model.drifts)
-                res = self.propagator.propagate(system, block_shocks, n, rng, record_contributions=True, exogenous=exo)
+                res = self.propagator.propagate(system, block_shocks, n, ctx.child_rng("couple", ctx.scope),
+                                                record_contributions=True, exogenous=exo)
                 results[b] = res
                 for s in members:
                     if res.has(s):
@@ -180,4 +169,4 @@ class IterativeBlockCoupler(NetworkCoupler):
                 if k in r.channel_index:
                     contrib[:, j, :] = r.contrib_of(k)
         return PropagationResult({s: i for i, s in enumerate(sids)}, {k: i for i, k in enumerate(keys)}, z, contrib,
-                                 chans, ctx.step_days)
+                                 chans)

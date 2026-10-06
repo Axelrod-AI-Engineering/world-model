@@ -20,20 +20,14 @@ if TYPE_CHECKING:
     from axelrod_wm.memory.working import WorkingMemory
 
 
-def level_drift(sub: Any, steps: int = 4, clip: float = 0.2) -> float:
-    """Mean change of the local level a_j over the last `steps` steps (0 if fewer), clipped."""
-    pts: dict[int, float] = {}
-    for ts in sub.history:
-        if "level" in ts.values and "step" in ts.values:
-            pts[int(ts.values["step"])] = float(ts.values["level"])
-    if len(pts) < 2:
+def level_drift(wm: WorkingMemory, sid: str, today: int, window_days: int, clip: float) -> float:
+    """Mean daily change of the local level (DeviationPoint.level) over the last `window_days`,
+    clipped to +-clip (0 if fewer days exist)."""
+    dev = wm.deviations
+    a, b = dev.point(sid, today - window_days), dev.point(sid, today)
+    if a is None or b is None or window_days <= 0:
         return 0.0
-    last = max(pts)
-    first_candidates = [s for s in pts if s <= last - steps]
-    if not first_candidates:
-        return 0.0
-    first = max(first_candidates)
-    drift = (pts[last] - pts[first]) / max(last - first, 1)
+    drift = (b.level - a.level) / window_days
     return max(-clip, min(clip, drift))
 
 
@@ -44,10 +38,10 @@ def focus_of(parsed: ParsedEvent, wm: WorkingMemory, ctx: ProcessContext) -> lis
             if sid in wm.graph.subentities and sid not in focus:
                 focus.append(sid)
     if not parsed.shocks:
-        step = wm.deviations.step_of(ctx.now)
-        w = int(ctx.config.frontier.window_steps)
+        today = ctx.today
+        w = int(ctx.config.frontier.window_days)
         for sid in sorted(wm.graph.subentities):
-            if sid not in focus and abs(wm.deviations.window_change(sid, step, w)) >= 0.5:
+            if sid not in focus and abs(wm.deviations.window_change(sid, today, w)) >= 0.5:
                 focus.append(sid)
     return focus
 
@@ -90,24 +84,27 @@ class AnalogEmpiricalBayesPrefiller(Prefiller):
         evidence: dict[str, list[AnalogEvidence]] = {}
         notes: list[str] = []
         target_noise: dict[str, float] = {}
-        tax = ltm.interaction_taxonomy
+        tax = ltm.interaction_generalizations.taxonomy
+        episodes = ltm.prior_states.episodes
         for key, ch in sorted(channels.items()):
             tgt = graph.subentities[ch.target_id]
-            target_noise[key] = obs_noise_of(tgt, wm, ltm)
+            target_noise[key] = obs_noise_of(tgt, wm, ctx.vocab)
             if not self.use_analogs:
                 continue
             inter = graph.interactions[base_interaction_id(key)]
             gen = inter.generalization_id
             siblings = set(tax.instances_under(gen)) if gen and gen in tax.nodes else set()
+            # an analog carries the response that followed its trigger (§8.12 step 2)
             items: list[AnalogEvidence] = []
             for eid, att in sorted(recalled.items()):
-                ep = ltm.episodes.episodes.get(eid)
+                ep = episodes.get(eid)
                 if ep is None:
                     continue
-                if inter.id in ep.edge_effects:
-                    b, wgt = ep.edge_effects[inter.id]
+                resp = ep.response_effects or ep.edge_effects
+                if key in resp:
+                    b, wgt = resp[key]
                 else:
-                    pairs = [ep.edge_effects[o] for o in sorted(siblings) if o in ep.edge_effects]
+                    pairs = [resp[o] for o in sorted(siblings) if o in resp]
                     if not pairs:
                         continue
                     wsum = sum(p[1] for p in pairs)
@@ -125,14 +122,14 @@ class AnalogEmpiricalBayesPrefiller(Prefiller):
             if inst is None:
                 continue
             network_episodes[iid] = [eid for eid in sorted(recalled)
-                                     if inst.pattern_id in ltm.episodes.episodes[eid].active_pattern_ids]
+                                     if eid in episodes and inst.pattern_id in episodes[eid].active_pattern_ids]
         drifts: dict[str, float] = {}
         if self.use_trends:
+            pf = ctx.config.prefill
             endpoints = {ch.source_id for ch in channels.values()} | {ch.target_id for ch in channels.values()}
             for sid in sorted(endpoints | set(focus)):
-                sub = graph.subentities.get(sid)
-                if sub is not None:
-                    d = level_drift(sub)
+                if sid in graph.subentities:
+                    d = level_drift(wm, sid, ctx.today, int(pf.trend_window_days), float(pf.max_drift_per_day))
                     if d:
                         drifts[sid] = d
         model = PrefilledModel(channels=channels, analog_evidence=evidence, network_episodes=network_episodes,
@@ -144,7 +141,7 @@ class AnalogEmpiricalBayesPrefiller(Prefiller):
             after = model.dynamics_for(key, all_eps).effect.mean()
             if abs(after - before) >= 0.01:
                 eps = [e.episode_id for e in evidence[key]]
-                tags = sorted({t for e in eps for t in ltm.episodes.episodes[e].tags})
+                tags = sorted({t for e in eps for t in episodes[e].tags})
                 label = f"{tags[0]} " if tags else ""
                 notes.append(f"{key} effect {before:.2f} -> {after:.2f} from {len(eps)} {label}analogs")
                 ctx.tracer.emit(Phase.PREFILL, "prefill.adjusted", refs=[base_interaction_id(key)] + eps,

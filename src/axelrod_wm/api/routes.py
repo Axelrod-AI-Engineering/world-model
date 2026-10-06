@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from datetime import date
+from datetime import date, datetime
 from typing import Any
 
 import yaml
@@ -21,12 +21,13 @@ from axelrod_wm.api.views import (
     pattern_view,
     proposal_view,
     taxonomy_view,
+    update_run_view,
 )
+from axelrod_wm.control.updates import UpdateRequest, UpdateState, UserMarketEventInput, end_of, has_world_ops
 from axelrod_wm.core.hypothesis import Hypothesis
 from axelrod_wm.engine.initialize import resolve_path
 from axelrod_wm.evaluation.backtest import EvaluationRequest
 from axelrod_wm.events.graph_update import GraphUpdateEvent
-from axelrod_wm.events.market import MarketEvent
 from axelrod_wm.events.thesis import Thesis
 from axelrod_wm.sim.scenario import list_scenarios
 from axelrod_wm.trace import Phase
@@ -78,10 +79,17 @@ class StatusBody(BaseModel):
     status: str
 
 
-class ConsolidateBody(BaseModel):
+class UpdateBody(BaseModel):
+    """POST /api/updates: every field optional (§12.1)."""
+
     model_config = ConfigDict(extra="forbid")
 
-    day: date | None = None
+    until: date | None = None
+    requested_at: datetime | None = None
+    requested_by: str = "user"
+    user_market_events: list[UserMarketEventInput] = []
+    user_graph_update_events: list[GraphUpdateEvent] = []
+    sources: list[str] | None = None
 
 
 class LoadBody(BaseModel):
@@ -115,8 +123,7 @@ def _config(st: AppState) -> dict:
         comps[slot] = {"name": name, "params": params}
     translators = {}
     for kind in cfg.translators:
-        name, params = cfg.translator(kind)
-        translators[kind] = {"name": name, "params": params}
+        translators[kind] = [{"name": name, "params": params} for name, params in cfg.translator_chain(kind)]
     return {"components": comps, "translators": translators,
             "review_policy": cfg.review.policy, "config_hash": cfg.config_hash(),
             "params": cfg.model_dump(mode="json", exclude={"components", "translators"})}
@@ -195,8 +202,17 @@ async def get_frontier(request: Request) -> list:
     st = S(request)
 
     def run() -> list:
-        entries = st.controller.engine.ltm.frontier.entries.values()
-        return [e.model_dump(mode="json") for e in sorted(entries, key=lambda e: (-e.support, e.id))]
+        eng = st.controller.engine
+        dev = eng.wm.deviations
+        spacing = int(eng.config.frontier.evidence_spacing_days)
+        out = []
+        for e in sorted(eng.ltm.correlation_frontier.entries.values(), key=lambda e: (-e.support, e.id)):
+            d = e.model_dump(mode="json")
+            # the first day the entry may be verified again (evidence spacing, §8.7)
+            d["next_eligible"] = (dev.date_of(e.last_verified_day + spacing).isoformat()
+                                  if e.last_verified_day is not None else None)
+            out.append(d)
+        return out
 
     return await st.call(run)
 
@@ -206,8 +222,8 @@ async def get_frontier_series(request: Request, entry_id: str) -> dict:
     st = S(request)
 
     def run() -> dict:
-        co = st.controller.engine.ltm.frontier.entries[entry_id]
-        return {"pairs": [[x, y] for x, y in co.corr.pairs], "lag_steps": co.lag_steps,
+        co = st.controller.engine.ltm.correlation_frontier.entries[entry_id]
+        return {"pairs": [[x, y] for x, y in co.corr.pairs], "lag_days": co.lag_days,
                 "earlier": co.earlier_id, "later": co.later_id, "sign": co.sign, "corr": co.corr.corr()}
 
     return await st.call(run)
@@ -286,14 +302,31 @@ async def get_market_event(request: Request, event_id: str) -> dict:
     return await st.call(run)
 
 
-@router.post("/market-events")
-async def post_market_event(request: Request, event: MarketEvent) -> list:
+@router.get("/market-events")
+async def get_market_events(request: Request, update_id: str | None = Query(None)) -> list:
+    """Market events with their channel, day, and status, optionally for one update run."""
     st = S(request)
 
     def run() -> list:
         ctl = st.controller
-        eng = ctl.engine
-        return [proposal_view(p, eng.wm, eng.ltm) for p in ctl.ingest(event)]
+        dev = ctl.engine.wm.deviations
+        days: dict[str, int] = {}
+        runs = [ctl.get_update(update_id)] if update_id else list(ctl.updates.values())
+        for r in runs:
+            for d, ids in r.queue.items():
+                for i in ids:
+                    days[i] = d
+        out = []
+        for mid, ev in ctl.market_events.items():
+            if update_id and ev.update_id != update_id:
+                continue
+            day = days.get(mid, dev.day_of(ev.published_at))
+            out.append({"id": mid, "kind": str(ev.kind), "channel": str(ev.channel), "source": ev.source,
+                        "headline": ev.headline, "published_at": ev.published_at.isoformat(),
+                        "day": dev.date_of(day).isoformat(), "update_id": ev.update_id,
+                        "status": ctl.market_status.get(mid, ""), "synthetic": ev.synthetic})
+        out.sort(key=lambda x: (x["published_at"], x["id"]))
+        return out
 
     return await st.call(run)
 
@@ -301,6 +334,9 @@ async def post_market_event(request: Request, event: MarketEvent) -> list:
 @router.post("/graph-update-events")
 async def post_graph_update(request: Request, event: GraphUpdateEvent, by: str = "human") -> dict:
     st = S(request)
+    if has_world_ops(event):
+        raise HTTPException(422, "a drawn event cannot contain observe_value or change_value ops; "
+                                 "type the news as a market event with an update instead")
 
     def run() -> dict:
         ctl = st.controller
@@ -332,16 +368,33 @@ def _proposal_after(st: AppState, proposal_id: str) -> dict:
     return proposal_view(ctl.proposals[proposal_id], ctl.engine.wm, ctl.engine.ltm)
 
 
+def _resume_if_awaited(st: AppState, proposal_id: str) -> str | None:
+    """If the active update run was waiting on this proposal and it is now decided, resume the run
+    (the caller drives its days in the background). Returns the run id to drive."""
+    ctl = st.controller
+    run = ctl.updates.get(ctl.active_update) if ctl.active_update else None
+    if run is None or run.state != UpdateState.AWAITING_REVIEW or run.waiting_on != proposal_id:
+        return None
+    if str(ctl.proposals[proposal_id].status) == "pending":
+        return None
+    ctl.cycle.resume(run, run_to_end=False)
+    return run.id
+
+
+async def _decided(st: AppState, proposal_id: str) -> dict:
+    run_id = await st.call(_resume_if_awaited, st, proposal_id)
+    if run_id is not None:
+        st.start_drive(run_id)
+    return await st.call(_proposal_after, st, proposal_id)
+
+
 @router.post("/proposals/{proposal_id}/approve")
 async def approve(request: Request, proposal_id: str, body: ReviewBody | None = None) -> dict:
     st = S(request)
     b = body or ReviewBody()
 
-    def run() -> dict:
-        st.controller.approve(proposal_id, by=b.by, note=b.note)
-        return _proposal_after(st, proposal_id)
-
-    return await st.call(run)
+    await st.call(lambda: st.controller.approve(proposal_id, by=b.by, note=b.note))
+    return await _decided(st, proposal_id)
 
 
 @router.post("/proposals/{proposal_id}/reject")
@@ -350,11 +403,8 @@ async def reject(request: Request, proposal_id: str, body: ReviewBody) -> dict:
     if not body.note:
         raise HTTPException(422, "a rejection needs a note")
 
-    def run() -> dict:
-        st.controller.reject(proposal_id, by=body.by, note=body.note)
-        return _proposal_after(st, proposal_id)
-
-    return await st.call(run)
+    await st.call(lambda: st.controller.reject(proposal_id, by=body.by, note=body.note))
+    return await _decided(st, proposal_id)
 
 
 @router.post("/proposals/{proposal_id}/edit")
@@ -373,11 +423,8 @@ async def defer(request: Request, proposal_id: str, body: ReviewBody | None = No
     st = S(request)
     b = body or ReviewBody()
 
-    def run() -> dict:
-        st.controller.defer(proposal_id, by=b.by)
-        return _proposal_after(st, proposal_id)
-
-    return await st.call(run)
+    await st.call(lambda: st.controller.defer(proposal_id, by=b.by))
+    return await _decided(st, proposal_id)
 
 
 # -- theses, forecasts, explanations -------------------------------------------------------------
@@ -387,9 +434,9 @@ async def post_thesis(request: Request, body: dict = Body(...)) -> dict:
 
     def run() -> dict:
         ctl = st.controller
-        if set(body) <= {"question", "horizon_days", "targets"} and "question" in body:
+        if set(body) <= {"question", "horizon_days", "targets", "target_groups"} and "question" in body:
             thesis = ctl.thesis_from_question(body["question"], horizon_days=int(body.get("horizon_days", 182)),
-                                              targets=body.get("targets"))
+                                              targets=body.get("targets"), target_groups=body.get("target_groups"))
         else:
             data = dict(body)
             data.setdefault("posed_at", ctl.now.isoformat())
@@ -424,6 +471,16 @@ async def get_forecasts(request: Request) -> list:
     return await st.call(run)
 
 
+@router.get("/forecasts/{forecast_id}/brief")
+async def get_forecast_brief(request: Request, forecast_id: str) -> dict:
+    """A written brief of a forecast (addition): bottom line, timeline, who is affected, why, the news
+    that shaped it and the news since, how it is tracking, and what to watch."""
+    from axelrod_wm.api.brief import brief_view
+
+    st = S(request)
+    return await st.call(lambda: brief_view(st.controller, forecast_id))
+
+
 @router.get("/forecasts/{forecast_id}")
 async def get_forecast(request: Request, forecast_id: str) -> dict:
     st = S(request)
@@ -451,17 +508,87 @@ async def get_explanation(request: Request, explanation_id: str) -> dict:
     return await st.call(run)
 
 
-# -- consolidation, evaluation, decisions --------------------------------------------------------
-@router.post("/consolidate")
-async def consolidate(request: Request, body: ConsolidateBody | None = None) -> dict:
+# -- update runs (§7.8, §12.1) ---------------------------------------------------------------
+@router.post("/updates")
+async def post_update(request: Request, body: UpdateBody | None = None) -> dict:
+    """Request an update. It continues in the background, one day per lock acquisition, and streams
+    trace events; a run that reaches a news item needing review pauses there."""
+    st = S(request)
+    b = body or UpdateBody()
+
+    def start() -> str:
+        ctl = st.controller
+        wm = ctl.engine.wm
+        # DECISION: `until` defaults to the scenario's current date, or the next day to process if that
+        # day is already done, so the Update button always moves forward.
+        nxt = wm.deviations.date_of(wm.last_processed_day + 1)
+        until = b.until or max(ctl.now.date(), nxt)
+        req = UpdateRequest(requested_by=b.requested_by, until=until, requested_at=b.requested_at or end_of(until),
+                            user_market_events=list(b.user_market_events),
+                            user_graph_update_events=list(b.user_graph_update_events), sources=b.sources)
+        run = ctl.request_update(req, run_to_end=False)
+        return run.id
+
+    run_id = await st.call(start)
+    st.start_drive(run_id)
+    return await st.call(lambda: update_run_view(st.controller.get_update(run_id), st.controller))
+
+
+@router.get("/updates")
+async def get_updates(request: Request) -> list:
     st = S(request)
 
-    def run() -> dict:
+    def run() -> list:
         ctl = st.controller
-        day = body.day if body is not None and body.day is not None else ctl.now.date()
-        return ctl.consolidate(day).model_dump(mode="json")
+        runs = sorted(ctl.updates.values(), key=lambda r: r.started_at, reverse=True)
+        return [update_run_view(r, ctl) for r in sorted(runs, key=lambda r: int(r.id.split("-")[-1]), reverse=True)]
 
     return await st.call(run)
+
+
+@router.get("/updates/{update_id}")
+async def get_update(request: Request, update_id: str) -> dict:
+    st = S(request)
+    return await st.call(lambda: update_run_view(st.controller.get_update(update_id), st.controller))
+
+
+@router.post("/updates/{update_id}/continue")
+async def continue_update(request: Request, update_id: str) -> dict:
+    """Continue a paused run (deferring its awaited proposal if still undecided) or a stalled one."""
+    st = S(request)
+
+    def run() -> str:
+        ctl = st.controller
+        r = ctl.get_update(update_id)
+        if r.state == UpdateState.AWAITING_REVIEW:
+            ctl.cycle.resume(r, run_to_end=False)
+        return str(r.state)
+
+    state = await st.call(run)
+    if state == "running":
+        st.start_drive(update_id)
+    return await st.call(lambda: update_run_view(st.controller.get_update(update_id), st.controller))
+
+
+@router.post("/updates/{update_id}/cancel")
+async def cancel_update(request: Request, update_id: str) -> dict:
+    st = S(request)
+    task = st.update_task
+    if task is not None and not task.done():
+        # the background run finishes its current day and stops
+        await st.call(lambda: setattr(st.controller.get_update(update_id), "cancel_requested", True))
+        try:
+            await asyncio.wait_for(asyncio.shield(task), timeout=600)
+        except (TimeoutError, asyncio.CancelledError):
+            pass
+    await st.call(lambda: st.controller.cancel_update(update_id))
+    runner = st.runner
+    if runner is not None and runner.pending_update() == update_id:
+        await st.call(runner.step, False)
+    return await st.call(lambda: update_run_view(st.controller.get_update(update_id), st.controller))
+
+
+# -- evaluation, decisions ---------------------------------------------------------------------
 
 
 @router.post("/evaluate")
@@ -544,7 +671,12 @@ async def sim_step(request: Request) -> dict:
     if st.play_task is not None and not st.play_task.done():
         raise HTTPException(409, "the scenario is playing; pause it first")
     runner = st.ensure_loaded()
-    rep = await st.call(runner.step)
+    rep = await st.call(runner.step, False)
+    run_id = runner.pending_update()
+    if run_id is not None:
+        state = await st.drive(run_id)
+        if state not in ("running", "awaiting_review") and runner.reports:
+            rep = runner.reports[-1]
     return rep.model_dump(mode="json")
 
 
@@ -556,11 +688,20 @@ async def _play_loop(st: AppState, until_step: int | None) -> None:
     runner.error = None
     try:
         while runner.step_index < last and not runner._pause.is_set():
-            if runner.state == "awaiting_review" and runner.controller.pending_proposals():
+            if runner.pending_update() is not None:
+                run = runner.controller.get_update(runner.pending_update())
+                if run.state == UpdateState.AWAITING_REVIEW:
+                    break
+            elif runner.state == "awaiting_review" and runner.controller.pending_proposals():
                 break
             if runner.step_index + 1 >= last:
                 runner.playing = False         # the last step of this play ends in idle
-            await st.call(runner.step)
+            await st.call(runner.step, False)
+            run_id = runner.pending_update()
+            if run_id is not None:
+                state = await st.drive(run_id)   # one day per lock acquisition; finishes the step when done
+                if state == "awaiting_review":
+                    break
             if runner.state in ("awaiting_review", "done") or runner._pause.is_set():
                 break
             await asyncio.sleep(st.play_delay)
@@ -590,6 +731,7 @@ async def _stop_play(st: AppState) -> None:
 async def sim_play(request: Request, body: PlayBody | None = None) -> dict:
     st = S(request)
     runner = st.ensure_loaded()
+    st.play_requested = True
     if st.play_task is None or st.play_task.done():
         runner._pause.clear()
         if runner.state != "awaiting_review" or not runner.controller.pending_proposals():
@@ -605,6 +747,7 @@ async def sim_play(request: Request, body: PlayBody | None = None) -> dict:
 async def sim_pause(request: Request) -> dict:
     st = S(request)
     runner = st.ensure_loaded()
+    st.play_requested = False
     runner._pause.set()
     task = st.play_task
     if task is not None and not task.done():
@@ -624,6 +767,21 @@ async def sim_reset(request: Request) -> dict:
     return (await st.call(runner.reset)).model_dump(mode="json")
 
 
+@router.get("/sim/script")
+async def sim_script(request: Request) -> list:
+    """The loaded scenario's steps, for the Admin window's Story list (addition)."""
+    st = S(request)
+    runner = st.ensure_loaded()
+    out = []
+    for i, step in enumerate(runner.script.steps):
+        # a step that runs an update and then asks questions (step 13) counts as a question
+        kind = ("question" if step.theses() else "update" if step.update is not None else "hypothesis" if step.pose_hypothesis
+                else "evaluation" if step.evaluate else "decision" if step.decision or step.resolve_decision else "caption")
+        out.append({"index": i, "at": step.at.isoformat(), "kind": kind, "caption": step.caption or "",
+                    "theses": step.theses()})
+    return out
+
+
 @router.get("/sim/status")
 async def sim_status(request: Request) -> dict:
     st = S(request)
@@ -633,9 +791,14 @@ async def sim_status(request: Request) -> dict:
 
 # -- trace ---------------------------------------------------------------------------------------
 @router.get("/trace")
-async def get_trace(request: Request, since_seq: int = 0, limit: int | None = None) -> list:
+async def get_trace(request: Request, since_seq: int = 0, limit: int | None = None,
+                    scope: str | None = Query(None)) -> list:
+    """Trace events after `since_seq`; with `scope`, only one market event's, thesis's, or day's
+    events (the demo's walkthrough reads them as the steps the model took)."""
     st = S(request)
     evs = st.tracer.since(since_seq)
+    if scope is not None:
+        evs = [e for e in evs if e.scope == scope]
     if limit is not None:
         evs = evs[: max(0, int(limit))]
     return [e.model_dump(mode="json") for e in evs]

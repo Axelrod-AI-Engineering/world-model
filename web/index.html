@@ -6,95 +6,102 @@
   <title>Axelrod World Model</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Mono:wght@400;500;700&family=Instrument+Sans:wght@400;500;600&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700&family=IBM+Plex+Mono:wght@400;500;600&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap">
   <link rel="stylesheet" href="css/tokens.css">
   <link rel="stylesheet" href="css/app.css">
   <script src="vendor/d3.v7.min.js"></script>
   <script type="module" src="js/main.js"></script>
 </head>
 <body>
-  <header id="toolbar" role="toolbar" aria-label="Scenario controls">
-    <div class="brand">Axelrod <span>World Model</span></div>
-    <label class="sr-only" for="scenario-select">Scenario</label>
-    <select id="scenario-select" title="Scenario"></select>
-    <button id="btn-load" title="Load the scenario from its init snapshot">Load</button>
-    <div class="sep"></div>
-    <button id="btn-back" title="Open the previous state version read-only (Shift+←)" aria-label="Previous version">◀</button>
-    <button id="btn-step" class="primary" title="Step (→)">Step ▶</button>
-    <button id="btn-play" title="Play or pause (Space)" aria-pressed="false">▶ Play</button>
-    <label class="small muted" for="speed">Speed</label>
-    <select id="speed" title="Animation speed">
-      <option value="0.25">0.25×</option><option value="0.5">0.5×</option><option value="1" selected>1×</option>
-      <option value="2">2×</option><option value="4">4×</option>
-    </select>
-    <div class="sep"></div>
-    <span id="sim-time" title="Simulated time">—</span>
-    <span id="sim-version" title="State version">v—</span>
-    <span id="step-label">step 0/0</span>
-    <span id="sim-state" data-state="idle">idle</span>
+  <!-- DECISION: the first view is the graph and one line of story; every panel opens on demand (the
+       user asked for a much simpler screen). The plan's controls are all still here, one level down. -->
+  <header id="topbar" role="toolbar" aria-label="Main controls">
+    <div class="brand"><b>Axelrod</b><span>World Model</span></div>
+    <div id="clock" title="Simulated date and state version">
+      <span id="sim-date">—</span><span id="sim-version" class="mono">v—</span>
+    </div>
     <div class="spacer"></div>
-    <label class="small muted" for="review-policy">Review</label>
-    <select id="review-policy" title="Review policy">
-      <option value="default">default (structural changes wait)</option>
-      <option value="auto_approve_all">auto-approve all</option>
-    </select>
-    <button id="btn-motion" aria-pressed="false" title="Reduced motion: animations become short fades">Reduced motion</button>
-    <button id="btn-memory" aria-expanded="false" title="Memory drawer">Memory ▴</button>
+    <div class="actions">
+      <button id="btn-update" class="primary" title="Request an update: collect news and data up to a date, then fold it in day by day (U)">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2.5v3h-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Update</button>
+      <div class="seg" role="group" aria-label="Scripted demo">
+        <button id="btn-step" title="Run the next scripted step of the demo (→)">Step <span aria-hidden="true">▸</span></button>
+        <button id="btn-play" title="Play or pause the scripted demo (Space)" aria-pressed="false">Play</button>
+      </div>
+      <span id="step-label" class="mono muted" title="Scripted demo progress">0 / 0</span>
+    </div>
+    <div class="spacer"></div>
+    <nav class="tools" aria-label="Panels">
+      <button id="btn-inbox" class="tool" title="News and data the model has read" aria-expanded="false">News <span class="count" id="inbox-count">0</span></button>
+      <button id="btn-review" class="tool" title="Proposals that wait for your review" aria-expanded="false">Review <span class="count" id="review-count">0</span></button>
+      <button id="btn-briefs" class="tool" title="Forecast briefs: a written reading of each forecast (B)" aria-expanded="false">Briefs <span class="count" id="briefs-count">0</span></button>
+      <button id="btn-ask" class="tool" title="Ask a what-if question (pose a thesis) (Q)" aria-expanded="false">Ask</button>
+      <button id="btn-memory" class="tool" title="Long-term memory (M)" aria-expanded="false">Memory</button>
+      <button id="btn-methods" class="tool" title="Proposed implementation and ML stack: a technical briefing" aria-expanded="false">Methods</button>
+      <button id="btn-admin" class="tool" title="Admin: navigate the story, the map, the view, and settings (,)" aria-expanded="false">Admin</button>
+    </nav>
   </header>
 
-  <main id="app">
-    <aside id="left">
-      <section id="inbox" class="panel" aria-labelledby="inbox-h">
-        <header><h2 id="inbox-h">Inbox</h2><span class="badge" id="inbox-count">0</span></header>
-        <div class="body" id="inbox-body"><p class="muted small">Market events appear here as the scenario runs.</p></div>
-      </section>
-      <section id="review" class="panel" aria-labelledby="review-h">
-        <header><h2 id="review-h">Review queue</h2><span class="badge count" id="review-count">0</span></header>
-        <div class="body" id="review-body"><p class="muted small">Nothing waits for review.</p></div>
-      </section>
-    </aside>
+  <div id="update-strip" class="hidden" role="status" aria-live="polite"></div>
 
-    <section id="center">
-      <div id="caption" aria-live="polite"><span class="step"></span><span class="text">Loading…</span></div>
-      <div id="readonly-banner" class="hidden" role="status"></div>
-      <div id="canvas-toolbar">
-        <div class="group" role="group" aria-label="Zoom level">
-          <button id="lvl-super" title="Superentities (1)">Superentities</button>
-          <button id="lvl-entity" title="Entities (2)" aria-pressed="true">Entities</button>
-          <button id="lvl-sub" title="Subentities (3)">Subentities</button>
-        </div>
-        <button id="btn-draw" aria-pressed="false" title="Draw a hand-drawn proposal (D)">Draw</button>
-        <button id="btn-fit" title="Fit everything (F)">Fit</button>
-        <div class="group" role="group" aria-label="Layout">
-          <button id="layout-gravity" aria-pressed="true" title="Gravity layout">Gravity</button>
-          <button id="layout-figure1" title="Figure 1 layout (pinned)">Figure 1</button>
-        </div>
-        <button id="btn-category" aria-pressed="false" title="Group by category tag">Group by category</button>
-        <button id="btn-fig1links" aria-pressed="false" title="Show only Figure 1's links">Figure 1 links only</button>
-        <button id="btn-clear" class="hidden" title="Clear the highlight">Clear highlight</button>
-        <div class="spacer"></div>
-        <label class="sr-only" for="search">Search entities and subentities</label>
-        <input id="search" type="search" placeholder="Search (/)" list="search-list" autocomplete="off">
+  <main id="stage">
+    <div id="canvas" tabindex="0" aria-label="Causal graph. Right-click anything for options.">
+      <svg id="graph-svg" role="img" aria-label="World model graph"></svg>
+      <div id="caption" class="floating" aria-live="polite"><span class="step"></span><span class="text">Loading…</span><span class="walks"></span></div>
+      <div id="walkthrough" class="floating walk hidden" role="region" aria-label="Walkthrough of the model's steps"></div>
+      <div id="readonly-banner" class="floating hidden" role="status"></div>
+      <div id="search-box" class="floating">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        <label class="sr-only" for="search">Find an entity or subentity</label>
+        <input id="search" type="search" placeholder="Find…  /" list="search-list" autocomplete="off">
         <datalist id="search-list"></datalist>
       </div>
-      <div id="canvas" tabindex="0" aria-label="Causal graph canvas">
-        <svg id="graph-svg" role="img" aria-label="World model graph"></svg>
-        <div id="legend"></div>
+      <div id="canvas-controls" class="floating" role="toolbar" aria-label="Canvas">
+        <div class="seg" role="group" aria-label="Detail">
+          <button id="lvl-super" title="Close every superentity into one card (1)">Superentities</button>
+          <button id="lvl-entity" title="Open superentities, close entities (2)">Entities</button>
+          <button id="lvl-sub" title="Open every entity into its subentities (3)">Subentities</button>
+        </div>
+        <div class="seg" role="group" aria-label="Zoom">
+          <button id="zoom-out" class="icon" title="Zoom out (−)" aria-label="Zoom out">−</button>
+          <button id="zoom-in" class="icon" title="Zoom in (+)" aria-label="Zoom in">+</button>
+          <button id="btn-fit" class="icon" title="Fit everything (F)" aria-label="Fit everything">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button>
+        </div>
+        <button id="btn-draw" aria-pressed="false" title="Draw a proposed edge: drag from one node to another (D)">Draw</button>
       </div>
-    </section>
+    </div>
 
-    <aside id="right">
-      <nav id="right-tabs" role="tablist" aria-label="Panels">
-        <button role="tab" data-tab="inspector" aria-selected="true">Inspector</button>
-        <button role="tab" data-tab="thesis" aria-selected="false">Thesis</button>
-        <button role="tab" data-tab="forecast" aria-selected="false">Forecast</button>
-        <button role="tab" data-tab="hypotheses" aria-selected="false">Hypotheses</button>
-        <button role="tab" data-tab="decisions" aria-selected="false">Decisions</button>
-      </nav>
+    <aside id="left-panel" class="sheet-panel left" aria-label="News, review, and briefs" hidden>
+      <header>
+        <nav role="tablist" aria-label="News, review, and briefs">
+          <button role="tab" data-ltab="inbox" aria-selected="true">News</button>
+          <button role="tab" data-ltab="review" aria-selected="false">Review <span class="count" id="review-count-tab">0</span></button>
+          <button role="tab" data-ltab="briefs" aria-selected="false">Briefs <span class="count" id="briefs-count-tab">0</span></button>
+        </nav>
+        <button class="close" data-close-panel="left" aria-label="Close">✕</button>
+      </header>
+      <section class="ltab active" id="ltab-inbox" role="tabpanel"><div id="inbox-body" class="body"></div></section>
+      <section class="ltab" id="ltab-review" role="tabpanel"><div id="review-body" class="body"></div></section>
+      <section class="ltab" id="ltab-briefs" role="tabpanel"><div id="briefs-body" class="body"></div></section>
+    </aside>
+
+    <aside id="right-panel" class="sheet-panel right" aria-label="Details" hidden>
+      <header>
+        <nav id="right-tabs" role="tablist" aria-label="Details">
+          <button role="tab" data-tab="inspector" aria-selected="true">Inspect</button>
+          <button role="tab" data-tab="thesis" aria-selected="false">Ask</button>
+          <button role="tab" data-tab="forecast" aria-selected="false">Forecast</button>
+          <button role="tab" data-tab="hypotheses" aria-selected="false">Hypotheses</button>
+          <button role="tab" data-tab="decisions" aria-selected="false">Decisions</button>
+        </nav>
+        <button class="close" data-close-panel="right" aria-label="Close">✕</button>
+      </header>
       <div id="right-body">
-        <section class="tabpanel active" id="tab-inspector" role="tabpanel"><p class="muted">Click an entity, edge, or hull to inspect it.</p></section>
+        <section class="tabpanel active" id="tab-inspector" role="tabpanel"></section>
         <section class="tabpanel" id="tab-thesis" role="tabpanel"></section>
-        <section class="tabpanel" id="tab-forecast" role="tabpanel"><p class="muted">Pose a thesis to see a forecast.</p></section>
+        <section class="tabpanel" id="tab-forecast" role="tabpanel"></section>
         <section class="tabpanel" id="tab-hypotheses" role="tabpanel"></section>
         <section class="tabpanel" id="tab-decisions" role="tabpanel"></section>
       </div>
@@ -102,34 +109,33 @@
   </main>
 
   <footer id="bottom">
-    <div id="pipeline" aria-label="Pipeline phases"></div>
+    <button id="btn-activity" class="tool" aria-expanded="false" title="Show the pipeline">
+      <span class="dot" aria-hidden="true"></span><span id="phase-now">idle</span></button>
     <div id="timeline">
-      <div class="label">TIMELINE</div>
       <div id="timeline-track"></div>
-      <div id="timeline-controls">
-        <input id="scrubber" type="range" min="0" max="0" value="0" aria-label="Timeline scrubber">
-        <div class="row small"><span id="scrub-label" class="mono">live</span><button id="btn-live" class="hidden">Back to live</button></div>
-      </div>
+      <input id="scrubber" type="range" min="0" max="0" value="0" aria-label="Timeline scrubber">
     </div>
+    <span id="scrub-label" class="mono muted">live</span>
+    <button id="btn-live" class="hidden">Back to live</button>
+    <div id="pipeline" class="hidden" aria-label="Pipeline phases"></div>
   </footer>
 
   <section id="drawer" aria-label="Memory drawer">
     <header role="tablist">
-      <h2 style="margin-right:8px">Memory</h2>
-      <button data-mtab="object" role="tab" aria-selected="true">Object taxonomy</button>
-      <button data-mtab="interaction" role="tab" aria-selected="false">Interaction taxonomy</button>
-      <button data-mtab="episodes" role="tab" aria-selected="false">Episodes</button>
-      <button data-mtab="frontier" role="tab" aria-selected="false">Frontier</button>
-      <button data-mtab="explanations" role="tab" aria-selected="false">Explanations</button>
+      <h2>Long-term memory</h2>
+      <button data-mtab="object" role="tab" aria-selected="true">Object generalizations</button>
+      <button data-mtab="interaction" role="tab" aria-selected="false">Interaction generalizations</button>
       <button data-mtab="entity_memories" role="tab" aria-selected="false">Entity memories</button>
-      <button data-mtab="versions" role="tab" aria-selected="false">Versions</button>
+      <button data-mtab="frontier" role="tab" aria-selected="false">Correlation frontier</button>
+      <button data-mtab="prior" role="tab" aria-selected="false">Prior states</button>
       <div class="spacer"></div>
-      <button id="drawer-close" aria-label="Close the memory drawer">✕</button>
+      <button id="drawer-close" class="close" aria-label="Close the memory drawer">✕</button>
     </header>
     <div class="body" id="drawer-body"></div>
   </section>
 
-  <div id="tooltip" class="hidden"></div>
+  <div id="menu-root"></div>
+  <div id="tooltip" class="hidden" role="tooltip"></div>
   <div id="modal-root"></div>
   <div id="toast" aria-live="polite"></div>
 </body>

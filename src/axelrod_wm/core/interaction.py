@@ -15,7 +15,7 @@ from axelrod_wm.core.distributions import Beta, Distribution, DistSummary, summa
 from axelrod_wm.core.evidence import Evidence, Origin
 from axelrod_wm.core.temporal import KernelSpec, TimeState
 
-REVERSE_SUFFIX = "~r"
+REVERSE_SUFFIX = ":rev"
 
 
 class Direction(StrEnum):
@@ -97,7 +97,7 @@ class Interaction(BaseModel):
         return out
 
     def channel_items(self) -> list[tuple[str, str, str, EdgeDynamics]]:
-        """(channel key, source, target, dynamics); the reverse channel's key is ``<id>~r``."""
+        """(channel key, source, target, dynamics); the reverse channel's key is ``<id>:rev``."""
         out = [(self.id, self.source_id, self.target_id, self.forward)]
         if self.direction == Direction.BIDIRECTIONAL and self.reverse is not None:
             out.append((self.id + REVERSE_SUFFIX, self.target_id, self.source_id, self.reverse))

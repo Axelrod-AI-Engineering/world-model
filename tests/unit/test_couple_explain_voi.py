@@ -25,7 +25,7 @@ NOW = START + timedelta(days=30)
 def test_iterative_block_matches_union_graph_on_six_nodes():
     eng = constructed_engine(build=True)
     ctx = eng.context(learn=False, now=NOW)
-    ctx.scope, ctx.notes["horizon_steps"] = "T-c", 26
+    ctx.scope, ctx.notes["horizon_days"] = "T-c", 182
     keys = {"e30", "e01", "e25", "e26", "e15"}
     chans = graph_channels(eng.wm, keys)
     model = PrefilledModel(channels=chans, analog_evidence={}, network_episodes={}, drifts={}, instance_ids=[], notes=[])
@@ -37,7 +37,7 @@ def test_iterative_block_matches_union_graph_on_six_nodes():
         n.subentity_ids = sorted({s for c in n.channels for s in (c.source_id, c.target_id)})
     subs = set(n1.subentity_ids) | set(n2.subentity_ids)
     assert len(subs) == 6
-    shock = [ShockInput(subentity_id="interest_rates.us_policy_rate", size=1.0, start_step=1)]
+    shock = [ShockInput(subentity_id="interest_rates.us_policy_rate", size=1.0, start_day=1)]
     prop = eng.components["propagator"]
     u = UnionGraphCoupler(eng.config, prop)
     it = IterativeBlockCoupler(eng.config, prop)
@@ -58,7 +58,7 @@ def _chain_channel(src, tgt, beta):
 
 def test_path_shares_on_a_linear_chain_sum_to_one():
     chans = [_chain_channel("a", "b", 0.8), _chain_channel("b", "c", 0.5), _chain_channel("c", "d", -0.6)]
-    paths = top_paths(chans, [("a", 2.0)], ["b", "c", "d"], horizon=26, step_days=7, min_delay=1)
+    paths = top_paths(chans, [("a", 2.0)], ["b", "c", "d"], horizon=182, min_delay=1)
     for t in ("b", "c", "d"):
         share = sum(p.share for p in paths if p.target_id == t)
         assert abs(share - 1.0) <= 0.05
@@ -78,7 +78,7 @@ def test_voi_peaks_at_half_and_vanishes_at_certainty():
     ctx = eng.context(learn=False, now=NOW)
     vals = {}
     for alpha, beta in ((1.0, 1.0), (9.0, 1.0), (1e6, 1e-3), (1e-3, 1e6)):
-        with eng.mutator.begin(f"e43-{alpha}", now=NOW) as txn:
+        with eng.mutator.begin(f"e43-{alpha}", at=NOW) as txn:
             txn.update("interactions", "e43", existence=Beta(alpha=alpha, beta=beta))
         p = alpha / (alpha + beta)
         vals[round(p, 3)] = scorer.score(_hyp(eng, p), eng.wm, eng.ltm, ctx)
@@ -93,23 +93,34 @@ def test_voi_halves_after_one_half_life():
     assert h.current_value(NOW + timedelta(days=28)) == pytest.approx(0.2)
 
 
-def test_hypotheses_rescore_when_an_update_touches_their_entities():
+def test_hypotheses_rescore_when_a_non_routine_day_touches_their_entities():
+    """Re-scoring happens once a day, at consolidation, for hypotheses whose entities a non-routine
+    event touched that day; routine data releases only let the value decay (§8.11)."""
+    from tests.conftest import close_day, predict_day
+
     eng = constructed_engine(build=True)
     warm_taxonomies(eng)
-    with eng.mutator.begin("h", now=START) as txn:
-        txn.add("hypotheses", _hyp(eng, 0.5).model_copy(update={"scored_at": START}))
-    at = START + timedelta(days=10)
-    eng.learning.run(real_event([{"op": "observe_value",
-                                  "target": {"kind": "concrete", "subentity_id": "inflation.headline_cpi"},
-                                  "value": 3.1, "observed_at": at.isoformat()}], "GUE-touch", at,
-                                produced_by="data_feed", event_type="data_release"), at)
+    with eng.mutator.begin("h", at=eng.wm.clock) as txn:
+        txn.add("wm.hypotheses", _hyp(eng, 0.5).model_copy(update={"scored_at": eng.wm.clock}))
+    first = eng.wm.hypotheses["H-t"].scored_at
+    dev = eng.wm.deviations
+
+    def day(event):
+        d = eng.wm.last_processed_day + 1
+        predict_day(eng, d)
+        eng.learning.run(event(d), dev.day_start(d) + timedelta(hours=21), d)
+        close_day(eng, d)
+        return dev.day_end(d)
+
+    # a routine release on inflation: no re-score
+    day(lambda d: real_event([{"op": "observe_value", "target": {"kind": "concrete", "subentity_id": "inflation.headline_cpi"},
+                               "value": 2.8, "observed_at": dev.day_start(d).isoformat()}], f"GUE-r{d}",
+                             dev.day_start(d), produced_by="data_feed", event_type="data_release"))
+    assert eng.wm.hypotheses["H-t"].scored_at == first
+    # a non-routine change on inflation: re-scored at the day's consolidation
+    end = day(lambda d: real_event([{"op": "change_value", "target": {"kind": "concrete",
+                                     "subentity_id": "inflation.headline_cpi"}, "delta": 1.0, "mode": "standardized",
+                                     "at": dev.day_start(d).isoformat()}], f"GUE-n{d}", dev.day_start(d),
+                                   event_type="supply_shock"))
     h = eng.wm.hypotheses["H-t"]
-    assert h.scored_at == at and h.informational_value > 0
-    # an update elsewhere does not touch it
-    later = at + timedelta(days=7)
-    eng.learning.run(real_event([{"op": "observe_value",
-                                  "target": {"kind": "concrete", "subentity_id": "climate_change.carbon_price"},
-                                  "value": 71.0, "observed_at": later.isoformat()}], "GUE-far", later,
-                                produced_by="data_feed", event_type="data_release"), later)
-    assert eng.wm.hypotheses["H-t"].scored_at == at
-    assert np.isfinite(h.informational_value)
+    assert h.scored_at == end and np.isfinite(h.informational_value)

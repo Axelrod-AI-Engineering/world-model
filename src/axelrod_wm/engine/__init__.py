@@ -17,6 +17,7 @@ DEFAULT_MODULES = (
     "axelrod_wm.engine.abduction",
     "axelrod_wm.engine.analyze",
     "axelrod_wm.engine.propagation",
+    "axelrod_wm.engine.daily",
     "axelrod_wm.engine.learning",
     "axelrod_wm.engine.kernel_update",
     "axelrod_wm.engine.frontier_test",

@@ -57,6 +57,12 @@ class Proposal(BaseModel):
     reason: str | None = None                 # why the engine proposed it
     changeset_id: str | None = None           # the ChangeSet its approval produced
     version_after: int | None = None
+    world_event: bool = False                 # folded on its day by the update run (§7.6); else a model edit
+    needs_review: bool = True                 # from the review policy's assessment
+    update_id: str | None = None              # the update run that raised it
+    due_day: int | None = None                # world events: the day it belongs to
+    late_from: int | None = None              # set when it is folded on a later day (deferred, then approved)
+    folded_day: int | None = None             # world events: the day it was folded in
 
 
 class ReviewRequirement(BaseModel):
@@ -90,9 +96,10 @@ class DefaultReviewPolicy(ReviewPolicy):
         text = {"llm"}
         if config is not None:
             for kind in ("news", "filing", "analyst"):
-                text.add(config.translator(kind)[0])
+                for name, _ in config.translator_chain(kind):
+                    text.add(name)
         else:
-            text.add("hand_drawn")
+            text.update({"hand_drawn", "template"})
         self.text_translators = text
 
     def assess(self, proposal: Proposal, wm: WorkingMemory) -> ReviewRequirement:

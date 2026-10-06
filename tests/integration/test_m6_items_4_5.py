@@ -13,11 +13,14 @@ def test_items_4_and_5():
     ctl = make_controller()
     eng = ctl.engine
     warm_taxonomies(eng)
-    ctl.set_time(datetime(2026, 2, 9, tzinfo=timezone.utc))
-    tdiff_before = eng.ltm.interaction_taxonomy.nodes["gen:int:technology_diffusion"].stats.support
-    (p3,) = ctl.ingest(market_event("ME-03"))
-    assert p3.status == ProposalStatus.PENDING
+    now = datetime(2026, 2, 9, 14, tzinfo=timezone.utc)
+    ctl.advance_now(now)
+    day = eng.wm.last_processed_day + 1
+    tdiff_before = eng.ltm.interaction_generalizations.taxonomy.nodes["gen:int:technology_diffusion"].stats.support
+    (p3,) = ctl.pipeline.ingest(market_event("ME-03"), now)
+    assert p3.status == ProposalStatus.PENDING and p3.needs_review
     ctl.approve(p3.id, "reviewer")
+    ctl.fold_world_event(p3, day)                       # what the update run's day loop does next
     g = eng.wm.graph
     # item 4
     sub = g.subentities["cross_border_trade.chip_exports"]
@@ -26,12 +29,13 @@ def test_items_4_and_5():
     assert g.interactions[iid].generalization_id == "gen:int:trade_restriction"
     pend = list(eng.wm.pending_refinements.values())
     assert len(pend) == 1 and pend[0].reached == Specificity.GENERALIZATION and pend[0].node_id == "gen:obj:supply_factor"
-    assert eng.ltm.interaction_taxonomy.nodes["gen:int:technology_diffusion"].stats.support > tdiff_before
+    assert eng.ltm.interaction_generalizations.taxonomy.nodes["gen:int:technology_diffusion"].stats.support > tdiff_before
     # item 5
-    (p4,) = ctl.ingest(market_event("ME-04"))
+    (p4,) = ctl.pipeline.ingest(market_event("ME-04"), now)
     ctl.approve(p4.id, "reviewer")
+    ctl.fold_world_event(p4, day)
     rbi = g.entities["rbi"]
-    tax = eng.ltm.object_taxonomy
+    tax = eng.ltm.object_generalizations.taxonomy
     assert tax.path_from_root(rbi.generalization_id) == ["gen:obj:root", "gen:obj:actor", "gen:obj:monetary_authority",
                                                          "gen:obj:central_bank"]
     assert g.subentities["rbi.policy_stance"].prior_source_id == "gen:obj:central_bank"

@@ -6,7 +6,6 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 from axelrod_wm.events.graph_update import SPECIFICITY_NAMES, op_ends, target_specificity
-from axelrod_wm.events.ledger import LedgerKind
 from axelrod_wm.events.market import MarketEvent
 from axelrod_wm.ingest.translators import TranslationContext, TranslationResult
 from axelrod_wm.trace import Phase
@@ -24,16 +23,16 @@ def op_summary(op: Any) -> str:
     if kind == "add_subentity":
         return f"add {op.name} to {op.entity}"
     if kind == "observe_value":
-        return f"observe {_end_label(op.target)} = {op.value:g}"
+        return f"observe {_end_label(op.target)} = {op.value:.4g}"
     if kind == "change_value":
         unit = {"relative": "%", "absolute": "", "standardized": " sd"}[str(op.mode)]
         delta = op.delta * 100 if str(op.mode) == "relative" else op.delta
         extra = " (held)" if op.intervention else ""
-        return f"change {_end_label(op.target)} {delta:+g}{unit}{extra}"
+        return f"change {_end_label(op.target)} {delta:+.3g}{unit}{extra}"
     if kind == "add_interaction":
         return f"{_end_label(op.source)} → {_end_label(op.target)}: {op.label}"
     if kind == "reweight_interaction":
-        return f"{'support' if op.supports else 'weaken'} {op.interaction_id} ({op.strength:g})"
+        return f"{'support' if op.supports else 'weaken'} {op.interaction_id} ({op.strength:.2g})"
     if kind == "annotate_interaction":
         return f"note on {op.interaction_id}: {op.note}"
     if kind == "propose_hypothesis":
@@ -62,26 +61,44 @@ def op_ends_view(op: Any) -> list[dict]:
 
 
 class IngestionPipeline:
+    """Translate, refine, and assess one market event, producing proposals (§7.8). Nothing is applied
+    here: the update run folds world events on their day."""
+
     def __init__(self, controller: WorldModelController) -> None:
         self.controller = controller
 
+    def translate(self, event: MarketEvent, now: datetime) -> TranslationResult:
+        """Try the configured translators for the event's kind in order, until one returns events."""
+        c = self.controller
+        eng = c.engine
+        tracer = eng.tracer
+
+        def emit(kind: str, **payload: Any) -> None:
+            tracer.emit(Phase.TRANSLATE, kind, refs=[event.id], **payload)
+
+        tctx = TranslationContext(eng.wm, eng.ltm, eng.vocab, now, recent=lambda n: c.applied_events[-n:], emit=emit)
+        result: TranslationResult | None = None
+        for translator in c.translator_chain(str(event.kind)):
+            result = translator.translate(event, tctx)
+            if result.events:
+                break
+        return result or TranslationResult(market_event_id=event.id, events=[], rationale="no translator")
+
     def ingest(self, event: MarketEvent, now: datetime) -> list[Proposal]:
+        with self.controller.engine.tracer.scoped(event.id):
+            return self._ingest(event, now)
+
+    def _ingest(self, event: MarketEvent, now: datetime) -> list[Proposal]:
         c = self.controller
         eng = c.engine
         tracer = eng.tracer
         tracer.set_context(sim_time=now, state_version=eng.version)
         c.market_events[event.id] = event
-        eng.ledger.append(LedgerKind.MARKET_EVENT, event, occurred_at=event.occurred_at, recorded_at=now)
         tracer.emit(Phase.INGEST, "market_event.received", refs=[event.id], id=event.id, kind=str(event.kind),
-                    headline=event.headline, source=event.source, synthetic=event.synthetic,
-                    published_at=event.published_at.isoformat())
-        translator = c.translator_for(str(event.kind))
-
-        def emit(kind: str, **payload: Any) -> None:
-            tracer.emit(Phase.TRANSLATE, kind, refs=[event.id], **payload)
-
-        tctx = TranslationContext(eng.wm, eng.ltm, now, recent=lambda n: c.applied_events[-n:], emit=emit)
-        result: TranslationResult = translator.translate(event, tctx)
+                    channel=str(event.channel), headline=event.headline, source=event.source,
+                    synthetic=event.synthetic, published_at=event.published_at.isoformat(),
+                    update_id=event.update_id)
+        result = self.translate(event, now)
         c.translations[event.id] = result
         if not result.events:
             c.market_status[event.id] = "no translation"
@@ -97,5 +114,5 @@ class IngestionPipeline:
             ref = c.refine(ev, now)
             c.market_status[event.id] = "refined"
             proposals.append(c.propose("graph_update", ref.event, steps=ref.steps, pending=ref.pending,
-                                       soft_support=ref.soft_support, market_event_id=event.id))
+                                       soft_support=ref.soft_support, market_event_id=event.id, world=True))
         return proposals

@@ -32,7 +32,7 @@ class PropagationAnalyzer(Analyzer):
     def analyze(self, parsed: ParsedEvent, model: PrefilledModel, wm: WorkingMemory, ctx: ProcessContext) -> Analysis:
         H = horizon_for(ctx)
         if not parsed.shocks or not model.channels:
-            return Analysis(event_id=parsed.event_id, result=None, expected_moves={}, horizon_steps=H)
+            return Analysis(event_id=parsed.event_id, result=None, expected_moves={}, horizon_days=H)
         episodes = set(model.recalled_episode_ids)
         channels = [model.channel_with(k, episodes) for k in sorted(model.channels)]
         system = build_system(channels, wm, ctx, H, extra_subentities=[s.subentity_id for s in parsed.shocks],
@@ -49,4 +49,4 @@ class PropagationAnalyzer(Analyzer):
                 expected[sid] = summarize_samples(col)
         emit_frames(ctx, Phase.ANALYZE, f"analyze:{parsed.event_id}", effect, refs=[parsed.event_id])
         return Analysis(event_id=parsed.event_id, result=effect, expected_moves=expected, levels=shocked,
-                        horizon_steps=H)
+                        horizon_days=H)

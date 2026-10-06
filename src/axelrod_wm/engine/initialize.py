@@ -1,11 +1,12 @@
 """Initialization (Figure 6, "executed once"; §8.13): construction specs, taxonomies, seeds.
 
-The history replay and the cached init snapshot are in ``Initializer.initialize`` (M7).
+The history replay is one long update run (§7.8) driven by the scenario runner, which also caches
+the init snapshot.
 """
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, date, datetime, time, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -48,8 +49,7 @@ from axelrod_wm.core.taxonomy import (
 )
 from axelrod_wm.core.temporal import parse_kernel
 from axelrod_wm.events.ledger import LedgerKind
-from axelrod_wm.memory.patterns import SuperInteractionBuilder
-from axelrod_wm.memory.working import DeviationHistory
+from axelrod_wm.memory.long_term import SuperInteractionBuilder
 
 if TYPE_CHECKING:
     from axelrod_wm.control.mutator import MutationTxn
@@ -108,6 +108,7 @@ class EntitySpec(_Spec):
     category_tags: list[CategoryTag]
     aliases: list[str] = []
     features: dict[str, str] = {}
+    description: str = ""
     subentities: list[SubentitySpec] = []
 
 
@@ -276,12 +277,13 @@ class PatternSeed(_Spec):
     support: float = 0.0
     bind: bool = True
     sub_patterns: list[str] = []
+    description: str = ""
 
 
 class FrontierSeed(_Spec):
     earlier: str
     later: str
-    lag_steps: int = 1
+    lag_days: int = 7
     sign: int = 1
     support: float = 1.0
 
@@ -325,45 +327,56 @@ class Initializer:
         self.engine = engine
 
     # -- construct -------------------------------------------------------------------------
-    def construct(self, spec: ConstructionSpec, taxonomy_dir: str | Path, *, start: datetime,
+    def construct(self, spec: ConstructionSpec, taxonomy_dir: str | Path, *, start: date | datetime,
                   vocab: AttributeVocabulary | None = None) -> None:
-        """Construct entities, set priors, and specify causal edges, with origin=construction.
-        Writes through the mutator as one ChangeSet with cause "construction"."""
+        """Construct entities, set priors, and specify causal edges, with origin=construction (§8.13
+        step 1). Day 0 is `start`, the first history day: `wm.last_processed_day` is -1 and `wm.clock`
+        is the end of the day before. Every interaction gets its ChannelStates at day 0. Writes
+        through the mutator as one ChangeSet with cause "construction"."""
+        from axelrod_wm.engine.daily import ensure_channel_states
+
         eng = self.engine
-        vocab = vocab or load_vocabulary(taxonomy_dir)
+        vocab = vocab or eng.vocab or load_vocabulary(taxonomy_dir)
+        if not eng.vocab.kinds:
+            eng.vocab = vocab
         spec.validate_spec(vocab)
+        day0 = start.date() if isinstance(start, datetime) else start
+        clock = datetime.combine(day0 - timedelta(days=1), time(23, 59, 59), tzinfo=UTC)
         obj_tax = load_taxonomy(resolve_path(taxonomy_dir) / "objects.yaml", TaxonomyKind.OBJECT)
         int_tax = load_taxonomy(resolve_path(taxonomy_dir) / "interactions.yaml", TaxonomyKind.INTERACTION)
         obj_home = {iid: gid for gid, n in obj_tax.nodes.items() for iid in n.instance_ids}
         int_home = {iid: gid for gid, n in int_tax.nodes.items() for iid in n.instance_ids}
-        with eng.mutator.begin("construction", now=start) as txn:
-            txn.set("wm.clock", start)
-            txn.set("wm.deviations", DeviationHistory(origin_date=start,
-                                                      step_days=float(eng.config.time.propagation_step_days)))
-            txn.set("ltm.attributes", vocab)
-            txn.set("ltm.object_taxonomy.root_id", obj_tax.root_id)
-            txn.set("ltm.interaction_taxonomy.root_id", int_tax.root_id)
+        with eng.mutator.begin("construction", at=clock) as txn:
+            txn.set("wm.clock", clock)
+            txn.set("wm.last_processed_day", -1)
+            txn.set("wm.deviations.origin_date", day0)
+            txn.set("wm.deviations.first_kept_day", 0)
+            txn.set("ltm.object_generalizations.taxonomy.root_id", obj_tax.root_id)
+            txn.set("ltm.interaction_generalizations.taxonomy.root_id", int_tax.root_id)
             for gid in obj_tax.nodes:
-                txn.add("generalizations.object", obj_tax.nodes[gid])
+                txn.add("ltm.object_generalizations.taxonomy.nodes", obj_tax.nodes[gid])
             for gid in int_tax.nodes:
-                txn.add("generalizations.interaction", int_tax.nodes[gid])
+                txn.add("ltm.interaction_generalizations.taxonomy.nodes", int_tax.nodes[gid])
             txn.set("wm.decision_variables", list(spec.decision_variables))
             txn.set("wm.graph.entity_link_labels", dict(spec.entity_link_labels))
             for es in spec.entities:
-                self._add_entity(txn, es, vocab, obj_home.get(es.id), start)
+                self._add_entity(txn, es, vocab, obj_home.get(es.id), clock)
             for ispec in spec.interactions:
-                self._add_interaction(txn, ispec, int_home.get(ispec.id), start)
+                self._add_interaction(txn, ispec, int_home.get(ispec.id), clock)
             # internal interactions of each entity
             internal: dict[str, list[str]] = {}
             for ispec in spec.interactions:
                 if entity_of(ispec.source) == entity_of(ispec.target):
                     internal.setdefault(entity_of(ispec.source), []).append(ispec.id)
             for eid, ids in sorted(internal.items()):
-                txn.update("entities", eid, internal_interaction_ids=ids)
+                txn.update("wm.graph.entities", eid, internal_interaction_ids=ids)
+            ctx = eng.context(learn=True, now=clock, processing_day=0)
+            for iid in sorted(eng.wm.graph.interactions):
+                ensure_channel_states(eng.wm.graph.interactions[iid], eng.wm, ctx, txn, day=0)
         eng.ledger.append(LedgerKind.CONSTRUCTION, {"spec_hash": spec.spec_hash(), "entities": len(spec.entities),
                                                     "subentities": len(spec.subentity_ids()),
                                                     "interactions": len(spec.interactions)},
-                          recorded_at=start)
+                          recorded_at=clock)
 
     def _add_entity(self, txn: MutationTxn, es: EntitySpec, vocab: AttributeVocabulary,
                     gen_id: str | None, now: datetime) -> None:
@@ -376,12 +389,12 @@ class Initializer:
                             aliases=s.aliases, features=s.features, scale=scale, obs_noise=s.obs_noise,
                             prior=prior, posterior=prior, anchor=m, origin=Origin.CONSTRUCTION,
                             prior_source_id="construction")
-            txn.add("subentities", sub)
+            txn.add("wm.graph.subentities", sub)
             sub_ids.append(s.id)
         ent = Entity(id=es.id, name=es.name, kind=es.kind, aliases=es.aliases, category_tags=set(es.category_tags),
                      features=es.features, subentity_ids=sub_ids, generalization_id=gen_id,
-                     origin=Origin.CONSTRUCTION, created_at=now)
-        txn.add("entities", ent)
+                     origin=Origin.CONSTRUCTION, created_at=now, description=es.description)
+        txn.add("wm.graph.entities", ent)
 
     def _add_interaction(self, txn: MutationTxn, i: InteractionSpec, gen_id: str | None, now: datetime) -> None:
         eff = dict(i.effect or {"mu": 0.0})
@@ -413,20 +426,21 @@ class Initializer:
                             reverse=reverse, parameters=params, evidence=evidence, generalization_id=gen_id,
                             internal=entity_of(i.source) == entity_of(i.target), tags=list(i.tags), created_at=now,
                             prior_source_id="construction")
-        txn.add("interactions", inter)
+        txn.add("wm.graph.interactions", inter)
 
     # -- seeds -----------------------------------------------------------------------------
     def load_seeds(self, seeds: SeedFile, *, now: datetime) -> list[str]:
         """Seed patterns (origin=seed, status=admitted) and their instances inst-<id> (§14.4)."""
         eng = self.engine
         graph = eng.wm.graph
-        obj_home = {iid: gid for gid, n in eng.ltm.object_taxonomy.nodes.items() for iid in n.instance_ids}
+        og = eng.ltm.object_generalizations
+        obj_home = {iid: gid for gid, n in og.taxonomy.nodes.items() for iid in n.instance_ids}
         created = []
-        with eng.mutator.begin("seeds", now=now) as txn:
+        with eng.mutator.begin("seeds", at=now) as txn:
             palettes = dict(DEFAULT_PALETTES)
             palettes.update(seeds.palettes)
-            txn.set("ltm.patterns.palettes", palettes)
-            txn.set("ltm.patterns.super_interaction_labels",
+            txn.set("ltm.object_generalizations.palettes", palettes)
+            txn.set("ltm.object_generalizations.super_interaction_labels",
                     {f"{d['source']}->{d['target']}": d["label"] for d in seeds.super_interaction_labels})
             for ps in seeds.patterns:
                 for m in ps.members:
@@ -439,7 +453,7 @@ class Initializer:
                 for m in ps.members:
                     ent = graph.entities[m]
                     kinds = sorted({graph.subentities[s].attribute_kind for s in ent.subentity_ids})
-                    roles.append(RoleSpec(name=m, generalization_id=ent.generalization_id or eng.ltm.object_taxonomy.root_id,
+                    roles.append(RoleSpec(name=m, generalization_id=ent.generalization_id or og.taxonomy.root_id,
                                           attribute_kinds=kinds))
                 relations = [self._relation(iid, True) for iid in ps.interactions]
                 relations += [self._relation(iid, False) for iid in ps.absent_interactions]
@@ -447,43 +461,29 @@ class Initializer:
                     id=ps.id, name=ps.name, roles=roles, relations=relations, sub_pattern_ids=ps.sub_patterns,
                     support=ps.support, status=SuperentityStatus.ADMITTED, rival_ids=set(ps.rivals),
                     generalization_id=obj_home.get(ps.id), origin=Origin.SEED, palette=ps.palette, created_at=now,
+                    description=ps.description,
                     last_seen=None)
-                txn.add("patterns", pattern)
+                txn.add("ltm.object_generalizations.patterns", pattern)
                 created.append(ps.id)
                 if ps.bind:
+                    # a composite's instance lists its parts' instances, which bind earlier in the file
+                    children = [f"inst-{c}" for c in ps.sub_patterns]
+                    for c in children:
+                        if c not in graph.instances:
+                            raise ConstructionError(f"seed pattern {ps.id!r}: part {c[5:]!r} must be a bound seed "
+                                                    "listed before it")
                     inst = SuperentityInstance(id=f"inst-{ps.id}", pattern_id=ps.id,
                                                bindings={m: m for m in ps.members},
                                                interaction_ids=list(ps.interactions),
-                                               absent_interaction_ids=list(ps.absent_interactions))
-                    txn.add("instances", inst)
-            SuperInteractionBuilder().rebuild(eng.wm.graph, eng.ltm.patterns, txn)
+                                               absent_interaction_ids=list(ps.absent_interactions),
+                                               child_instance_ids=children)
+                    txn.add("wm.graph.instances", inst)
+            SuperInteractionBuilder().rebuild(eng.wm.graph, og, txn)
         return created
 
-    def replay_history(self, controller: Any, events: list[Any]) -> int:
-        """Replay dated market events through the ingestion pipeline with the auto_approve_all
-        policy, consolidating at each day boundary (§8.13 step 4). During the replay the frontier
-        tester does not run, inducer.bind() binds nothing, inducer.count() only adds support to
-        seed patterns, seed supports do not decay, and nothing structural is proposed."""
-        eng = self.engine
-        eng.initializing = True
-        keep_snap = eng.snapshot_on_consolidation
-        eng.snapshot_on_consolidation = False
-        policy = eng.config.review.policy
-        controller.set_review_policy("auto_approve_all")
-        try:
-            for ev in sorted(events, key=lambda e: (e.published_at, e.id)):
-                controller.ingest(ev)
-            days = eng.wm.touched_days()
-            if days:
-                controller.consolidate(days[-1])
-        finally:
-            eng.initializing = False
-            eng.snapshot_on_consolidation = keep_snap
-            controller.set_review_policy(policy)
-        return len(events)
-
     def load_frontier_seeds(self, seeds: SeedFile, *, now: datetime) -> list[str]:
-        """Frontier seeds become CoMovement entries with seeded=True, each with its hypothesis (§8.13)."""
+        """Frontier seeds become CoMovement entries with seeded=True, each with its hypothesis (§8.13
+        step 5). Their corr and response are backfilled from the replayed history."""
         from axelrod_wm.core.hypothesis import Hypothesis, HypothesisKind
         from axelrod_wm.memory.frontier import CoMovement, backfilled, comovement_statement
 
@@ -491,29 +491,38 @@ class Initializer:
         cfg = eng.config
         rec = float(cfg.thresholds.recognition)
         created = []
-        with eng.mutator.begin("frontier_seeds", now=now) as txn:
-            step = eng.wm.deviations.step_of(now)
+        day = int(eng.wm.last_processed_day)
+        with eng.mutator.begin("frontier_seeds", at=now) as txn:
             for fs in seeds.frontier_seeds:
                 for sid in (fs.earlier, fs.later):
                     if sid not in eng.wm.graph.subentities:
                         raise ConstructionError(f"frontier seed: unknown subentity {sid!r}")
                 cm_id = txn.new_id("CM")
                 h_id = txn.new_id("H")
-                co = CoMovement(id=cm_id, earlier_id=fs.earlier, later_id=fs.later, lag_steps=fs.lag_steps,
+                co = CoMovement(id=cm_id, earlier_id=fs.earlier, later_id=fs.later, lag_days=fs.lag_days,
                                 sign=fs.sign, support=fs.support, first_seen=now, last_seen=now, seeded=True,
-                                hypothesis_id=h_id)
-                co = backfilled(co, eng.wm.deviations, step, int(cfg.frontier.window_steps),
-                                int(cfg.frontier.backfill_steps))
-                txn.add("frontier", co)
+                                hypothesis_id=h_id, ambiguous_direction=fs.lag_days == 0)
+                # non-overlapping windows ending at the last replayed day
+                w = int(cfg.frontier.window_days)
+                co = backfilled(co, eng.wm.deviations, day + w, w, int(cfg.frontier.backfill_days))
+                txn.add("ltm.correlation_frontier.entries", co)
                 hyp = Hypothesis(id=h_id, kind=HypothesisKind.INTERACTION_PRESENT,
                                  statement=comovement_statement(eng.wm.graph, fs.earlier, fs.later, fs.sign),
                                  source_id=fs.earlier, target_id=fs.later,
                                  probability=fs.support / (fs.support + rec + 1.0), scored_at=now,
                                  half_life_days=float(cfg.hypotheses.half_life_days), origin=Origin.SEED,
                                  comovement_id=cm_id)
-                txn.add("hypotheses", hyp)
+                txn.add("wm.hypotheses", hyp)
                 created.append(cm_id)
         return created
+
+    def set_cursors(self, sources: list[str], at: datetime) -> None:
+        """Put a cursor for every live source at `at`, so the first live update collects only what is
+        published after the history (§8.13 step 5)."""
+        eng = self.engine
+        with eng.mutator.begin("cursors", at=at) as txn:
+            for name in sources:
+                txn.put("wm.source_cursors", name, at)
 
     def _relation(self, interaction_id: str, present: bool) -> PatternRelation:
         graph = self.engine.wm.graph

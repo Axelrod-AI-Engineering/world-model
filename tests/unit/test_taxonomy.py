@@ -45,7 +45,7 @@ def _int_between(eng, a, b):
 
 def test_rbi_and_india_edge_classify_and_inherit(warm_engine):
     eng = warm_engine
-    res = eng.learning.run(real_event(ME04_OPS, "GUE-ME04", AT, produced_by="hand_drawn"), AT)
+    res = eng.learning.run(real_event(ME04_OPS, "GUE-ME04", AT, produced_by="hand_drawn"), AT, 0)
     paths = {c.item_id: c for c in res.shared.classifications}
     assert paths["rbi"].path == ["gen:obj:root", "gen:obj:actor", "gen:obj:monetary_authority", "gen:obj:central_bank"]
     g = eng.wm.graph
@@ -61,10 +61,10 @@ def test_rbi_and_india_edge_classify_and_inherit(warm_engine):
 
 def test_prior_source_respects_the_recall_threshold():
     eng = constructed_engine(build=True)          # supports are 0: nothing is supported
-    eng.learning.run(real_event(ME04_OPS, "GUE-ME04", AT), AT)
+    eng.learning.run(real_event(ME04_OPS, "GUE-ME04", AT), AT, 0)
     sub = eng.wm.graph.subentities["rbi.policy_stance"]
     assert sub.prior_source_id in ("graph", "vocabulary")
-    assert eng.ltm.object_taxonomy.nodes["gen:obj:central_bank"].stats.support == 1.0
+    assert eng.ltm.object_generalizations.taxonomy.nodes["gen:obj:central_bank"].stats.support == 1.0
 
 
 def test_chip_edge_classifies_under_technology_diffusion(warm_engine):
@@ -72,11 +72,11 @@ def test_chip_edge_classifies_under_technology_diffusion(warm_engine):
     eng.learning.run(real_event([{"op": "add_subentity", "entity": "cross_border_trade",
                                   "temp_id": "new:cross_border_trade.chip_exports", "name": "Chip exports",
                                   "attribute_kind": "trade_flow", "unit": "index",
-                                  "features": {"product": "semiconductors"}}], "GUE-A", AT), AT)
+                                  "features": {"product": "semiconductors"}}], "GUE-A", AT), AT, 0)
     eng.learning.run(real_event([{"op": "add_interaction",
                                   "source": {"kind": "concrete", "subentity_id": "cross_border_trade.chip_exports"},
                                   "target": {"kind": "concrete", "subentity_id": "productivity_tech.tech_capex"},
-                                  "label": "supports investment by chip users", "polarity": 1}], "GUE-B", AT), AT)
+                                  "label": "supports investment by chip users", "polarity": 1}], "GUE-B", AT), AT, 0)
     inter = _int_between(eng, "cross_border_trade.chip_exports", "productivity_tech.tech_capex")
     assert inter.generalization_id == "gen:int:technology_diffusion"
     sub = eng.wm.graph.subentities["cross_border_trade.chip_exports"]
@@ -92,7 +92,7 @@ def test_classification_never_overwrites_supplied_priors(warm_engine):
             "target": {"kind": "concrete", "subentity_id": "inflation.core_cpi"}, "label": "feeds", "polarity": 1,
             "dynamics": {"effect": {"family": "gaussian", "mu": 0.77, "sigma": 0.1},
                          "kernel": {"delay_days": 3, "lag_days": 5, "duration_days": None}}}
-    eng.learning.run(real_event([op, edge], "GUE-P", AT), AT)
+    eng.learning.run(real_event([op, edge], "GUE-P", AT), AT, 0)
     sub = eng.wm.graph.subentities["inflation.services_cpi"]
     assert sub.prior == Gaussian(mu=4.0, sigma=0.3) and sub.scale == 0.3 and sub.anchor == 4.0
     inter = _int_between(eng, "inflation.services_cpi", "inflation.core_cpi")
@@ -101,12 +101,12 @@ def test_classification_never_overwrites_supplied_priors(warm_engine):
 
 def test_path_update_increments_supports():
     eng = constructed_engine(build=True)
-    tax = eng.ltm.object_taxonomy
+    tax = eng.ltm.object_generalizations.taxonomy
     before = {g: n.stats.support for g, n in tax.nodes.items()}
     warm_taxonomies(eng, rounds=1)
-    assert tax.nodes["gen:obj:root"].stats.support == before["gen:obj:root"] + 33
+    assert tax.nodes["gen:obj:root"].stats.support == before["gen:obj:root"] + 48     # every entity
     assert tax.nodes["gen:obj:central_bank"].stats.support == 2
-    assert tax.nodes["gen:obj:actor"].stats.support == 4
+    assert tax.nodes["gen:obj:actor"].stats.support == 18    # agencies, people, and companies
     assert "policy_rate" in tax.nodes["gen:obj:central_bank"].stats.attribute_level
 
 
@@ -144,7 +144,7 @@ def test_grower_splits_on_a_shared_feature(m1_engine):
     # five firms under gen:obj:firm, four of them in the EU
     from axelrod_wm.core.entity import Entity
 
-    with eng.mutator.begin("firms", now=AT) as txn:
+    with eng.mutator.begin("firms", at=AT) as txn:
         ids = []
         for k in range(5):
             eid = f"firm{k}"
@@ -154,8 +154,8 @@ def test_grower_splits_on_a_shared_feature(m1_engine):
                                        generalization_id="gen:obj:firm"))
         txn.update("generalizations.object", "gen:obj:firm", instance_ids=ids)
     ctx = eng.context(learn=True, now=AT)
-    tax = eng.ltm.object_taxonomy
-    with eng.mutator.begin("grow", now=AT) as txn:
+    tax = eng.ltm.object_generalizations.taxonomy
+    with eng.mutator.begin("grow", at=AT) as txn:
         created = SplitOnSharedFeatureGrower().maybe_split(tax, "gen:obj:firm", ctx, txn)
     assert len(created) == 1
     child = tax.nodes[created[0]]
@@ -163,5 +163,5 @@ def test_grower_splits_on_a_shared_feature(m1_engine):
     assert sorted(child.instance_ids) == ["firm0", "firm1", "firm2", "firm3"]
     assert tax.nodes["gen:obj:firm"].instance_ids == ["firm4"]
     assert eng.wm.graph.entities["firm0"].generalization_id == child.id
-    with eng.mutator.begin("grow2", now=AT) as txn:   # three of a kind is not enough (recognition = 3)
+    with eng.mutator.begin("grow2", at=AT) as txn:   # three of a kind is not enough (recognition = 3)
         assert SplitOnSharedFeatureGrower().maybe_split(tax, child.id, ctx, txn) == []
