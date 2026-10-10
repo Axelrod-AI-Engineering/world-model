@@ -10,6 +10,7 @@ import { scatter } from "../charts/fan.js";
 import { sparkline } from "../charts/sparkline.js";
 import { paletteOf } from "../graph/hulls.js";
 import { CATEGORY_BLURBS, CATEGORY_NAMES } from "../graph/layouts.js";
+import { rowLabels } from "../graph/model.js";
 import { store } from "../store.js";
 import { esc, fmt, fmtDate, fmtTime, signed } from "../util.js";
 import { reportView } from "./update.js";
@@ -122,22 +123,42 @@ export function initInspector({ onSelect, focusNode, renderer, onAction, scopeFo
     const tags = (e.category_tags ?? []).slice().sort();
     const groupKeys = renderer.groupsInfo.ofEntity.get(id) ?? [];
     const marks = renderer.model?.marks ?? new Map();
-    // one line per value (name, a small picture of its distribution, how far from normal); a click opens it
-    const subRows = v.subentities.map((s) => {
+    // one line per value (name, a small picture of its distribution, how far from normal); a click opens it.
+    // Names read as on the canvas, without the entity's name they all start with.
+    const labels = rowLabels(v.subentities);
+    const subOpen = (sid) => store.view?.subentities.find((x) => x.id === sid)?.open;
+    const rowHtml = (s) => {
       const usedBy = (marks.get(s.id) ?? []).map((k) => groupChip(k, renderer.groupsInfo.byKey.get(k)?.hulls[0]?.pattern_id)).join(" ");
       const open = s.id === focusSub || v.subentities.length === 1;
       return `<details class="subrow ${s.id === focusSub ? "selected" : ""}" data-sub="${esc(s.id)}" ${open ? "open" : ""}>
-        <summary><span class="nm">${esc(s.name)}${s.decision_variable ? ` <span class="badge init">decision</span>` : ""}</span>
+        <summary><span class="nm" title="${esc(s.name)}">${esc(labels.get(s.id) ?? s.name)}${s.decision_variable ? ` <span class="badge init">decision</span>` : ""}</span>
           <span class="mini"></span><span class="val">${zText(s.z)}</span></summary>
         <div class="subbody">
           <div class="dens"><span class="big"></span><span class="small muted">median <b class="mono">${fmt(s.summary.q50)}</b> ${esc(s.unit)}<br>
             90%: ${fmt(s.summary.q05)} to ${fmt(s.summary.q95)}<br><span class="faint">dashed: its normal range</span></span></div>
           <div class="small muted">${s.observed_today ? "● observed today" : s.observed === false ? "◌ never observed; moved by the graph" : "◌ carried forward by daily propagation"}</div>
+          ${subOpen(s.id) != null ? `<div class="small tt-open"><span class="on-dot" aria-hidden="true"></span><span>Open node ${Math.round(100 * subOpen(s.id))}% <span class="muted">of its movement is not explained by the graph yet</span></span></div>` : ""}
           <div class="spark"></div>
           ${usedBy ? `<div class="small">used by ${usedBy}</div>` : ""}
           <div class="row"><button class="ghost small" data-act="forecast" data-arg="subentity|${esc(s.id)}">Forecast it</button>
-            ${scopeFor?.(s.id) ? `<button class="ghost small" data-act="walk" data-arg="${esc(scopeFor(s.id))}">Walk through its latest news ▸</button>` : ""}</div>
+            ${scopeFor?.(s.id) ? `<button class="ghost small" data-act="walk" data-arg="${esc(scopeFor(s.id))}" title="Step through what the model did with the latest news about it">How it learned ▸</button>` : ""}</div>
         </div></details>`;
+    };
+    // the values its kinds give every member come first, under the kind that gives them, then its own: similar
+    // objects have similar subentities, and the line names the entities that share them
+    const kindName = new Map((v.generalization_path ?? []).map((g) => [g.id, g.name]));
+    const order = [...new Set(v.subentities.map((s) => s.slot_of ?? ""))];
+    const kinOf = (k) => {
+      const slots = new Set(v.subentities.filter((s) => s.slot_of === k).map((s) => s.slot));
+      const subs = store.view?.subentities ?? [];
+      return (store.view?.entities ?? []).filter((x) => x.id !== id && subs.some((s) => s.entity_id === x.id && slots.has(s.slot)))
+        .map((x) => x.name);
+    };
+    const subRows = order.length === 1 && !order[0] ? v.subentities.map(rowHtml).join("") : order.map((k) => {
+      const kin = k ? kinOf(k) : [];
+      const head = k ? `Like every ${esc((kindName.get(k) ?? k).toLowerCase())}` : "Its own";
+      const also = kin.length ? ` <span class="faint">· also ${esc(kin.length <= 3 ? kin.join(", ") : `${kin.slice(0, 2).join(", ")} and ${kin.length - 2} more`)}</span>` : "";
+      return `<div class="kin-h">${head}${also}</div>${v.subentities.filter((s) => (s.slot_of ?? "") === k).map(rowHtml).join("")}`;
     }).join("");
     const memory = v.entity_memory ? fold(`Entity memory <span class="faint small">${v.entity_memory.entries} weekly entries</span>`,
       Object.entries(v.entity_memory.profiles ?? {}).map(([sid, prof]) => `<div class="small"><b>${esc(subName(sid))}</b> decisions by context:
@@ -148,17 +169,20 @@ export function initInspector({ onSelect, focusNode, renderer, onAction, scopeFo
       <div class="group-label">Entity · ${esc(e.kind.replace(/_/g, " "))}${node?.loose ? " · in no superentity" : ""}</div>
       <h3>${esc(e.name)}</h3>
       <div class="row" style="margin:6px 0">${tags.map((t) => `<span class="badge" title="${esc(CATEGORY_BLURBS[t] ?? "")}"><code>${esc(t)}</code> ${esc(CATEGORY_NAMES[t] ?? t)}</span>`).join("")}
-        ${e.origin !== "construction" ? `<span class="badge real">learned from ${esc(e.origin)}</span>` : ""}</div>
+        ${e.origin !== "construction" ? `<span class="badge real">learned from ${esc(e.origin)}</span>` : ""}
+        ${node?.user_confidence != null && node.user_confidence < 1 ? `<span class="badge" title="The reviewer's confidence when it was added">added at ${Math.round(100 * node.user_confidence)}% confidence</span>` : ""}</div>
       ${e.description ? `<p class="lede">${esc(e.description)}</p>` : ""}
       ${tags.length ? `<p class="small muted">${tags.map((t) => esc(CATEGORY_BLURBS[t] ?? "")).join(" ")}</p>` : ""}
       <div class="row" style="margin:8px 0 4px">
         <button data-act="toggle-entity" data-arg="${esc(id)}">${renderer.ui.expanded.has(id) ? "Close its subentities" : "Show its subentities"}</button>
         <button data-act="ask-entity" data-arg="${esc(id)}">What if it moves?</button>
         <button data-act="forecast" data-arg="entity|${esc(id)}">Forecast it</button>
-        ${walkScope ? `<button data-act="walk" data-arg="${esc(walkScope)}" title="Step through the latest news that touched it">Walk through ▸</button>` : ""}</div>
+        ${walkScope ? `<button data-act="walk" data-arg="${esc(walkScope)}" title="Step through what the model did with the latest news that touched it">How it learned ▸</button>` : ""}</div>
       <div class="section"><h4>Its values now</h4>${subRows}</div>
       <div class="section"><h4>Part of</h4>${groupKeys.map((k) => groupChip(k)).join(" ") || "<span class='muted small'>no superentity yet: a loose entity</span>"}</div>
-      <div class="section"><h4>Pushed by <span class="faint small">${v.in_links.length}</span></h4>${more(v.in_links.map((i) => edgeLine(i, "in")), 4, "<span class='muted small'>nothing in the graph</span>")}</div>
+      <div class="section"><h4>Pushed by <span class="faint small">${v.in_links.length}</span></h4>${more(v.in_links.map((i) => edgeLine(i, "in")), 4, "<span class='muted small'>nothing in the graph</span>")}
+        ${node?.open != null ? `<div class="small tt-open" title="Its open node: the share of its values' movement over the last weeks that no interaction in the graph explains (a cause outside the model, so far)"><span class="on-dot" aria-hidden="true"></span>
+          <span><b>Something not in the graph: ${Math.round(100 * node.open)}%</b> <span class="muted">of its values' movement</span></span></div>` : ""}</div>
       <div class="section"><h4>Pushes <span class="faint small">${v.out_links.length}</span></h4>${more(v.out_links.map((i) => edgeLine(i, "out")), 4, "<span class='muted small'>nothing in the graph</span>")}</div>
       ${fold(`Classified as <span class="faint small">${esc(v.generalization_path.at(-1)?.name ?? "unclassified")}</span>`,
         `<div class="path-list">${v.generalization_path.map((g) => `<span class="node">${esc(g.name)}</span>`).join("") || "<span class='muted'>unclassified</span>"}</div>`)}
@@ -166,7 +190,7 @@ export function initInspector({ onSelect, focusNode, renderer, onAction, scopeFo
     for (const s of v.subentities) {
       const row = d.querySelector(`[data-sub="${CSS.escape(s.id)}"]`);
       row.querySelector(".mini").appendChild(densitySvg(s.density, { width: 56, height: 14, prior: s.prior_density, marker: s.summary?.q50 }));
-      row.querySelector(".big").appendChild(densitySvg(s.density, { width: 150, height: 34, labels: true, prior: s.prior_density, marker: s.summary?.q50 }));
+      row.querySelector(".big").appendChild(densitySvg(s.density, { width: 150, height: 34, labels: true, unit: s.unit, prior: s.prior_density, marker: s.summary?.q50 }));
       row.querySelector(".spark").appendChild(sparkline(s.daily ?? [], { value: (p) => p.z, width: 340, height: 34, zero: true,
         dot: (p) => p.observed, label: `${s.name}: deviation over the last ${(s.daily ?? []).length} days` }));
     }
@@ -183,11 +207,14 @@ export function initInspector({ onSelect, focusNode, renderer, onAction, scopeFo
       <h3>${esc(r.label)}</h3>
       <p class="lede">${link("subentity", r.source, subName(r.source))} ${sign} ${link("subentity", r.target, subName(r.target))},
         after about ${fmt(r.kernel_means?.delay_days, 0)} days, building over ${fmt(r.kernel_means?.lag_days, 0)} more.</p>
+      ${linkOf(id)?.hedge ? `<p class="small hedge-note">A candidate of a fuzzy end: ${Math.round(100 * (linkOf(id).hedge_p ?? 0))}% likely to be the one the
+        article meant. It stays soft until later evidence carries one candidate past the bound and a reviewer approves.</p>` : ""}
+      ${linkOf(id)?.user_confidence != null && linkOf(id).user_confidence < 1 ? `<p class="small muted">Its latest evidence came at the reviewer's ${Math.round(100 * linkOf(id).user_confidence)}% confidence.</p>` : ""}
       ${others.length ? `<div class="small muted">The same arrow on the canvas also carries ${others.map((x) => link("interaction", x, linkOf(x)?.label ?? x)).join(", ")}.</div>` : ""}
       <div class="section"><h4>Weight over time</h4><div class="small">significance now ${summ(r.weight.now)}</div><div class="wspark"></div></div>
-      <details class="section fold"><summary><h4>The full record <span class="faint small">effect ${summ(r.effect)} · exists ${fmt(r.existence.mean)}</span></h4></summary>
+      <details class="section fold"><summary><h4>The full record <span class="faint small">effect ${summ(r.effect)} sd per sd · exists ${fmt(r.existence.mean)}</span></h4></summary>
       <dl class="kv">
-        <dt>Effect</dt><dd>${summ(r.effect)}${r.reverse_effect ? ` · reverse ${summ(r.reverse_effect)}` : ""}</dd>
+        <dt>Effect</dt><dd>${summ(r.effect)} sd per sd${r.reverse_effect ? ` · reverse ${summ(r.reverse_effect)} sd per sd` : ""}</dd>
         <dt>Exists</dt><dd>${fmt(r.existence.mean)} (α ${fmt(r.existence_params.alpha, 1)}, β ${fmt(r.existence_params.beta, 1)})</dd>
         <dt>Confidence</dt><dd>${fmt(r.confidence)}</dd>
         <dt>Timing</dt><dd>${kernelText(r.kernel_means)}</dd>
@@ -232,15 +259,15 @@ export function initInspector({ onSelect, focusNode, renderer, onAction, scopeFo
     const d = wrap(`
       <div class="group-label">Superentity · ${esc(p.status)} · ${esc(p.origin)}${p.sub_pattern_ids?.length ? " · made of superentities" : ""}</div>
       <h3>${esc(p.id)} · ${esc(p.name)}</h3>
-      ${p.description ? `<p class="lede">${esc(p.description)}</p>` : `<p class="lede">A pattern the model inferred: these entities moved together through the links below often enough to count as one recurring configuration.</p>`}
+      ${p.description ? `<p class="lede">${esc(p.description)}</p>` : `<p class="lede">A pattern the model inferred: these entities moved together through the interactions below often enough to count as one recurring configuration.</p>`}
       ${g ? `<div class="row" style="margin:8px 0 4px"><button data-act="toggle-group" data-arg="${esc(g.key)}">${closed ? "Open it on the canvas" : "Close it into one card"}</button>
         ${g.children.length ? `<button data-act="close-parts" data-arg="${esc(g.key)}">Close its parts</button>` : ""}
         ${p.status === "admitted" ? `<button data-act="forecast" data-arg="superentity|${esc(p.id)}">Forecast it</button>` : ""}</div>` : ""}
       ${parts.length ? `<div class="section"><h4>Made of</h4><div class="row">${parts.join(" ")}${extra.length ? ` <span class="faint">plus</span> ${extra.map((m) => link("entity", m, entName(m))).join(", ")}` : ""}</div></div>` : ""}
       ${parents.length ? `<div class="section"><h4>Part of</h4><div class="row">${parents.join(" ")}</div></div>` : ""}
       <div class="section"><h4>Entities</h4><div class="small">${members.map((m) => link("entity", m, entName(m))).join(", ") || "—"}</div></div>
-      <div class="section"><h4>How it works</h4>${more(ids.map((i) => { const l = linkOf(i); return l ? `<div class="small" style="padding:1px 0">${esc(subName(l.source))} <span class="faint">→</span> ${esc(subName(l.target))} <span class="faint">· ${link("interaction", i, l.label)}</span></div>` : ""; }), 5, "<span class='muted small'>no links bound</span>")}
-        ${inst?.absent_interaction_ids?.length ? `<div class="small muted" style="margin-top:4px">and, by this pattern, no link ${inst.absent_interaction_ids.map((i) => esc(linkOf(i)?.label ?? i)).join(", ")}</div>` : ""}</div>
+      <div class="section"><h4>How it works</h4>${more(ids.map((i) => { const l = linkOf(i); return l ? `<div class="small" style="padding:1px 0">${esc(subName(l.source))} <span class="faint">→</span> ${esc(subName(l.target))} <span class="faint">· ${link("interaction", i, l.label)}</span></div>` : ""; }), 5, "<span class='muted small'>no interactions bound</span>")}
+        ${inst?.absent_interaction_ids?.length ? `<div class="small muted" style="margin-top:4px">and, by this pattern, no interaction ${inst.absent_interaction_ids.map((i) => esc(linkOf(i)?.label ?? i)).join(", ")}</div>` : ""}</div>
       ${fold(`Subentities it runs through <span class="faint small">${subs.length}</span>`, `<div class="small">${subs.map((s) => link("subentity", s, subName(s))).join(", ") || "—"}</div>`)}
       ${p.rival_ids?.length ? `<div class="section"><h4>Rivals</h4><div class="small">${p.rival_ids.map((x) => link("pattern", x)).join(", ")}: they explain the same moves with a different structure, and forecasts weigh both.</div></div>` : ""}
       ${fold(`Connections to other superentities <span class="faint small">${r.super_interactions.filter((s) => s.kind === "causal").length}</span>`, more(r.super_interactions.filter((s) => s.kind === "causal").slice(0, 24).map((s) => `<div class="small">${esc(s.source_instance_id)} → ${esc(s.target_instance_id)} · <b>${esc(s.label)}</b></div>`), 6, "<span class='muted small'>none</span>"))}

@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 
 from axelrod_wm.api.app import create_app
 from axelrod_wm.engine.config import DEFAULT_CONFIG_PATH, deep_merge
-from axelrod_wm.memory.snapshots import MemoryBackend
+from axelrod_wm.repo.snapshots import MemoryBackend
 
 T01 = {
     "id": "T-api", "question": "What if oil prices doubled next quarter?", "mode": "scaffolded", "horizon_days": 182,
@@ -44,9 +44,9 @@ def test_read_endpoints_after_load(client):
     assert h["ok"] is True and h["version"] > 0
     view = client.get("/api/state").json()
     assert view["version"] == h["version"]
-    assert len(view["entities"]) == 48 and len(view["subentities"]) == 107
+    assert len(view["entities"]) == 53 and len(view["subentities"]) == 159
     assert {x["pattern_id"] for x in view["hulls"]} >= {f"S{i}" for i in range(1, 10)}
-    assert len(view["frontier"]) == 1 and view["frontier"][0]["earlier"] == "inflation.headline_cpi"
+    assert len(view["frontier"]) == 6 and view["frontier"][0]["earlier"] == "inflation.headline_cpi"   # plus five more seeds
     assert client.get("/api/versions").json()
     cfg = client.get("/api/config").json()
     assert cfg["components"]["propagator"]["name"] == "mc_impulse"
@@ -128,15 +128,19 @@ def test_step_until_review_then_approve(client):
     assert st["state"] == "awaiting_review" and st["update_id"], "a news event should pause the update for review"
     run = client.get(f"/api/updates/{st['update_id']}").json()
     assert run["state"] == "awaiting_review" and run["waiting_on"]
-    pending = client.get("/api/proposals?status=pending").json()
-    p = next(x for x in pending if x["proposal"]["id"] == run["waiting_on"][0])
-    assert p["ops"] and p["review_reasons"] and p["proposal"]["world_event"]
-    out = client.post(f"/api/proposals/{p['proposal']['id']}/approve", json={"by": "tester", "note": "ok"}).json()
-    assert out["proposal"]["status"] == "approved"
-    done = wait_for_update(client, run["id"])
-    assert done["state"] == "done" and done["report"]["approved"] >= 1
+    # the day's news items wait one at a time; approving each resumes the run until the next
+    approved = []
+    while run["state"] == "awaiting_review":
+        pending = client.get("/api/proposals?status=pending").json()
+        p = next(x for x in pending if x["proposal"]["id"] == run["waiting_on"][0])
+        assert p["ops"] and p["review_reasons"] and p["proposal"]["world_event"]
+        out = client.post(f"/api/proposals/{p['proposal']['id']}/approve", json={"by": "tester", "note": "ok"}).json()
+        assert out["proposal"]["status"] == "approved"
+        approved.append(p["proposal"]["id"])
+        run = wait_for_update(client, run["id"])
+    assert run["state"] == "done" and run["report"]["approved"] >= len(approved) >= 1
     assert client.get("/api/health").json()["version"] > v0
-    again = client.post(f"/api/proposals/{p['proposal']['id']}/approve", json={"by": "tester"})
+    again = client.post(f"/api/proposals/{approved[0]}/approve", json={"by": "tester"})
     assert again.status_code == 409
     wait_until_not_running(client)
     assert client.get("/api/sim/status").json()["step_index"] >= 3
@@ -241,6 +245,14 @@ def test_a_forecast_brief_reads_the_forecast_and_the_news_behind_it(client):
     for e in b["shaped_by"] + b["since"]:
         assert 0 < e["relevance"] <= 1 and e["reasons"]
     assert client.get("/api/forecasts/FC-nope/brief").status_code == 404
+
+
+def test_a_held_decision_brief_states_the_lucas_critique(client):
+    """Posing a decision hypothesis holds the decision (graph surgery); its brief says what that assumes."""
+    r = client.post("/api/hypotheses/H-fed-hold/pose", json={})
+    assert r.status_code == 200, r.text
+    b = client.get(f"/api/forecasts/{r.json()['forecast']['id']}/brief").json()
+    assert any("Lucas critique" in c and c.startswith("Changing ") for c in b["caveats"])
 
 
 def test_the_script_lists_every_scripted_step(client):

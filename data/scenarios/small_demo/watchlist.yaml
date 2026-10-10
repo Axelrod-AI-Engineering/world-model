@@ -1,0 +1,4 @@
+# The names the small demo's forecasts always report (the context layer), once they exist.
+name: Small demo book
+description: "The airlines in the small demo (synthetic)."
+entities: [delta, united_airlines]

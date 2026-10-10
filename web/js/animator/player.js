@@ -24,12 +24,12 @@ export class Player {
 
   // DECISION: propagation runs emit up to 60 frames each, and a forecast runs ten networks; queueing
   // all of them made the player fall behind and skip the whole show. Frames are thinned on arrival
-  // (every 3rd for an expectation, every 6th for a network, every 4th for the coupled run); the rest
-  // still reach the store, so walkthroughs keep every day.
+  // (every 5th for an expectation or the coupled run, every 10th for a network), so a forecast plays in
+  // seconds; the rest still reach the store, so walkthroughs keep every day.
   push(ev) {
     if (ev.kind === "propagation.frame" && !store.walkthrough) {
       const rid = String(ev.payload?.run_id ?? "");
-      const every = rid.startsWith("predict:") ? 6 : rid.startsWith("couple:") ? 4 : 3;
+      const every = rid.startsWith("predict:") ? 10 : rid.startsWith("couple:") ? 5 : 5;
       const k = this.frameCount.get(rid) ?? 0;
       this.frameCount.set(rid, k + 1);
       if (this.frameCount.size > 400) this.frameCount.clear();
@@ -70,14 +70,15 @@ export class Player {
           continue;
         }
         if (this.skipping) { this.skipping = false; emit("player", { skipping: false }); }
-        // while a walkthrough is open it owns the canvas: live events update the model, not the picture
-        if (store.walkthrough) continue;
+        // while a walkthrough or a staged review is open it owns the canvas: live events update the model,
+        // not the picture
+        if (store.walkthrough || store.staged) continue;
         try {
           // DECISION: the player speeds up with its backlog (up to 8x), so a long update sweeps through
           // its routine days and slows to full detail when it catches up with the live run
           // a forecast plays at a readable pace (at full speed while the guide narrates it)
           const forecast = /^T-/.test(fresh[0].scope ?? "");
-          const catchUp = this.ctx.guide?.run ? 1 : forecast ? Math.min(2, 1 + behind / 60) : Math.min(8, 1 + behind / 30);
+          const catchUp = this.ctx.guide?.run ? 1 : forecast ? Math.min(3, 1.5 + behind / 40) : Math.min(8, 1 + behind / 30);
           await play(fresh, { ...this.ctx, speed: this.speed * catchUp, reduced: store.settings.reducedMotion,
                               interactive: store.status?.state === "awaiting_review" });
         } catch (err) {

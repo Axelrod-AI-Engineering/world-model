@@ -17,11 +17,11 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
 
 from axelrod_wm.control.controller import ControllerError
-from axelrod_wm.control.decisions import DecisionError
-from axelrod_wm.engine.performance.task import UnboundThesis
 from axelrod_wm.events.graph_update import EventValidationError
-from axelrod_wm.ingest.translators import LLMNotConfigured
-from axelrod_wm.memory.snapshots import RestoreError, StorageBackend
+from axelrod_wm.inference.decisions import DecisionError
+from axelrod_wm.inference.task import UnboundThesis
+from axelrod_wm.intake.translators import LLMNotConfigured
+from axelrod_wm.repo.snapshots import RestoreError, StorageBackend
 from axelrod_wm.sim.runner import ScenarioRunner, build_runner
 from axelrod_wm.sim.scenario import REPO_ROOT
 from axelrod_wm.trace import BroadcastTracer
@@ -93,7 +93,9 @@ class AppState:
         from axelrod_wm.control.updates import UpdateState
 
         ctl = self.runner.controller
-        run = ctl.get_update(run_id)
+        run = ctl.updates.get(run_id)
+        if run is None:                    # the model was reloaded (a rewind, a reset): nothing left to drive
+            return "done"
         if run.state == UpdateState.RUNNING:
             try:
                 ctl.cycle.run_days(run, max_days=1)
@@ -114,9 +116,21 @@ class AppState:
                 runner.state = state
                 runner._broadcast()
 
+        def defer_and_go_on() -> str:
+            # DECISION: a non-interactive load (headless play through the API) defers what waits for
+            # review and keeps going, as the headless runner does; deferred events can still fold in late
+            run = self.runner.controller.updates.get(run_id)
+            if run is None:
+                return "done"
+            self.runner.controller.cycle.resume(run, run_to_end=False)
+            return str(run.state)
+
         await self.call(mark, "running")
         state = "running"
-        while state == "running":
+        while state == "running" or (state == "awaiting_review" and not self.interactive):
+            if state == "awaiting_review":
+                state = await self.call(defer_and_go_on)
+                continue
             state = await self.call(self._one_day, run_id)
             await asyncio.sleep(0)
         if state == "awaiting_review":
@@ -177,11 +191,11 @@ async def _daily_schedule(state: AppState) -> None:
 def create_app(config_path: str | None = None, scenario: str = "oil_shock_demo", *,
                storage: StorageBackend | None = None, trace_dir: str | Path | None = "var/axelrod/traces",
                load_on_startup: bool = True, play_delay: float = 0.4,
-               cache_dir: str | Path | None = None) -> FastAPI:
+               cache_dir: str | Path | None = None, start_example: str | None = None) -> FastAPI:
     if storage is None:
         # DECISION: the demo server keeps its state under var/axelrod/demo, so it never overwrites the
         # session that `axelrod init` and `axelrod update` keep under var/axelrod.
-        from axelrod_wm.memory.snapshots import FilesBackend
+        from axelrod_wm.repo.snapshots import FilesBackend
 
         storage = FilesBackend(path=Path("var/axelrod/demo"))
     state = AppState(scenario, config_path, storage=storage, trace_dir=trace_dir, play_delay=play_delay,
@@ -191,6 +205,9 @@ def create_app(config_path: str | None = None, scenario: str = "oil_shock_demo",
     async def lifespan(app: FastAPI):
         if load_on_startup:
             await anyio.to_thread.run_sync(state.ensure_loaded)
+            if start_example and hasattr(state.runner, "run_example"):
+                # a demo opened at an example: the examples before it are played, and it waits for review
+                await state.call(state.runner.run_example, start_example)
             cfg = state.runner.controller.config if state.runner is not None and state.runner.loaded else None
             if cfg is not None and cfg.update.auto_daily:
                 state.schedule_task = asyncio.create_task(_daily_schedule(state))
@@ -245,5 +262,15 @@ def create_app(config_path: str | None = None, scenario: str = "oil_shock_demo",
     app.include_router(router)
     app.include_router(ws_router)
     if WEB_DIR.exists():
-        app.mount("/", StaticFiles(directory=WEB_DIR, html=True), name="web")
+        app.mount("/", _RevalidatedFiles(directory=WEB_DIR, html=True), name="web")
     return app
+
+
+class _RevalidatedFiles(StaticFiles):
+    """The demo's files, which the browser must revalidate on every load. DECISION: without this a browser can keep
+    running an old module (ES modules are cached heuristically) after the code changes under a running demo."""
+
+    def file_response(self, *args: Any, **kwargs: Any) -> Any:
+        resp = super().file_response(*args, **kwargs)
+        resp.headers["Cache-Control"] = "no-cache"
+        return resp

@@ -1,0 +1,15 @@
+# Tutorial overrides: no sources to poll (each example brings its own event), and every change waits for a
+# person, so each example ends at the human review.
+propagation:
+  samples: 200
+review:
+  policy: review_all
+update:
+  sources: []
+  pause_for_review: true
+# a kind lends its priors once it has one member, so the second airline inherits what the first taught; long-term
+# memory proposes a superentity or a learned link after two confirmations instead of three, and a kind splits with
+# three members sharing a feature, so the small demo shows each in weeks rather than months
+thresholds:
+  recall: 0.5
+  recognition: 2

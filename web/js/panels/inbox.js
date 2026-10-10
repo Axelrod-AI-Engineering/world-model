@@ -3,8 +3,9 @@
 // status chip. Clicking a card shows its translation: highlighted spans and op chips with specificity
 // badges. DECISION: a day's data releases fold into one line, so the news reads first.
 import { api } from "../api.js";
+import { LEVEL_PLAIN, names, OP_WORDS } from "../names.js";
 import { on, store } from "../store.js";
-import { esc, fmtTime, SPEC_BADGE } from "../util.js";
+import { esc, fmtTime } from "../util.js";
 
 const STATUS_CLASS = { queued: "", received: "init", translated: "real", refined: "real", "awaiting review": "out",
                        applied: "wm", rejected: "front", deferred: "", "no translation": "" };
@@ -29,16 +30,20 @@ function highlightSpans(text, spans) {
 function opChips(translation) {
   const ops = (translation?.events ?? []).flatMap((e) => e.ops ?? []);
   if (!ops.length) return `<span class="muted small">no operations</span>`;
+  const nm = names();
   return `<div class="chips small"><span class="faint">${ops.length} operation${ops.length === 1 ? "" : "s"}:</span>${ops.map((o) => {
-    const ends = (o.ends ?? []).map((x) => `${x.end}: ${SPEC_BADGE[x.level] ?? x.level}`).join(", ");
-    return `<span class="chip op" title="${esc([o.summary, ends].filter(Boolean).join(" · "))}">${esc(String(o.op).replace(/_/g, " "))}</span>`;
+    const ends = (o.ends ?? []).filter((x) => x.level !== "subentity").map((x) => `${x.end}: ${LEVEL_PLAIN[x.level] ?? x.level}`).join(", ");
+    return `<span class="chip op" title="${esc([nm.text(o.summary), ends].filter(Boolean).join(" · "))}">${esc(OP_WORDS[o.op] ?? String(o.op).replace(/_/g, " "))}</span>`;
   }).join("")}</div>`;
 }
 
 // routine daily releases fold; a release with its own headline (a rate decision) reads as news
 const isData = (c) => String(c.id).startsWith("ME-D-");
 
-export function initInbox({ onSelectEvent, onWalk } = {}) {
+const dayName = (iso) => new Date(`${String(iso).slice(0, 10)}T12:00:00Z`)
+  .toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
+
+export function initInbox({ onSelectEvent, onWalk, onReport } = {}) {
   const body = document.getElementById("inbox-body");
   const count = document.getElementById("inbox-count");
   let open = null;
@@ -80,8 +85,9 @@ export function initInbox({ onSelectEvent, onWalk } = {}) {
       const u = store.updates.get(rk);
       const isOpen = userOpen.has(rk) || (ri === 0 && !userShut.has(rk));
       return `<details class="run-group" data-run="${esc(rk)}" ${isOpen ? "open" : ""}>
-        <summary>${rk === "earlier" ? "Before this session" : esc(rk)}<span class="muted small" style="font-weight:400">${n} news
-          ${u?.first ? ` · ${esc(u.first)}${u.last && u.last !== u.first ? ` to ${esc(u.last)}` : ""}` : ""}</span></summary>
+        <summary>${rk === "earlier" ? "Before this session" : u?.last ? `Update to ${esc(dayName(u.last))}` : esc(rk)}
+          <span class="muted small" style="font-weight:400">${n} news</span>
+          ${rk !== "earlier" && onReport ? `<button class="ghost small" data-report="${esc(rk)}" title="The update's report">Report</button>` : ""}</summary>
         ${days.map(([day, cs]) => {
           const news = cs.filter((c) => !isData(c)).sort((a, b) => String(b.published_at).localeCompare(String(a.published_at)));
           const data = cs.filter(isData);
@@ -98,6 +104,9 @@ export function initInbox({ onSelectEvent, onWalk } = {}) {
         if (d.open) { userOpen.add(d.dataset.run); userShut.delete(d.dataset.run); }
         else { userShut.add(d.dataset.run); userOpen.delete(d.dataset.run); }
       });
+    }
+    for (const b of body.querySelectorAll("[data-report]")) {
+      b.addEventListener("click", (ev) => { ev.preventDefault(); ev.stopPropagation(); onReport?.(b.dataset.report); });
     }
     for (const b of body.querySelectorAll("[data-data]")) {
       b.addEventListener("click", () => {
@@ -133,7 +142,7 @@ export function initInbox({ onSelectEvent, onWalk } = {}) {
       ${translation?.rationale ? `<details class="more"><summary>how it was read</summary><div class="small muted">${esc(translation.rationale)}</div></details>` : ""}
       ${event?.url ? `<div class="small faint mono" style="margin-top:4px;overflow-wrap:anywhere">${esc(event.url)}</div>` : ""}
       ${onWalk && store.traces.some((e) => e.scope === id) ? `<div class="ask-row" style="margin-top:6px">
-        <button class="primary small" data-walk="${esc(id)}" title="Step through what the model did with this news (W)">Walk through ▸</button>
+        <button class="primary small" data-walk="${esc(id)}" title="Step through what the model did with this news (W)">How it learned ▸</button>
         <span class="small faint">news → fuzzy ops → real edges → the graph</span></div>` : ""}`;
     holder.querySelector("[data-walk]")?.addEventListener("click", (ev) => { ev.stopPropagation(); onWalk(id); });
     holder.addEventListener("click", (ev) => ev.stopPropagation());

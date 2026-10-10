@@ -1,0 +1,74 @@
+{
+  "market_event_id": "ME-11",
+  "rationale": "Hand-drawn. Carriers expect fuel, their second-largest cost, to rise with crude.",
+  "spans": [
+    [
+      19,
+      44,
+      0
+    ],
+    [
+      45,
+      64,
+      2
+    ]
+  ],
+  "events": [
+    {
+      "id": "GUE-ME11",
+      "kind": "real",
+      "event_type": "cost_warning",
+      "occurred_at": "2026-02-02T16:00:00Z",
+      "recorded_at": "2026-02-02T16:00:00Z",
+      "produced_by": "hand_drawn",
+      "confidence": 0.85,
+      "market_event_id": "ME-11",
+      "evidence": [
+        {
+          "id": "EV-ME11",
+          "source_type": "news",
+          "excerpt": "Airlines warn that jet fuel bills will climb after the OPEC+ cut",
+          "observed_at": "2026-02-02T16:00:00Z",
+          "strength": 0.6,
+          "market_event_id": "ME-11"
+        }
+      ],
+      "ops": [
+        {
+          "op": "change_value",
+          "target": {
+            "kind": "concrete",
+            "subentity_id": "delta.fuel_cost"
+          },
+          "delta": 1.2,
+          "mode": "standardized",
+          "persistence": "step",
+          "at": "2026-02-02T16:00:00Z"
+        },
+        {
+          "op": "change_value",
+          "target": {
+            "kind": "concrete",
+            "subentity_id": "united_airlines.fuel_cost"
+          },
+          "delta": 1.2,
+          "mode": "standardized",
+          "persistence": "step",
+          "at": "2026-02-02T16:00:00Z"
+        },
+        {
+          "op": "reweight_interaction",
+          "interaction_id": "e78",
+          "supports": true,
+          "strength": 0.4
+        }
+      ],
+      "mentions": [
+        "airlines",
+        "jet fuel",
+        "OPEC+"
+      ],
+      "tags": []
+    }
+  ]
+}

@@ -4,14 +4,14 @@ from __future__ import annotations
 
 from datetime import date, datetime, time
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from axelrod_wm.core.hypothesis import Hypothesis
 from axelrod_wm.engine.initialize import REPO_ROOT
 from axelrod_wm.events.thesis import Thesis
+from axelrod_wm.model.hypothesis import Hypothesis
 
 SCENARIOS_DIR = REPO_ROOT / "data" / "scenarios"
 
@@ -31,9 +31,9 @@ class HistorySpec(BaseModel):
 class InitializationSpec(_M):
     construction_dir: str
     taxonomy_dir: str
-    seeds: str
+    seeds: str | None = None          # a blank canvas (the small demo) has no seeds and no history
     layout: str | None = None
-    history: dict[str, Any]
+    history: dict[str, Any] | None = None
 
     def history_spec(self) -> HistorySpec:
         return HistorySpec.model_validate(self.history)
@@ -57,9 +57,45 @@ class UpdateStepSpec(_M):
     sources: list[str] | None = None
 
 
+class GroupSpec(_M):
+    """Collapse: a superentity made of these entities and the interactions among them."""
+
+    id: str | None = None
+    name: str
+    members: list[str]
+    interactions: list[str] = []
+    description: str = ""
+
+
+class DissolveSpec(_M):
+    """Expand: an admitted superentity breaks back into its constituents."""
+
+    pattern: str
+    reason: str
+
+
+class RetireSpec(_M):
+    """Delete: one entity (with its subentities and interactions) or one interaction."""
+
+    entity: str | None = None
+    interaction: str | None = None
+    reason: str
+
+
+class StructureAction(_M):
+    """A backend user's own structural edit (restructure). It is proposed and vetted like any edit, and
+    approval commits it once (process: structural)."""
+
+    group: GroupSpec | None = None
+    dissolve: DissolveSpec | None = None
+    retire: RetireSpec | None = None
+    by: str = "backend user"
+
+
 class ScenarioStep(_M):
     at: datetime
     update: UpdateStepSpec | None = None
+    structure: list[StructureAction] = []
     thesis: str | list[str] | None = None
     pose_hypothesis: PoseHypothesisStep | None = None
     evaluate: dict[str, Any] | None = None
@@ -89,8 +125,14 @@ class ScenarioScript(_M):
     start: date
     seed: int | None = None
     initialization: InitializationSpec
-    world: WorldSpec
+    world: WorldSpec | None = None
     config_overrides: str | None = None
+    checklist: bool = False           # the scenario keeps a checklist (sim/checklist.py): oil_shock_demo
+    # "scripted": built from construction files and history, then stepped; "blank": an empty canvas that a
+    # chain of examples builds up (the small demo, sim/examples)
+    canvas: Literal["scripted", "blank"] = "scripted"
+    examples: str | None = None       # a demo with a chain of examples: "small" or "prod" (sim/examples)
+    base: str | None = None           # a demo built on another scenario's world and history (prod_demo)
     steps: list[ScenarioStep]
 
     @classmethod
@@ -164,6 +206,7 @@ def list_scenarios() -> list[dict[str, str]]:
         p = d / "scenario.yaml"
         if p.exists():
             raw = yaml.safe_load(p.read_text()) or {}
-            out.append({"id": raw.get("id", d.name), "title": raw.get("title", d.name)})
+            out.append({"id": raw.get("id", d.name), "title": raw.get("title", d.name),
+                        "canvas": raw.get("canvas", "scripted"), "examples": raw.get("examples")})
     return out
 

@@ -41,6 +41,7 @@ export const api = {
   frontier: () => get("/frontier"),
   frontierSeries: (id) => get(`/frontier/${q(id)}/series`),
   hypotheses: () => get("/hypotheses?sort=voi"),
+  hypothesisEvidence: (id) => get(`/hypotheses/${q(id)}/evidence`),
   addHypothesis: (h) => post("/hypotheses", h),
   poseHypothesis: (id, baseThesisId) => post(`/hypotheses/${q(id)}/pose`, { base_thesis_id: baseThesisId ?? null }),
   setHypothesisStatus: (id, status) => post(`/hypotheses/${q(id)}/status`, { status }),
@@ -54,11 +55,29 @@ export const api = {
   continueUpdate: (id) => post(`/updates/${q(id)}/continue`),
   cancelUpdate: (id) => post(`/updates/${q(id)}/cancel`),
   proposals: (status) => get(status ? `/proposals?status=${status}` : "/proposals"),
-  approve: (id, by = "human", note = null) => post(`/proposals/${q(id)}/approve`, { by, note }),
+  // the reviewer's selection (`keep`) and confidences (Oct 8): `confidence` for the article, `opConfidence` {index: c};
+  // `ripple` {subentity id: p}, the probability each value's ripple arrives (Oct 9)
+  approve: (id, by = "human", note = null, keep = null, confidence = null, opConfidence = null, ripple = null) =>
+    post(`/proposals/${q(id)}/approve`, { by, note, ...(keep ? { keep } : {}), ...(confidence != null ? { confidence } : {}),
+                                          ...(opConfidence && Object.keys(opConfidence).length ? { op_confidence: opConfidence } : {}),
+                                          ...(ripple && Object.keys(ripple).length ? { ripple } : {}) }),
+  // the staged review: the proposal's learning on a copy of the model, with only the `keep` operations
+  stage: (id, keep = null, confidence = null, opConfidence = null, ripple = null) => {
+    const qs = [keep ? `keep=${keep.join(",")}` : "", confidence != null ? `conf=${confidence}` : "",
+                opConfidence && Object.keys(opConfidence).length ? `opconf=${Object.entries(opConfidence).map(([i, c]) => `${i}:${c ?? ""}`).join(",")}` : "",
+                ripple && Object.keys(ripple).length ? `ripple=${encodeURIComponent(Object.entries(ripple).map(([s, p]) => `${s}:${p ?? ""}`).join(","))}` : ""]
+      .filter(Boolean).join("&");
+    return get(`/proposals/${q(id)}/stage${qs ? `?${qs}` : ""}`);
+  },
+  checks: () => get("/checks"),
+  find: (q) => get(`/find?q=${encodeURIComponent(q)}`),
   reject: (id, note, by = "human") => post(`/proposals/${q(id)}/reject`, { by, note }),
   edit: (id, event, by = "human") => post(`/proposals/${q(id)}/edit`, { by, event }),
   defer: (id, by = "human") => post(`/proposals/${q(id)}/defer`, { by }),
   poseThesis: (thesis) => post("/theses", thesis),
+  scenarioTheses: () => get("/scenario-theses"),
+  learningTasks: () => get("/learning-tasks"),
+  poseStoredThesis: (id) => post(`/theses/${q(id)}/pose`, {}),
   ask: (question, horizon_days) => post("/theses", horizon_days ? { question, horizon_days } : { question }),
   forecasts: () => get("/forecasts"),
   forecast: (id) => get(`/forecasts/${q(id)}`),
@@ -80,6 +99,28 @@ export const api = {
   status: () => get("/sim/status"),
   trace: (since_seq = 0, limit) => get(`/trace?since_seq=${since_seq}${limit ? `&limit=${limit}` : ""}`),
   traceScope: (scope) => get(`/trace?since_seq=0&scope=${q(scope)}`),
+  // the flowchart, contracts, the commit log, structure edits, and the tutorial
+  flows: () => get("/flows"),
+  flowSvg: async (id, bare = false) => {
+    const res = await fetch(`/api/flows/${q(id)}/svg${bare ? "?bare=true" : ""}`);
+    if (!res.ok) throw new ApiError(res.status, { detail: await res.text() });
+    return res.text();
+  },
+  contracts: () => get("/contracts"),
+  repoLog: ({ limit = 60, before = null, process = [], memory = null } = {}) =>
+    get(`/repo/log?limit=${limit}${before != null ? `&before=${before}` : ""}${process.map((p) => `&process=${q(p)}`).join("")}${memory ? `&memory=${q(memory)}` : ""}`),
+  repoShow: (version) => get(`/repo/commits/${version}`),
+  repoDiff: (from, to) => get(`/repo/diff?from=${from}${to != null ? `&to=${to}` : ""}`),
+  repoProcesses: () => get("/repo/processes"),
+  group: (body) => post("/structure/group", body),
+  dissolve: (pattern_id, reason, by = "human") => post("/structure/dissolve", { pattern_id, reason, by }),
+  retire: (body) => post("/structure/retire", body),
+  examples: () => get("/examples"),
+  runExample: (id, manual = null) => post(`/examples/${q(id)}`, manual ? { manual } : undefined),
+  prepareExample: (id) => post(`/examples/${q(id)}/prepare`),
+  manual: (spec, by = "backend user") => post("/manual", { manual: spec, by }),
+  vocabulary: () => get("/vocabulary"),
+  runLibrary: (id) => post(`/library/${q(id)}`),
 };
 
 // The /ws stream (§12.3): {"type": "hello", "since_seq": n}, then trace and status messages.

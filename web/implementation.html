@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Implementation · Axelrod World Model</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=IBM+Plex+Mono:wght@400;500&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+  <link rel="stylesheet" href="css/tokens.css">
+  <style>
+    /* standalone reading; inside the demo the Methods pane supplies its own styles */
+    body { margin: 0; background: var(--linen); color: var(--ink); font: 15px/1.62 var(--font-ui); }
+    main { max-width: 980px; margin: 0 auto; padding: 32px 28px 64px; background: var(--sheet); min-height: 100vh; box-sizing: border-box; }
+    h1 { font: 700 26px/1.2 var(--font-head); margin: 0 0 6px; }
+    h2 { font: 700 19px var(--font-head); margin: 30px 0 8px; }
+    p { margin: 0 0 10px; }
+    .abstract { background: var(--paper); border: 1px solid var(--rule); border-radius: 10px; padding: 12px 16px; }
+    table { border-collapse: collapse; width: 100%; font-size: 13px; margin: 8px 0 14px; }
+    th, td { border-bottom: 1px solid var(--rule-soft); padding: 5px 8px; text-align: left; vertical-align: top; }
+    th { color: var(--ink-2); font-weight: 600; border-bottom-color: var(--rule); }
+    code { font-family: var(--font-mono); font-size: 12.5px; background: var(--paper); border: 1px solid var(--rule-soft); border-radius: 4px; padding: 0 4px; }
+    .meta { color: var(--ink-2); font-size: 13px; }
+    @media (max-width: 640px) { main { padding: 20px 16px 48px; } table { display: block; overflow-x: auto; } }
+  </style>
+</head>
+<body>
+<main>
+<h1>Implementation: the ML stack, component by component</h1>
+<p class="meta">Technical briefing · Axelrod World Model · October 2026 · how each part would be built. Deployment is out of scope.</p>
+
+<div class="abstract">
+<p><b>Summary.</b> The world model works like version control over a causal graph. Learning of working memory and learning of long-term memory write to it, and only through commits. Each event's learning first runs on a staged copy; a person reviews everything the copy would commit, selects what to keep, and only that is committed. Inference reads committed versions on a branch that is never merged, so inference never learns.</p>
+<p>Every component sits behind one interface with a contract: its inputs, outputs, the memories it reads and writes, and when it runs (<code>engine/contracts.py</code>; <code>axelrod contracts</code>). This page says, for each component, what the prototype does and what a production ML stack would use instead; the last section lists every contract. How it works shows where each one runs.</p>
+</div>
+
+<h2 id="processes">1. Processes and their commits</h2>
+<table>
+  <thead><tr><th>Process</th><th>Runs</th><th>Commits</th><th>Writes</th></tr></thead>
+  <tbody>
+    <tr><td>Intake</td><td>Per update run</td><td>Only the sources' cursors; everything else is a proposal</td><td>—</td></tr>
+    <tr><td>Review</td><td>Per proposal</td><td>None while staged; on approval, its side effects (pending refinements, soft support)</td><td>Working and long-term memory</td></tr>
+    <tr><td>Learning, working memory</td><td>Per vetted event; per day</td><td><code>&lt;event&gt;</code>; <code>predict:</code>, <code>record:</code>, <code>close:</code> each day</td><td>Working memory</td></tr>
+    <tr><td>Learning, long-term memory</td><td>Per vetted event; per day</td><td><code>ltm:&lt;event&gt;</code>; <code>distill:</code> each day</td><td>Long-term memory</td></tr>
+    <tr><td>Structure</td><td>Per approved structural proposal</td><td>One commit (collapse, expand, add, retire)</td><td>Both</td></tr>
+    <tr><td>Inference</td><td>Per thesis</td><td>None: a branch that is never merged</td><td>—</td></tr>
+  </tbody>
+</table>
+
+<h2 id="intake">2. Intake</h2>
+<table>
+  <thead><tr><th>Component</th><th>Prototype</th><th>Production stack</th></tr></thead>
+  <tbody>
+    <tr><td><code>source</code></td><td>Replays scripted news and a synthetic data feed</td><td>Connectors to news, filings, and data vendors, with real-time data vintages, so a backtest sees only what was known then; near-duplicates removed with MinHash on normalized titles</td></tr>
+    <tr><td><code>translator</code></td><td>Reviewed fixtures, then regular-expression templates</td><td>A language model with schema-constrained decoding, where the schema is the set of graph update operations. It uses few-shot examples drawn from reviewed fixtures and abstains when unsure. Reviewed translations become its evaluation set.</td></tr>
+    <tr><td><code>refiner</code></td><td>Descent through the object and interaction taxonomies: generalization, then entity, then subentity</td><td>The same descent; an unresolved end stays pending until later evidence names it</td></tr>
+    <tr><td><code>entity_resolver</code></td><td>Aliases and fuzzy string match</td><td>String similarity plus embedding similarity over entity profiles (structured, not only text), with a margin rule for binding</td></tr>
+  </tbody>
+</table>
+
+<h2 id="review">3. Review</h2>
+<table>
+  <thead><tr><th>Component</th><th>Prototype</th><th>Production stack</th></tr></thead>
+  <tbody>
+    <tr><td>Staged review</td><td>The event's whole learning (working and long-term memory, and the day's distillation) runs on a copy of the state with a throwaway ledger; the difference is the review: items, moves, the ripple by order, what is learned (<code>control/stage.py</code>)</td><td>A copy-on-write branch of the state store, so staging costs only what the event touches; deselecting items re-runs it on the branch</td></tr>
+    <tr><td><code>review_policy</code></td><td>Rules: new or deleted structure, text translation, large reweighting, low confidence (the tutorial reviews everything)</td><td>The same rules, plus a calibrated score, learned from past decisions, that ranks the queue. Each reviewer decision, selection, and note becomes a training label.</td></tr>
+  </tbody>
+</table>
+
+<h2 id="shared">4. The shared read (learning and inference)</h2>
+<table>
+  <thead><tr><th>Component</th><th>Prototype</th><th>Production stack</th></tr></thead>
+  <tbody>
+    <tr><td><code>parser</code></td><td>Deterministic application of operations</td><td>Unchanged</td></tr>
+    <tr><td><code>classifier</code>, <code>taxonomy_grower</code></td><td>Greedy descent on signatures; a shared-feature split</td><td>Cobweb trees, one per data structure and one per composition of structures. Inputs are structured embeddings with an acuity cutoff (no whitening). Splits and merges come from category utility.</td></tr>
+    <tr><td><code>recaller</code>, <code>attention</code></td><td>Overlap of classification paths and graph proximity; softmax top-k</td><td>Two stages: a cheap vector filter over the Cobweb trees, then structure-mapping scores on the survivors</td></tr>
+    <tr><td><code>binder</code></td><td>Breadth-first role filling</td><td>Subgraph matching (VF2-style) under type constraints from the taxonomies</td></tr>
+    <tr><td><code>prefiller</code></td><td>Empirical-Bayes shrinkage of analog responses toward each interaction's posterior, pooling only same-sign siblings</td><td>The same model, with weights learned from analog hit rates</td></tr>
+    <tr><td><code>analyzer</code></td><td>Monte Carlo of the event's shocks through the working set</td><td>Unchanged, on the vectorized propagator</td></tr>
+  </tbody>
+</table>
+
+<h2 id="dynamics">5. Dynamics</h2>
+<table>
+  <thead><tr><th>Component</th><th>Prototype</th><th>Production stack</th></tr></thead>
+  <tbody>
+    <tr><td><code>propagator</code></td><td>NumPy Monte Carlo with gamma lag kernels and common random numbers (with and without the shock)</td><td>The same model in JAX (<code>jit</code> and <code>vmap</code> over samples and scenarios), with soft economic bounds as smooth penalties</td></tr>
+    <tr><td><code>daily_propagator</code></td><td>Kalman predict and update over the graph's values</td><td>A sparse state-space model that handles missing data and data vintages</td></tr>
+  </tbody>
+</table>
+
+<h2 id="learning-wm">6. Learning of working memory</h2>
+<table>
+  <thead><tr><th>Component</th><th>Prototype</th><th>Production stack</th></tr></thead>
+  <tbody>
+    <tr><td><code>folder</code>, <code>posterior_updater</code></td><td>Conjugate updates: a Gaussian on each effect, a Beta on each interaction's existence, moment matching through link functions</td><td>The same, with a variational or particle update for nonlinear interactions</td></tr>
+    <tr><td><code>kernel_updater</code></td><td>Grid search on delay and lag every few days</td><td>Hierarchical Bayesian estimation of the kernels (NumPyro), with priors from the interaction's kind</td></tr>
+    <tr><td><code>hypothesis_scorer</code></td><td>Value of information from forecast sensitivity</td><td>The same, with expected information gain over the scenarios it would separate</td></tr>
+  </tbody>
+</table>
+
+<h2 id="learning-ltm">7. Learning of long-term memory</h2>
+<table>
+  <thead><tr><th>Component</th><th>Prototype</th><th>Production stack</th></tr></thead>
+  <tbody>
+    <tr><td><code>generalization_updater</code></td><td>Running statistics (Welford) along each classification path</td><td>Partial pooling down the taxonomy: a kind's statistics are the prior for its members</td></tr>
+    <tr><td><code>frontier</code>, <code>promotion_test</code></td><td>Lagged correlation of unexplained moves, conditioned on known drivers, re-checked at spaced intervals; threshold promotion</td><td>PCMCI on the fold's innovations for conditional-independence tests, with a sequential test so false promotions stay controlled</td></tr>
+    <tr><td><code>inducer</code></td><td>Co-activation counting with evidence spacing; candidates from connected components; admission and dissolution thresholds</td><td>Frequent-subgraph mining over episodes, with chunks formed as in TRELLIS: a composite refers to its parts by the concepts they were sorted into</td></tr>
+    <tr><td><code>consolidator</code></td><td>Episodes as feature bags; analog responses pooled per interaction</td><td>Episodes embedded for retrieval in a Cobweb tree; analog responses estimated by local projections</td></tr>
+  </tbody>
+</table>
+
+<h2 id="inference">8. Inference</h2>
+<table>
+  <thead><tr><th>Component</th><th>Prototype</th><th>Production stack</th></tr></thead>
+  <tbody>
+    <tr><td><code>isolator</code></td><td>Bound instances, a residual network of significant channels, and context paths to every target and watched name</td><td>The same, with k-shortest paths (Yen's algorithm) for context paths</td></tr>
+    <tr><td><code>network_predictor</code>, <code>coupler</code></td><td>Monte Carlo per network, then over the union graph</td><td>Unchanged, on the vectorized propagator</td></tr>
+    <tr><td><code>rival_detector</code>, <code>scenario_weighter</code>, <code>unifier</code></td><td>Rivals by pattern and sign; weights from support, fit, and track record; a mixture of densities</td><td>Bayesian model averaging, or stacking on proper scores; fan charts and tail quantiles</td></tr>
+    <tr><td><code>explainer</code></td><td>Ablation of interactions; top paths</td><td>Sampled Shapley values over interactions</td></tr>
+  </tbody>
+</table>
+
+<h2 id="evaluation">9. Evaluation and the repository</h2>
+<table>
+  <thead><tr><th>Component</th><th>Prototype</th><th>Production stack</th></tr></thead>
+  <tbody>
+    <tr><td><code>scorer</code></td><td>Omission, commission, calibration, CRPS; freeze-at-date backtests</td><td>The same, run nightly over rolling origins; track records feed scenario weights</td></tr>
+    <tr><td><code>storage</code></td><td>An append-only ledger of commits (JSON lines) and gzip snapshots</td><td>The same log in a columnar store (Parquet, queried with DuckDB), with snapshots every N versions and content hashes for reproducibility</td></tr>
+  </tbody>
+</table>
+
+<h2 id="libraries">10. Libraries</h2>
+<p>The prototype uses Python 3.12, Pydantic (the contracts), NumPy and SciPy. The production stack adds JAX and NumPyro, NetworkX, the Teachable AI Lab's Cobweb code, tigramite (PCMCI), rapidfuzz, a language model with schema-constrained decoding, and Parquet with DuckDB. The Literature tab gives the reasons and the references.</p>
+<h2 id="choices">11. Simpler choices that won</h2>
+<table>
+  <thead><tr><th>Considered</th><th>Chosen</th><th>Why</th></tr></thead>
+  <tbody>
+    <tr><td>Whitening embeddings</td><td>An acuity cutoff per tree</td><td>The same effect without a preprocessing step.</td></tr>
+    <tr><td>One Cobweb tree for all data</td><td>A tree per data structure, plus trees over compositions</td><td>Each structure is categorized on its own terms, and a composite sees its parts as concepts.</td></tr>
+    <tr><td>Text embeddings for everything</td><td>Structured blocks; text only where the input is text</td><td>Most objects are not text. How things move and respond is what makes them alike for forecasting.</td></tr>
+    <tr><td>One large VAR over every value</td><td>A sparse causal graph that borrows the VAR toolkit</td><td>Large Bayesian VARs handle many series, but they are re-estimated whole. The graph grows one reviewed interaction at a time.</td></tr>
+    <tr><td>An end-to-end neural forecaster</td><td>Neural networks only produce vectors</td><td>Kinds, dynamics, and forecasts stay explicit and inspectable.</td></tr>
+    <tr><td>Interactions proposed by a language model</td><td>Interactions from data and review</td><td>Plausible text is not evidence.</td></tr>
+  </tbody>
+</table>
+
+<h2 id="contracts">12. Component contracts</h2>
+<p>Every pluggable component's inputs and outputs, what it writes, and when it runs.</p>
+<div id="contracts-table"><p class="meta">The demo fills this table from <code>/api/contracts</code>; from the command line, <code>axelrod contracts</code>.</p></div>
+<p class="meta">All news and data in the demo are synthetic.</p>
+</main>
+</body>
+</html>

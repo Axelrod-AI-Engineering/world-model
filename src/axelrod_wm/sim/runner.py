@@ -19,6 +19,7 @@ import json
 import os
 import shutil
 import threading
+from contextlib import contextmanager
 from datetime import UTC, datetime, time, timedelta
 from pathlib import Path
 from typing import Any, Literal
@@ -28,8 +29,6 @@ from pydantic import BaseModel, ConfigDict
 
 from axelrod_wm.control.controller import WorldModelController
 from axelrod_wm.control.updates import UpdateRequest, UpdateState
-from axelrod_wm.core.hypothesis import Hypothesis
-from axelrod_wm.core.serialization import canonical_json, sha256_text
 from axelrod_wm.engine.config import EngineConfig, load_config
 from axelrod_wm.engine.engine import build_engine, make_storage
 from axelrod_wm.engine.initialize import (
@@ -43,9 +42,11 @@ from axelrod_wm.engine.initialize import (
 from axelrod_wm.evaluation.backtest import EvaluationRequest
 from axelrod_wm.events.graph_update import GraphUpdateEvent
 from axelrod_wm.events.market import MarketEventChannel
-from axelrod_wm.ingest.scrapers import MockWebScraper
-from axelrod_wm.ingest.sources import HistoryReplaySource, JsonlReplaySource
-from axelrod_wm.memory.snapshots import FilesBackend, StateVersion, StorageBackend, load_state
+from axelrod_wm.intake.scrapers import MockWebScraper
+from axelrod_wm.intake.sources import HistoryReplaySource, JsonlReplaySource
+from axelrod_wm.model.hypothesis import Hypothesis
+from axelrod_wm.model.serialization import canonical_json, sha256_text
+from axelrod_wm.repo.snapshots import FilesBackend, StateVersion, StorageBackend, load_state
 from axelrod_wm.sim.scenario import (
     ScenarioScript,
     load_decisions,
@@ -74,6 +75,8 @@ class RunnerStatus(BaseModel):
     loaded: bool = False
     error: str | None = None
     next_step_at: datetime | None = None  # the next scripted step: the Update dialog's default "until"
+    canvas: str = "scripted"              # "blank" for the small demo's empty canvas
+    examples: str | None = None           # a demo with examples ("small", "prod"): the UI shows Examples, not Step
 
 
 class StepReport(BaseModel):
@@ -89,12 +92,12 @@ class StepReport(BaseModel):
     notes: list[str] = []
 
 
-def _hash_files(paths: list[Path]) -> str:
+def _hash_files(paths: list[Path], skip: tuple[str, ...] = ()) -> str:
     parts = []
     for p in sorted(paths):
         if p.is_dir():
             for f in sorted(p.rglob("*")):
-                if f.is_file() and "__pycache__" not in f.parts:
+                if f.is_file() and "__pycache__" not in f.parts and not any(k in f.parts for k in skip):
                     rel = f.relative_to(REPO_ROOT) if f.is_relative_to(REPO_ROOT) else f
                     parts.append(f"{rel}:{sha256_text(f.read_text())}")
         elif p.exists():
@@ -159,14 +162,16 @@ class ScenarioRunner:
                  self.scenario_dir / "market_events.jsonl"]
         # DECISION: the key also covers the package's source, so a code change rebuilds the cache.
         src = Path(__file__).resolve().parents[1]
-        code = [src / d for d in ("core", "memory", "events", "ingest", "control", "engine", "evaluation", "sim")]
+        code = sorted(d for d in src.iterdir()
+                      if d.is_dir() and not d.name.startswith("__") and d.name not in ("api", "flows"))
         # DECISION: the history replay always auto-approves, so the review policy is left out of the key
         keyed = cfg.model_copy(deep=True)
         keyed.review.policy = "default"
         keyed.components.pop("review_policy", None)
         keyed.storage.backend = "files"
         keyed.storage.path = ""
-        payload = {"format": INIT_FORMAT, "files": _hash_files(files), "code": _hash_files(code),
+        # the demos' example catalogs never run during the history replay, so editing them keeps the cache
+        payload = {"format": INIT_FORMAT, "files": _hash_files(files), "code": _hash_files(code, skip=("examples",)),
                    "config": keyed.config_hash(), "seed": cfg.seed,
                    "history": [hist.from_.isoformat(), hist.to.isoformat()]}
         return sha256_text(canonical_json(payload))
@@ -178,7 +183,7 @@ class ScenarioRunner:
     def _build_world(self, cfg: EngineConfig) -> tuple[SyntheticWorld, list]:
         ini = self.script.initialization
         hist = ini.history_spec()
-        spec = ConstructionSpec.load(ini.construction_dir)
+        spec = ConstructionSpec.load(ini.construction_dir, ini.taxonomy_dir)
         truth = TruthSpec.load(self.script.world.truth)
         vocab = load_vocabulary(ini.taxonomy_dir)
         scripted = self._scripted_events()
@@ -192,6 +197,23 @@ class ScenarioRunner:
     # -- initialization ------------------------------------------------------------------------
     def _init_dir(self) -> Path:
         return self.cache_dir / "init"
+
+    @contextmanager
+    def _init_lock(self):
+        """An exclusive lock on the scenario's init cache, across processes (restructure). Without it, two
+        processes whose code differs could rebuild the same cache at once and corrupt it."""
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
+        with open(self.cache_dir / "init.lock", "w") as fh:
+            try:
+                import fcntl
+            except ImportError:            # no POSIX locks (Windows): run unlocked
+                yield
+                return
+            fcntl.flock(fh, fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(fh, fcntl.LOCK_UN)
 
     def _init_cache_path(self) -> Path:
         return self.cache_dir / "init_snapshot.json.gz"
@@ -210,7 +232,7 @@ class ScenarioRunner:
         vocab = load_vocabulary(ini.taxonomy_dir)
         eng = build_engine(cfg, storage, NullTracer(), vocab=vocab)
         init = Initializer(eng)
-        spec = ConstructionSpec.load(ini.construction_dir)
+        spec = ConstructionSpec.load(ini.construction_dir, ini.taxonomy_dir)
         init.construct(spec, ini.taxonomy_dir, start=hist.from_, vocab=vocab)
         seeds = SeedFile.load(ini.seeds)
         init.load_seeds(seeds, now=eng.wm.clock)
@@ -284,8 +306,10 @@ class ScenarioRunner:
             if self.auto_approve:
                 cfg.review.policy = "auto_approve_all"
             world, history = self._build_world(cfg)
-            meta = self._load_or_build_init(cfg, history)
-            storage = self._session_storage(cfg, meta)
+            # one builder at a time: a demo server, the CLI, and the tests may share a scenario's init cache
+            with self._init_lock():
+                meta = self._load_or_build_init(cfg, history)
+                storage = self._session_storage(cfg, meta)
             vocab = load_vocabulary(self.script.initialization.taxonomy_dir)
             eng = build_engine(cfg, storage, self.tracer, vocab=vocab)
             eng.ledger.set_base(int(meta["seq"]))
@@ -352,7 +376,7 @@ class ScenarioRunner:
         """Continue a session: restore the latest version from the files backend (its newest snapshot
         plus the change sets after it), rebuild the world (deterministic from the seed), and rebuild
         the controller's view of the market events already collected."""
-        from axelrod_wm.memory.snapshots import SnapshotStore  # noqa: F401  (documentation)
+        from axelrod_wm.repo.snapshots import SnapshotStore  # noqa: F401  (documentation)
 
         with self.lock:
             cfg = self.effective_config()
@@ -375,8 +399,8 @@ class ScenarioRunner:
                                                                    **cfg.update.source_params.get("mock_web_scraper", {})))
             ctl.register_source("synthetic_data_feed", SyntheticDataFeed(
                 world, scripted=[e for e in scripted.events if e.channel == MarketEventChannel.DATA_FEED]))
-            from axelrod_wm.events.ledger import LedgerKind
             from axelrod_wm.events.market import MarketEvent
+            from axelrod_wm.repo.ledger import LedgerKind
 
             last_day = int(wm.last_processed_day)
             for e in eng.ledger.of_kind(LedgerKind.MARKET_EVENT, int(session.get("init_seq", 0))):
@@ -503,6 +527,9 @@ class ScenarioRunner:
         st = ctx["step"]
         ctl.advance_now(st.at)
         notes: list[str] = []
+        for act in st.structure:
+            prop = self._structure_action(act)
+            notes.append(f"{prop.kind} {prop.id}: {prop.status}")
         for tid in st.theses():
             spec = self.theses_spec[tid]
             fc = ctl.pose_thesis(thesis_from_spec(spec, ctl.now))
@@ -549,6 +576,20 @@ class ScenarioRunner:
             fn("step", report=report)
         self._broadcast()
         return report
+
+    def _structure_action(self, act: Any) -> Any:
+        """A backend user's structural edit: collapse (group), expand (dissolve), or delete (retire)."""
+        ctl = self.controller
+        if act.group is not None:
+            g = act.group
+            return ctl.propose_group(g.name, g.members, interactions=g.interactions or None, pattern_id=g.id,
+                                     description=g.description, by=act.by)
+        if act.dissolve is not None:
+            return ctl.propose_dissolve(act.dissolve.pattern, act.dissolve.reason, by=act.by)
+        if act.retire is not None:
+            r = act.retire
+            return ctl.propose_retire(entity_id=r.entity, interaction_id=r.interaction, reason=r.reason, by=act.by)
+        raise ValueError("a structure action needs group, dissolve, or retire")
 
     def _record_decision(self, decision_id: str) -> Any:
         ctl = self.controller
@@ -618,7 +659,7 @@ class ScenarioRunner:
 
 
 def _ledger_kind(name: str) -> Any:
-    from axelrod_wm.events.ledger import LedgerKind
+    from axelrod_wm.repo.ledger import LedgerKind
 
     return LedgerKind[name]
 
@@ -632,10 +673,20 @@ def build_runner(scenario: str = "oil_shock_demo", *, interactive: bool = False,
     if cfg is None and config_path is not None:
         overrides = [script.config_overrides] if script.config_overrides else []
         cfg = load_config(config_path, overrides=overrides)
-    runner = ScenarioRunner(None, None, script, interactive, config=cfg, storage=storage, tracer=tracer,
-                            auto_approve=auto_approve, seed=seed, use_cache=use_cache, cache_dir=cache_dir)
+    cls = ScenarioRunner
+    if script.examples is not None:
+        from axelrod_wm.sim.examples.session import ProdDemoRunner, SmallDemoRunner
+
+        if script.base is not None:
+            script = ScenarioScript.load(script.base)        # the base's world, history, and init cache
+            cls = ProdDemoRunner
+        else:
+            cls = SmallDemoRunner
+        record_checklist = False
+    runner = cls(None, None, script, interactive, config=cfg, storage=storage, tracer=tracer,
+                 auto_approve=auto_approve, seed=seed, use_cache=use_cache, cache_dir=cache_dir)
     runner.config_path = config_path
-    if record_checklist:
+    if record_checklist and script.checklist:
         from axelrod_wm.sim.checklist import ChecklistRecorder
 
         runner.recorder = ChecklistRecorder()

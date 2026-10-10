@@ -7,15 +7,15 @@ from datetime import UTC, date, datetime, time, timedelta
 
 from pydantic import BaseModel, ConfigDict
 
-from axelrod_wm.core.evidence import Evidence
-from axelrod_wm.core.graph import CausalGraph
-from axelrod_wm.core.hypothesis import Hypothesis
-from axelrod_wm.core.ids import IdFactory
-from axelrod_wm.core.serialization import StrSet
-from axelrod_wm.engine.explain_records import Explanation
-from axelrod_wm.engine.kernels import KernelRecursion
-from axelrod_wm.engine.performance.records import Forecast
+from axelrod_wm.dynamics.kernels import KernelRecursion
 from axelrod_wm.events.graph_update import GraphOp, Specificity
+from axelrod_wm.inference.records import Forecast
+from axelrod_wm.model.evidence import Evidence
+from axelrod_wm.model.explanation import Explanation
+from axelrod_wm.model.graph import CausalGraph
+from axelrod_wm.model.hypothesis import Hypothesis
+from axelrod_wm.model.ids import IdFactory
+from axelrod_wm.model.serialization import StrSet
 
 
 def point_key(subentity_id: str, day: int) -> str:
@@ -153,8 +153,31 @@ class ChannelState(BaseModel):
     day: int = 0                      # the day the recursion's phi refers to
 
 
+class HedgeCheck(BaseModel):
+    """One piece of evidence a hedge weighed (Oct 8): which candidate it favored, how much, and the posterior after."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    at: datetime
+    event_id: str
+    market_event_id: str | None = None
+    headline: str | None = None
+    kind: str                           # "mention", "move", "against", or "intake"
+    candidate: str | None = None
+    weight: float = 0.0                 # pseudo-count added (already times the reviewer's confidence)
+    confidence: float = 1.0             # the reviewer's confidence in the evidence
+    posterior: dict[str, float] = {}    # after this check (candidates and "__open__")
+
+
 class PendingRefinement(BaseModel):
-    """A graph update op that could not yet be made concrete (§7.5)."""
+    """A graph update op that could not yet be made concrete (§7.5).
+
+    DECISION (Oct 8): a fuzzy end is a hedge, not a guess. Its candidates carry a Dirichlet posterior (`alpha`, plus
+    `open_alpha` for a candidate not in the graph yet); `candidates` is that posterior, normalized. Evidence from later
+    articles updates it inside each event's staged learning, and once one candidate passes the commit bound with
+    enough checks a refinement proposal goes to review. When the candidates are values, the hedge is also drawn as
+    soft interactions (tagged `hedge:<key>`), one per candidate, whose existence follows the posterior: forecasts hedge
+    across them as probabilistic data association does (Bar-Shalom, Daum, and Huang, 2009)."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -174,6 +197,58 @@ class PendingRefinement(BaseModel):
     label: str | None = None
     polarity: int | None = None
     market_event_id: str | None = None
+    key: str | None = None                      # stable across approval: "pending:<event>:<op>"; soft edges carry it
+    ends: list[str] = []                        # the hedged ends; a joint hedge's candidates are "a|b" for these ends
+    alpha: dict[str, float] = {}                # Dirichlet pseudo-counts per candidate
+    open_alpha: float = 0.0                     # pseudo-count for a candidate not in the graph yet
+    support: float = 0.0                        # checks that moved the posterior
+    checks: list[HedgeCheck] = []               # the newest 20
+    status: str = "holding"                     # holding, resolution_proposed
+    soft: bool = False                          # drawn as soft interactions (candidates are values)
+    user_confidence: float = 1.0                # the reviewer's confidence when it was stored
+
+    def posterior(self) -> dict[str, float]:
+        """The candidates' probabilities, with "__open__" for one not in the graph yet."""
+        if not self.alpha:
+            tot = sum(self.candidates.values()) or 1.0
+            return {c: v / tot for c, v in self.candidates.items()}
+        tot = sum(self.alpha.values()) + self.open_alpha
+        out = {c: a / tot for c, a in self.alpha.items()}
+        if self.open_alpha > 0:
+            out["__open__"] = self.open_alpha / tot
+        return out
+
+
+class RippleJudgment(BaseModel):
+    """A reviewer's judgment of one value's ripple from one event (Oct 9): the probability that the ripple reaches
+    it. The ripple is not an op of the event (it follows from the interactions), but it moves the state day by day,
+    so the reviewer may weigh it: with probability `weight` it arrives as the analysis expects, else not at all.
+    The daily prediction adds (weight - 1) times `path` (the expected ripple, by day from `start_day`, already
+    scaled by what the reviewer said of the values upstream) to the value's predicted deviation, until the path ends.
+    Keyed "<event id>|<subentity id>"."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    event_id: str
+    subentity_id: str
+    weight: float                     # 0: the ripple does not reach it; 1: as the analysis expects
+    start_day: int                    # the event's processing day; path[0] is this day
+    path: list[float]                 # the expected ripple in sd, by day
+    order: int = 1
+    via: list[str] = []               # the interactions along its main path
+
+
+def ripple_key(event_id: str, subentity_id: str) -> str:
+    return f"{event_id}|{subentity_id}"
+
+
+def ripple_correction(wm: WorkingMemory, subentity_id: str, day: int) -> float:
+    """What the reviewers' ripple judgments add to one value's predicted deviation on `day`."""
+    out = 0.0
+    for j in wm.ripple_judgments.values():
+        if j.subentity_id == subentity_id and 0 <= day - j.start_day < len(j.path):
+            out += (j.weight - 1.0) * j.path[day - j.start_day]
+    return out
 
 
 class ForecastStateView(BaseModel):
@@ -188,7 +263,7 @@ class ForecastStateView(BaseModel):
 
 
 class ForecastLayer(BaseModel):
-    """Forecasts written by the performance task, keyed by thesis id (D5). It never touches
+    """Forecasts written by the inference task, keyed by thesis id (D5). It never touches
     posteriors, it is not part of the state hash, and writing it never bumps the version.
     Unpinned entries are cleared at consolidation, after their explanations are stored."""
 
@@ -240,6 +315,7 @@ class WorkingMemory(BaseModel):
     channel_phi: dict[str, float] = {}           # "<channel id>|<day>" -> phi; pruned with the activity log
     hypotheses: dict[str, Hypothesis] = {}
     pending_refinements: dict[str, PendingRefinement] = {}
+    ripple_judgments: dict[str, RippleJudgment] = {}  # "<event id>|<subentity id>" -> a reviewer's weight (Oct 9)
     forecast_layer: ForecastLayer = ForecastLayer()
     activity_log: dict[str, ActivityRecord] = {}   # "<day>|<channel id>" -> record; rolling window (§8.8)
     fold_accumulators: dict[str, tuple[float, float]] = {}   # interaction id -> (sum phi*y, sum phi^2) today

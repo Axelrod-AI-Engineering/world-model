@@ -11,12 +11,19 @@ nodes:
   - {id: gen:int:credit_feeds_activity, name: Credit feeds activity, parent: gen:int:credit_channel, instances: [e04, e15, e45, e88]}
   - {id: gen:int:lending_conditions, name: Lending conditions, parent: gen:int:credit_channel, instances: [e25, e26, e87]}
   - {id: gen:int:cost_push, name: Cost push, parent: gen:int:root}
-  - {id: gen:int:energy_to_prices, name: Energy to prices and costs, parent: gen:int:cost_push, instances: [e08, e20]}
+  - {id: gen:int:energy_to_prices, name: Energy to prices and costs, parent: gen:int:cost_push, instances: [e08, e20, e78]}
   - {id: gen:int:supply_to_prices, name: Supply delays to prices, parent: gen:int:cost_push, instances: [e34]}
-  - {id: gen:int:margin_squeeze, name: Input costs squeeze margins, parent: gen:int:cost_push, instances: [e78, e79, e80]}
-  - {id: gen:int:demand_linkage, name: Demand linkage, parent: gen:int:root, instances: [e06, e24, e27, e48, e57, e63, e74, e81]}
+  - {id: gen:int:margin_squeeze, name: Input costs squeeze margins, parent: gen:int:cost_push, instances: [e79]}
+  - {id: gen:int:demand_linkage, name: Demand linkage, parent: gen:int:root, instances: [e06, e24, e27, e48, e57, e63, e74]}
   # real actors (addition): customers' spending becomes suppliers' revenue; rivals trade share
   - {id: gen:int:supply_relationship, name: Supply relationship, parent: gen:int:root, instances: [e53, e54, e55, e56, e69, e71, e73]}
+  # inside a firm (addition): segments add up to revenue, and revenue lifts the margin. Its signature keeps it to
+  # links between two of one firm's values (scope: internal), so a new link elsewhere, such as two rivals
+  # trading share, never descends into it.
+  - {id: gen:int:firm_financials, name: Firm financials, parent: gen:int:root, signature: {required: {
+      source_gen: [gen:obj:chipmaker, gen:obj:cloud_platform, gen:obj:energy_producer, gen:obj:airline, gen:obj:bank],
+      target_gen: [gen:obj:chipmaker, gen:obj:cloud_platform, gen:obj:energy_producer, gen:obj:airline, gen:obj:bank],
+      scope: [internal]}}}
   - {id: gen:int:competition, name: Competition, parent: gen:int:root, instances: [e59, e62, e82, e86]}
   - {id: gen:int:supply_response, name: Supply response, parent: gen:int:root, instances: [e70, e72, e75]}
   - {id: gen:int:rule_making, name: Rule making, parent: gen:int:root, instances: [e50]}

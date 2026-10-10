@@ -19,21 +19,21 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict
 
-from axelrod_wm.core.graph import CausalGraph
-from axelrod_wm.core.serialization import StrSet
-from axelrod_wm.core.superentity import (
+from axelrod_wm.memory.entity_memory import EntityMemory
+from axelrod_wm.memory.frontier import CorrelationFrontier
+from axelrod_wm.model.explanation import Explanation
+from axelrod_wm.model.graph import CausalGraph
+from axelrod_wm.model.serialization import StrSet
+from axelrod_wm.model.superentity import (
     SuperentityPattern,
     SuperentityStatus,
     SuperInteraction,
     SuperLinkKind,
 )
-from axelrod_wm.core.taxonomy import Taxonomy, TaxonomyKind
-from axelrod_wm.engine.explain_records import Explanation
-from axelrod_wm.memory.entity_memory import EntityMemory
-from axelrod_wm.memory.frontier import CorrelationFrontier
+from axelrod_wm.model.taxonomy import Taxonomy, TaxonomyKind
 
 if TYPE_CHECKING:
-    from axelrod_wm.control.mutator import MutationTxn
+    from axelrod_wm.repo.mutator import MutationTxn
 
 
 class Episode(BaseModel):

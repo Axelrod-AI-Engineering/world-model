@@ -1,6 +1,6 @@
 """Axelrod World Model v0.
 
-An evidence-backed, event-sourced causal world model. See PLAN.md for the design and
+An evidence-backed, event-sourced causal world model. See docs/plan.md for the design and
 docs/architecture.md for a map from modules to plan sections.
 """
 

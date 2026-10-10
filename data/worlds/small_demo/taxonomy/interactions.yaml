@@ -1,0 +1,19 @@
+# The small demo's interaction taxonomy: the kinds of causal relation the examples create, with no
+# members yet. Signatures match on the ends' attribute kinds, the sign, and whether a link stays inside one
+# entity. A kind pools its members' effects, and a new member with no effect of its own inherits them.
+root: gen:int:root
+nodes:
+  - {id: gen:int:root, name: Causal relation, parent: null}
+  - {id: gen:int:cost_push, name: Cost push, parent: gen:int:root,
+     signature: {required: {polarity: ["1"]}, any_of: {source_attr: [commodity_price, cost_index]}}}
+  - {id: gen:int:energy_to_prices, name: Energy to prices and costs, parent: gen:int:cost_push,
+     signature: {required: {source_attr: [commodity_price]}}}
+  - {id: gen:int:margin_squeeze, name: Input costs squeeze margins, parent: gen:int:root,
+     signature: {required: {target_attr: [margin], polarity: ["-1"]}, any_of: {source_attr: [cost_index, commodity_price]}}}
+  - {id: gen:int:asset_repricing, name: Asset repricing, parent: gen:int:root, signature: {required: {target_attr: [asset_price]}}}
+  - {id: gen:int:policy_reaction, name: Policy reaction, parent: gen:int:root,
+     signature: {required: {source_attr: [inflation_rate], target_attr: [policy_rate]}}}
+  - {id: gen:int:policy_transmission, name: Policy transmission, parent: gen:int:root,
+     signature: {required: {source_attr: [policy_rate]}, any_of: {target_attr: [inflation_rate, growth_rate]}}}
+  - {id: gen:int:competition, name: Competition, parent: gen:int:root,
+     signature: {required: {scope: [between], polarity: ["-1"], source_attr: [share]}}}

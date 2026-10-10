@@ -12,34 +12,59 @@
   <script src="vendor/d3.v7.min.js"></script>
   <script type="module" src="js/main.js"></script>
 </head>
-<body>
+<body class="mode-learn">
   <!-- DECISION: the first view is the graph and one line of story; every panel opens on demand (the
        user asked for a much simpler screen). The plan's controls are all still here, one level down. -->
   <header id="topbar" role="toolbar" aria-label="Main controls">
     <div class="brand"><b>Axelrod</b><span>World Model</span></div>
+    <!-- DECISION (restructure): one world model, two views. Learn is for backend users, who update it (every
+         change vetted and committed); Predict is for everyone else, who pose theses and never change it. -->
+    <div class="seg mode" role="group" aria-label="View">
+      <button id="mode-learn" aria-pressed="true" title="Learn: backend users update the one world model. Every change is vetted and committed.">Learn</button>
+      <button id="mode-predict" aria-pressed="false" title="Predict: pose theses against committed versions. Nothing you do here is learned.">Predict</button>
+    </div>
     <div id="clock" title="Simulated date and state version">
       <span id="sim-date">—</span><span id="sim-version" class="mono">v—</span>
     </div>
     <div class="spacer"></div>
     <div class="actions">
-      <button id="btn-update" class="primary" title="Request an update: collect news and data up to a date, then fold it in day by day (U)">
+      <!-- a demo with examples (small_demo, prod_demo): Examples replaces Update and Step -->
+      <button id="btn-examples" class="primary learn-only examples-only" aria-expanded="false" title="Example events: each isolates one part of the framework and stops at your review (E)">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 3.5h10M3 8h10M3 12.5h6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        Examples</button>
+      <button id="btn-update" class="primary learn-only scripted-only" title="Request an update: collect news and data up to a date, then fold it in day by day (U)">
         <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2.5v3h-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
         Update</button>
-      <div class="seg" role="group" aria-label="Scripted demo">
+      <div class="seg learn-only scripted-only" role="group" aria-label="Scripted demo">
         <button id="btn-step" title="Run the next scripted step of the demo (→)">Step <span aria-hidden="true">▸</span></button>
         <button id="btn-play" title="Play or pause the scripted demo (Space)" aria-pressed="false">Play</button>
       </div>
-      <span id="step-label" class="mono muted" title="Scripted demo progress">0 / 0</span>
+      <span id="step-label" class="mono muted learn-only scripted-only" title="Scripted demo progress">0 / 0</span>
     </div>
     <div class="spacer"></div>
+    <!-- DECISION (Oct 8): the bar offers only what the moment needs: the primary action (Examples or Step in
+         Learn, Ask in Predict), Review when something waits, and one menu for everything else. -->
     <nav class="tools" aria-label="Panels">
-      <button id="btn-inbox" class="tool" title="News and data the model has read" aria-expanded="false">News <span class="count" id="inbox-count">0</span></button>
-      <button id="btn-review" class="tool" title="Proposals that wait for your review" aria-expanded="false">Review <span class="count" id="review-count">0</span></button>
-      <button id="btn-briefs" class="tool" title="Forecast briefs: a written reading of each forecast (B)" aria-expanded="false">Briefs <span class="count" id="briefs-count">0</span></button>
-      <button id="btn-ask" class="tool" title="Ask a what-if question (pose a thesis) (Q)" aria-expanded="false">Ask</button>
-      <button id="btn-memory" class="tool" title="Long-term memory (M)" aria-expanded="false">Memory</button>
-      <button id="btn-methods" class="tool" title="Proposed implementation and ML stack: a technical briefing" aria-expanded="false">Methods</button>
-      <button id="btn-admin" class="tool" title="Admin: navigate the story, the map, the view, and settings (,)" aria-expanded="false">Admin</button>
+      <button id="btn-methods" class="tool" aria-expanded="false" title="How it works: learning, inference, the literature, and the implementation (H)">How it works</button>
+      <button id="btn-ask" class="tool primary-ask predict-only" title="Ask a what-if question (pose a thesis) (Q)" aria-expanded="false">Ask</button>
+      <button id="btn-review" class="tool learn-only idle" title="Review: what each change would commit, through the third-order ripple; approve all, some, or none" aria-expanded="false">Review <span class="count" id="review-count">0</span></button>
+      <div class="menu-wrap">
+        <button id="btn-menu" class="tool" aria-haspopup="menu" aria-expanded="false" title="Everything else">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 4h11M2.5 8h11M2.5 12h11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+          <span class="dot" aria-hidden="true"></span><span class="sr-only">Menu</span></button>
+        <div id="menu-panel" class="menu-panel" role="menu" hidden>
+          <button id="btn-inbox" class="tool" role="menuitem" aria-expanded="false" title="News and data the model has read">News <span class="count" id="inbox-count">0</span><kbd>N</kbd></button>
+          <button id="btn-briefs" class="tool" role="menuitem" aria-expanded="false" title="A written reading of each forecast">Briefs <span class="count" id="briefs-count">0</span><kbd>B</kbd></button>
+          <button id="btn-manual" class="tool learn-only" role="menuitem" title="Add an entity, values, or interactions from your own knowledge; no article needed">Add from your own knowledge</button>
+          <button id="btn-ask-learn" class="tool learn-only" role="menuitem" title="Switch to Predict and ask a what-if question">Ask a what-if<kbd>Q</kbd></button>
+          <button id="btn-checks" class="tool" role="menuitem" title="What the model is testing now, and when and how each check happens">Checks<kbd>C</kbd></button>
+          <button id="btn-memory" class="tool" role="menuitem" aria-expanded="false" title="Long-term memory">Long-term memory<kbd>M</kbd></button>
+          <button id="btn-console" class="tool learn-only" role="menuitem" aria-expanded="false" title="Console: the commit log of the world model (version control)">Console: the log<kbd>I</kbd></button>
+          <hr>
+          <button id="btn-admin" class="tool" role="menuitem" aria-expanded="false" title="Navigate the story, the map, the view, and settings">Admin and settings<kbd>,</kbd></button>
+          <button id="btn-keys" class="tool" role="menuitem" title="Every keyboard shortcut">Keyboard shortcuts<kbd>?</kbd></button>
+        </div>
+      </div>
     </nav>
   </header>
 
@@ -51,17 +76,19 @@
       <div id="caption" class="floating" aria-live="polite"><span class="step"></span><span class="text">Loading…</span><span class="walks"></span></div>
       <div id="walkthrough" class="floating walk hidden" role="region" aria-label="Walkthrough of the model's steps"></div>
       <div id="readonly-banner" class="floating hidden" role="status"></div>
+      <div id="staged-banner" class="floating hidden" role="status"></div>
+      <div id="empty-hint" class="floating hidden" role="note"></div>
       <div id="search-box" class="floating">
         <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-        <label class="sr-only" for="search">Find an entity or subentity</label>
-        <input id="search" type="search" placeholder="Find…  /" list="search-list" autocomplete="off">
-        <datalist id="search-list"></datalist>
+        <label class="sr-only" for="search">Find or filter entities, values, interactions, and superentities</label>
+        <input id="search" type="search" placeholder="Find or filter…  /" autocomplete="off">
       </div>
       <div id="canvas-controls" class="floating" role="toolbar" aria-label="Canvas">
         <div class="seg" role="group" aria-label="Detail">
           <button id="lvl-super" title="Close every superentity into one card (1)">Superentities</button>
           <button id="lvl-entity" title="Open superentities, close entities (2)">Entities</button>
           <button id="lvl-sub" title="Open every entity into its subentities (3)">Subentities</button>
+          <button id="lvl-auto" aria-pressed="true" title="Detail follows zoom: zoom out for superentities, in for the values of what is in view (0)">Auto</button>
         </div>
         <div class="seg" role="group" aria-label="Zoom">
           <button id="zoom-out" class="icon" title="Zoom out (−)" aria-label="Zoom out">−</button>
@@ -69,7 +96,7 @@
           <button id="btn-fit" class="icon" title="Fit everything (F)" aria-label="Fit everything">
             <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button>
         </div>
-        <button id="btn-draw" aria-pressed="false" title="Draw a proposed edge: drag from one node to another (D)">Draw</button>
+        <button id="btn-draw" class="learn-only" aria-pressed="false" title="Draw a proposed edge: drag from one node to another (D)">Draw</button>
       </div>
     </div>
 
@@ -77,10 +104,10 @@
       <header>
         <nav role="tablist" aria-label="News, review, and briefs">
           <button role="tab" data-ltab="inbox" aria-selected="true">News</button>
-          <button role="tab" data-ltab="review" aria-selected="false">Review <span class="count" id="review-count-tab">0</span></button>
+          <button role="tab" data-ltab="review" class="learn-only" aria-selected="false">Review <span class="count" id="review-count-tab">0</span></button>
           <button role="tab" data-ltab="briefs" aria-selected="false">Briefs <span class="count" id="briefs-count-tab">0</span></button>
         </nav>
-        <button class="close" data-close-panel="left" aria-label="Close">✕</button>
+        <button class="ghost win-max-btn" data-max type="button" aria-label="Full screen" title="Full screen (or back)">⤢</button><button class="close" data-close-panel="left" aria-label="Close">✕</button>
       </header>
       <section class="ltab active" id="ltab-inbox" role="tabpanel"><div id="inbox-body" class="body"></div></section>
       <section class="ltab" id="ltab-review" role="tabpanel"><div id="review-body" class="body"></div></section>
@@ -96,7 +123,7 @@
           <button role="tab" data-tab="hypotheses" aria-selected="false">Hypotheses</button>
           <button role="tab" data-tab="decisions" aria-selected="false">Decisions</button>
         </nav>
-        <button class="close" data-close-panel="right" aria-label="Close">✕</button>
+        <button class="ghost win-max-btn" data-max type="button" aria-label="Full screen" title="Full screen (or back)">⤢</button><button class="close" data-close-panel="right" aria-label="Close">✕</button>
       </header>
       <div id="right-body">
         <section class="tabpanel active" id="tab-inspector" role="tabpanel"></section>
@@ -109,11 +136,11 @@
   </main>
 
   <footer id="bottom">
-    <button id="btn-activity" class="tool" aria-expanded="false" title="Show the pipeline">
+    <button id="btn-activity" class="tool" aria-expanded="false" title="The phase the model is in now. Click for the pipeline: learning and inference phases">
       <span class="dot" aria-hidden="true"></span><span id="phase-now">idle</span></button>
     <div id="timeline">
       <div id="timeline-track"></div>
-      <input id="scrubber" type="range" min="0" max="0" value="0" aria-label="Timeline scrubber">
+      <input id="scrubber" type="range" min="0" max="0" value="0" aria-label="Timeline" title="Drag back to see the model as it was then (read-only); Back to live returns">
     </div>
     <span id="scrub-label" class="mono muted">live</span>
     <button id="btn-live" class="hidden">Back to live</button>
@@ -123,13 +150,13 @@
   <section id="drawer" aria-label="Memory drawer">
     <header role="tablist">
       <h2>Long-term memory</h2>
-      <button data-mtab="object" role="tab" aria-selected="true">Object generalizations</button>
-      <button data-mtab="interaction" role="tab" aria-selected="false">Interaction generalizations</button>
-      <button data-mtab="entity_memories" role="tab" aria-selected="false">Entity memories</button>
-      <button data-mtab="frontier" role="tab" aria-selected="false">Correlation frontier</button>
-      <button data-mtab="prior" role="tab" aria-selected="false">Prior states</button>
+      <button data-mtab="object" role="tab" aria-selected="true" title="A taxonomy over entities and superentities. Classifies new objects and supplies priors.">Object generalizations</button>
+      <button data-mtab="interaction" role="tab" aria-selected="false" title="A taxonomy over causal interactions. Classifies new interactions and supplies priors.">Interaction generalizations</button>
+      <button data-mtab="entity_memories" role="tab" aria-selected="false" title="Each entity's own long-term memory, which affects how it is used later.">Entity memories</button>
+      <button data-mtab="frontier" role="tab" aria-selected="false" title="Co-movements not yet admitted as causal; promoted once verified.">Correlation frontier</button>
+      <button data-mtab="prior" role="tab" aria-selected="false" title="Summarized past days (episodes) and the explanations stored with them; recall draws analogs from them.">Prior states</button>
       <div class="spacer"></div>
-      <button id="drawer-close" class="close" aria-label="Close the memory drawer">✕</button>
+      <button class="ghost win-max-btn" data-max type="button" aria-label="Full screen" title="Full screen (or back)">⤢</button><button id="drawer-close" class="close" aria-label="Close the memory drawer">✕</button>
     </header>
     <div class="body" id="drawer-body"></div>
   </section>

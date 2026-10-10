@@ -9,7 +9,7 @@ import pytest
 from axelrod_wm.engine.config import load_config
 from axelrod_wm.engine.engine import Engine
 from axelrod_wm.engine.initialize import ConstructionSpec, Initializer, SeedFile, load_vocabulary
-from axelrod_wm.memory.snapshots import MemoryBackend
+from axelrod_wm.repo.snapshots import MemoryBackend
 from axelrod_wm.trace import NullTracer
 
 START_DATE = date(2023, 1, 2)                     # day 0 of the constructed engine
@@ -48,7 +48,7 @@ def constructed_engine(build: bool = False, config=None) -> Engine:
     else:
         eng = Engine(cfg, MemoryBackend(), NullTracer(), vocab=VOCAB)
     init = Initializer(eng)
-    init.construct(ConstructionSpec.load("data/construction"), "data/taxonomy", start=START_DATE, vocab=VOCAB)
+    init.construct(ConstructionSpec.load("data/worlds/economy"), "data/taxonomy", start=START_DATE, vocab=VOCAB)
     init.load_seeds(SeedFile.load(SEEDS), now=eng.wm.clock)
     return eng
 
@@ -61,8 +61,8 @@ def m1_engine() -> Engine:
 def warm_taxonomies(eng, rounds: int = 6, now=None) -> None:
     """Push every entity and interaction through its classification path `rounds` times, as the
     history replay would, so supports exceed the recall threshold."""
-    from axelrod_wm.core.taxonomy import TaxonomyKind
     from axelrod_wm.engine.interfaces import Classification
+    from axelrod_wm.model.taxonomy import TaxonomyKind
 
     now = now or eng.wm.clock
     ltm = eng.ltm
@@ -137,7 +137,7 @@ def make_controller(engine=None, policy: str | None = None):
 def market_event(me_id: str):
     import json
 
-    from axelrod_wm.ingest.sources import parse_market_event
+    from axelrod_wm.intake.sources import parse_market_event
 
     for line in open(f"{SCENARIO_DIR}/market_events.jsonl"):
         if line.strip():
@@ -152,18 +152,18 @@ def market_event(me_id: str):
 # ---------------------------------------------------------------------------------------------
 
 def predict_day(eng, d: int) -> None:
-    dev = eng.wm.deviations
-    ctx = eng.context(learn=True, now=dev.day_start(d), processing_day=d)
-    with eng.mutator.begin(f"predict:{dev.date_of(d)}", at=dev.day_start(d)) as txn:
-        eng.components["daily_propagator"].predict(d, eng.wm, ctx, txn)
+    """Working memory opens the day (its prediction)."""
+    eng.learning.open_day(d)
 
 
 def close_day(eng, d: int):
+    """The day's end, as the update run does it: record (working), distill (long-term), close (working)."""
     dev = eng.wm.deviations
     ctx = eng.context(learn=True, now=dev.day_end(d), processing_day=d)
-    with eng.mutator.begin(f"record:{dev.date_of(d)}", at=dev.day_end(d)) as txn:
-        moves = eng.components["daily_propagator"].record(d, eng.wm, ctx, txn)
-    report = eng.components["consolidator"].run(d, ctx)
+    moves = eng.learning.working.record_day(d, ctx)
+    report = eng.learning.long_term.distill(d, ctx)
+    eng.learning.working.close_day(d, ctx, report)
+    report.version = eng.version
     return moves, report
 
 

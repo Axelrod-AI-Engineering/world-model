@@ -7,28 +7,28 @@ from datetime import UTC, date, datetime, time, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from axelrod_wm.control.decisions import DecisionError, DecisionRecord, DecisionTrace, Outcome
-from axelrod_wm.control.review import Proposal, ProposalKind, ProposalStatus
 from axelrod_wm.control.updates import UpdateCycle, UpdateRequest, UpdateRun, UpdateState
-from axelrod_wm.core.hypothesis import Hypothesis, HypothesisKind, HypothesisStatus
-from axelrod_wm.core.ids import IdFactory
-from axelrod_wm.engine.performance.task import UnboundThesis
 from axelrod_wm.engine.registry import registry
 from axelrod_wm.events.graph_update import ChangeValue, EventKind, GraphUpdateEvent
-from axelrod_wm.events.ledger import LedgerKind
 from axelrod_wm.events.market import MarketEvent
 from axelrod_wm.events.thesis import Thesis, ThesisMode
-from axelrod_wm.ingest.pipeline import IngestionPipeline
-from axelrod_wm.ingest.scrapers import dedup_keys
+from axelrod_wm.inference.decisions import DecisionError, DecisionRecord, DecisionTrace, Outcome
+from axelrod_wm.inference.task import UnboundThesis
+from axelrod_wm.intake.pipeline import IngestionPipeline
+from axelrod_wm.intake.scrapers import dedup_keys
 from axelrod_wm.memory.frontier import CoMovementStatus, pair_key
+from axelrod_wm.model.hypothesis import Hypothesis, HypothesisKind, HypothesisStatus
+from axelrod_wm.model.ids import IdFactory
+from axelrod_wm.repo.ledger import LedgerKind
+from axelrod_wm.repo.review import Proposal, ProposalKind, ProposalStatus
 from axelrod_wm.trace import Phase
 
 if TYPE_CHECKING:
-    from axelrod_wm.control.mutator import ChangeSet
     from axelrod_wm.engine.engine import Engine
-    from axelrod_wm.engine.performance.records import Forecast
     from axelrod_wm.evaluation.backtest import EvaluationReport, EvaluationRequest
-    from axelrod_wm.ingest.refiner import RefinementResult
+    from axelrod_wm.inference.records import Forecast
+    from axelrod_wm.intake.refiner import RefinementResult
+    from axelrod_wm.repo.mutator import ChangeSet
 
 
 class ControllerError(ValueError):
@@ -91,9 +91,30 @@ class WorldModelController:
                 kwargs: dict[str, Any] = dict(params)
                 if name == "hand_drawn" and "directory" not in kwargs and self.scenario_dir is not None:
                     kwargs["directory"] = self.scenario_dir / "translations"
+                world = self.world_dir()
+                if world is not None:
+                    if name == "template" and "templates" not in kwargs and (world / "templates.yaml").exists():
+                        kwargs["templates"] = world / "templates.yaml"
+                    if name == "data_feed" and "series_map" not in kwargs and (world / "series_map.yaml").exists():
+                        kwargs["series_map"] = world / "series_map.yaml"
                 chain.append(cls(config=self.config, **kwargs))
             self._translators[kind] = chain
         return self._translators[kind]
+
+    def world_dir(self) -> Path | None:
+        """The folder of the world the scenario is built on (its construction_dir): entities,
+        interactions, translation templates, and the data feed's series map."""
+        if not hasattr(self, "_world_dir"):
+            self._world_dir = None
+            p = self.scenario_dir / "scenario.yaml" if self.scenario_dir is not None else None
+            if p is not None and p.exists():
+                import yaml
+
+                from axelrod_wm.engine.initialize import resolve_path
+
+                d = ((yaml.safe_load(p.read_text()) or {}).get("initialization") or {}).get("construction_dir")
+                self._world_dir = resolve_path(d) if d else None
+        return self._world_dir
 
     def translator_for(self, kind: str) -> Any:
         return self.translator_chain(kind)[0]
@@ -202,6 +223,103 @@ class WorldModelController:
                 return self.propose(ProposalKind.GRAPH_UPDATE, ref.event, steps=ref.steps, pending=ref.pending,
                                     soft_support=ref.soft_support, update_id=update_id)
 
+    # ---------------------------------------------------------------------------------------
+    # structure: a backend user's own edits (restructure). Each is a proposal like any other: the
+    # review policy decides whether a person must approve it, and approval commits it once
+    # (process: structural), with no fold (flows: structure).
+    # ---------------------------------------------------------------------------------------
+    def propose_group(self, name: str, members: list[str], *, interactions: list[str] | None = None,
+                      pattern_id: str | None = None, description: str = "", by: str = "user",
+                      parts: list[str] | None = None) -> Proposal:
+        """Collapse: ask to admit a superentity made of `members` (entity ids) and the interactions among
+        them (all active ones between two members by default). With `parts` (admitted superentity pattern ids), it
+        is a composite (Oct 9): a superentity made of superentities, plus any further members."""
+        from axelrod_wm.events.graph_update import ProposeSuperentity
+        from axelrod_wm.model.evidence import Origin
+        from axelrod_wm.model.superentity import SuperentityPattern, SuperentityStatus
+        from axelrod_wm.shared.recognize import interactions_among, roles_and_relations
+
+        with self.lock:
+            eng = self.engine
+            g = eng.wm.graph
+            og0 = eng.ltm.object_generalizations
+            parts = list(dict.fromkeys(parts or []))
+            bad_parts = [q for q in parts if q not in og0.patterns or og0.patterns[q].status != SuperentityStatus.ADMITTED
+                         or not any(i.pattern_id == q and not i.transient for i in g.instances.values())]
+            if bad_parts:
+                raise ControllerError(f"not admitted superentities on the canvas: {', '.join(bad_parts)}")
+            part_members = [m for q in parts for iid, inst in sorted(g.instances.items())
+                            if inst.pattern_id == q and not inst.transient for m in sorted(g.members(iid))]
+            members = list(dict.fromkeys(part_members + list(members)))
+            unknown = [m for m in members if m not in g.entities]
+            if unknown:
+                raise ControllerError(f"unknown entities: {', '.join(unknown)}")
+            if len(members) < 2 or (parts and len(parts) + len([m for m in members if m not in part_members]) < 2):
+                raise ControllerError("a superentity needs at least two members (or two parts)")
+            edges = list(interactions) if interactions else interactions_among(members, g)
+            bad = [i for i in edges if i not in g.interactions or not g.interactions[i].active]
+            if bad:
+                raise ControllerError(f"unknown or retired interactions: {', '.join(bad)}")
+            if not edges:
+                raise ControllerError("the members share no interaction to group them by")
+            og = eng.ltm.object_generalizations
+            pid = pattern_id or self.ids.next("SE")
+            if pid in og.patterns and og.patterns[pid].status == SuperentityStatus.ADMITTED:
+                raise ControllerError(f"{pid} is already an admitted superentity")
+            roles, relations = roles_and_relations(members, edges, g, eng.ltm, float(self.config.thresholds.recognition))
+            spare = [k for k in sorted(og.palettes) if k.startswith("x")]
+            what = (", ".join(og.patterns[q].name for q in parts) if parts
+                    else ", ".join(g.entities[m].name for m in members))
+            pattern = SuperentityPattern(
+                id=pid, name=name, roles=roles, relations=relations, support=float(self.config.thresholds.recognition),
+                status=SuperentityStatus.CANDIDATE, origin=Origin.HUMAN, created_at=self.now, last_seen=self.now,
+                palette=spare[len(og.patterns) % len(spare)] if spare else None, sub_pattern_ids=parts,
+                description=description or f"Grouped by {by}: {what}.")
+            event = GraphUpdateEvent(id=f"GUE-GROUP-{pid}", kind=EventKind.REAL, event_type="superentity_admission",
+                                     occurred_at=self.now, recorded_at=self.now, produced_by="human", confidence=1.0,
+                                     ops=[ProposeSuperentity(pattern=pattern, bindings={m: m for m in members})])
+            with eng.tracer.scoped(event.id):
+                return self.propose(ProposalKind.SUPERENTITY_ADMISSION, event, subject_id=pid,
+                                    reasons=[f"{by} groups {what} into {name}"])
+
+    def propose_dissolve(self, pattern_id: str, reason: str, *, by: str = "user") -> Proposal:
+        """Expand: ask to dissolve a superentity, so it breaks back into its constituents."""
+        from axelrod_wm.events.graph_update import DissolveSuperentity
+        from axelrod_wm.model.superentity import SuperentityStatus
+
+        with self.lock:
+            p = self.engine.ltm.object_generalizations.patterns.get(pattern_id)
+            if p is None or p.status != SuperentityStatus.ADMITTED:
+                raise ControllerError(f"{pattern_id} is not an admitted superentity")
+            event = GraphUpdateEvent(id=f"GUE-DISSOLVE-{pattern_id}-{self.now:%Y%m%d%H%M}", kind=EventKind.REAL,
+                                     event_type="superentity_dissolution", occurred_at=self.now,
+                                     recorded_at=self.now, produced_by="human", confidence=1.0,
+                                     ops=[DissolveSuperentity(pattern_id=pattern_id, reason=reason)])
+            with self.engine.tracer.scoped(event.id):
+                return self.propose(ProposalKind.SUPERENTITY_DISSOLUTION, event, subject_id=pattern_id,
+                                    reasons=[f"{by}: {reason}"])
+
+    def propose_retire(self, *, entity_id: str | None = None, interaction_id: str | None = None, reason: str,
+                       by: str = "user") -> Proposal:
+        """Delete: ask to retire an entity (with its subentities and interactions) or one interaction."""
+        from axelrod_wm.events.graph_update import RetireEntity, RetireInteraction
+
+        g = self.engine.wm.graph
+        if (entity_id is None) == (interaction_id is None):
+            raise ControllerError("retire exactly one entity or one interaction")
+        if entity_id is not None and entity_id not in g.entities:
+            raise ControllerError(f"unknown entity {entity_id}")
+        if interaction_id is not None and (interaction_id not in g.interactions
+                                           or not g.interactions[interaction_id].active):
+            raise ControllerError(f"unknown or retired interaction {interaction_id}")
+        op = (RetireEntity(entity_id=entity_id, reason=reason) if entity_id is not None
+              else RetireInteraction(interaction_id=interaction_id, reason=reason))
+        target = entity_id or interaction_id
+        event = GraphUpdateEvent(id=f"GUE-RETIRE-{target}-{self.now:%Y%m%d%H%M}", kind=EventKind.REAL,
+                                 event_type="retirement", occurred_at=self.now, recorded_at=self.now,
+                                 produced_by="human", confidence=1.0, ops=[op])
+        return self.submit_graph_update(event, by=by)
+
     def _apply_effects(self, p: Proposal, txn: Any) -> None:
         """What approval itself does: store the pending items, add the soft support, and retire the
         pending item a refinement resolves (§7.6)."""
@@ -225,7 +343,13 @@ class WorldModelController:
         eng = self.engine
         ev = p.event
         before_seq = eng.ledger.next_seq
-        with eng.mutator.begin(cause=p.id, at=self.now) as txn:
+        from axelrod_wm.intake.pipeline import op_summary
+
+        what = "; ".join(op_summary(op) for op in ev.ops[:3]) + (" …" if len(ev.ops) > 3 else "")
+        verb = {ProposalKind.SUPERENTITY_ADMISSION: "Collapse", ProposalKind.SUPERENTITY_DISSOLUTION: "Expand",
+                ProposalKind.FRONTIER_PROMOTION: "Promote"}.get(p.kind, "Structure")
+        with eng.mutator.begin(cause=p.id, at=self.now, process="structural", proposal_id=p.id,
+                               vetted_by="policy" if auto else by, message=f"{verb}: {what or p.kind} ({p.id})") as txn:
             self._apply_effects(p, txn)
             if ev.ops:
                 eng.structural.apply(ev, self.now, str(p.kind))
@@ -274,13 +398,19 @@ class WorldModelController:
         headline = me.headline if me is not None else None
         before_seq = eng.ledger.next_seq
         result = None
-        with eng.mutator.begin(cause=p.id, at=now) as txn:
+        # DECISION (restructure): what approval itself does (pending refinements, soft support) commits on
+        # its own; the event then commits twice, once per learning process (working, then long-term).
+        with eng.mutator.begin(cause=p.id, at=now, process="review", proposal_id=p.id,
+                               message=f"Review effects of {p.id}") as txn:
             self._apply_effects(p, txn)
             if late_from is not None and p.id in eng.wm.late_queue:
                 txn.remove("wm.late_queue", p.id)
-            if p.event.ops:
-                result = eng.learning.run(p.event, now, day, headline=headline)
-        cs = eng.mutator.last_changeset if eng.ledger.next_seq > before_seq else None
+        effects_cs = eng.mutator.last_changeset if eng.ledger.next_seq > before_seq else None
+        if p.event.ops:
+            vetted_by = "policy" if auto else (p.decided_by or "reviewer")
+            result = eng.learning.run(p.event, now, day, headline=headline, proposal_id=p.id, vetted_by=vetted_by)
+        cs = (result.working.commit if result is not None and result.working is not None
+              and result.working.commit is not None else effects_cs)
         p.folded_day = day
         p.late_from = late_from
         if auto:
@@ -301,25 +431,8 @@ class WorldModelController:
         if result is not None:
             for pe in result.proposal_events:
                 self.propose(pe["kind"], pe["event"], reasons=[pe.get("reason", "")], subject_id=pe.get("subject_id"),
-                             update_id=update_id)
-        if p.event.ops:
-            self._retry_pending(p.event, update_id)
+                             retires_pending_id=pe.get("retires_pending_id"), update_id=update_id)
         return cs
-
-    def _retry_pending(self, applied: GraphUpdateEvent, update_id: str | None = None) -> None:
-        eng = self.engine
-        if not eng.wm.pending_refinements:
-            return
-        ctx = eng.context(learn=True, now=self.now, processing_day=int(eng.wm.last_processed_day) + 1)
-        open_ids = {p.retires_pending_id for p in self.proposals.values()
-                    if p.kind == ProposalKind.REFINEMENT and p.status in (ProposalStatus.PENDING, ProposalStatus.DEFERRED)}
-        for ev in eng.components["refiner"].retry_pending(applied, eng.wm, eng.ltm, ctx):
-            pid = ev.id[len("GUE-REF-"):] if ev.id.startswith("GUE-REF-") else None
-            if pid in open_ids or pid not in eng.wm.pending_refinements:
-                continue
-            open_ids.add(pid)
-            self.propose(ProposalKind.REFINEMENT, ev, retires_pending_id=pid, reasons=[f"new evidence from {applied.id}"],
-                         update_id=update_id)
 
     def _notify(self, kind: str, **info: Any) -> None:
         for fn in list(self.listeners):
@@ -339,16 +452,37 @@ class WorldModelController:
             return run
         return None
 
-    def approve(self, proposal_id: str, by: str, note: str | None = None) -> ChangeSet | None:
+    def approve(self, proposal_id: str, by: str, note: str | None = None,
+                keep: list[int] | None = None, confidence: float | None = None,
+                op_confidence: dict[int, float | None] | None = None,
+                ripple: dict[str, float | None] | None = None) -> ChangeSet | None:
+        """Approve a proposal. With `keep` (op indices), only those operations are approved: the rest are
+        edited out first (logged as an edit), together with any operation that needs one left out. With
+        `confidence` (the article's) or `op_confidence` (per op index, of the proposal as it is), the reviewer's
+        confidences are set first and logged; they go into the data the approval writes (Oct 8). So does `ripple`,
+        the probability that each value's ripple arrives (Oct 9)."""
         with self.lock:
             p = self._get_open(proposal_id)
+            if confidence is not None or op_confidence or ripple:
+                self.set_confidence(proposal_id, confidence, op_confidence, ripple, by=by)
+                p = self._get_open(proposal_id)
+            if keep is not None:
+                from axelrod_wm.control.stage import closure, subset
+
+                kept = closure(p.event, keep)
+                if not kept:
+                    raise ControllerError("nothing is selected; reject the proposal instead")
+                if len(kept) < len(p.event.ops):
+                    self.edit(proposal_id, subset(p.event, kept), by=by)
+                    p = self._get_open(proposal_id)
             eng = self.engine
             with eng.tracer.scoped(self.scope_of(p)):
                 if not p.world_event:
                     return self._apply_model_edit(p, by=by, note=note, auto=False)
                 # a world event: approval stores its side effects now; the day loop folds it on its day
                 before_seq = eng.ledger.next_seq
-                with eng.mutator.begin(cause=f"approve:{p.id}", at=self.now) as txn:
+                with eng.mutator.begin(cause=f"approve:{p.id}", at=self.now, process="review", proposal_id=p.id,
+                                       vetted_by=by, message=f"Approved {p.id}") as txn:
                     self._apply_effects(p, txn)
                     late = p.due_day is not None and p.due_day <= eng.wm.last_processed_day and p.folded_day is None
                     if late:
@@ -360,6 +494,31 @@ class WorldModelController:
                 self.cycle.resume(run)
             return cs
 
+    def set_confidence(self, proposal_id: str, confidence: float | None = None,
+                       op_confidence: dict[int, float | None] | None = None,
+                       ripple: dict[str, float | None] | None = None, *, by: str = "user") -> Proposal:
+        """Set the reviewer's confidence in a proposal's changes (Oct 8): the article's, and any change's own. Logged
+        as an edit with the values before and after."""
+        from axelrod_wm.control.stage import with_confidence
+
+        with self.lock:
+            p = self._get_open(proposal_id)
+            before = {"confidence": p.event.user_confidence,
+                      "ops": {i: op.confidence for i, op in enumerate(p.event.ops) if op.confidence is not None},
+                      "ripple": dict(p.event.ripple)}
+            p.event = with_confidence(p.event, confidence, op_confidence, ripple)
+            p.pending = [pd.model_copy(update={"user_confidence": p.event.user_confidence}) for pd in p.pending]
+            after = {"confidence": p.event.user_confidence,
+                     "ops": {i: op.confidence for i, op in enumerate(p.event.ops) if op.confidence is not None},
+                     "ripple": dict(p.event.ripple)}
+            if after != before:
+                self._decision_entry(p, "confidence", by, None, {"before": before, "after": after})
+                with self.engine.tracer.scoped(self.scope_of(p)):
+                    self.engine.tracer.emit(Phase.REVIEW, "review.confidence", refs=[p.id], proposal_id=p.id,
+                                            confidence=after["confidence"], ops=after["ops"],
+                                            ripple=after["ripple"], by=by)
+            return p
+
     def reject(self, proposal_id: str, by: str, note: str) -> None:
         with self.lock:
             p = self._get_open(proposal_id)
@@ -368,11 +527,34 @@ class WorldModelController:
             if p.kind == ProposalKind.FRONTIER_PROMOTION and p.subject_id in frontier.entries:
                 co = frontier.entries[p.subject_id]
                 until = self.now + timedelta(days=float(self.config.frontier.reject_cooldown_days))
-                with eng.mutator.begin(cause=p.id, at=self.now) as txn:
+                with eng.mutator.begin(cause=p.id, at=self.now, process="review", proposal_id=p.id, vetted_by=by,
+                                       message=f"Reject {p.id}: the pair is blocked for a while") as txn:
                     txn.update("ltm.correlation_frontier.entries", co.id, status=CoMovementStatus.DECAYED)
                     if co.hypothesis_id in eng.wm.hypotheses:
                         txn.update("wm.hypotheses", co.hypothesis_id, status=HypothesisStatus.REFUTED)
                     txn.put("ltm.correlation_frontier.blocked_until", pair_key(co.earlier_id, co.later_id), until)
+            pend = eng.wm.pending_refinements.get(p.retires_pending_id or "")
+            if p.kind == ProposalKind.REFINEMENT and pend is not None and pend.alpha:
+                # the person says "not this one": the hedge holds again, and half the winner's weight returns to the
+                # open reserve, so it must earn the bound again. DECISION (Oct 9): and its checks again: support
+                # restarts at 0, so one more article cannot re-propose it at once
+                from axelrod_wm.memory.working import HedgeCheck
+
+                winner = max(pend.alpha, key=lambda k: pend.alpha[k])
+                alpha = dict(pend.alpha)
+                moved = alpha[winner] / 2
+                alpha[winner] -= moved
+                open_alpha = pend.open_alpha + moved
+                tot = sum(alpha.values()) + open_alpha
+                post = {**{k: round(v / tot, 4) for k, v in alpha.items()}, "__open__": round(open_alpha / tot, 4)}
+                check = HedgeCheck(at=self.now, event_id=p.event.id, kind="rejected", candidate=winner,
+                                   weight=round(moved, 4), posterior=post)
+                with eng.mutator.begin(cause=p.id, at=self.now, process="review", proposal_id=p.id, vetted_by=by,
+                                       message=f"Reject {p.id}: the fuzzy end keeps hedging") as txn:
+                    txn.update("wm.pending_refinements", pend.id, status="holding", alpha=alpha, open_alpha=open_alpha,
+                               support=0.0,
+                               candidates={k: v for k, v in post.items() if k != "__open__"},
+                               checks=(list(pend.checks) + [check])[-20:])
             p.status = ProposalStatus.REJECTED
             p.decided_at, p.decided_by, p.note = self.now, by, note
             self._decision_entry(p, "rejected", by, note)
@@ -395,9 +577,10 @@ class WorldModelController:
             if p.edited_from is None:
                 p.edited_from = old
             p.event = ref.event
-            p.refinement_steps = ref.steps
-            p.pending = ref.pending
-            p.soft_support = ref.soft_support
+            p.refinement_steps = ref.steps or p.refinement_steps
+            # an edit of an already refined event (a selection, a confidence) keeps the hedges it raised
+            p.pending = ref.pending or p.pending
+            p.soft_support = ref.soft_support or p.soft_support
             diff = {"before": old.model_dump(mode="json"), "after": ref.event.model_dump(mode="json")}
             self._decision_entry(p, "edited", by, None, diff)
             with self.engine.tracer.scoped(self.scope_of(p)):
@@ -490,9 +673,12 @@ class WorldModelController:
                              posed_by: str = "human", target_groups: list[dict] | None = None) -> Thesis:
         tr = self._translators.get("_template")
         if tr is None:
-            from axelrod_wm.ingest.translators import TemplateTranslator
+            from axelrod_wm.intake.translators import TemplateTranslator
 
-            tr = self._translators["_template"] = TemplateTranslator(self.config)
+            world = self.world_dir()
+            own = world / "templates.yaml" if world is not None else None
+            tr = self._translators["_template"] = TemplateTranslator(
+                self.config, templates=own if own is not None and own.exists() else None)
         ops, _ = tr.parse(question, self.now)
         if not ops:
             raise ControllerError(f"could not translate the question: {question!r}")
@@ -513,7 +699,7 @@ class WorldModelController:
                 return self._pose_thesis(thesis)
 
     def _pose_thesis(self, thesis: Thesis) -> Forecast:
-        from axelrod_wm.ingest.pipeline import op_ends_view, op_summary
+        from axelrod_wm.intake.pipeline import op_ends_view, op_summary
 
         # the walkthrough's first step: the question and its operations, ends as fuzzy as they were posed
         self.engine.tracer.emit(Phase.TRANSLATE, "thesis.posed", refs=[thesis.id, thesis.event.id], thesis_id=thesis.id,
@@ -531,7 +717,7 @@ class WorldModelController:
         if unbound:
             raise UnboundThesis(unbound)
         refined = thesis.model_copy(update={"event": ref.event})
-        forecast = self.engine.performance.run(refined, self.now)
+        forecast = self.engine.inference.run(refined, self.now, watch=(self.watchlist() or {}).get("entities"))
         self.forecasts[forecast.id] = forecast
         self.theses[thesis.id] = refined
         return forecast
@@ -601,7 +787,7 @@ class WorldModelController:
     def forecast(self, forecast_id: str) -> Forecast | None:
         if forecast_id in self.forecasts:
             return self.forecasts[forecast_id]
-        from axelrod_wm.engine.performance.records import Forecast as _F
+        from axelrod_wm.inference.records import Forecast as _F
 
         for e in reversed(self.engine.ledger.of_kind(LedgerKind.FORECAST)):
             if e.payload["forecast"]["id"] == forecast_id:
@@ -610,8 +796,19 @@ class WorldModelController:
                 return fc
         return None
 
+    def watchlist(self) -> dict | None:
+        """The names a portfolio tracks (addition): the scenario's watchlist.yaml, read once."""
+        if not hasattr(self, "_watchlist"):
+            self._watchlist = None
+            path = self.scenario_dir / "watchlist.yaml" if self.scenario_dir is not None else None
+            if path is not None and path.exists():
+                import yaml
+
+                self._watchlist = yaml.safe_load(path.read_text()) or None
+        return self._watchlist
+
     def explanation(self, explanation_id: str) -> Any:
-        from axelrod_wm.engine.explain_records import Explanation
+        from axelrod_wm.model.explanation import Explanation
 
         stored = self.engine.ltm.prior_states.explanations
         if explanation_id in stored:
@@ -709,7 +906,7 @@ class WorldModelController:
 
     def trace_decision(self, decision_id: str) -> DecisionTrace:
         with self.lock:
-            from axelrod_wm.memory.snapshots import state_hash
+            from axelrod_wm.repo.snapshots import state_hash
 
             rec = self.decisions.get(decision_id)
             if rec is None:

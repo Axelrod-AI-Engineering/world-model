@@ -134,6 +134,29 @@ patterns:
     members: [us_commerce, china_mofcom]
     interactions: [e68]
     support: 4
+  # a design partner's context (addition): the chip supply chain's Japanese tiers, the yen carry trade, and
+  # the server CPU rivalry where a soft constraint (buyers keep a second source) caps one supplier's share
+  - id: S18
+    name: Chip packaging chain
+    description: "Japanese build-up film becomes substrates, substrates become TSMC's advanced packaging, and packaging capacity sets how many GPUs NVIDIA and AMD can ship: a shock upstream reaches the GPU makers at second and third hand."
+    palette: h18
+    members: [ajinomoto, ibiden, tsmc, nvidia, amd]
+    interactions: [e98, e99, e100, e101]
+    support: 3
+  - id: S19
+    name: Yen carry trade
+    description: "Cheap yen funds positions abroad while US rates and returns stay high. A BoJ hike or a fall in US stocks unwinds it: the yen strengthens and volatility jumps."
+    palette: h19
+    members: [boj, interest_rates, yen_carry, asset_prices, dollar_fx]
+    interactions: [e91, e93, e92, e94, e95, e96, e97]
+    support: 3
+  - id: S20
+    name: Server CPU rivalry
+    description: "Intel and AMD compete for server processors; buyers keep a second source, so neither can take the whole market."
+    palette: h20
+    members: [intel, amd]
+    interactions: [e102]
+    support: 4
   - id: HP1
     name: Bank run (2008-like)
     description: "A historical pattern: falling asset prices start a banking crisis that freezes credit and trade finance."
@@ -154,6 +177,15 @@ super_interaction_labels:
   - {source: S3, target: S4, label: cuts trade finance}
 frontier_seeds:
   - {earlier: inflation.headline_cpi, later: confidence.consumer_confidence, lag_days: 7, sign: -1, support: 1.0}
+  # more co-movements for the frontier (addition), of different kinds: three the synthetic world really has
+  # (shipping costs lead input costs; a strong dollar drains EM portfolio flows; long yields weigh on house
+  # prices), one confounded by a common driver the model cannot see (ASML's shares lead JPMorgan's), and one
+  # plausible idea the data do not support, which should fade (carbon prices and United's shares)
+  - {earlier: supply_chains.shipping_costs, later: business_investment.input_costs, lag_days: 14, sign: 1, support: 1.0}
+  - {earlier: dollar_fx.dollar_index, later: capital_flows.em_portfolio_flows, lag_days: 14, sign: -1, support: 1.0}
+  - {earlier: interest_rates.long_term_yields, later: asset_prices.house_prices, lag_days: 28, sign: -1, support: 0.5}
+  - {earlier: asml.share_price, later: jpmorgan.share_price, lag_days: 14, sign: 1, support: 1.0}
+  - {earlier: climate_change.carbon_price, later: united_airlines.share_price, lag_days: 14, sign: -1, support: 0.5}
 palettes:
   h8: {fill: "#E6E3C8", line: "#A39A5B"}
   h9: {fill: "#D9E4E8", line: "#7A98A3"}
@@ -165,3 +197,6 @@ palettes:
   h15: {fill: "#D6E8E4", line: "#4F8C80"}
   h16: {fill: "#E0E9D9", line: "#6E8E5E"}
   h17: {fill: "#EDE0CF", line: "#8F7550"}
+  h18: {fill: "#E4E6D2", line: "#7D8550"}
+  h19: {fill: "#DDE2F0", line: "#5C6E9E"}
+  h20: {fill: "#EFDDD6", line: "#9E6A58"}

@@ -1,0 +1,63 @@
+{
+  "market_event_id": "ME-10",
+  "rationale": "Hand-drawn. Carriers said holiday and January bookings set records, and fares held up.",
+  "spans": [
+    [
+      19,
+      41,
+      0
+    ]
+  ],
+  "events": [
+    {
+      "id": "GUE-ME10",
+      "kind": "real",
+      "event_type": "demand_report",
+      "occurred_at": "2026-02-02T15:00:00Z",
+      "recorded_at": "2026-02-02T15:00:00Z",
+      "produced_by": "hand_drawn",
+      "confidence": 0.85,
+      "market_event_id": "ME-10",
+      "evidence": [
+        {
+          "id": "EV-ME10",
+          "source_type": "news",
+          "excerpt": "US airlines report record January traffic and firmer fares",
+          "observed_at": "2026-02-02T15:00:00Z",
+          "strength": 0.6,
+          "market_event_id": "ME-10"
+        }
+      ],
+      "ops": [
+        {
+          "op": "change_value",
+          "target": {
+            "kind": "concrete",
+            "subentity_id": "delta.passenger_traffic"
+          },
+          "delta": 1.0,
+          "mode": "standardized",
+          "persistence": "step",
+          "at": "2026-02-02T15:00:00Z"
+        },
+        {
+          "op": "change_value",
+          "target": {
+            "kind": "concrete",
+            "subentity_id": "united_airlines.passenger_traffic"
+          },
+          "delta": 1.0,
+          "mode": "standardized",
+          "persistence": "step",
+          "at": "2026-02-02T15:00:00Z"
+        }
+      ],
+      "mentions": [
+        "US airlines",
+        "traffic",
+        "fares"
+      ],
+      "tags": []
+    }
+  ]
+}

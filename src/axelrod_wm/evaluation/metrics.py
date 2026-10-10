@@ -6,7 +6,7 @@ import math
 
 import numpy as np
 
-from axelrod_wm.core.distributions import QUANTILE_LEVELS, DistSummary
+from axelrod_wm.model.distributions import QUANTILE_LEVELS, DistSummary
 
 
 def crps_samples(samples: np.ndarray, y: float) -> float:

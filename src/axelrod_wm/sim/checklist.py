@@ -5,17 +5,17 @@ from __future__ import annotations
 import math
 from typing import Any
 
-from axelrod_wm.control.review import ProposalKind
-from axelrod_wm.memory.snapshots import load_state, state_hash
+from axelrod_wm.repo.review import ProposalKind
+from axelrod_wm.repo.snapshots import load_state, state_hash
 
 CPI, CONF = "inflation.headline_cpi", "confidence.consumer_confidence"
 OIL, STANCE, RATE = "resources_energy.oil_price", "federal_reserve.policy_stance", "interest_rates.us_policy_rate"
 CHIPS, CONTROLS, CAPEX = "cross_border_trade.chip_exports", "legal_regulatory.export_controls", "productivity_tech.tech_capex"
 NVDA_CAPEX = "nvidia.capex"
 HAWK, YIELDS = "fed_chair.hawkishness", "interest_rates.long_term_yields"
-# S10 is the seeded composite (S2 + S1 + the Fed); S11-S17 group the real actors by sector and rivalry;
-# HP1 and HP2 load unbound
-BOUND_SEEDS = {f"S{i}" for i in range(1, 18)}
+# S10 is the seeded composite (S2 + S1 + the Fed); S11-S20 group the real actors by sector and rivalry
+# (S18-S20 from a design partner's context); HP1 and HP2 load unbound
+BOUND_SEEDS = {f"S{i}" for i in range(1, 21)}
 SEED_PATTERNS = BOUND_SEEDS | {"HP1", "HP2"}
 # DECISION: NVIDIA (a real chipmaker) replaces the plan's fictional Northwind and sits in two superentities
 LOOSE = {"market_concentration", "geography", "ecb", "fed_chair"}
@@ -49,8 +49,13 @@ class ChecklistRecorder:
         eng = runner.controller.engine
         g, ltm, wm = eng.wm.graph, eng.ltm, eng.wm
         ints = sorted(g.interactions)
-        # DECISION: Figure 1's 33 entities with NVIDIA in Northwind's place, plus 15 more real actors
-        ok_counts = (len(g.entities) == 48 and len(g.subentities) == 107 and ints == [f"e{i:02d}" for i in range(1, 91)]
+        # DECISION: Figure 1's 33 entities with NVIDIA in Northwind's place, plus 20 more real actors (the last
+        # five from a design partner's context: the BoJ, the yen carry trade, Intel, and two Japanese suppliers);
+        # 115 subentities written out and 44 from the firms' kinds, and 65 links from those kinds (e80 and e81
+        # became the Airline kind's defaults)
+        written = [i for i in ints if not i.startswith("d-")]
+        ok_counts = (len(g.entities) == 53 and len(g.subentities) == 159
+                     and written == sorted(f"e{i:02d}" for i in range(1, 103) if i not in (80, 81)) and len(ints) == 100 + 65
                      and not any(str(i.edge_type) == "learned_causal" for i in g.interactions.values()))
         pats = ltm.object_generalizations.patterns
         admitted = {p for p, x in pats.items() if str(x.status) == "admitted"}
@@ -59,8 +64,10 @@ class ChecklistRecorder:
         ok_pats = admitted == SEED_PATTERNS and not others and with_inst == BOUND_SEEDS
         loose = {e for e in g.entities if not g.instances_of_entity(e)}
         fr = list(ltm.correlation_frontier.entries.values())
-        ok_frontier = (len(fr) == 1 and fr[0].earlier_id == CPI and fr[0].later_id == CONF
-                       and abs(fr[0].support - 1.0) < 1e-9)
+        # the plan's seed (CPI -> confidence) plus five more of different kinds (addition)
+        seed = [e for e in fr if e.earlier_id == CPI and e.later_id == CONF]
+        ok_frontier = (len(fr) == 6 and len(seed) == 1 and abs(seed[0].support - 1.0) < 1e-9
+                       and all(e.seeded for e in fr))
         ok_tax = all(len(n.child_ids) == 0 or len(n.child_ids) >= 2
                      for tax in (ltm.object_generalizations.taxonomy, ltm.interaction_generalizations.taxonomy)
                      for n in tax.nodes.values())
@@ -187,6 +194,18 @@ class ChecklistRecorder:
             self._set(4, "ME-03: chip_exports created; export_controls -> chip_exports under Trade restriction; "
                          "one pending refinement at Supply factor; Technology diffusion support grew", ok,
                       f"pending={len(pend)} tdiff={tdiff:.2f}")
+        if "ME-09" in report.market_event_ids:
+            # DECISION (Oct 8): fuzzy ends are hedged until evidence settles them, so one article no longer binds the
+            # "downstream chip users" end. ME-09 names chip capex: the hedge narrows to tech_capex and its odds pass
+            # the bound; a resolution waits for one more check and goes through review.
+            hedge = next((p for p in eng.wm.pending_refinements.values() if CAPEX in p.alpha), None)
+            post = hedge.posterior() if hedge is not None else {}
+            top = max((k for k in post if k != "__open__"), key=lambda k: post[k], default=None)
+            ok8 = hedge is not None and top == CAPEX and post[CAPEX] >= float(eng.config.refinement.commit_posterior) \
+                and any(ck.event_id.endswith("ME09") or ck.market_event_id == "ME-09" for ck in hedge.checks)
+            self._set(8, "After ME-09: the fuzzy end narrows to tech_capex and its odds pass the bound; it resolves "
+                         "on one more check, through review", ok8,
+                      f"{ {k: round(v, 2) for k, v in post.items()} } support={hedge.support if hedge else None}")
         if "ME-04" in report.market_event_ids:
             me4 = ctl.market_events["ME-04"]
             rbi = g.entities.get("rbi")
@@ -248,10 +267,6 @@ class ChecklistRecorder:
                and ad.get("classified") and ad.get("bound"))
         self._set(7, "By step 12: the export-controls pattern (support > 3) is proposed, admitted under "
                      "Configuration, and bound", ok7, str(ad))
-        rf = self.facts.get("refinement")
-        ok8 = rf is not None and rf.get("generalization") == "gen:int:technology_diffusion"
-        self._set(8, "After ME-09: the pending refinement binds tech_capex and the edge lands in Technology diffusion",
-                  ok8, str(rf))
 
     def _check_t01(self, runner: Any) -> None:
         ctl = runner.controller
@@ -297,8 +312,8 @@ class ChecklistRecorder:
 
     def _check_restore(self, runner: Any) -> None:
         eng = runner.controller.engine
-        from axelrod_wm.control.mutator import ChangeSet, apply_changeset
-        from axelrod_wm.events.ledger import LedgerKind
+        from axelrod_wm.repo.ledger import LedgerKind
+        from axelrod_wm.repo.mutator import ChangeSet, apply_changeset
 
         info = eng.version_info(runner.init_version)
         wm, ltm = load_state(eng.storage.load_snapshot(runner.init_version))

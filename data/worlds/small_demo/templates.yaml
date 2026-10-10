@@ -1,0 +1,18 @@
+# Template translator rules for the small demo: typed theses such as "What if oil rose by 30% next
+# quarter?". A subject only works once the example that creates it has been committed.
+subjects:
+  - {pattern: "jet fuel(?: prices?| costs?)?|fuel costs", subentity: delta.fuel_cost}
+  - {pattern: "oil(?: prices?)?|brent|crude", subentity: resources_energy.oil_price}
+  - {pattern: "(?:the )?fed(?:eral reserve)?|(?:us )?policy rates?|interest rates|rates", subentity: federal_reserve.policy_rate}
+  - {pattern: "inflation|cpi", subentity: inflation.headline_cpi}
+  - {pattern: "delta(?:'s)? (?:shares|stock|share price)", subentity: delta.share_price}
+verbs:
+  - {pattern: "(?:prices? )?(?:doubled|double|doubles)", mode: relative, delta: 1.0}
+  - {pattern: "(?:halved|halve|halves|fell by half)", mode: relative, delta: -0.5}
+  - {pattern: "(?:rose|rise|rises|jumped|jump|jumps|climbed|climb|increased|increase|went up|go up|surged|hiked|hike|raised|raise)s?(?: [a-z]+)? by (?P<num>[0-9.]+) ?(?P<unit>%|percent|bp|basis points|sd|standard deviations)?", sign: 1.0}
+  - {pattern: "(?:fell|fall|falls|dropped|drop|drops|declined|decline|decreased|decrease|went down|go down|cut|cuts)s?(?: [a-z]+)? by (?P<num>[0-9.]+) ?(?P<unit>%|percent|bp|basis points|sd|standard deviations)?", sign: -1.0}
+  - {pattern: "(?:spiked|spike|spikes|soared|soar|soars|surged|surge|surges)", mode: standardized, delta: 2.0}
+timeframes:
+  - {pattern: "next quarter|in three months|in 3 months", days: 90}
+  - {pattern: "next month|in a month", days: 30}
+  - {pattern: "next year|in a year", days: 365}

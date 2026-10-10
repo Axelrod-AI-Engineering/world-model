@@ -1,0 +1,4 @@
+# The small demo's world (Oct 8 restructure): a blank canvas. Every entity, value, and interaction arrives through
+# an example's article (src/axelrod_wm/sim/examples/small.py) and is committed only after review. The kinds the
+# examples are sorted into are in taxonomy/. All data are synthetic.
+entities: []

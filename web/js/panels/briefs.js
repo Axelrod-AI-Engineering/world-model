@@ -54,10 +54,10 @@ export function initBriefs({ openLeft, onWalk, onChat, focusNode, openForecast }
         <span>Writing the brief…</span><span class="spacer"></span><span class="faint">${esc(writing.phase ?? "")}</span></div>
         <div class="title">${esc(writing.question ?? "")}</div></div>` : ""}
       ${list.length ? "" : `<p class="empty">No forecasts yet. Ask a question (Q), or step the demo to step 13.</p>`}
-      ${list.map((f) => `<article class="card selectable brief-card" data-fc="${esc(f.id)}" tabindex="0">
-        <div class="meta"><span class="badge hyp">${esc(f.thesis_id)}</span><span class="mono faint">${esc(f.id)}</span>
-          <span class="spacer"></span><span>${esc(day(f.created_at))}</span></div>
+      ${list.map((f) => `<article class="card selectable brief-card" data-fc="${esc(f.id)}" tabindex="0" title="Open the brief">
         <div class="title">${esc(f.question || f.thesis_id)}</div>
+        <div class="meta"><span>${esc(day(f.created_at))}</span><span class="spacer"></span>
+          <span class="mono faint">${esc(f.thesis_id)} · ${esc(f.id)}</span></div>
         ${cache.has(f.id) ? `<div class="small muted">${esc(cache.get(f.id).bottom_line.split(". ")[0])}.</div>` : ""}
       </article>`).join("")}`;
     for (const card of body.querySelectorAll("[data-fc]")) {
@@ -65,6 +65,22 @@ export function initBriefs({ openLeft, onWalk, onChat, focusNode, openForecast }
       card.addEventListener("click", go);
       card.addEventListener("keydown", (ev) => { if (ev.key === "Enter") go(); });
     }
+  }
+
+  // how it travels (addition): effects by order, the main transmission path, and the watchlist's coverage
+  function travelsHtml(t) {
+    if (!t || !(t.orders ?? []).length) return "";
+    const ord = (n) => (n === 1 ? "first" : n === 2 ? "second" : n === 3 ? "third" : `${n}th`);
+    const wl = t.watchlist;
+    const c = wl?.counts ?? {};
+    return `<section><h4>How it travels</h4>
+      <div class="small">${t.orders.filter((o) => o.material).map((o) => `${o.material} ${ord(o.order)}-order effect${o.material === 1 ? "" : "s"}`).join(", ") || "No effect"} of 0.05 sd or more
+        <span class="faint">(${t.orders.reduce((a, o) => a + o.values, 0)} values reached in all)</span>.</div>
+      ${t.path ? `<p class="small" style="margin:6px 0 2px">The longest material chain reaches <b>${esc(t.path.name)}</b> (${esc(t.path.entity)}), a ${esc(t.path.order_word)} effect of ${arrow(t.path.peak)} at its peak:</p>
+        <div class="small muted">${esc(t.path_text)}</div>` : ""}
+      ${wl ? `<p class="small" style="margin-top:6px">${esc(wl.name)}: ${c.moves ?? 0} names move${wl.moves.length ? ` (${wl.moves.slice(0, 5).map((m) => `${esc(m.name)} ${arrow(m.peak)}, ${ord(m.order)} order`).join("; ")})` : ""};
+        ${c.small ?? 0} move slightly; ${(c.negligible ?? 0) + (c.no_path ?? 0)} are not reached${c.no_path ? `, ${c.no_path} with no path in the graph at all` : ""}.</p>` : ""}
+    </section>`;
   }
 
   async function renderBrief(id) {
@@ -81,7 +97,7 @@ export function initBriefs({ openLeft, onWalk, onChat, focusNode, openForecast }
     const evCard = (e) => `<div class="ev">
         <div class="meta"><span class="rel" title="relevance ${fmt(e.relevance)}"><i style="width:${Math.round(e.relevance * 100)}%"></i></span>
           <span class="faint">${esc(day(e.published_at))}</span>${e.after ? `<span class="badge ${e.stance === "supports" ? "wm" : e.stance === "pushes against" ? "front" : ""}">${esc(e.stance)}</span>` : ""}
-          <span class="spacer"></span><button class="ghost small" data-walk="${esc(e.id)}">How it learned ▸</button></div>
+          <span class="spacer"></span><button class="ghost small" data-walk="${esc(e.id)}" title="Step through what the model did with this news">How it learned ▸</button></div>
         <div class="title">${esc(e.headline)}</div>
         <ul class="reasons">${e.reasons.map((r) => `<li>${esc(r)}</li>`).join("")}</ul></div>`;
     body.innerHTML = `<article class="brief" data-brief="${esc(id)}">
@@ -90,7 +106,7 @@ export function initBriefs({ openLeft, onWalk, onChat, focusNode, openForecast }
       <h3>${esc(b.question)}</h3>
       <div class="small muted">Posed ${esc(day(b.posed_at))} at v${b.version} · ${b.horizon_days} days ahead, to ${esc(day(b.horizon))}</div>
       <div class="row" style="margin:8px 0 2px"><button class="small" data-act="charts">Charts ▸</button>
-        <button class="small hyp" data-act="walk">How it forecast ▸</button></div>
+        <button class="small hyp" data-act="walk" title="Step through how the model made this forecast">How it inferred ▸</button></div>
       <section><h4>Bottom line</h4><p class="lede">${esc(b.bottom_line)}</p>
         ${b.scenarios.length > 1 ? `<div class="weightbar small">${b.scenarios.map((s, i) => `<div style="width:${(s.weight * 100).toFixed(1)}%;background:${["#E8CFEC", "#DCE6F0", "#F7E1D3", "#E1ECDF"][i % 4]}" title="${esc(s.name)}">${s.weight > 0.16 ? esc(`${s.name.split(" · ")[0]} ${Math.round(s.weight * 100)}%`) : ""}</div>`).join("")}</div>` : ""}</section>
       ${b.timeline.length ? `<section><h4>What moves, and when</h4><ol class="timeline-list">${b.timeline.map((t) => `<li><span class="mono faint">${esc(day(t.onset))}</span>
@@ -99,6 +115,7 @@ export function initBriefs({ openLeft, onWalk, onChat, focusNode, openForecast }
         ${b.affected.map((a) => `<div class="small" style="margin:3px 0"><span class="pick ${a.kind === "sector" ? "sector" : a.kind === "superentity" ? "superentity" : a.kind === "category" ? "category" : "actor"}"><span class="k">${esc(a.kind)}</span>${esc(a.name)}</span>
           ${arrow(a.effect)} on average${a.top.length ? `, led by ${a.top.map((t) => `${esc(t.name)} ${arrow(t.effect)}`).join(", ")}` : ""}</div>`).join("")}
         ${b.movers.length ? `<p class="small muted" style="margin-top:6px">Most moved overall:</p><div class="chips">${b.movers.map((m) => `<span class="pick actor" title="${esc(m.name)}"><a href="#" data-node="${esc(m.entity)}">${esc(m.entity_name)}</a>${arrow(m.effect)}</span>`).join("")}</div>` : ""}</section>` : ""}
+      ${travelsHtml(b.travels)}
       ${b.why.length ? `<section><h4>Why</h4><ul class="wlist">${b.why.map((w) => `<li>${esc(w.text)} <span class="faint small">${Math.round(w.share * 100)}%</span></li>`).join("")}</ul></section>` : ""}
       <section><h4>The news that shaped it</h4>${b.shaped_by.length ? b.shaped_by.map(evCard).join("") : `<p class="small muted">No news so far touched its drivers: it rests on the history the model was built from.</p>`}</section>
       <section><h4>Since this forecast</h4>
@@ -150,7 +167,7 @@ export function initBriefs({ openLeft, onWalk, onChat, focusNode, openForecast }
       render();
     }
   });
-  on("tab-left", (name) => { if (name === "briefs") render(); else panel.classList.remove("wide"); });
+  on("tab-left", (name) => { if (name === "briefs") render(); else if (name !== "review") panel.classList.remove("wide"); });
   refresh();
   return {
     refresh,

@@ -1,0 +1,11 @@
+# Where the small demo's entities sit once their examples create them: pill centers (pills are 164 x 30).
+# Oil in the middle, inflation and the Fed above it, the airlines on the right.
+pill: {width: 164, height: 30}
+entities:
+  resources_energy: [300, 340]
+  inflation: [300, 190]
+  federal_reserve: [580, 140]
+  delta: [600, 300]
+  united_airlines: [600, 450]
+hulls: {}
+frontier_lines: []

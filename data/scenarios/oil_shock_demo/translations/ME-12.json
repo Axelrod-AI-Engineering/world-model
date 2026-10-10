@@ -1,0 +1,58 @@
+{
+  "market_event_id": "ME-12",
+  "rationale": "Hand-drawn. Contract chipmakers lifted spending plans for advanced capacity.",
+  "spans": [
+    [
+      10,
+      33,
+      0
+    ]
+  ],
+  "events": [
+    {
+      "id": "GUE-ME12",
+      "kind": "real",
+      "event_type": "corporate_guidance",
+      "occurred_at": "2026-02-16T15:00:00Z",
+      "recorded_at": "2026-02-16T15:00:00Z",
+      "produced_by": "hand_drawn",
+      "confidence": 0.85,
+      "market_event_id": "ME-12",
+      "evidence": [
+        {
+          "id": "EV-ME12",
+          "source_type": "news",
+          "excerpt": "Foundries raise their capex plans on AI demand",
+          "observed_at": "2026-02-16T15:00:00Z",
+          "strength": 0.6,
+          "market_event_id": "ME-12"
+        }
+      ],
+      "ops": [
+        {
+          "op": "change_value",
+          "target": {
+            "kind": "concrete",
+            "subentity_id": "tsmc.capex"
+          },
+          "delta": 1.0,
+          "mode": "standardized",
+          "persistence": "step",
+          "at": "2026-02-16T15:00:00Z"
+        },
+        {
+          "op": "reweight_interaction",
+          "interaction_id": "e57",
+          "supports": true,
+          "strength": 0.3
+        }
+      ],
+      "mentions": [
+        "foundries",
+        "capex",
+        "AI demand"
+      ],
+      "tags": []
+    }
+  ]
+}

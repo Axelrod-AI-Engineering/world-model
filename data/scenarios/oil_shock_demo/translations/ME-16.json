@@ -1,0 +1,57 @@
+{
+  "market_event_id": "ME-16",
+  "rationale": "Hand-drawn. Producers lifted April prices as crude stayed high.",
+  "spans": [
+    [
+      15,
+      44,
+      0
+    ]
+  ],
+  "events": [
+    {
+      "id": "GUE-ME16",
+      "kind": "real",
+      "event_type": "pricing",
+      "occurred_at": "2026-03-16T16:00:00Z",
+      "recorded_at": "2026-03-16T16:00:00Z",
+      "produced_by": "hand_drawn",
+      "confidence": 0.85,
+      "market_event_id": "ME-16",
+      "evidence": [
+        {
+          "id": "EV-ME16",
+          "source_type": "news",
+          "excerpt": "Gulf producers raise official selling prices for Asian buyers",
+          "observed_at": "2026-03-16T16:00:00Z",
+          "strength": 0.6,
+          "market_event_id": "ME-16"
+        }
+      ],
+      "ops": [
+        {
+          "op": "change_value",
+          "target": {
+            "kind": "concrete",
+            "subentity_id": "saudi_aramco.revenue"
+          },
+          "delta": 0.8,
+          "mode": "standardized",
+          "persistence": "step",
+          "at": "2026-03-16T16:00:00Z"
+        },
+        {
+          "op": "reweight_interaction",
+          "interaction_id": "e71",
+          "supports": true,
+          "strength": 0.3
+        }
+      ],
+      "mentions": [
+        "Gulf producers",
+        "selling prices"
+      ],
+      "tags": []
+    }
+  ]
+}

@@ -13,7 +13,7 @@ export function initDecisions({ toast }) {
     try { ds = await api.decisions(); } catch { return; }
     const now = new Date(store.status?.sim_time ?? Date.now());
     el.innerHTML = `<h3>Decisions</h3>
-      ${ds.length ? "" : "<p class='muted small'>No decisions recorded yet.</p>"}
+      ${ds.length ? "" : "<p class='muted small'>No decisions recorded yet. A decision records a recommendation made with forecasts in hand: it keeps the point-in-time world model state (its version) and the forecasts it cited, so it can be traced and scored once the outcome is known. The demo records one near its end.</p>"}
       ${ds.map((d) => `<div class="card" data-d="${esc(d.id)}">
         <div class="meta"><span class="mono">${esc(d.id)}</span><span>${esc(d.agent_id)}</span><span class="spacer"></span>
           <span class="badge ltm">v${d.state_version}</span></div>

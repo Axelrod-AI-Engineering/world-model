@@ -13,17 +13,18 @@ from typing import TYPE_CHECKING, Any
 import yaml
 from pydantic import BaseModel, ConfigDict
 
-from axelrod_wm.core.categories import CategoryTag
-from axelrod_wm.core.distributions import (
+from axelrod_wm.memory.long_term import SuperInteractionBuilder
+from axelrod_wm.model.categories import CategoryTag
+from axelrod_wm.model.distributions import (
     FAMILIES,
     Beta,
     parse_distribution,
     prior_from_native,
 )
-from axelrod_wm.core.entity import Entity, EntityKind, Subentity
-from axelrod_wm.core.evidence import Evidence, Origin, SourceType
-from axelrod_wm.core.ids import entity_of
-from axelrod_wm.core.interaction import (
+from axelrod_wm.model.entity import Entity, EntityKind, Subentity
+from axelrod_wm.model.evidence import Evidence, Origin, SourceType
+from axelrod_wm.model.ids import entity_of
+from axelrod_wm.model.interaction import (
     Direction,
     EdgeDynamics,
     EdgeType,
@@ -31,15 +32,15 @@ from axelrod_wm.core.interaction import (
     ParameterBinding,
     ParameterForm,
 )
-from axelrod_wm.core.serialization import canonical_json, sha256_text
-from axelrod_wm.core.superentity import (
+from axelrod_wm.model.serialization import canonical_json, sha256_text
+from axelrod_wm.model.superentity import (
     PatternRelation,
     RoleSpec,
     SuperentityInstance,
     SuperentityPattern,
     SuperentityStatus,
 )
-from axelrod_wm.core.taxonomy import (
+from axelrod_wm.model.taxonomy import (
     AttributeKind,
     AttributeVocabulary,
     Generalization,
@@ -47,13 +48,12 @@ from axelrod_wm.core.taxonomy import (
     Taxonomy,
     TaxonomyKind,
 )
-from axelrod_wm.core.temporal import parse_kernel
-from axelrod_wm.events.ledger import LedgerKind
-from axelrod_wm.memory.long_term import SuperInteractionBuilder
+from axelrod_wm.model.temporal import parse_kernel
+from axelrod_wm.repo.ledger import LedgerKind
 
 if TYPE_CHECKING:
-    from axelrod_wm.control.mutator import MutationTxn
     from axelrod_wm.engine.engine import Engine
+    from axelrod_wm.repo.mutator import MutationTxn
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
@@ -99,6 +99,9 @@ class SubentitySpec(_Spec):
     aliases: list[str] = []
     features: dict[str, str] = {}
     obs_noise: float | None = None
+    slot: str | None = None          # the kind's default it fills, when its id does not say so (addition)
+    slot_of: str | None = None       # set by apply_kind_defaults: the object generalization of that default
+    constraint: dict[str, Any] | None = None   # a soft economic bound: {min, max, reason} in native units
 
 
 class EntitySpec(_Spec):
@@ -110,6 +113,8 @@ class EntitySpec(_Spec):
     features: dict[str, str] = {}
     description: str = ""
     subentities: list[SubentitySpec] = []
+    short: str | None = None         # names its default subentities ("Delta jet fuel cost"); else the name
+    levels: dict[str, float] = {}    # slot -> typical native level of a default it gets (else the kind's)
 
 
 class ParameterSpec(_Spec):
@@ -147,6 +152,7 @@ class InteractionSpec(_Spec):
     evidence: list[EvidenceSpec] = []
     tags: list[str] = []
     note: str | None = None
+    generalization: str | None = None    # its interaction generalization, for links made from a kind's defaults
 
 
 class ConstructionSpec(_Spec):
@@ -158,7 +164,9 @@ class ConstructionSpec(_Spec):
     entity_link_labels: dict[str, str] = {}
 
     @classmethod
-    def load(cls, construction_dir: str | Path) -> ConstructionSpec:
+    def load(cls, construction_dir: str | Path, taxonomy_dir: str | Path | None = None) -> ConstructionSpec:
+        """The spec, with each kind's default subentities and links filled in from the object taxonomy
+        (`taxonomy_dir`; else the world's own `taxonomy/` folder if it has one; else the shared data/taxonomy)."""
         d = resolve_path(construction_dir)
         ent = yaml.safe_load((d / "entities.yaml").read_text()) or {}
         inter = yaml.safe_load((d / "interactions.yaml").read_text()) or {}
@@ -166,9 +174,12 @@ class ConstructionSpec(_Spec):
                 "interactions": inter.get("interactions", []),
                 "entity_link_labels": inter.get("entity_link_labels", {}) or {}}
         try:
-            return cls.model_validate(data)
+            spec = cls.model_validate(data)
         except Exception as exc:  # pydantic's message names the field
             raise ConstructionError(f"invalid construction spec in {d}: {exc}") from exc
+        tax = resolve_path(taxonomy_dir) if taxonomy_dir is not None else world_taxonomy_dir(d)
+        objects = tax / "objects.yaml"
+        return apply_kind_defaults(spec, objects) if objects.exists() else spec
 
     def subentity_ids(self) -> set[str]:
         return {s.id for e in self.entities for s in e.subentities}
@@ -225,6 +236,113 @@ class ConstructionSpec(_Spec):
 
     def spec_hash(self) -> str:
         return sha256_text(canonical_json(self.model_dump(mode="json")))
+
+
+# ---------------------------------------------------------------------------------------------
+# A kind's defaults (addition)
+# ---------------------------------------------------------------------------------------------
+# DECISION: the user asked that similar objects visibly have similar subentities. An object
+# generalization lists the subentities every instance of it has ("slots") and the typical links among
+# them; each instance gets the slots of every kind on its path, root first, then its own subentities.
+# One of its own fills a slot when its id ends in the slot's name or it names the slot, and a typical
+# link applies to each instance that has both of its ends. Defaults are construction data, so the model
+# and the synthetic world are built from the same expanded spec.
+
+class SlotSpec(_Spec):
+    slot: str
+    name: str                        # generic: "jet fuel cost"; the instance's is "<short> <name>"
+    attribute_kind: str
+    unit: str
+    family: str | None = None
+    mean: float                      # typical native level; an entity's `levels` overrides it
+    scale: float
+
+
+class SlotLinkSpec(_Spec):
+    source: str                      # a value of the instance (a slot, or the end of its own id); with a dot, any subentity
+    target: str
+    label: str
+    effect: float
+    kernel: dict[str, Any]
+    generalization: str | None = None
+
+
+def apply_kind_defaults(spec: ConstructionSpec, objects_path: Path) -> ConstructionSpec:
+    """`spec` with every entity's default subentities and links added (see the DECISION above)."""
+    raw = yaml.safe_load(objects_path.read_text()) or {}
+    nodes = {n["id"]: n for n in raw.get("nodes", [])}
+    home = {iid: n["id"] for n in raw.get("nodes", []) for iid in n.get("instances") or []}
+
+    def path(gid: str | None) -> list[str]:
+        out: list[str] = []
+        while gid is not None and gid in nodes:
+            out.append(gid)
+            gid = nodes[gid].get("parent")
+        return out[::-1]
+
+    try:
+        slots = {gid: [SlotSpec.model_validate(s) for s in n.get("defaults") or []] for gid, n in nodes.items()}
+        slot_links = {gid: [SlotLinkSpec.model_validate(s) for s in n.get("default_links") or []]
+                      for gid, n in nodes.items()}
+    except Exception as exc:
+        raise ConstructionError(f"invalid defaults in {objects_path.name}: {exc}") from exc
+    entities: list[EntitySpec] = []
+    kinds_of: dict[str, list[str]] = {}
+    for e in spec.entities:
+        kinds = [g for g in path(home.get(e.id)) if slots[g] or slot_links[g]]
+        if not kinds:
+            entities.append(e)
+            continue
+        kinds_of[e.id] = kinds
+        wanted = [(g, s) for g in kinds for s in slots[g]]
+        names = {s.slot for _, s in wanted}
+        filled: dict[str, SubentitySpec] = {}
+        for s in e.subentities:
+            key = s.slot or s.id.split(".", 1)[1]
+            if key in names and key not in filled:
+                filled[key] = s
+        subs = []
+        for g, sl in wanted:
+            s = filled.get(sl.slot) or SubentitySpec(
+                id=f"{e.id}.{sl.slot}", name=f"{e.short or e.name} {sl.name}", attribute_kind=sl.attribute_kind,
+                unit=sl.unit, family=sl.family, mean=e.levels.get(sl.slot, sl.mean), scale=sl.scale)
+            subs.append(s.model_copy(update={"slot": sl.slot, "slot_of": g}))
+        taken = {s.id for s in filled.values()}
+        subs += [s for s in e.subentities if s.id not in taken]
+        entities.append(e.model_copy(update={"subentities": subs}))
+    known = {s.id for e in entities for s in e.subentities}
+    links = list(spec.interactions)
+    pairs = {(i.source, i.target) for i in links}
+    applied: dict[tuple[str, int], int] = {}
+    for e in entities:
+        # an end without a dot names a value of the instance: a slot, or the end of one of its own ids
+        mine = {s.id.split(".", 1)[1]: s.id for s in e.subentities} | {s.slot: s.id for s in e.subentities if s.slot}
+        for g in kinds_of.get(e.id, []):
+            for k, ln in enumerate(slot_links[g]):
+                src, tgt = ((end if end in known else None) if "." in end else mine.get(end)
+                            for end in (ln.source, ln.target))
+                if src is None or tgt is None:
+                    continue                     # the link applies to the instances that have both ends
+                applied[(g, k)] = applied.get((g, k), 0) + 1
+                if (src, tgt) in pairs:
+                    continue                     # the entity already has this link, written out
+                pairs.add((src, tgt))
+                links.append(InteractionSpec(
+                    id=f"d-{e.id}-{src.split('.', 1)[1]}-{tgt.split('.', 1)[1]}", source=src, target=tgt,
+                    label=ln.label, effect={"mu": ln.effect}, kernel=dict(ln.kernel),
+                    tags=["demo_addition", "kind_default"], note=f"default link of {nodes[g]['name']}",
+                    generalization=ln.generalization))
+    for g in sorted({g for ks in kinds_of.values() for g in ks}):
+        for k, ln in enumerate(slot_links[g]):
+            if not applied.get((g, k)):
+                raise ConstructionError(f"{g}: default link {ln.source} -> {ln.target} applies to no instance")
+    return spec.model_copy(update={"entities": entities, "interactions": links})
+
+
+def world_taxonomy_dir(world_dir: str | Path) -> Path:
+    """A world (data/worlds/<name>) may carry its own taxonomy; otherwise it uses the shared one."""
+    own = resolve_path(world_dir) / "taxonomy"
+    return own if (own / "objects.yaml").exists() else resolve_path("data/taxonomy")
 
 
 def load_vocabulary(taxonomy_dir: str | Path) -> AttributeVocabulary:
@@ -333,7 +451,7 @@ class Initializer:
         step 1). Day 0 is `start`, the first history day: `wm.last_processed_day` is -1 and `wm.clock`
         is the end of the day before. Every interaction gets its ChannelStates at day 0. Writes
         through the mutator as one ChangeSet with cause "construction"."""
-        from axelrod_wm.engine.daily import ensure_channel_states
+        from axelrod_wm.dynamics.daily import ensure_channel_states
 
         eng = self.engine
         vocab = vocab or eng.vocab or load_vocabulary(taxonomy_dir)
@@ -346,6 +464,15 @@ class Initializer:
         int_tax = load_taxonomy(resolve_path(taxonomy_dir) / "interactions.yaml", TaxonomyKind.INTERACTION)
         obj_home = {iid: gid for gid, n in obj_tax.nodes.items() for iid in n.instance_ids}
         int_home = {iid: gid for gid, n in int_tax.nodes.items() for iid in n.instance_ids}
+        # links made from a kind's defaults name their own generalization
+        for ispec in spec.interactions:
+            gid = ispec.generalization
+            if gid is None or ispec.id in int_home:
+                continue
+            if gid not in int_tax.nodes:
+                raise ConstructionError(f"interaction {ispec.id!r}: unknown generalization {gid!r}")
+            int_home[ispec.id] = gid
+            int_tax.nodes[gid].instance_ids.append(ispec.id)
         with eng.mutator.begin("construction", at=clock) as txn:
             txn.set("wm.clock", clock)
             txn.set("wm.last_processed_day", -1)
@@ -388,7 +515,8 @@ class Initializer:
             sub = Subentity(id=s.id, entity_id=es.id, name=s.name, attribute_kind=s.attribute_kind, unit=s.unit,
                             aliases=s.aliases, features=s.features, scale=scale, obs_noise=s.obs_noise,
                             prior=prior, posterior=prior, anchor=m, origin=Origin.CONSTRUCTION,
-                            prior_source_id="construction")
+                            prior_source_id="construction", slot=s.slot, slot_of=s.slot_of,
+                            constraint=s.constraint)
             txn.add("wm.graph.subentities", sub)
             sub_ids.append(s.id)
         ent = Entity(id=es.id, name=es.name, kind=es.kind, aliases=es.aliases, category_tags=set(es.category_tags),
@@ -484,8 +612,8 @@ class Initializer:
     def load_frontier_seeds(self, seeds: SeedFile, *, now: datetime) -> list[str]:
         """Frontier seeds become CoMovement entries with seeded=True, each with its hypothesis (§8.13
         step 5). Their corr and response are backfilled from the replayed history."""
-        from axelrod_wm.core.hypothesis import Hypothesis, HypothesisKind
         from axelrod_wm.memory.frontier import CoMovement, backfilled, comovement_statement
+        from axelrod_wm.model.hypothesis import Hypothesis, HypothesisKind
 
         eng = self.engine
         cfg = eng.config

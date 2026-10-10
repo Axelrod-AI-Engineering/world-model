@@ -8,9 +8,12 @@ import { CATEGORY_CODES, CATEGORY_NAMES } from "../graph/layouts.js";
 import { emit, on, store } from "../store.js";
 import { errorText, esc } from "../util.js";
 
-// examples the template translator (data/construction/templates.yaml) understands
-const EXAMPLES = ["What if oil prices doubled next quarter?", "What if NVIDIA's China sales fall by 30%?",
+// examples the world's template translator (data/worlds/<world>/templates.yaml) understands
+const ECONOMY_EXAMPLES = ["What if oil prices doubled next quarter?", "What if NVIDIA's China sales fall by 30%?",
   "What if OPEC cuts output by 10%?", "What if the Fed raises rates by 100bp?", "What if jet fuel spikes next month?"];
+const TUTORIAL_EXAMPLES = ["What if oil rose by 30% next quarter?", "What if oil prices doubled next quarter?",
+  "What if the Fed raised rates by 100bp?"];
+const examples = () => (!!store.status?.examples ? TUTORIAL_EXAMPLES : ECONOMY_EXAMPLES);
 const KIND_LABEL = { sub: "value", actor: "actor", idea: "idea", superentity: "superentity", sector: "sector", category: "category" };
 const ACTOR_KINDS = new Set(["agency", "company", "person"]);
 
@@ -25,9 +28,11 @@ export function initThesis({ toast }) {
   let busy = false;
   let counter = 1;
   let advanced = false;
-  let question = EXAMPLES[0];
+  let question = ECONOMY_EXAMPLES[0];
   let horizon = 270;
   let adding = false;
+  let ready = [];            // the scenario's ready-made questions (a design partner's), posed whole
+  api.scenarioTheses().then((l) => { ready = l.filter((t) => !t.scripted); render(); }).catch(() => {});
   let query = "";
 
   const view = () => store.graph ?? store.view;
@@ -81,6 +86,11 @@ export function initThesis({ toast }) {
 
   function render() {
     const subs = view()?.subentities ?? [];
+    // forecast only for what this world has (the tutorial starts empty)
+    if (view()?.entities?.length) {
+      const known = new Set(catalog().map((x) => `${x.kind}:${x.ref}`));
+      picks = picks.filter((p) => known.has(`${p.kind}:${p.ref}`));
+    }
     const decisions = subs.filter((s) => s.decision_variable);
     const sugg = suggestions();
     el.innerHTML = `
@@ -91,7 +101,10 @@ export function initThesis({ toast }) {
       <div class="ask-row"><input id="th-q" type="text" value="${esc(question)}" aria-label="Question">
         <button class="hyp" id="th-ask">${busy ? "Thinking…" : "Ask"}</button></div>
       <div class="chips" style="margin-top:8px"><span class="faint small">Try</span>
-        ${EXAMPLES.map((q, i) => `<button class="pick ghosted" data-ex="${i}">${esc(q)}</button>`).join("")}</div>
+        ${examples().map((q, i) => `<button class="pick ghosted" data-ex="${i}">${esc(q)}</button>`).join("")}</div>
+      ${ready.length ? `<div class="section"><h4>Ready-made questions</h4>
+        <div class="small muted">A design partner's theses, each with several shocks and interventions already set.</div>
+        <div class="chips" style="margin-top:4px">${ready.map((t) => `<button class="pick ghosted" data-ready="${esc(t.id)}" title="Pose ${esc(t.id)} as written">${esc(t.question)}</button>`).join("")}</div></div>` : ""}
       <div class="section"><h4>Forecast for</h4>
         <div class="chips">${picks.map((p, i) => `<span class="pick ${p.kind}"><span class="k">${esc(KIND_LABEL[p.kind])}</span>${esc(labelOf(p))}
             <button class="x" data-rm="${i}" aria-label="Remove ${esc(labelOf(p))}">✕</button></span>`).join("")}
@@ -127,7 +140,8 @@ export function initThesis({ toast }) {
     el.querySelector("#th-q").addEventListener("input", (ev) => { question = ev.target.value; });
     el.querySelector("#th-q").addEventListener("keydown", (ev) => { if (ev.key === "Enter") ask(); });
     el.querySelector("#th-h").addEventListener("change", (ev) => { horizon = +ev.target.value || 182; });
-    for (const b of el.querySelectorAll("[data-ex]")) b.addEventListener("click", () => { question = EXAMPLES[+b.dataset.ex]; render(); });
+    for (const b of el.querySelectorAll("[data-ex]")) b.addEventListener("click", () => { question = examples()[+b.dataset.ex]; render(); });
+    for (const b of el.querySelectorAll("[data-ready]")) b.addEventListener("click", () => poseReady(b.dataset.ready));
     for (const b of el.querySelectorAll("[data-rm]")) b.addEventListener("click", () => { picks.splice(+b.dataset.rm, 1); render(); });
     el.querySelector("#th-add-t")?.addEventListener("click", () => { adding = true; query = ""; render(); el.querySelector("#th-add-q")?.focus(); });
     const qi = el.querySelector("#th-add-q");
@@ -241,6 +255,24 @@ export function initThesis({ toast }) {
     }
   }
 
+  async function poseReady(id) {
+    if (busy) return;
+    const err = el.querySelector("#th-err");
+    err.textContent = "";
+    busy = true;
+    const t = ready.find((x) => x.id === id);
+    emit("ask-started", { question: t?.question ?? id });
+    try {
+      const fv = await api.poseStoredThesis(id);
+      emit("asked", fv);
+      emit("show-forecast", fv);
+    } catch (e) {
+      err.textContent = errorText(e);
+    } finally {
+      busy = false;
+    }
+  }
+
   // "What if it moves?" from the canvas: one standardized shock on the entity's first subentity
   function prefill(id) {
     const v = view();
@@ -269,5 +301,13 @@ export function initThesis({ toast }) {
 
   on("graph", () => { if (!el.contains(document.activeElement)) render(); });
   render();
-  return { render, prefill, forecastFor };
+  // a question from elsewhere (the tutorial's inference example), ready to ask
+  function setQuestion(q) {
+    question = q;
+    advanced = false;
+    render();
+    el.querySelector("#th-q")?.focus({ preventScroll: true });
+  }
+
+  return { render, prefill, forecastFor, setQuestion };
 }

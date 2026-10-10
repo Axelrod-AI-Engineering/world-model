@@ -19,8 +19,8 @@ from typing import TYPE_CHECKING, Any
 from pydantic import BaseModel, ConfigDict
 
 from axelrod_wm.events.graph_update import ChangeValue, GraphUpdateEvent, ObserveValue
-from axelrod_wm.events.ledger import LedgerKind
 from axelrod_wm.events.market import MarketEvent, MarketEventChannel, MarketEventKind
+from axelrod_wm.repo.ledger import LedgerKind
 from axelrod_wm.trace import Phase
 
 if TYPE_CHECKING:
@@ -260,7 +260,8 @@ class UpdateCycle:
         for day in run.queue:
             run.queue[day].sort(key=lambda i: (c.market_events[i].published_at, i))
         if cursors:
-            with eng.mutator.begin(f"collect:{run.id}", at=wm.clock) as txn:
+            with eng.mutator.begin(f"collect:{run.id}", at=wm.clock, process="intake",
+                                   message=f"Collect {run.id}: move the sources' cursors") as txn:
                 for name, at in sorted(cursors.items()):
                     txn.put("wm.source_cursors", name, at)
         eng.tracer.emit(Phase.COLLECT, "update.collected", refs=[i for q in run.queue.values() for i in q][:100],
@@ -339,12 +340,8 @@ class UpdateCycle:
         return True
 
     def _predict(self, d: int) -> None:
-        eng = self.engine
-        dev = eng.wm.deviations
-        at = dev.day_start(d)
-        ctx = eng.context(learn=True, now=at, processing_day=d)
-        with eng.mutator.begin(f"predict:{dev.date_of(d).isoformat()}", at=at) as txn:
-            eng.components["daily_propagator"].predict(d, eng.wm, ctx, txn)
+        """Working memory opens the day: its prediction, before the day's events."""
+        self.engine.learning.open_day(d)
 
     def _fold_late_queue(self, run: UpdateRun, d: int) -> int:
         """Proposals approved after their day are folded in first on the next processed day."""
@@ -374,7 +371,7 @@ class UpdateCycle:
 
     def _walk_one(self, run: UpdateRun, d: int, me_id: str, pause: bool) -> bool:
         """One market event of the day: ingest it once, then fold, defer, or wait on its proposals."""
-        from axelrod_wm.control.review import ProposalStatus
+        from axelrod_wm.repo.review import ProposalStatus
 
         c = self.c
         eng = self.engine
@@ -414,17 +411,15 @@ class UpdateCycle:
         return True
 
     def _close_day(self, run: UpdateRun, d: int) -> None:
-        """record(d), then consolidation, which sets wm.clock to the end of d; snapshots on schedule."""
+        """The day's end: working memory records it, long-term memory distills it, and working memory
+        closes it (which sets wm.clock to the end of d). Snapshots on schedule."""
         c = self.c
         eng = self.engine
         dev = eng.wm.deviations
         end = dev.day_end(d)
         c.advance_now(end)
-        ctx = eng.context(learn=True, now=end, processing_day=d)
         with eng.tracer.scoped(f"day:{dev.date_of(d).isoformat()}"):
-            with eng.mutator.begin(f"record:{dev.date_of(d).isoformat()}", at=end) as txn:
-                eng.components["daily_propagator"].record(d, eng.wm, ctx, txn)
-            report = eng.components["consolidator"].run(d, ctx)
+            report = eng.learning.close_day(d, end)
             ids = []
             for pe in report.proposal_events:
                 p = c.propose(pe["kind"], pe["event"], reasons=[pe.get("reason", "")],
@@ -441,7 +436,7 @@ class UpdateCycle:
     # -- resume, cancel, finish ------------------------------------------------------------
     def resume(self, run: UpdateRun, *, run_to_end: bool = True) -> UpdateRun:
         """Called when the awaited proposal is decided (or by continue_update, which defers it first)."""
-        from axelrod_wm.control.review import ProposalStatus
+        from axelrod_wm.repo.review import ProposalStatus
 
         c = self.c
         if run.state != UpdateState.AWAITING_REVIEW:
@@ -516,7 +511,7 @@ class UpdateCycle:
                         report=run.report.model_dump(mode="json"))
 
     def _report(self, run: UpdateRun, reposed: list[str]) -> UpdateReport:
-        from axelrod_wm.control.review import ProposalStatus
+        from axelrod_wm.repo.review import ProposalStatus
 
         c = self.c
         eng = self.engine

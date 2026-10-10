@@ -6,15 +6,16 @@ import inspect
 from datetime import datetime
 from typing import Any
 
-from axelrod_wm.control.mutator import ChangeSet, GraphMutator, MutationTxn
-from axelrod_wm.core.taxonomy import AttributeVocabulary
 from axelrod_wm.engine.config import DEFAULT_COMPONENTS, EngineConfig
 from axelrod_wm.engine.context import ProcessContext
 from axelrod_wm.engine.registry import REGISTRIES, registry
 from axelrod_wm.engine.rng import make_rng
-from axelrod_wm.events.ledger import EventLedger, LedgerKind
 from axelrod_wm.memory.long_term import LongTermMemory
-from axelrod_wm.memory.snapshots import (
+from axelrod_wm.memory.working import WorkingMemory
+from axelrod_wm.model.taxonomy import AttributeVocabulary
+from axelrod_wm.repo.ledger import EventLedger, LedgerKind
+from axelrod_wm.repo.mutator import ChangeSet, GraphMutator, MutationTxn
+from axelrod_wm.repo.snapshots import (
     FilesBackend,
     MemoryBackend,
     SnapshotStore,
@@ -24,7 +25,6 @@ from axelrod_wm.memory.snapshots import (
     empty_state,
     state_hash,
 )
-from axelrod_wm.memory.working import WorkingMemory
 from axelrod_wm.trace import NullTracer, Phase, Tracer
 
 
@@ -57,7 +57,7 @@ class Engine:
         self.initializing = False
         self.shared: Any = None
         self.learning: Any = None
-        self.performance: Any = None
+        self.inference: Any = None
         self.structural: Any = None
 
     # -- context ---------------------------------------------------------------------------
@@ -80,19 +80,21 @@ class Engine:
         self.version = cs.version_after
         self.state_hash = self.hasher.update(self.wm, self.ltm, txn.dirty)
         sv = StateVersion(version=self.version, seq=entry.seq, state_hash=self.state_hash,
-                          recorded_at=cs.recorded_at, cause=cs.cause)
+                          recorded_at=cs.recorded_at, cause=cs.cause, process=cs.process, memory=cs.memory)
         self.storage.append_version(sv)
         self.tracer.set_context(state_version=self.version)
-        if cs.cause.startswith("consolidation"):
+        if cs.process in ("day.distill", "day.close"):
             phase = Phase.CONSOLIDATE
-        elif cs.cause.startswith(("predict:", "record:")):
+        elif cs.process in ("day.predict", "day.record"):
             phase = Phase.DAILY
-        elif self.initializing or cs.cause in ("construction", "seeds"):
+        elif self.initializing or cs.process == "construction":
             phase = Phase.INIT
+        elif cs.process == "learn.long_term":
+            phase = Phase.GENERALIZE
         else:
             phase = Phase.FOLD
         self.tracer.emit(phase, "state.version", refs=[cs.id], version=self.version, cause=cs.cause,
-                         changes=len(cs.changes))
+                         changes=len(cs.changes), process=cs.process, memory=cs.memory, message=cs.message)
 
     def version_info(self, version: int | None = None) -> StateVersion | None:
         return self.snapshots.version_info(self.version if version is None else version)
@@ -173,9 +175,10 @@ def build_engine(config: EngineConfig, storage: StorageBackend | None = None,
     from axelrod_wm.engine import load_defaults
 
     load_defaults()
-    from axelrod_wm.engine.learning import LearningTask, StructuralApplier
-    from axelrod_wm.engine.performance.task import PerformanceTask
-    from axelrod_wm.engine.shared import SharedProcess
+    from axelrod_wm.inference.task import InferenceTask
+    from axelrod_wm.learning.structural import StructuralApplier
+    from axelrod_wm.learning.task import LearningTask
+    from axelrod_wm.shared.process import SharedProcess
 
     storage = storage if storage is not None else make_storage(config)
     engine = Engine(config, storage, tracer or NullTracer(), vocab=vocab)
@@ -187,7 +190,7 @@ def build_engine(config: EngineConfig, storage: StorageBackend | None = None,
                                   recaller=made["recaller"], inducer=made["inducer"],
                                   prefiller=made["prefiller"], analyzer=made["analyzer"])
     engine.learning = LearningTask(engine)
-    engine.performance = PerformanceTask(engine)
+    engine.inference = InferenceTask(engine)
     engine.structural = StructuralApplier(engine)
     return engine
 

@@ -37,9 +37,15 @@
   --h6-fill: #EFCBD6; --h6-line: #B86A84; --h6-ink: #8C3D58;
   --h7-fill: #CBE6E0; --h7-line: #5E9C8F; --h7-ink: #2F6B5F;
 
+  /* "Color by category" (Oct 9): one soft fill per category tag, clear of the learning and hypothesis hues */
+  --cat-SD: #F4D9C6; --cat-MF: #D3E1F0; --cat-SC: #F1E5BC; --cat-DI: #F0D5DE;
+  --cat-DF: #E4DCCB; --cat-EN: #D4E8E2; --cat-EX: #E3E9C8; --cat-SH: #EBD3CF;
+  /* "Color by open": blind spots, where the graph explains little (amber) */
+  --open-hi: #F2D9A0;
+
   /* deviation halos: up with ▲, down with ▼ */
-  --up: #B5523B;
-  --down: #2F5F8A;
+  --up: #2E7D4F;          /* moved up: green */
+  --down: #B83A2E;        /* moved down: red */
 
   --font-head: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
   --font-ui: "Instrument Sans", "Helvetica Neue", "Segoe UI", system-ui, sans-serif;

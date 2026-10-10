@@ -30,6 +30,7 @@ class MarketEvent(BaseModel):
     source: str                       # feed, site, or publisher name; "user" for user events
     headline: str
     body: str = ""
+    full_text: str = ""               # the whole article, when a sample one exists (Oct 9; the demos' examples)
     published_at: datetime            # when the information became available; decides the day it is folded in
     occurred_at: datetime             # when it happened in the world
     data: dict[str, float] = {}       # DATA events: series id -> value

@@ -44,4 +44,3 @@ export function errorText(err) {
   return err.message ?? String(err);
 }
 
-export const SPEC_BADGE = { generalization: "Generalization", entity: "Entity", subentity: "Subentity" };
