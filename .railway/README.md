@@ -54,7 +54,9 @@ environment: it can propose deleting services owned by other repositories.
 
 ## Basic Auth
 
-The hosted demo requires `WORLD_MODEL_REQUIRE_BASIC_AUTH=1` and both
+The hosted demo at https://world-model-dev.up.railway.app uses Basic Auth.
+Railway hosting automatically requires authentication; IaC additionally sets
+`WORLD_MODEL_REQUIRE_BASIC_AUTH=1`. Configure both
 `WORLD_MODEL_BASIC_AUTH_USERNAME` / `WORLD_MODEL_BASIC_AUTH_PASSWORD`. Credentials
 are generated securely and kept in Railway; IaC preserves them. A private,
 gitignored operator copy is in `var/railway/dev-basic-auth.txt` (mode 0600).

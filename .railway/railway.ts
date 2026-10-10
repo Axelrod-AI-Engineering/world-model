@@ -31,6 +31,9 @@ export default defineRailway((ctx) => {
       WORLD_MODEL_BASIC_AUTH_USERNAME: preserve(),
       WORLD_MODEL_BASIC_AUTH_PASSWORD: preserve(),
     },
+    networking: {
+      serviceDomains: { "world-model-dev.up.railway.app": { port: 8080 } },
+    },
     volumeMounts: { "/app/var": storage },
   });
   return project("Axelrod", { resources: [storage, app] });
