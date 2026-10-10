@@ -14,7 +14,7 @@ from axelrod_wm.evaluation.metrics import covered, crps_quantiles, finite, prob_
 from axelrod_wm.events.thesis import Thesis
 
 if TYPE_CHECKING:
-    from axelrod_wm.engine.performance.records import Forecast
+    from axelrod_wm.inference.records import Forecast
 
 
 class EvaluationRequest(BaseModel):
@@ -181,8 +181,8 @@ class Backtester:
     def run(self, request: EvaluationRequest) -> EvaluationReport:
         from axelrod_wm.engine.engine import build_engine
         from axelrod_wm.events.graph_update import ChangeValue
-        from axelrod_wm.events.ledger import LedgerKind
-        from axelrod_wm.memory.snapshots import MemoryBackend
+        from axelrod_wm.repo.ledger import LedgerKind
+        from axelrod_wm.repo.snapshots import MemoryBackend
         from axelrod_wm.trace import NullTracer, Phase
 
         c = self.controller
@@ -217,7 +217,7 @@ class Backtester:
         hits: dict[str, list[int]] = {}
         forecast_ids = []
         for th in theses:
-            fc = frozen.performance.run(th, request.freeze_at)
+            fc = frozen.inference.run(th, request.freeze_at)
             forecast_ids.append(fc.id)
             realized = {sid: realized_series(eng.wm.deviations, sid, start_day, fc.horizon_days)
                         for sid in sorted(set(fc.targets) | {s for n in fc.networks for s in n.subentity_ids})}

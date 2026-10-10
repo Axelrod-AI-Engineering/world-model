@@ -8,6 +8,9 @@ history_noise_sd: 0.3
 hidden_subentities:
   - {id: cross_border_trade.chip_exports, family: lognormal, anchor_value: 100, scale: 0.05,
      attribute_kind: trade_flow, features: {product: semiconductors}}
+  # a common driver the model never sees (addition): global risk appetite moves ASML's shares within days and
+  # JPMorgan's about two weeks later, so the two co-move with a lag that no interaction between them explains
+  - {id: asset_prices.risk_appetite, family: gaussian, anchor_value: 0.0, scale: 1.0, attribute_kind: condition_index}
 # DECISION: tuned per §15.3 (timing). H1 is active from mid-2025 rather than 2026-01-01, so the frontier
 # seed's backfilled pairs (the last 182 days of history) already show the relation; with H1 switched on
 # only at the end of the history, the backfill was all noise and the pair's correlation stayed below
@@ -22,6 +25,18 @@ hidden_interactions:
      delay_days: 7, lag_days: 30, duration_days: null}
   - {id: H3, source: cross_border_trade.chip_exports, target: productivity_tech.tech_capex, effect: 0.5,
      delay_days: 14, lag_days: 30, duration_days: null}
+  # more relations for the correlation frontier to find (addition): three real ones the graph lacks, and the
+  # hidden common driver above, whose two effects make a confounded pair (ASML's shares seem to lead JPMorgan's)
+  - {id: H4, source: supply_chains.shipping_costs, target: business_investment.input_costs, effect: 2.0,
+     delay_days: 7, lag_days: 14, duration_days: null, active_from: 2025-01-01}
+  - {id: H5, source: dollar_fx.dollar_index, target: capital_flows.em_portfolio_flows, effect: -2.0,
+     delay_days: 7, lag_days: 14, duration_days: null, active_from: 2025-01-01}
+  - {id: H6, source: interest_rates.long_term_yields, target: asset_prices.house_prices, effect: -2.0,
+     delay_days: 14, lag_days: 28, duration_days: null, active_from: 2025-01-01}
+  - {id: H7, source: asset_prices.risk_appetite, target: asml.share_price, effect: 2.0,
+     delay_days: 1, lag_days: 3, duration_days: null}
+  - {id: H8, source: asset_prices.risk_appetite, target: jpmorgan.share_price, effect: 2.0,
+     delay_days: 14, lag_days: 3, duration_days: null}
 # DECISION: tuned per §15.3. With the plan's rule (a 0.75 rise over the default 42-day window, p 0.65)
 # the Fed never moved in three years of synthetic history, so the model learned e43 near zero and S8
 # had nothing to tighten (checklist items 10 and 12). The rules now read headline CPI's 7-day average
@@ -41,24 +56,45 @@ decision_rules:
   - {decision: ecb.policy_stance,
      condition: {subentity: inflation.headline_cpi, window_change_lt: -1.0, window_days: 63, lag_days: 42},
      change: -0.25, probability: 0.5}
+  # the BoJ (addition): it moves less often than the Fed. DECISION: it must move in the history at all, or the
+  # model never learns that its decision sets Japan's rate; that effect then widens with daily process noise
+  # until analogs from other central banks' links drown it, and a BoJ hike in a thesis moves nothing.
+  - {decision: boj.policy_stance,
+     condition: {subentity: inflation.headline_cpi, window_change_gt: 0.5, window_days: 63, lag_days: 42},
+     change: 0.25, probability: 0.4}
+  - {decision: boj.policy_stance,
+     condition: {subentity: inflation.headline_cpi, window_change_lt: -0.5, window_days: 63, lag_days: 42},
+     change: -0.25, probability: 0.4}
 release_calendar:                   # business days for "daily"; Fridays for "weekly"; the 15th for "monthly"
   daily: [resources_energy.oil_price, resources_energy.gas_price, asset_prices.equity_index,
           asset_prices.equity_volatility, dollar_fx.dollar_index, dollar_fx.em_fx_volatility,
           interest_rates.long_term_yields, interest_rates.real_rate, nvidia.share_price, amd.share_price,
           asml.share_price, microsoft.share_price, exxonmobil.share_price, delta.share_price,
-          united_airlines.share_price, regional_banks.share_index, delta.fuel_cost]
+          united_airlines.share_price, regional_banks.share_index, delta.fuel_cost,
+          # share prices that come from the Firm kind's defaults (addition)
+          tsmc.share_price, samsung.share_price, tokyo_electron.share_price, saudi_aramco.share_price,
+          jpmorgan.share_price, united_airlines.fuel_cost,
+          # the design partner's markets (addition)
+          yen_carry.usd_jpy, intel.share_price, interest_rates.japan_policy_rate]
   weekly: [credit_availability.us_bank_funding_cost, credit_availability.lending_standards,
            credit_availability.credit_growth, inflation.headline_cpi, inflation.core_cpi,
            confidence.consumer_confidence, business_investment.input_costs, business_investment.capex_growth,
            cross_border_trade.trade_volume, cross_border_trade.chip_exports, productivity_tech.tech_capex,
            financial_crises.banking_stress, policy_uncertainty.epu_index, supply_chains.delivery_times,
-           nvidia.china_revenue, regional_banks.deposits, jpmorgan.deposits]
+           nvidia.china_revenue, regional_banks.deposits, jpmorgan.deposits,
+           # weekly so the correlation frontier sees their moves (addition)
+           supply_chains.shipping_costs, capital_flows.em_portfolio_flows, asset_prices.house_prices,
+           yen_carry.positioning,
+           # the chip supply chain's upstream tiers report weekly, so their links are learned well (addition)
+           ajinomoto.film_output, ibiden.substrate_output, tsmc.advanced_packaging]
   # DECISION: NVIDIA's capex is never reported (it shows daily propagation moving an unobserved value, as
   # Northwind's did), and the two trade authorities' rule indices move only through news and theses
   never: [nvidia.capex, culture_trust.social_trust, institutions.rule_of_law, geography.trade_distance_cost,
-          us_commerce.chip_rule_stringency, china_mofcom.mineral_export_curbs]
+          us_commerce.chip_rule_stringency, china_mofcom.mineral_export_curbs,
+          asset_prices.risk_appetite]
   default: monthly
 meetings:
   federal_reserve.policy_stance: [2026-01-28, 2026-03-18, 2026-04-29, 2026-06-17]
   ecb.policy_stance: [2026-02-05, 2026-03-19, 2026-04-30, 2026-06-11]
+  boj.policy_stance: [2026-01-23, 2026-03-19, 2026-04-30, 2026-06-16]
 history_meeting_every_days: 42

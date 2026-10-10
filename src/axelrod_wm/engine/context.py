@@ -8,15 +8,15 @@ from typing import TYPE_CHECKING, Any, Optional
 
 import numpy as np
 
-from axelrod_wm.core.graph import CausalGraph
 from axelrod_wm.engine.rng import make_rng
 from axelrod_wm.memory.working import WorkingMemory
+from axelrod_wm.model.graph import CausalGraph
 
 if TYPE_CHECKING:
-    from axelrod_wm.control.mutator import GraphMutator
-    from axelrod_wm.core.taxonomy import AttributeVocabulary
     from axelrod_wm.engine.config import EngineConfig
     from axelrod_wm.memory.long_term import LongTermMemory
+    from axelrod_wm.model.taxonomy import AttributeVocabulary
+    from axelrod_wm.repo.mutator import GraphMutator
     from axelrod_wm.trace import Tracer
 
 

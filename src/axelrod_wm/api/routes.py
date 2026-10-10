@@ -15,8 +15,10 @@ from axelrod_wm.api.app import AppState
 from axelrod_wm.api.views import (
     entity_view,
     forecast_view,
+    hypothesis_evidence,
     hypothesis_view,
     interaction_view,
+    learning_tasks_view,
     memory_summary,
     pattern_view,
     proposal_view,
@@ -24,11 +26,11 @@ from axelrod_wm.api.views import (
     update_run_view,
 )
 from axelrod_wm.control.updates import UpdateRequest, UpdateState, UserMarketEventInput, end_of, has_world_ops
-from axelrod_wm.core.hypothesis import Hypothesis
 from axelrod_wm.engine.initialize import resolve_path
 from axelrod_wm.evaluation.backtest import EvaluationRequest
 from axelrod_wm.events.graph_update import GraphUpdateEvent
 from axelrod_wm.events.thesis import Thesis
+from axelrod_wm.model.hypothesis import Hypothesis
 from axelrod_wm.sim.scenario import list_scenarios
 from axelrod_wm.trace import Phase
 
@@ -52,6 +54,10 @@ class ReviewBody(BaseModel):
 
     by: str = "human"
     note: str | None = None
+    keep: list[int] | None = None       # approve only these operations (the reviewer's selection)
+    confidence: float | None = None     # the reviewer's confidence in the article's changes, 0..1 (Oct 8)
+    op_confidence: dict[int, float | None] | None = None   # per operation index; None returns it to the article's
+    ripple: dict[str, float | None] | None = None   # subentity id -> probability its ripple arrives (Oct 9); None: 1
 
 
 class EditBody(BaseModel):
@@ -187,14 +193,38 @@ async def get_taxonomy(request: Request, kind: str) -> dict:
     if kind not in ("object", "interaction"):
         raise HTTPException(404, f"unknown taxonomy {kind!r}")
     st = S(request)
-    return await st.call(taxonomy_view, kind, st.controller.engine.ltm)
+    return await st.call(taxonomy_view, kind, st.controller.engine.ltm, st.controller.config)
+
+
+@router.get("/find")
+async def get_find(request: Request, q: str = Query("", max_length=200)) -> dict:
+    """Find (Oct 9): semantic search and filters over entities, values, interactions, and superentities."""
+    from axelrod_wm.api.find import find
+
+    st = S(request)
+    return await st.call(find, st.controller, q)
+
+
+@router.get("/checks")
+async def get_checks(request: Request) -> dict:
+    """Checks (Oct 9): each kind (when it runs, how, what it updates, its bound), and what is being checked now."""
+    from axelrod_wm.api.checks import checks_view
+
+    st = S(request)
+    return await st.call(checks_view, st.controller)
 
 
 @router.get("/memory")
 async def get_memory(request: Request) -> dict:
     st = S(request)
     eng = st.controller.engine
-    return await st.call(memory_summary, eng.wm, eng.ltm)
+    return await st.call(memory_summary, eng.wm, eng.ltm, st.controller.config)
+
+
+@router.get("/learning-tasks")
+async def learning_tasks(request: Request) -> list[dict]:
+    st = S(request)
+    return await st.call(learning_tasks_view, st.controller)
 
 
 @router.get("/frontier")
@@ -259,6 +289,19 @@ async def post_hypothesis(request: Request, body: dict = Body(...)) -> dict:
     return await st.call(run)
 
 
+@router.get("/hypotheses/{hypothesis_id}/evidence")
+async def get_hypothesis_evidence(request: Request, hypothesis_id: str) -> dict:
+    """What bears on a hypothesis: its probability's basis, its series, its evidence, and the news (addition)."""
+    st = S(request)
+
+    def run() -> dict:
+        ctl = st.controller
+        h = ctl.engine.wm.hypotheses[hypothesis_id]
+        return hypothesis_evidence(h, ctl)
+
+    return await st.call(run)
+
+
 @router.post("/hypotheses/{hypothesis_id}/pose")
 async def pose_hypothesis(request: Request, hypothesis_id: str, body: PoseBody | None = None) -> dict:
     st = S(request)
@@ -266,7 +309,7 @@ async def pose_hypothesis(request: Request, hypothesis_id: str, body: PoseBody |
     def run() -> dict:
         ctl = st.controller
         fc = ctl.pose_hypothesis(hypothesis_id, body.base_thesis_id if body else None)
-        return forecast_view(fc, ctl.explanation(fc.explanation_id), ctl.engine.wm)
+        return forecast_view(fc, ctl.explanation(fc.explanation_id), ctl.engine.wm, ctl.watchlist())
 
     return await st.call(run)
 
@@ -393,8 +436,51 @@ async def approve(request: Request, proposal_id: str, body: ReviewBody | None = 
     st = S(request)
     b = body or ReviewBody()
 
-    await st.call(lambda: st.controller.approve(proposal_id, by=b.by, note=b.note))
+    await st.call(lambda: st.controller.approve(proposal_id, by=b.by, note=b.note, keep=b.keep,
+                                                confidence=b.confidence, op_confidence=b.op_confidence,
+                                                ripple=b.ripple))
     return await _decided(st, proposal_id)
+
+
+def _op_confidence(raw: str | None) -> dict[int, float | None] | None:
+    """"2:0.6,5:0.3" -> {2: 0.6, 5: 0.3}; "3:" clears op 3's own confidence."""
+    if not raw:
+        return None
+    out: dict[int, float | None] = {}
+    for part in raw.split(","):
+        if ":" in part:
+            i, v = part.split(":", 1)
+            out[int(i)] = float(v) if v.strip() else None
+    return out
+
+
+def _ripple(raw: str | None) -> dict[str, float | None] | None:
+    """"delta.margin:0.5,fed.rate:0" -> {...}; "delta.margin:" lets that ripple arrive as expected again."""
+    if not raw:
+        return None
+    out: dict[str, float | None] = {}
+    for part in raw.split(","):
+        if ":" in part:
+            sid, v = part.rsplit(":", 1)
+            out[sid.strip()] = float(v) if v.strip() else None
+    return out
+
+
+@router.get("/proposals/{proposal_id}/stage")
+async def stage_proposal(request: Request, proposal_id: str, keep: str | None = Query(None),
+                         graph: bool = True, conf: float | None = Query(None, ge=0, le=1),
+                         opconf: str | None = Query(None), ripple: str | None = Query(None)) -> dict:
+    """The proposal's learning, run on a copy of the state with only the `keep` operations (comma-separated
+    indices; all when absent), at the reviewer's confidence (`conf`, the article's; `opconf`, "i:c,..." per
+    operation; `ripple`, "subentity:p,..." the probability each value's ripple arrives): every change it would
+    commit, by memory and by order, and the staged graph."""
+    from axelrod_wm.control.stage import stage
+
+    st = S(request)
+    kept = None if keep is None else [int(x) for x in keep.split(",") if x.strip()]
+    oc = _op_confidence(opconf)
+    return await st.call(lambda: stage(st.controller, proposal_id, kept, with_graph=graph, confidence=conf,
+                                       op_confidence=oc, ripple=_ripple(ripple)).model_dump(mode="json"))
 
 
 @router.post("/proposals/{proposal_id}/reject")
@@ -428,6 +514,37 @@ async def defer(request: Request, proposal_id: str, body: ReviewBody | None = No
 
 
 # -- theses, forecasts, explanations -------------------------------------------------------------
+@router.get("/scenario-theses")
+async def scenario_theses(request: Request) -> list[dict]:
+    """The scenario's stored theses (addition), so the Ask tab can offer the ready-made ones the script does not
+    pose (a design partner's questions)."""
+    st = S(request)
+    runner = st.runner
+    specs = getattr(runner, "theses_spec", None) or {}
+    scripted = set()
+    for step in getattr(getattr(runner, "script", None), "steps", []) or []:
+        scripted |= set(step.theses()) if hasattr(step, "theses") else set()
+    return [{"id": tid, "question": spec.get("question", tid), "horizon_days": spec.get("horizon_days"),
+             "scripted": tid in scripted} for tid, spec in specs.items()]
+
+
+@router.post("/theses/{thesis_id}/pose")
+async def pose_stored_thesis(request: Request, thesis_id: str) -> dict:
+    st = S(request)
+
+    def run() -> dict:
+        from axelrod_wm.sim.scenario import thesis_from_spec
+
+        ctl = st.controller
+        specs = getattr(st.runner, "theses_spec", None) or {}
+        if thesis_id not in specs:
+            raise KeyError(thesis_id)
+        fc = ctl.pose_thesis(thesis_from_spec(specs[thesis_id], ctl.now))
+        return forecast_view(fc, ctl.explanation(fc.explanation_id), ctl.engine.wm, ctl.watchlist())
+
+    return await st.call(run)
+
+
 @router.post("/theses")
 async def post_thesis(request: Request, body: dict = Body(...)) -> dict:
     st = S(request)
@@ -449,7 +566,7 @@ async def post_thesis(request: Request, body: dict = Body(...)) -> dict:
             data["event"] = ev
             thesis = Thesis.model_validate(data)
         fc = ctl.pose_thesis(thesis)
-        return forecast_view(fc, ctl.explanation(fc.explanation_id), ctl.engine.wm)
+        return forecast_view(fc, ctl.explanation(fc.explanation_id), ctl.engine.wm, ctl.watchlist())
 
     return await st.call(run)
 
@@ -490,7 +607,7 @@ async def get_forecast(request: Request, forecast_id: str) -> dict:
         fc = ctl.forecast(forecast_id)
         if fc is None:
             raise KeyError(forecast_id)
-        return forecast_view(fc, ctl.explanation(fc.explanation_id), ctl.engine.wm)
+        return forecast_view(fc, ctl.explanation(fc.explanation_id), ctl.engine.wm, ctl.watchlist())
 
     return await st.call(run)
 
@@ -802,3 +919,271 @@ async def get_trace(request: Request, since_seq: int = 0, limit: int | None = No
     if limit is not None:
         evs = evs[: max(0, int(limit))]
     return [e.model_dump(mode="json") for e in evs]
+
+
+# -- the flowchart, contracts, history, structure edits, and the demos' examples -------------------
+class GroupBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    members: list[str]
+    interactions: list[str] = []
+    id: str | None = None
+    description: str = ""
+    by: str = "human"
+
+
+class DissolveBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    pattern_id: str
+    reason: str
+    by: str = "human"
+
+
+class RetireBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    entity_id: str | None = None
+    interaction_id: str | None = None
+    reason: str
+    by: str = "human"
+
+
+@router.get("/flows")
+async def get_flows() -> list[dict]:
+    """The flowchart as data: its stages (input and output), steps, decisions, commits, and edges."""
+    from axelrod_wm.flows import FLOWS
+
+    return [f.model_dump(mode="json") for f in FLOWS.values()]
+
+
+@router.get("/flows/{flow_id}/svg")
+async def get_flow_svg(flow_id: str, bare: bool = False) -> Any:
+    from fastapi.responses import Response
+
+    from axelrod_wm.flows import FLOWS
+    from axelrod_wm.flows.render import render_svg
+
+    if flow_id not in FLOWS:
+        raise HTTPException(404, f"unknown flow {flow_id!r}")
+    return Response(content=render_svg(FLOWS[flow_id], bare=bare), media_type="image/svg+xml")
+
+
+@router.get("/contracts")
+async def get_contracts() -> list[dict]:
+    """Every pluggable component's inputs, outputs, reads, writes, and when it runs."""
+    from axelrod_wm.engine.contracts import CONTRACTS
+
+    return [c.model_dump(mode="json") for c in CONTRACTS.values()]
+
+
+@router.get("/repo/log")
+async def repo_log(request: Request, limit: int = Query(50, ge=1, le=500), before: int | None = None,
+                   process: list[str] | None = Query(None), memory: str | None = None) -> list[dict]:
+    """The commit log, newest first: each version's process, memory, message, and who vetted it."""
+    from axelrod_wm.repo.history import log
+
+    st = S(request)
+    return await st.call(lambda: [c.model_dump(mode="json") for c in log(
+        st.controller.engine, limit=limit, before_version=before, processes=set(process or []) or None,
+        memory=memory)])
+
+
+@router.get("/repo/commits/{version}")
+async def repo_show(request: Request, version: int) -> dict:
+    from axelrod_wm.repo.history import show
+
+    st = S(request)
+
+    def run() -> dict:
+        out = show(st.controller.engine, version)
+        if out is None:
+            raise HTTPException(404, f"no commit produced version {version}")
+        return out
+
+    return await st.call(run)
+
+
+@router.get("/repo/diff")
+async def repo_diff(request: Request, from_version: int = Query(..., alias="from"),
+                    to_version: int | None = Query(None, alias="to")) -> dict:
+    from axelrod_wm.repo.history import diff
+
+    st = S(request)
+    return await st.call(diff, st.controller.engine, from_version, to_version)
+
+
+@router.get("/repo/processes")
+async def repo_processes() -> dict:
+    from axelrod_wm.repo.mutator import PROCESSES
+
+    return PROCESSES
+
+
+@router.post("/structure/group")
+async def structure_group(request: Request, body: GroupBody) -> dict:
+    """Collapse: propose a superentity made of these entities (it waits for review)."""
+    from axelrod_wm.control.controller import ControllerError
+
+    st = S(request)
+
+    def run() -> dict:
+        ctl = st.controller
+        try:
+            p = ctl.propose_group(body.name, body.members, interactions=body.interactions or None,
+                                  pattern_id=body.id, description=body.description, by=body.by)
+        except ControllerError as exc:
+            raise HTTPException(422, str(exc)) from exc
+        return _proposal_after(st, p.id)
+
+    return await st.call(run)
+
+
+@router.post("/structure/dissolve")
+async def structure_dissolve(request: Request, body: DissolveBody) -> dict:
+    """Expand: propose that a superentity break back into its constituents."""
+    from axelrod_wm.control.controller import ControllerError
+
+    st = S(request)
+
+    def run() -> dict:
+        try:
+            p = st.controller.propose_dissolve(body.pattern_id, body.reason, by=body.by)
+        except ControllerError as exc:
+            raise HTTPException(422, str(exc)) from exc
+        return _proposal_after(st, p.id)
+
+    return await st.call(run)
+
+
+@router.post("/structure/retire")
+async def structure_retire(request: Request, body: RetireBody) -> dict:
+    """Delete: propose retiring an entity (with its values and interactions) or one interaction."""
+    from axelrod_wm.control.controller import ControllerError
+
+    st = S(request)
+
+    def run() -> dict:
+        try:
+            p = st.controller.propose_retire(entity_id=body.entity_id, interaction_id=body.interaction_id,
+                                             reason=body.reason, by=body.by)
+        except ControllerError as exc:
+            raise HTTPException(422, str(exc)) from exc
+        return _proposal_after(st, p.id)
+
+    return await st.call(run)
+
+
+# -- the demos' examples: a chain of features, with rewind, and a library of further events ---------------
+def _session(st: AppState) -> Any:
+    runner = st.ensure_loaded()
+    if not hasattr(runner, "run_example"):
+        raise HTTPException(404, "the loaded scenario has no examples; load small_demo or prod_demo")
+    return runner
+
+
+@router.get("/examples")
+async def get_examples(request: Request) -> list[dict]:
+    """The examples, in chain order: what each isolates, its articles, whether it is done, and its "more like this"
+    events (an empty list when the loaded scenario has none)."""
+    st = S(request)
+
+    def run() -> list[dict]:
+        runner = st.ensure_loaded()
+        return runner.examples() if hasattr(runner, "examples") else []
+
+    return await st.call(run)
+
+
+class ManualBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    manual: dict | None = None          # the "Add from your own knowledge" form (see sim/examples/catalog.manual_ops)
+    by: str = "backend user"
+
+
+@router.post("/examples/{example_id}")
+async def run_example(request: Request, example_id: str, body: ManualBody | None = None) -> dict:
+    """Run one example: play (or rewind to) the examples before it, then stage it and stop at the review (a thesis
+    returns its question for the Ask panel instead). A manual example takes the person's form in the body."""
+    st = S(request)
+
+    def run() -> dict:
+        runner = _session(st)
+        out = runner.run_example(example_id, manual=(body.manual if body else None))
+        if out["proposal_id"]:
+            out["proposal"] = _proposal_after(st, out["proposal_id"])
+        runner._broadcast()
+        return out
+
+    return await st.call(run)
+
+
+@router.post("/examples/{example_id}/prepare")
+async def prepare_example(request: Request, example_id: str) -> dict:
+    """Bring the canvas to just before an example (playing or rewinding the ones before it) without running it: a
+    manual example's form opens over what the earlier examples built."""
+    st = S(request)
+
+    def run() -> dict:
+        runner = _session(st)
+        return runner.prepare_example(example_id)
+
+    return await st.call(run)
+
+
+@router.post("/library/{event_id}")
+async def run_library_event(request: Request, event_id: str) -> dict:
+    """Add one more event like an example's, on the current state; it stops at the review."""
+    st = S(request)
+
+    def run() -> dict:
+        runner = _session(st)
+        out = runner.run_library(event_id)
+        if out["proposal_id"]:
+            out["proposal"] = _proposal_after(st, out["proposal_id"])
+        runner._broadcast()
+        return out
+
+    return await st.call(run)
+
+
+# -- a backend user's own knowledge (Oct 9) ------------------------------------------------------------
+@router.post("/manual")
+async def add_manual(request: Request, body: ManualBody) -> dict:
+    """Stage what a backend user adds from their own knowledge (an entity, its values, interactions) for review, like
+    any article, with their confidence on it. No article is needed."""
+    from axelrod_wm.sim.examples.catalog import manual_event
+
+    st = S(request)
+    if not body.manual:
+        raise HTTPException(422, "nothing to add")
+
+    def run() -> dict:
+        ctl = st.controller
+        n = sum(1 for p in ctl.proposals.values() if p.event.event_type == "manual_addition") + 1
+        try:
+            event = manual_event(body.manual, ctl.now, f"GUE-MAN-U{n:03d}")
+        except (KeyError, ValueError) as exc:
+            raise HTTPException(422, f"the form is incomplete: {exc}") from exc
+        p = ctl.submit_graph_update(event, by=body.by)
+        return proposal_view(p, ctl.engine.wm, ctl.engine.ltm)
+
+    return await st.call(run)
+
+
+@router.get("/vocabulary")
+async def get_vocabulary(request: Request) -> dict:
+    """What the form offers: value kinds (with their distribution family), entity kinds, and category tags."""
+    from axelrod_wm.model.entity import EntityKind
+
+    st = S(request)
+
+    def run() -> dict:
+        vocab = st.controller.engine.vocab
+        kinds = [{"id": k, "family": v.family, "parent": v.parent} for k, v in sorted(vocab.kinds.items())]
+        return {"attribute_kinds": kinds, "entity_kinds": [str(k) for k in EntityKind],
+                "category_tags": ["SD", "MF", "SC", "DI", "DF", "EN", "EX", "SH"]}
+
+    return await st.call(run)

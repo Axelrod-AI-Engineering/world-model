@@ -4,22 +4,136 @@ nodes:
   - {id: gen:obj:root, name: Economic object, parent: null}
   - {id: gen:obj:actor, name: Actor, parent: gen:obj:root, signature: {required: {kind: [agency, company, person]}}}
   - {id: gen:obj:monetary_authority, name: Monetary authority, parent: gen:obj:actor, signature: {required: {function: [monetary_policy]}}}
-  - {id: gen:obj:central_bank, name: Central bank, parent: gen:obj:monetary_authority, signature: {any_of: {attribute_kinds: [policy_rate]}}, instances: [federal_reserve, ecb]}
+  - {id: gen:obj:central_bank, name: Central bank, parent: gen:obj:monetary_authority, signature: {any_of: {attribute_kinds: [policy_rate]}}, instances: [federal_reserve, ecb, boj]}
   - {id: gen:obj:currency_board, name: Currency board, parent: gen:obj:monetary_authority, signature: {required: {regime: [currency_board]}}}
   - {id: gen:obj:fiscal_authority, name: Fiscal authority, parent: gen:obj:actor, signature: {required: {function: [fiscal_policy]}}}
-  - {id: gen:obj:firm, name: Firm, parent: gen:obj:actor, signature: {required: {kind: [company]}}}
-  # firms by sector (real actors; addition): the sector feature places a new firm
-  - {id: gen:obj:chipmaker, name: Chipmaker, parent: gen:obj:firm, signature: {required: {sector: [semiconductors]}}, instances: [nvidia, amd, tsmc, samsung, asml, tokyo_electron]}
-  - {id: gen:obj:cloud_platform, name: Cloud platform, parent: gen:obj:firm, signature: {required: {sector: [cloud]}}, instances: [microsoft]}
-  - {id: gen:obj:energy_producer, name: Energy producer, parent: gen:obj:firm, signature: {required: {sector: [energy]}}, instances: [saudi_aramco, exxonmobil]}
-  - {id: gen:obj:airline, name: Airline, parent: gen:obj:firm, signature: {required: {sector: [airlines]}}, instances: [delta, united_airlines]}
-  - {id: gen:obj:bank, name: Bank, parent: gen:obj:firm, signature: {required: {sector: [banking]}}, instances: [jpmorgan]}
+  # Firms (real actors; addition). A kind lists `defaults`, the subentities every instance of it has, and
+  # `default_links`, the typical links among them; an instance gets those of every kind on its path, root
+  # first (engine/initialize.apply_kind_defaults). So similar firms have similar subentities: every firm a
+  # revenue, an operating margin, and a share price; every airline a jet fuel cost as well. A link end with
+  # a dot is a subentity id; one without names a value of the instance (a slot, or the end of one of its
+  # own ids), and the link applies to each instance that has both ends. Means are typical native levels.
+  - id: gen:obj:firm
+    name: Firm
+    parent: gen:obj:actor
+    signature: {required: {kind: [company]}}
+    defaults:
+      - {slot: revenue, name: revenue, attribute_kind: revenue_flow, unit: $bn/qtr, mean: 20.0, scale: 0.06}
+      - {slot: operating_margin, name: operating margin, attribute_kind: margin, unit: pct, mean: 15.0, scale: 2.0}
+      - {slot: share_price, name: share price, attribute_kind: asset_price, unit: $, mean: 100.0, scale: 0.08}
+    default_links:
+      - {source: revenue, target: operating_margin, label: lifts, effect: 0.3,
+         kernel: {delay_days: 30, lag_days: 90, duration_days: null}, generalization: gen:int:firm_financials}
+      - {source: operating_margin, target: share_price, label: drives, effect: 0.5,
+         kernel: {delay_days: 1, lag_days: 14, duration_days: null}, generalization: gen:int:asset_repricing}
+  # firms by sector: the sector feature places a new firm
+  - id: gen:obj:chipmaker
+    name: Chipmaker
+    parent: gen:obj:firm
+    signature: {required: {sector: [semiconductors]}}
+    instances: [nvidia, amd, tsmc, samsung, asml, tokyo_electron, intel]
+    defaults:
+      - {slot: china_sales, name: China sales, attribute_kind: revenue_flow, unit: $bn/qtr, mean: 3.0, scale: 0.08}
+    # a typical link applies to every member that has both ends: designers' data-center revenue, foundries'
+    # share, and toolmakers' orders all feed revenue
+    default_links:
+      - {source: legal_regulatory.export_controls, target: china_sales, label: cuts China sales, effect: -0.4,
+         kernel: {delay_days: 30, lag_days: 60, duration_days: null}, generalization: gen:int:trade_restriction}
+      - {source: china_sales, target: revenue, label: adds to, effect: 0.3,
+         kernel: {delay_days: 7, lag_days: 30, duration_days: null}, generalization: gen:int:firm_financials}
+      - {source: datacenter_revenue, target: revenue, label: adds to, effect: 0.7,
+         kernel: {delay_days: 7, lag_days: 30, duration_days: null}, generalization: gen:int:firm_financials}
+      - {source: gpu_share, target: datacenter_revenue, label: drives, effect: 0.6,
+         kernel: {delay_days: 14, lag_days: 60, duration_days: null}, generalization: gen:int:asset_repricing}
+      - {source: foundry_share, target: revenue, label: drives, effect: 0.4,
+         kernel: {delay_days: 30, lag_days: 90, duration_days: null}, generalization: gen:int:firm_financials}
+      - {source: orders, target: revenue, label: turn into, effect: 0.6,
+         kernel: {delay_days: 60, lag_days: 120, duration_days: null}, generalization: gen:int:firm_financials}
+      - {source: revenue, target: capex, label: funds, effect: 0.4,
+         kernel: {delay_days: 60, lag_days: 120, duration_days: null}, generalization: gen:int:demand_linkage}
+  # upstream suppliers to chipmakers (addition): film and substrate makers each have an output that feeds revenue
+  - id: gen:obj:chip_supplier
+    name: Chip materials supplier
+    parent: gen:obj:firm
+    signature: {required: {sector: [chip_materials]}}
+    instances: [ajinomoto, ibiden]
+    defaults:
+      - {slot: output, name: output, attribute_kind: production_flow, unit: index, mean: 100.0, scale: 0.05}
+    default_links:
+      - {source: output, target: revenue, label: sells into, effect: 0.5,
+         kernel: {delay_days: 14, lag_days: 60, duration_days: null}, generalization: gen:int:firm_financials}
+  - id: gen:obj:cloud_platform
+    name: Cloud platform
+    parent: gen:obj:firm
+    signature: {required: {sector: [cloud]}}
+    instances: [microsoft]
+    defaults:
+      - {slot: cloud_revenue, name: cloud revenue, attribute_kind: revenue_flow, unit: $bn/qtr, mean: 30.0, scale: 0.05}
+      - {slot: ai_capex, name: AI capex, attribute_kind: spending_flow, unit: $bn/qtr, mean: 15.0, scale: 0.06}
+    default_links:
+      - {source: confidence.business_confidence, target: cloud_revenue, label: lifts, effect: 0.3,
+         kernel: {delay_days: 30, lag_days: 90, duration_days: null}, generalization: gen:int:demand_linkage}
+      - {source: cloud_revenue, target: revenue, label: adds to, effect: 0.6,
+         kernel: {delay_days: 7, lag_days: 30, duration_days: null}, generalization: gen:int:firm_financials}
+      - {source: cloud_revenue, target: ai_capex, label: funds, effect: 0.4,
+         kernel: {delay_days: 60, lag_days: 120, duration_days: null}, generalization: gen:int:demand_linkage}
+  - id: gen:obj:energy_producer
+    name: Energy producer
+    parent: gen:obj:firm
+    signature: {required: {sector: [energy]}}
+    instances: [saudi_aramco, exxonmobil]
+    defaults:
+      - {slot: production, name: oil production, attribute_kind: production_flow, unit: mb/d, mean: 3.0, scale: 0.03}
+      - {slot: upstream_capex, name: upstream capex, attribute_kind: spending_flow, unit: $bn/qtr, mean: 6.0, scale: 0.06}
+    default_links:
+      - {source: resources_energy.oil_price, target: revenue, label: lifts, effect: 0.7,
+         kernel: {delay_days: 14, lag_days: 30, duration_days: null}, generalization: gen:int:supply_relationship}
+      - {source: production, target: revenue, label: adds to, effect: 0.4,
+         kernel: {delay_days: 7, lag_days: 30, duration_days: null}, generalization: gen:int:firm_financials}
+      - {source: revenue, target: upstream_capex, label: funds, effect: 0.4,
+         kernel: {delay_days: 90, lag_days: 180, duration_days: null}, generalization: gen:int:demand_linkage}
+  - id: gen:obj:airline
+    name: Airline
+    parent: gen:obj:firm
+    signature: {required: {sector: [airlines]}}
+    instances: [delta, united_airlines]
+    defaults:
+      - {slot: fuel_cost, name: jet fuel cost, attribute_kind: cost_index, unit: $/gal, mean: 2.6, scale: 0.08}
+      - {slot: passenger_traffic, name: passenger traffic, attribute_kind: traffic_flow, unit: m passengers/qtr, mean: 45.0, scale: 0.05}
+      - {slot: market_share, name: US market share, attribute_kind: share, unit: share, mean: 0.15, scale: 0.08}
+    default_links:
+      - {source: resources_energy.oil_price, target: fuel_cost, label: raises, effect: 0.9,
+         kernel: {delay_days: 7, lag_days: 30, duration_days: null}, generalization: gen:int:energy_to_prices}
+      - {source: fuel_cost, target: operating_margin, label: squeezes, effect: -0.6,
+         kernel: {delay_days: 14, lag_days: 60, duration_days: null}, generalization: gen:int:margin_squeeze}
+      - {source: confidence.consumer_confidence, target: passenger_traffic, label: fills planes, effect: 0.4,
+         kernel: {delay_days: 30, lag_days: 60, duration_days: null}, generalization: gen:int:demand_linkage}
+      - {source: passenger_traffic, target: revenue, label: earns, effect: 0.6,
+         kernel: {delay_days: 7, lag_days: 30, duration_days: null}, generalization: gen:int:firm_financials}
+  # two kinds of airline with no members yet (Oct 8): Airline has children, so when it gets crowded it can split one
+  # group off (the production demo's kind-split example) instead of needing two groups at once
+  - {id: gen:obj:cargo_airline, name: Cargo airline, parent: gen:obj:airline, signature: {required: {business: [cargo]}}}
+  - {id: gen:obj:regional_airline, name: Regional airline, parent: gen:obj:airline, signature: {required: {business: [regional]}}}
+  - id: gen:obj:bank
+    name: Bank
+    parent: gen:obj:firm
+    signature: {required: {sector: [banking]}}
+    instances: [jpmorgan]
+    defaults:
+      - {slot: net_interest_margin, name: net interest margin, attribute_kind: margin, unit: pct, mean: 2.7, scale: 0.15}
+      - {slot: deposits, name: deposits, attribute_kind: balance, unit: $tn, mean: 2.0, scale: 0.03}
+      - {slot: loan_growth, name: loan growth, attribute_kind: growth_rate, unit: pct y/y, mean: 4.0, scale: 1.0}
+    default_links:
+      - {source: net_interest_margin, target: revenue, label: earns, effect: 0.5,
+         kernel: {delay_days: 30, lag_days: 90, duration_days: null}, generalization: gen:int:firm_financials}
+      - {source: loan_growth, target: revenue, label: earns, effect: 0.3,
+         kernel: {delay_days: 30, lag_days: 90, duration_days: null}, generalization: gen:int:firm_financials}
   - {id: gen:obj:official, name: Official, parent: gen:obj:actor, signature: {required: {kind: [person]}}, instances: [fed_chair]}
   - {id: gen:obj:trade_authority, name: Trade authority, parent: gen:obj:actor, signature: {required: {function: [trade_policy]}}, instances: [us_commerce, china_mofcom]}
   - {id: gen:obj:producer_group, name: Producer group, parent: gen:obj:actor, signature: {required: {function: [production_policy]}}, instances: [opec_plus]}
   - {id: gen:obj:financial_condition, name: Financial condition, parent: gen:obj:root, signature: {required: {kind: [macro_factor, market]}, any_of: {attribute_kinds: [interest_rate, borrowing_cost, fx_rate, capital_flow]}}}
   - {id: gen:obj:price_of_credit, name: Price and supply of credit, parent: gen:obj:financial_condition, instances: [interest_rates, credit_availability, debt_cycle]}
-  - {id: gen:obj:external_finance, name: External finance, parent: gen:obj:financial_condition, instances: [dollar_fx, capital_flows]}
+  - {id: gen:obj:external_finance, name: External finance, parent: gen:obj:financial_condition, instances: [dollar_fx, capital_flows, yen_carry]}
   - {id: gen:obj:market_stress, name: Market stress, parent: gen:obj:root, instances: [asset_prices, financial_crises, regional_banks]}
   - {id: gen:obj:price_level, name: Price level, parent: gen:obj:root, instances: [inflation]}
   - {id: gen:obj:demand_flow, name: Demand flow, parent: gen:obj:root, instances: [consumer_spending, business_investment, cross_border_trade, gov_spending]}
@@ -31,11 +145,11 @@ nodes:
   - {id: gen:obj:configuration, name: Configuration, parent: gen:obj:root, signature: {required: {object_type: [superentity]}}}
   - {id: gen:obj:financial_stress_config, name: Financial stress configuration, parent: gen:obj:configuration}
   - {id: gen:obj:bank_run, name: Bank run, parent: gen:obj:financial_stress_config, instances: [HP1, HP2]}
-  - {id: gen:obj:funding_squeeze, name: Funding squeeze, parent: gen:obj:financial_stress_config, instances: [S3]}
+  - {id: gen:obj:funding_squeeze, name: Funding squeeze, parent: gen:obj:financial_stress_config, instances: [S3, S19]}
   - {id: gen:obj:policy_config, name: Policy configuration, parent: gen:obj:configuration, instances: [S1, S8, S9]}
   - {id: gen:obj:shock_config, name: Shock configuration, parent: gen:obj:configuration, instances: [S2, S7, S10]}
   # sectors and competitive play among real actors (addition)
   - {id: gen:obj:market_config, name: Market configuration, parent: gen:obj:configuration}
-  - {id: gen:obj:supply_chain_config, name: Supply chain, parent: gen:obj:market_config, instances: [S11, S14]}
-  - {id: gen:obj:rivalry_config, name: Rivalry, parent: gen:obj:market_config, instances: [S12, S13, S15, S16, S17]}
+  - {id: gen:obj:supply_chain_config, name: Supply chain, parent: gen:obj:market_config, instances: [S11, S14, S18]}
+  - {id: gen:obj:rivalry_config, name: Rivalry, parent: gen:obj:market_config, instances: [S12, S13, S15, S16, S17, S20]}
   - {id: gen:obj:structural_config, name: Structural configuration, parent: gen:obj:configuration, instances: [S4, S5, S6]}

@@ -2,22 +2,20 @@
 // make room for one another (an opened entity pushes its neighbors aside, and they return when it
 // closes). The "Gravity" layout adds the plan's bodies: charge, link springs, and each superentity as a
 // gravity well, with loose entities drawn weakly to the center.
+//
+// DECISION (Oct 9): gravity places, it does not float. When the structure changes, `staticLayout` runs the gravity
+// physics off-screen to convergence (charge, interaction springs, superentity wells, a pull to the center of mass,
+// no overlaps), with boxes already placed anchored near where they were; each box then glides once to its new home
+// and stays there. In the Gravity layout every box is placed this way; in the Figure 1 layout only the "free" boxes
+// Figure 1 does not place (the tutorial's, and entities created during a run).
 /* global d3 */
 import { categoryAnchors } from "./layouts.js";
-
-export function linkDistance(sig) {
-  return 60 + 140 * (1 - Math.min(1, sig));
-}
-
-export function linkStrength(sig) {
-  return 0.05 + 0.5 * Math.min(1, sig);
-}
 
 function forceHome(getMode) {
   let nodes = [];
   function force(alpha) {
     const fig = getMode() === "figure1";
-    const s = fig ? 0.22 : 0.025;
+    const s = 0.22;
     for (const n of nodes) {
       if (n.fx != null || n.hx == null) continue;
       if (fig && n.flow) {
@@ -39,7 +37,7 @@ function forceHome(getMode) {
 function forceCluster(getGroups, opts) {
   let nodes = [];
   function force(alpha) {
-    if (opts.getMode() !== "gravity") return;
+    if (opts.getMode && opts.getMode() !== "gravity") return;
     const byId = new Map(nodes.map((n) => [n.id, n]));
     const anchors = opts.groupByCategory() ? categoryAnchors() : null;
     const centroids = new Map();
@@ -79,19 +77,58 @@ function forceCluster(getGroups, opts) {
   return force;
 }
 
-export function createSimulation({ getMode, getGroups, groupByCategory, onTick }) {
-  const gravity = () => getMode() === "gravity";
+// how far apart two boxes' centers should sit when an interaction ties them: their half-widths, plus a gap that
+// shrinks with the interaction's significance (strong ties sit closer)
+const span = (l) => ((l.source.w ?? 160) + (l.target.w ?? 160)) / 2 + 80 + 110 * (1 - Math.min(1, l.significance ?? 0));
+
+// The live simulation only carries boxes to their homes and keeps them apart; it holds the interaction list (the
+// "link" force, at zero strength) for the static layout to read.
+export function createSimulation({ getMode, onTick }) {
   const sim = d3.forceSimulation()
-    .alphaDecay(0.03)
-    .velocityDecay(0.42)
+    .alphaDecay(0.045)
+    .velocityDecay(0.45)
     .force("home", forceHome(getMode))
-    .force("charge", d3.forceManyBody().strength((d) => (gravity() ? (d.kind === "card" ? -600 : -220) : 0)).distanceMax(700))
-    .force("link", d3.forceLink().id((d) => d.id).distance((l) => linkDistance(l.significance ?? 0))
-      .strength((l) => (gravity() ? linkStrength(l.significance ?? 0) * 0.5 : 0)))
-    .force("cluster", forceCluster(getGroups, { getMode, groupByCategory }))
+    .force("link", d3.forceLink().id((d) => d.id).strength(0))
     .on("tick", onTick);
   sim.stop();
   return sim;
+}
+
+// Gravity, solved off-screen. `nodes`: {id, kind, x, y, w, h, oy, tags, groupKeys, fixed, anchor: {x, y} | null}.
+// Returns id -> {x, y}. Anchored boxes are held gently near their anchor, so a new entity finds its place among the
+// others without reshuffling them; fixed boxes do not move.
+export function staticLayout(nodes, links, { groups = [], groupByCategory = false, ticks = 300 } = {}) {
+  if (!nodes.length) return new Map();
+  const sim = d3.forceSimulation(nodes).stop()
+    .alphaDecay(1 - Math.pow(0.001, 1 / ticks))
+    .velocityDecay(0.45)
+    .force("charge", d3.forceManyBody().strength((d) => -(d.kind === "card" ? 700 : 260 + 1.4 * (d.w ?? 160) + 2 * (d.h ?? 30)))
+      .distanceMin(30).distanceMax(900))
+    .force("link", d3.forceLink(links).id((d) => d.id).distance(span)
+      .strength((l) => 0.18 + 0.32 * Math.min(1, l.significance ?? 0)))
+    .force("cluster", forceCluster(() => groups, { groupByCategory: () => groupByCategory }));
+  for (const n of nodes) if (n.fixed) { n.fx = n.x; n.fy = n.y; }
+  const anchored = nodes.filter((n) => n.anchor);
+  const free = nodes.filter((n) => !n.fixed);
+  for (let i = 0; i < ticks; i++) {
+    sim.tick();
+    const alpha = sim.alpha();
+    // gravity toward the center of mass, and the anchors that keep a placed box near its place
+    const cx = nodes.reduce((t, n) => t + n.x, 0) / nodes.length;
+    const cy = nodes.reduce((t, n) => t + n.y, 0) / nodes.length;
+    for (const n of free) {
+      n.x += (cx - n.x) * 0.018 * alpha;
+      n.y += (cy - n.y) * 0.026 * alpha;
+    }
+    for (const n of anchored) {
+      if (n.fixed) continue;
+      n.x += (n.anchor.x - n.x) * 0.12;
+      n.y += (n.anchor.y - n.y) * 0.12;
+    }
+    resolveCollisions(nodes, 2);
+  }
+  resolveCollisions(nodes, 8);
+  return new Map(nodes.map((n) => [n.id, { x: n.x, y: n.y }]));
 }
 
 // Boxes never overlap: separate every overlapping pair along the axis that needs the smaller move.

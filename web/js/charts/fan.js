@@ -35,8 +35,8 @@ export function fanChart({ dates, series, compare = null, width = 340, height = 
     .call(d3.axisBottom(x).ticks(compact ? 2 : 4).tickSizeOuter(0).tickFormat(d3.utcFormat("%b %y")));
   svg.append("g").attr("class", "axis").attr("transform", `translate(${m.left},0)`)
     .call(d3.axisLeft(y).ticks(compact ? 3 : 4).tickSizeOuter(0).tickFormat(fmt));
-  if (unit && !compact) {
-    svg.append("text").attr("x", m.left + 4).attr("y", m.top + 8).attr("font-size", 9.5).attr("fill", "#665E54").text(unit);
+  if (unit) {
+    svg.append("text").attr("x", m.left + 4).attr("y", m.top + 8).attr("font-size", compact ? 8.5 : 9.5).attr("fill", "#665E54").text(unit);
   }
   return svg.node();
 }
@@ -50,8 +50,14 @@ export function scatter(pairs, { width = 260, height = 150, xLabel = "earlier mo
       .attr("fill", "#665E54").text("no points yet");
     return svg.node();
   }
-  const x = d3.scaleLinear().domain(d3.extent(pairs, (d) => d[0])).nice().range([m.left, width - m.right]);
-  const y = d3.scaleLinear().domain(d3.extent(pairs, (d) => d[1])).nice().range([height - m.bottom, m.top]);
+  // pad each extent by a tenth, so no point sits on an axis
+  const padded = (k) => {
+    const [lo, hi] = d3.extent(pairs, (d) => d[k]);
+    const pad = Math.max((hi - lo) * 0.1, 0.1);
+    return [lo - pad, hi + pad];
+  };
+  const x = d3.scaleLinear().domain(padded(0)).nice().range([m.left, width - m.right]);
+  const y = d3.scaleLinear().domain(padded(1)).nice().range([height - m.bottom, m.top]);
   svg.append("g").selectAll("circle").data(pairs).join("circle").attr("cx", (d) => x(d[0])).attr("cy", (d) => y(d[1]))
     .attr("r", 2.6).attr("fill", "#93465F").attr("fill-opacity", 0.6);
   svg.append("g").attr("class", "axis").attr("transform", `translate(0,${height - m.bottom})`).call(d3.axisBottom(x).ticks(4));

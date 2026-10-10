@@ -27,6 +27,7 @@ export const store = {
   graph: null,             // live GraphView
   view: null,              // the GraphView on screen (live, or a read-only version)
   readOnlyVersion: null,
+  staged: null,            // a staged review on screen: {review, view} (the canvas shows what it would commit)
   status: null,
   scenarios: [],
   config: null,
@@ -48,7 +49,7 @@ export const store = {
   highlight: null,         // {entities:Set, links:Set, hulls:Set, hot:Set} for dimming
   phaseFilter: null,
   settings: { speed: 1, reducedMotion: false, figure1LinksOnly: false, groupByCategory: false, layout: "figure1",
-              draw: false, showCandidates: false },
+              draw: false, showCandidates: false, captions: (() => { try { return localStorage.getItem("axelrod.captions") !== "off"; } catch { return true; } })() },
 };
 
 export function nodeIndex() {
@@ -81,7 +82,7 @@ export async function refreshGraph() {
     const [g, pending] = await Promise.all([api.state(), api.proposals("pending")]);
     store.graph = g;
     store.proposals = pending;
-    if (store.readOnlyVersion == null) {
+    if (store.readOnlyVersion == null && !store.staged) {
       store.view = g;
       emit("graph", g);
     }
@@ -93,16 +94,58 @@ export async function refreshGraph() {
   }
 }
 
+// the step on screen, from 1: the one the caption narrates, which may still be running or waiting for review
+export const stepShown = () => Math.max(store.status?.step_index ?? 0, (store.caption?.step ?? -1) + 1);
+
+let versionRequest = 0;      // the latest openVersion or backToLive wins; an earlier answer is dropped
+
 export async function openVersion(version) {
   if (version == null || (store.graph && version === store.graph.version)) return backToLive();
+  const ticket = ++versionRequest;
   const g = await api.state(version);
+  if (ticket !== versionRequest) return;
   store.readOnlyVersion = version;
   store.view = g;
   emit("graph", g);
   emit("readonly", version);
 }
 
+// A staged review on the canvas: the staged graph, plus what it would retire (drawn from the live graph, so
+// the reviewer sees what goes). Leaving it returns to the live graph.
+export function showStaged(review) {
+  if (!review?.graph || store.readOnlyVersion != null) return;
+  const live = store.graph ?? { entities: [], subentities: [], links: [] };
+  const g = { ...review.graph, entities: [...review.graph.entities], subentities: [...review.graph.subentities],
+              links: [...review.graph.links] };
+  const retired = new Set(review.marks?.retired ?? []);
+  const has = (xs, id) => xs.some((x) => x.id === id);
+  for (const e of live.entities) {
+    if (!retired.has(e.id) || has(g.entities, e.id)) continue;
+    g.entities.push(e);
+    for (const s of live.subentities) if (s.entity_id === e.id && !has(g.subentities, s.id)) { g.subentities.push(s); retired.add(s.id); }
+  }
+  for (const l of live.links) if (retired.has(l.id) && !has(g.links, l.id)) g.links.push(l);
+  // a value the ripple reaches shows its expected peak, so the canvas reads the direction of each order
+  const peaks = new Map((review.ripple ?? []).map((a) => [a.subentity_id, a.peak]));
+  g.subentities = g.subentities.map((s) => (peaks.has(s.id) ? { ...s, z: peaks.get(s.id), expected: true } : s));
+  store.staged = { review, view: g, retired };
+  store.view = g;
+  emit("graph", g);
+  emit("staged", review);
+}
+
+export function clearStaged() {
+  if (!store.staged) return;
+  store.staged = null;
+  if (store.readOnlyVersion == null && store.graph) {
+    store.view = store.graph;
+    emit("graph", store.graph);
+  }
+  emit("staged", null);
+}
+
 export function backToLive() {
+  versionRequest += 1;
   store.readOnlyVersion = null;
   store.view = store.graph;
   emit("graph", store.graph);
@@ -303,7 +346,7 @@ export function applyTrace(ev) {
       emit("forecast-ready", p);
       break;
     case "state.version":
-      store.versions.push({ version: p.version, seq: ev.seq, cause: p.cause, at: ev.sim_time });
+      store.versions.push({ version: p.version, seq: ev.seq, cause: p.cause, process: p.process, at: ev.sim_time });
       emit("versions", store.versions);
       scheduleRefresh(250);
       break;

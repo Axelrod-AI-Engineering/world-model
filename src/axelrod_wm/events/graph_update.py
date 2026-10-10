@@ -8,14 +8,14 @@ from typing import Annotated, Any, Literal, Optional, Union
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 
-from axelrod_wm.core.categories import TagSet
-from axelrod_wm.core.distributions import Beta, Distribution
-from axelrod_wm.core.entity import EntityKind
-from axelrod_wm.core.evidence import Evidence
-from axelrod_wm.core.hypothesis import Hypothesis
-from axelrod_wm.core.ids import TEMP_PREFIX
-from axelrod_wm.core.interaction import Direction, EdgeDynamics, EdgeType, ParameterBinding
-from axelrod_wm.core.superentity import SuperentityPattern
+from axelrod_wm.model.categories import TagSet
+from axelrod_wm.model.distributions import Beta, Distribution
+from axelrod_wm.model.entity import EntityKind
+from axelrod_wm.model.evidence import Evidence
+from axelrod_wm.model.hypothesis import Hypothesis
+from axelrod_wm.model.ids import TEMP_PREFIX
+from axelrod_wm.model.interaction import Direction, EdgeDynamics, EdgeType, ParameterBinding
+from axelrod_wm.model.superentity import SuperentityPattern
 
 
 class EventKind(StrEnum):
@@ -75,6 +75,7 @@ class AddEntity(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     op: Literal["add_entity"] = "add_entity"
+    confidence: float | None = None       # the reviewer's confidence in this change, 0..1; None: the event's
     temp_id: str                          # "new:<final id>"
     name: str
     kind: EntityKind
@@ -87,6 +88,7 @@ class AddSubentity(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     op: Literal["add_subentity"] = "add_subentity"
+    confidence: float | None = None       # the reviewer's confidence in this change, 0..1; None: the event's
     entity: str                           # entity id or temp id
     temp_id: str                          # "new:<entity_id>.<slug>"
     name: str
@@ -103,6 +105,7 @@ class ObserveValue(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     op: Literal["observe_value"] = "observe_value"
+    confidence: float | None = None       # the reviewer's confidence in this change, 0..1; None: the event's
     target: TargetSpec
     value: float                          # native units
     noise_sd: float | None = None         # standardized units; None uses the subentity's obs_noise
@@ -113,6 +116,7 @@ class ChangeValue(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     op: Literal["change_value"] = "change_value"
+    confidence: float | None = None       # the reviewer's confidence in this change, 0..1; None: the event's
     target: TargetSpec
     delta: float
     delta_sd: float = 0.0                 # uncertainty about the change, same units as delta
@@ -134,6 +138,7 @@ class AddInteraction(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     op: Literal["add_interaction"] = "add_interaction"
+    confidence: float | None = None       # the reviewer's confidence in this change, 0..1; None: the event's
     source: TargetSpec
     target: TargetSpec
     label: str
@@ -146,12 +151,14 @@ class AddInteraction(BaseModel):
     reverse: Optional[EdgeDynamics] = None    # for BIDIRECTIONAL
     existence: Optional[Beta] = None
     parameters: list[ParameterBinding] = []
+    hedge: str | None = None              # a soft interaction of a fuzzy end's hedge: the hedge's key (Oct 8)
 
 
 class ReweightInteraction(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     op: Literal["reweight_interaction"] = "reweight_interaction"
+    confidence: float | None = None       # the reviewer's confidence in this change, 0..1; None: the event's
     interaction_id: str
     supports: bool                        # True: evidence for the relation; False: against it
     strength: float = 0.5
@@ -161,6 +168,7 @@ class AnnotateInteraction(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     op: Literal["annotate_interaction"] = "annotate_interaction"
+    confidence: float | None = None       # the reviewer's confidence in this change, 0..1; None: the event's
     interaction_id: str
     note: str
     valid_from: datetime
@@ -171,6 +179,7 @@ class ProposeHypothesis(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     op: Literal["propose_hypothesis"] = "propose_hypothesis"
+    confidence: float | None = None       # the reviewer's confidence in this change, 0..1; None: the event's
     hypothesis: Hypothesis
 
 
@@ -178,6 +187,7 @@ class ProposeSuperentity(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     op: Literal["propose_superentity"] = "propose_superentity"
+    confidence: float | None = None       # the reviewer's confidence in this change, 0..1; None: the event's
     pattern: SuperentityPattern
     bindings: dict[str, str] = {}
 
@@ -186,18 +196,46 @@ class DissolveSuperentity(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     op: Literal["dissolve_superentity"] = "dissolve_superentity"
+    confidence: float | None = None       # the reviewer's confidence in this change, 0..1; None: the event's
     pattern_id: str
+    reason: str
+
+
+class RetireInteraction(BaseModel):
+    """Delete an interaction from the current graph (restructure). Like `git rm`: it leaves the active
+    graph and the forecasts, and the ledger keeps its whole history."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    op: Literal["retire_interaction"] = "retire_interaction"
+    confidence: float | None = None       # the reviewer's confidence in this change, 0..1; None: the event's
+    interaction_id: str
+    reason: str
+
+
+class RetireEntity(BaseModel):
+    """Delete an entity (a node) from the current graph, with its subentities; every interaction that
+    touches them is retired, and superentity instances that bound it dissolve (restructure). Its own
+    long-term memory stays: the model remembers what it learned about the entity."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    op: Literal["retire_entity"] = "retire_entity"
+    confidence: float | None = None       # the reviewer's confidence in this change, 0..1; None: the event's
+    entity_id: str
     reason: str
 
 
 GraphOp = Annotated[
     Union[AddEntity, AddSubentity, ObserveValue, ChangeValue, AddInteraction, ReweightInteraction,
-          AnnotateInteraction, ProposeHypothesis, ProposeSuperentity, DissolveSuperentity],
+          AnnotateInteraction, ProposeHypothesis, ProposeSuperentity, DissolveSuperentity,
+          RetireInteraction, RetireEntity],
     Field(discriminator="op"),
 ]
 GRAPH_OP_ADAPTER: TypeAdapter = TypeAdapter(GraphOp)
 
-STRUCTURAL_OPS = frozenset({"add_entity", "add_subentity", "add_interaction"})
+STRUCTURAL_OPS = frozenset({"add_entity", "add_subentity", "add_interaction", "retire_interaction",
+                            "retire_entity"})
 
 
 def op_ends(op: Any) -> list[tuple[str, ConcreteTarget | AbstractTarget]]:
@@ -226,13 +264,21 @@ class GraphUpdateEvent(BaseModel):
     evidence: list[Evidence] = []
     market_event_id: str | None = None
     produced_by: str                       # translator name, "human", or "engine"
-    confidence: float = 1.0
+    confidence: float = 1.0                # the translator's own confidence
+    user_confidence: float = 1.0           # the reviewer's confidence in the article's changes (Oct 8), 0..1
+    ripple: dict[str, float] = {}          # subentity id -> the reviewer's probability its ripple arrives (Oct 9)
     tags: list[str] = []                   # e.g. ["bank-run-like"]; copied into episodes
     mentions: list[str] = []               # text spans the refiner can match, e.g. ["chip capex"]
 
     def specificity(self) -> Specificity:
         """The lowest specificity over all target ends of all ops."""
         return min((op_specificity(op) for op in self.ops), default=Specificity.SUBENTITY)
+
+
+def op_confidence(event: GraphUpdateEvent, op: Any) -> float:
+    """The reviewer's confidence in one op: its own if set, else the event's (Oct 8). 1.0 changes nothing."""
+    c = getattr(op, "confidence", None)
+    return float(min(1.0, max(0.0, event.user_confidence if c is None else c)))
 
 
 TRANSLATOR_NAMES = frozenset({"hand_drawn", "data_feed", "template", "llm"})
@@ -256,6 +302,9 @@ def validate_event(event: GraphUpdateEvent) -> None:
             raise EventValidationError(f"{event.id}: op {i} ({op.op}) cannot come from a translator")
         if isinstance(op, ObserveValue) and event.kind == EventKind.HYPOTHETICAL:
             raise EventValidationError(f"{event.id}: hypothetical events may not contain observe_value")
+        if isinstance(op, (RetireInteraction, RetireEntity)) and event.kind == EventKind.HYPOTHETICAL:
+            raise EventValidationError(f"{event.id}: a thesis cannot retire structure; pose the interaction as "
+                                       "absent (an interaction-absent hypothesis) instead")
         if isinstance(op, AddEntity):
             if not op.temp_id.startswith(TEMP_PREFIX):
                 raise EventValidationError(f"{event.id}: add_entity temp_id must start with 'new:'")

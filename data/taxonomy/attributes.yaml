@@ -20,6 +20,7 @@ spending_flow: {parent: quantity_flow, family: lognormal}
 trade_flow: {parent: quantity_flow, family: lognormal}
 revenue_flow: {parent: quantity_flow, family: lognormal}
 production_flow: {parent: quantity_flow, family: lognormal}
+traffic_flow: {parent: quantity_flow, family: lognormal}
 capital_flow: {parent: quantity_flow, family: gaussian}
 loss_flow: {parent: quantity_flow, family: gamma}
 share: {parent: null, family: beta}

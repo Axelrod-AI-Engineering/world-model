@@ -9,24 +9,25 @@ import { store } from "../store.js";
 const KEY_MODE = "axelrod.guide.mode";
 const KEY_SEEN = "axelrod.guide.seen";
 
-const RACCOON = `<svg viewBox="0 0 52 46" width="46" height="41" aria-hidden="true">
-  <g class="ears">
-    <path d="M9 17 L5.5 4.5 L19 10.5 Z" fill="#8F8983" stroke="#3E3833" stroke-width="1.6" stroke-linejoin="round"/>
-    <path d="M43 17 L46.5 4.5 L33 10.5 Z" fill="#8F8983" stroke="#3E3833" stroke-width="1.6" stroke-linejoin="round"/>
-    <path d="M9.6 13.6 L8 7.2 L15 10.4 Z" fill="#E6C6BC"/>
-    <path d="M42.4 13.6 L44 7.2 L37 10.4 Z" fill="#E6C6BC"/>
+// a raccoon in sunglasses, after the team's sticker: flat, a few shapes, the canvas's inks
+const RACCOON = `<svg viewBox="0 0 52 48" width="46" height="42" aria-hidden="true">
+  <path d="M9.5 47.5 Q26 35.5 42.5 47.5 Z" fill="#37312D"/>
+  <path d="M12 16.5 L8.6 4.6 Q15 6.4 20.4 11.4 Z" fill="#8E8780" stroke="#2F2A25" stroke-width="1.4" stroke-linejoin="round"/>
+  <path d="M40 16.5 L43.4 4.6 Q37 6.4 31.6 11.4 Z" fill="#8E8780" stroke="#2F2A25" stroke-width="1.4" stroke-linejoin="round"/>
+  <path d="M12.6 13.2 L11.1 7.9 L16.4 10.8 Z" fill="#EFE3D7"/>
+  <path d="M39.4 13.2 L40.9 7.9 L35.6 10.8 Z" fill="#EFE3D7"/>
+  <path d="M26 9.2 C37.2 9.2 45.2 16.3 45.6 25.2 C46 33.6 38.8 41.4 26 41.9 C13.2 41.4 6 33.6 6.4 25.2 C6.8 16.3 14.8 9.2 26 9.2 Z" fill="#A49D95" stroke="#2F2A25" stroke-width="1.4"/>
+  <path d="M26 11.2 Q24.4 15.6 25.1 18.8 Q26 19.8 26.9 18.8 Q27.6 15.6 26 11.2 Z" fill="#857D76"/>
+  <path d="M9.4 26.4 Q26 15.6 42.6 26.4 Q40.6 38.6 26 40.8 Q11.4 38.6 9.4 26.4 Z" fill="#F4F0E8"/>
+  <path d="M7.6 25.2 Q15.2 18.6 26 23.2 Q36.8 18.6 44.4 25.2 Q41 31.2 33 30.4 Q26 28.2 19 30.4 Q11 31.2 7.6 25.2 Z" fill="#2F2A25"/>
+  <g class="shades">
+    <rect x="11.6" y="21.4" width="11.8" height="7.2" rx="3.2" fill="#E8643B" stroke="#2F2A25" stroke-width="1.2"/>
+    <rect x="28.6" y="21.4" width="11.8" height="7.2" rx="3.2" fill="#E8643B" stroke="#2F2A25" stroke-width="1.2"/>
+    <path d="M23.4 24 Q26 22.4 28.6 24" stroke="#2F2A25" stroke-width="1.3" fill="none"/>
+    <path class="glint" d="M13.8 23.4 L17.4 23.4 M30.8 23.4 L34.4 23.4" stroke="#FFE0D2" stroke-width="1.1" stroke-linecap="round"/>
   </g>
-  <ellipse cx="26" cy="27" rx="19.5" ry="16" fill="#A8A29B" stroke="#3E3833" stroke-width="1.6"/>
-  <path d="M10.5 26 Q26 14.5 41.5 26 Q39.5 40.5 26 43 Q12.5 40.5 10.5 26 Z" fill="#F5F1EA"/>
-  <path d="M7.5 24 Q16.5 16 26 22.5 Q35.5 16 44.5 24 Q41 31.5 33 30.5 Q26 27 19 30.5 Q11 31.5 7.5 24 Z" fill="#37322E"/>
-  <g class="eyes">
-    <circle cx="18" cy="24.5" r="2.9" fill="#fff"/><circle cx="18.6" cy="24.8" r="1.7" fill="#1E1A17"/>
-    <circle cx="34" cy="24.5" r="2.9" fill="#fff"/><circle cx="33.4" cy="24.8" r="1.7" fill="#1E1A17"/>
-    <circle cx="19.2" cy="24" r="0.55" fill="#fff"/><circle cx="34" cy="24" r="0.55" fill="#fff"/>
-  </g>
-  <ellipse cx="26" cy="33.5" rx="2.9" ry="2.1" fill="#2A2522"/>
-  <path d="M26 35.6 Q23.8 38.4 21.6 37.2 M26 35.6 Q28.2 38.4 30.4 37.2" stroke="#2A2522" stroke-width="1.2" fill="none" stroke-linecap="round"/>
-  <ellipse cx="14.5" cy="33" rx="2.4" ry="1.3" fill="#EBB7AE" opacity="0.7"/><ellipse cx="37.5" cy="33" rx="2.4" ry="1.3" fill="#EBB7AE" opacity="0.7"/>
+  <ellipse cx="26" cy="33.8" rx="2.7" ry="1.9" fill="#2A2522"/>
+  <path d="M26 35.6 Q24.4 37.6 22.6 36.8 M26 35.6 Q27.6 37.6 29.4 36.8" stroke="#2A2522" stroke-width="1.1" fill="none" stroke-linecap="round"/>
 </svg>`;
 
 function load(key, fallback) {
@@ -115,7 +116,7 @@ export class Guide {
     this.bubble.classList.add("pop");
     if (!wait) return;
     const speed = store.settings.speed || 1;
-    const read = ms ?? Math.max(1400, Math.min(4000, 800 + 27 * text.length)) / speed;
+    const read = ms ?? Math.max(900, Math.min(2600, 450 + 17 * text.length)) / speed;
     await new Promise((resolve) => {
       const timer = setTimeout(resolve, store.settings.reducedMotion ? Math.min(read, 1200) : read);
       this.skip = () => { clearTimeout(timer); resolve(); };
@@ -133,7 +134,7 @@ export class Guide {
     if (text) await this.say(text, target);
     const cam = this.run.camera;
     this.stop();
-    if (cam) this.renderer.zoom?.set(cam, store.settings.reducedMotion ? 0 : 600);
+    if (cam) this.renderer.zoom?.set(cam, store.settings.reducedMotion ? 0 : 320);
   }
 
   stop() {
@@ -142,7 +143,7 @@ export class Guide {
     this.spot(null);
     document.body.classList.remove("guided");
     this.el.classList.add("leaving");
-    setTimeout(() => { if (!this.run) this.el.classList.add("hidden"); }, 380);
+    setTimeout(() => { if (!this.run) this.el.classList.add("hidden"); }, 220);
   }
 
   // -- placement ----------------------------------------------------------------------------------------
@@ -195,7 +196,7 @@ export class Guide {
     const mx = (from.x + x) / 2;
     const my = Math.min(from.y, y) - Math.min(70, 20 + Math.hypot(x - from.x, y - from.y) * 0.15);
     this.el.animate([{ transform: `translate(${from.x}px, ${from.y}px)` }, { transform: `translate(${mx}px, ${my}px)`, offset: 0.45 },
-                     { transform: to }], { duration: 620, easing: "cubic-bezier(.35,.1,.25,1)" });
+                     { transform: to }], { duration: 360, easing: "cubic-bezier(.35,.1,.25,1)" });
     this.el.style.transform = to;
     this.critter.classList.remove("land");
     void this.critter.offsetWidth;

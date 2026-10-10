@@ -1,0 +1,58 @@
+{
+  "market_event_id": "ME-15",
+  "rationale": "Hand-drawn. Suppliers of AI server memory booked large orders for the year.",
+  "spans": [
+    [
+      14,
+      46,
+      0
+    ]
+  ],
+  "events": [
+    {
+      "id": "GUE-ME15",
+      "kind": "real",
+      "event_type": "supply_deal",
+      "occurred_at": "2026-03-16T15:00:00Z",
+      "recorded_at": "2026-03-16T15:00:00Z",
+      "produced_by": "hand_drawn",
+      "confidence": 0.85,
+      "market_event_id": "ME-15",
+      "evidence": [
+        {
+          "id": "EV-ME15",
+          "source_type": "news",
+          "excerpt": "Memory makers win high-bandwidth memory orders from cloud providers",
+          "observed_at": "2026-03-16T15:00:00Z",
+          "strength": 0.6,
+          "market_event_id": "ME-15"
+        }
+      ],
+      "ops": [
+        {
+          "op": "change_value",
+          "target": {
+            "kind": "concrete",
+            "subentity_id": "samsung.memory_revenue"
+          },
+          "delta": 1.0,
+          "mode": "standardized",
+          "persistence": "step",
+          "at": "2026-03-16T15:00:00Z"
+        },
+        {
+          "op": "reweight_interaction",
+          "interaction_id": "e69",
+          "supports": true,
+          "strength": 0.4
+        }
+      ],
+      "mentions": [
+        "memory makers",
+        "high-bandwidth memory",
+        "cloud providers"
+      ],
+      "tags": []
+    }
+  ]
+}

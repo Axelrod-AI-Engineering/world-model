@@ -2,7 +2,7 @@
 // for hypothetical ones. Widths follow the least specific end: generalization 28, entity 14, subentity 4.
 /* global d3 */
 
-export const RIBBON_WIDTH = { generalization: 28, entity: 14, subentity: 4 };
+export const RIBBON_WIDTH = { generalization: 10, entity: 6, subentity: 2.5 };
 
 export function prettyNode(ref) {
   if (!ref) return "?";
@@ -12,13 +12,39 @@ export function prettyNode(ref) {
 }
 
 // Normalize server fuzzy views and live translation ops into ribbon items.
+// DECISION (Oct 8): a hedged fuzzy end fans out: one ribbon per candidate, as wide as it is probable, and a faint one
+// to its kind for the share kept for a candidate not in the graph yet. A hedge drawn as soft interactions shows
+// those as edges, so only its open share is a ribbon here.
 export function ribbonItems(view, liveOps) {
   const items = [];
   for (const f of view?.fuzzy ?? []) {
     const ends = {};
     for (const name of ["source", "target", "subject"]) if (f[name]) ends[name] = f[name];
-    items.push({ key: `srv:${f.pending_id}:${f.proposal_id ?? ""}`, ends, label: f.label, relation: f.relation,
-                 hyp: f.kind === "hypothetical", pending: f.status === "pending", proposed: f.status === "proposed" });
+    const base = { label: f.label, relation: f.relation, hyp: f.kind === "hypothetical", pending: f.status === "pending",
+                   proposed: f.status === "proposed" };
+    const h = f.hedge;
+    if (!h?.candidates?.length) {
+      items.push({ key: `srv:${f.pending_id}:${f.proposal_id ?? ""}`, ends, ...base });
+      continue;
+    }
+    for (const c of h.candidates) {
+      if (h.soft && c.id !== "__open__") continue;
+      // the open share points at the end's generalization; with no real one (the root), it is told in the review only
+      if (c.id === "__open__" && !Object.values(ends).some((e) => e.level === "generalization" && e.ref && !/root$/.test(e.ref))) continue;
+      const e2 = { ...ends };
+      if (c.id === "__open__") {
+        // the open share gathers around the candidates it competes with ("another airline" beside the airlines)
+        const near = h.candidates.filter((x) => x.id !== "__open__").flatMap((x) => x.id.split("|")).map((r) => r.split(".")[0]);
+        for (const end of h.ends) if (e2[end]?.level === "generalization") e2[end] = { ...e2[end], candidates: near };
+      } else {
+        c.id.split("|").forEach((ref, k) => {
+          const end = h.ends[k];
+          if (e2[end]) e2[end] = { ...e2[end], ref, level: ref.includes(".") ? "subentity" : "entity" };
+        });
+      }
+      items.push({ key: `srv:${f.pending_id}:${f.proposal_id ?? ""}:${c.id}`, ends: e2, ...base, weight: c.p,
+                   share: `${Math.round(100 * c.p)}%${c.id === "__open__" ? " not in the graph yet" : ""}`, open: c.id === "__open__" });
+    }
   }
   for (const o of liveOps?.values() ?? []) {
     const ends = o.ends ?? {};
@@ -31,8 +57,8 @@ export function ribbonItems(view, liveOps) {
 }
 
 function widthOf(ends) {
-  let w = 4;
-  for (const e of Object.values(ends)) w = Math.max(w, RIBBON_WIDTH[e.level] ?? 14);
+  let w = 2.5;
+  for (const e of Object.values(ends)) w = Math.max(w, RIBBON_WIDTH[e.level] ?? 6);
   return w;
 }
 
@@ -42,11 +68,11 @@ export function drawRibbons(layer, items, anchor, colors, { animate = true, dura
     const names = Object.keys(it.ends);
     const a = anchor(it.ends[names.includes("source") ? "source" : names[0]]);
     const b = names.includes("target") ? anchor(it.ends.target) : null;
-    return { ...it, a, b, width: widthOf(it.ends) };
+    return { ...it, a, b, width: widthOf(it.ends) * (it.weight == null ? 1 : 0.35 + 0.65 * it.weight) };
   }).filter((d) => d.a);
-  const color = (d) => (d.hyp ? colors.hyp : colors.real);
+  const color = (d) => (d.hyp ? colors.hyp : colors.fuzzy ?? colors.real);
   const g = layer.selectAll("g.ribbon").data(data, (d) => d.key);
-  g.exit().transition().duration(animate ? 400 : 0).style("opacity", 0).remove();
+  g.exit().transition().duration(animate ? 200 : 0).style("opacity", 0).remove();
   const enter = g.enter().append("g").attr("class", "ribbon").style("opacity", 0);
   enter.append("path").attr("class", "fuzzy-blob");
   enter.append("path").attr("class", "fuzzy-blob-b");
@@ -54,13 +80,13 @@ export function drawRibbons(layer, items, anchor, colors, { animate = true, dura
   enter.append("text").attr("class", "fuzzy-label");
   enter.append("g").attr("class", "badge-g");
   const all = enter.merge(g);
-  all.transition().duration(animate ? 300 : 0).style("opacity", 1);
+  all.transition().duration(animate ? 160 : 0).style("opacity", 1);
   const blobPath = (blob) => (blob && blob.length >= 3
     ? d3.line().curve(d3.curveCatmullRomClosed.alpha(0.5))(blob) : null);
-  all.select("path.fuzzy-blob").attr("fill", (d) => (d.hyp ? colors.hypFill : colors.realFill))
+  all.select("path.fuzzy-blob").attr("fill", (d) => (d.hyp ? colors.hypFill : colors.fuzzyFill ?? colors.realFill))
     .attr("stroke", color).attr("d", (d) => blobPath(d.a.blob));
   all.select("path.fuzzy-blob-b").attr("class", "fuzzy-blob fuzzy-blob-b")
-    .attr("fill", (d) => (d.hyp ? colors.hypFill : colors.realFill)).attr("stroke", color)
+    .attr("fill", (d) => (d.hyp ? colors.hypFill : colors.fuzzyFill ?? colors.realFill)).attr("stroke", color)
     .attr("d", (d) => blobPath(d.b?.blob));
   const ribbon = all.select("path.fuzzy-ribbon").attr("stroke", color)
     .attr("d", (d) => {
@@ -70,14 +96,15 @@ export function drawRibbons(layer, items, anchor, colors, { animate = true, dura
       return `M${d.a.x} ${d.a.y}Q${mx} ${my} ${d.b.x} ${d.b.y}`;
     });
   (animate ? ribbon.transition().duration(duration) : ribbon).attr("stroke-width", (d) => d.width);
-  all.select("text.fuzzy-label").attr("fill", (d) => (d.hyp ? colors.hypInk : colors.realInk))
+  all.select("text.fuzzy-label").attr("fill", (d) => (d.hyp ? colors.hypInk : colors.fuzzyInk ?? colors.realInk))
     .attr("x", (d) => (d.b ? (d.a.x + d.b.x) / 2 : d.a.x + 18))
     .attr("y", (d) => (d.b ? (d.a.y + d.b.y) / 2 - 22 : d.a.y - 18))
     .attr("text-anchor", "middle")
     .text((d) => {
       const gen = Object.values(d.ends).find((e) => e.level === "generalization");
       const tag = d.pending ? " · fuzzy" : d.proposed ? " · awaiting review" : "";
-      return `${d.label ? d.label.slice(0, 48) : ""}${gen ? ` (${prettyNode(gen.ref)})` : ""}${tag}`;
+      if (d.open) return `≈ ${d.share}${gen ? `: another ${prettyNode(gen.ref).toLowerCase()}` : ""}`;
+      return `${d.share ? `≈ ${d.share} · ` : ""}${d.label ? d.label.slice(0, 48) : ""}${gen ? ` (${prettyNode(gen.ref)})` : ""}${tag}`;
     });
   return all;
 }
@@ -88,10 +115,10 @@ export function flashCandidates(layer, candidates, position, duration = 700) {
     .map(([id, score]) => ({ id, score, p: position(id) })).filter((d) => d.p);
   const g = layer.append("g").attr("class", "cand-flash");
   g.selectAll("text").data(pts).join("text").attr("x", (d) => d.p.x).attr("y", (d) => d.p.y - 20)
-    .attr("text-anchor", "middle").attr("font-size", 11).attr("font-weight", 700).attr("fill", "#4A3590")
+    .attr("text-anchor", "middle").attr("font-size", 10).attr("font-weight", 600).attr("fill", "#665E54")
     .text((d) => (d.score == null ? "" : d.score.toFixed(2)));
   g.selectAll("circle").data(pts).join("circle").attr("cx", (d) => d.p.x).attr("cy", (d) => d.p.y).attr("r", 10)
-    .attr("fill", "none").attr("stroke", "#7C64C4").attr("stroke-width", 2)
-    .transition().duration(duration).attr("r", 34).style("opacity", 0);
+    .attr("fill", "none").attr("stroke", "#A69C8E").attr("stroke-width", 1.2)
+    .transition().duration(duration).attr("r", 20).style("opacity", 0);
   g.transition().delay(duration).duration(250).style("opacity", 0).remove();
 }

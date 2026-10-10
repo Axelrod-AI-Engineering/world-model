@@ -7,7 +7,7 @@ from typing import ClassVar
 
 from pydantic import BaseModel, ConfigDict
 
-from axelrod_wm.core.distributions import DistSummary
+from axelrod_wm.model.distributions import DistSummary
 
 
 class DecisionObservation(BaseModel):

@@ -48,7 +48,7 @@ export function initUpdate({ openModal, toast, startDraw, openReview, showReport
           <select id="up-kind">${Object.entries(KIND_LABEL).map(([k, v]) => `<option value="${k}" ${k === "analyst" ? "selected" : ""}>${v}</option>`).join("")}</select>
           <label for="up-pub">Published</label><input id="up-pub" type="datetime-local" title="optional; inside the window">
         </div>
-        <div class="row" style="margin-top:8px"><button id="up-attach">Attach</button>
+        <div class="row" style="margin-top:8px"><button id="up-attach" title="Attach this item to the update; you can attach several">Attach</button>
           <button id="up-draw" title="Draw an edge on the canvas and attach it to this update">Draw an edge…</button></div>
         <div class="attached">${[...draft.events.map((e, i) => `<div class="item"><span class="badge">${esc(KIND_LABEL[e.kind] ?? e.kind)}</span>
             <span style="flex:1">${esc(e.headline)}</span><button class="ghost small" data-rm-ev="${i}" aria-label="Remove">✕</button></div>`),
@@ -85,7 +85,7 @@ export function initUpdate({ openModal, toast, startDraw, openReview, showReport
                        user_graph_update_events: draft.drawn };
         try {
           const run = await api.requestUpdate(body);
-          toast(`Update ${run.id} started: ${run.first_day} to ${run.last_day}.`);
+          toast(`Updating to ${fmtDay(run.last_day)}…`);
           draft = { events: [], drawn: [], until: null, sources: null };
           close();
         } catch (err) {
@@ -98,7 +98,8 @@ export function initUpdate({ openModal, toast, startDraw, openReview, showReport
   // -- the strip ---------------------------------------------------------------------------------
   function renderStrip() {
     const u = store.updates.get(store.activeUpdate) ?? null;
-    const showing = !!u && ["collecting", "running", "awaiting_review"].includes(u.state);
+    // the tutorial runs one example at a time and opens Review itself, so it needs no strip
+    const showing = !!u && ["collecting", "running", "awaiting_review"].includes(u.state) && !store.status?.examples;
     strip.classList.toggle("hidden", !showing);
     document.body.classList.toggle("strip", showing);
     if (!showing) { strip.innerHTML = ""; return; }
@@ -108,9 +109,9 @@ export function initUpdate({ openModal, toast, startDraw, openReview, showReport
     const collected = Object.values(u.collected ?? {}).reduce((a, b) => a + b, 0);
     strip.classList.toggle("awaiting", u.state === "awaiting_review");
     strip.innerHTML = `
-      <b>Update</b><span class="id">${esc(u.id)}</span>
-      <span class="stage ${u.state === "collecting" ? "now" : "done"}">collecting${collected ? ` (${collected} new)` : ""}</span>
-      <span class="stage ${u.state === "running" ? "now" : u.state === "awaiting_review" ? "done" : ""}">day ${n} of ${days}${u.current ? ` · ${esc(fmtDate(u.current))}` : ""}</span>
+      <b>Updating to ${esc(fmtDay(u.last))}</b>
+      <span class="stage ${u.state === "collecting" ? "now" : "done"}">collecting${collected ? ` ${collected} new` : ""}</span>
+      <span class="stage ${u.state === "running" ? "now" : u.state === "awaiting_review" ? "done" : ""}">day ${n} of ${days}${u.current ? ` · ${esc(fmtDay(u.current))}` : ""}</span>
       ${u.state === "awaiting_review" ? `<span class="stage now">awaiting review (${pending})</span>` : ""}
       <div class="bar" aria-hidden="true"><div style="width:${Math.round((100 * (u.done ?? 0)) / days)}%"></div></div>
       <span class="spacer"></span>
@@ -120,7 +121,7 @@ export function initUpdate({ openModal, toast, startDraw, openReview, showReport
     strip.querySelector("#us-cancel").addEventListener("click", async () => {
       try {
         await api.cancelUpdate(u.id);
-        toast(`Update ${u.id} cancelled after its current day.`);
+        toast("The update stops after its current day.");
       } catch (err) { toast(errorText(err), "err"); }
     });
   }
@@ -134,7 +135,14 @@ export function initUpdate({ openModal, toast, startDraw, openReview, showReport
     if (store.booting) return;
     if (u.state === "failed") { toast(`Update ${u.id} failed: ${u.error ?? ""}`, "err"); return; }
     if (u.requestedBy === "init") return;
-    try { showReport(await api.update(u.id)); } catch { /* the report is in the trace too */ }
+    let run = null;
+    try { run = await api.update(u.id); } catch { return; }
+    const r = run.report ?? {};
+    const n = Object.values(r.collected ?? {}).reduce((a, b) => a + b, 0);
+    const top = (r.biggest_moves ?? [])[0];
+    const move = top ? ` · biggest move: ${subLabel(top[0]).split(" · ")[0]} ${top[1] > 0 ? "▲" : "▼"} ${Math.abs(top[1]).toFixed(1)} sd` : "";
+    // the tutorial says what each example did in its review; an update toast there is noise
+    if (!store.status?.examples) toast(`Updated to ${fmtDay(run.last_day)}: ${n} new${move}`, "real", { label: "Report", run: () => showReport(run) });
   });
   on("status", (st) => {
     // a page opened mid-run learns about the run from the status
@@ -150,6 +158,13 @@ export function initUpdate({ openModal, toast, startDraw, openReview, showReport
   return { open, renderStrip };
 }
 
+// "Wed 28 Jan" for a date like 2026-01-28
+function fmtDay(iso) {
+  if (!iso) return "";
+  const d = new Date(`${String(iso).slice(0, 10)}T12:00:00Z`);
+  return d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
+}
+
 function subLabel(sid) {
   const s = store.view?.subentities.find((x) => x.id === sid);
   const e = s && store.view.entities.find((x) => x.id === s.entity_id);
@@ -163,8 +178,8 @@ export function reportView(run) {
   const collected = Object.entries(r.collected ?? {});
   const stat = (n, label) => `<div class="stat"><b>${n}</b><span>${label}</span></div>`;
   return `
-    <div class="group-label">Update report</div>
-    <h3>${esc(run.id)}</h3>
+    <div class="group-label">Update report · ${esc(run.id)}</div>
+    <h3>Update to ${esc(fmtDay(run.last_day))}</h3>
     <p class="lede">${esc(fmtDate(run.first_day))} to ${esc(fmtDate(run.last_day))} · ${r.days} day${r.days === 1 ? "" : "s"} ·
       version v${r.version_before} → v${r.version_after}</p>
     <div class="report-grid">

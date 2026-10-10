@@ -16,6 +16,31 @@ export function textWidth(text, font = "600 13px Instrument Sans") {
   return measureCtx.measureText(text).width;
 }
 
+// An open entity's rows read without the words they all start with ("Delta jet fuel cost" reads "Jet fuel
+// cost"), so similar entities' rows line up word for word. Every row keeps at least one word.
+export function rowLabels(subs) {
+  const words = subs.map((s) => (s?.name ?? s?.id ?? "").split(" "));
+  let n = 0;
+  if (words.length > 1) {
+    while (words.every((w) => w.length > n + 1 && w[n] === words[0][n])) n += 1;
+  }
+  return new Map(subs.map((s, i) => {
+    const rest = words[i].slice(n).join(" ");
+    return [s?.id, n ? rest.charAt(0).toUpperCase() + rest.slice(1) : words[i].join(" ")];
+  }));
+}
+
+// Kin (addition): the same value in similar entities. Two subentities are kin when their kind gives both the
+// same slot ("every airline has a jet fuel cost"), or when their ids end alike inside entities of the same kind
+// (NVIDIA's and AMD's data-center revenue).
+export function kinKey(s, entById) {
+  if (!s) return null;
+  if (s.slot) return `slot:${s.slot}`;
+  const gen = entById.get(s.entity_id)?.generalization_id;
+  const tail = String(s.id).split(".").slice(1).join(".");
+  return gen && tail ? `${gen}:${tail}` : null;
+}
+
 export function truncate(text, maxW, font) {
   if (textWidth(text, font) <= maxW) return text;
   let s = text;
@@ -170,7 +195,7 @@ export function computeModel(view, groupsInfo, ui) {
     const key = `${a.box}#${a.row}>${b.box}#${b.row}`;
     let e = agg.get(key);
     if (!e) {
-      e = { key, a, b, ids: [], label: "", sig: -1, learned: true, demo: true, bidir: false, effect: 0 };
+      e = { key, a, b, ids: [], label: "", sig: -1, learned: true, demo: true, bidir: false, effect: 0, hedge: true, hedgeP: 0 };
       agg.set(key, e);
     }
     e.ids.push(l.id);
@@ -178,6 +203,9 @@ export function computeModel(view, groupsInfo, ui) {
     e.learned = e.learned && l.edge_type === "learned_causal";
     e.demo = e.demo && (l.tags ?? []).includes("demo_addition");
     e.bidir = e.bidir || l.direction === "bidirectional";
+    // a fuzzy end's soft interaction (Oct 8): the edge is hedged while every interaction in it is one
+    e.hedge = e.hedge && !!l.hedge;
+    if (l.hedge) e.hedgeP = Math.max(e.hedgeP, l.hedge_p ?? 0);
   }
   const edges = [...agg.values()];
   for (const e of edges) {

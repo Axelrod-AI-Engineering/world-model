@@ -1,0 +1,9 @@
+# The names a portfolio tracks (addition, from a portfolio manager's notes). A design partner follows a book
+# of names on a thesis of elevated rates in the US, Japan, and the euro area. Every forecast reports each
+# name here, including those the shock never reaches, so the world model works as a context layer: no
+# effect on a tracked name goes unnoticed, and a name with no path is said to have none. The book is
+# synthetic; a real one would list about 50 names.
+name: Design partner book
+description: "Names tracked on a thesis of elevated rates in the US, Japan, and the euro area (synthetic)."
+entities: [nvidia, amd, intel, tsmc, samsung, asml, tokyo_electron, ajinomoto, ibiden, microsoft, saudi_aramco,
+           exxonmobil, delta, united_airlines, jpmorgan, regional_banks, yen_carry]

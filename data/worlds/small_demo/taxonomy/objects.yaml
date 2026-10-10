@@ -1,0 +1,18 @@
+# The small demo's object taxonomy: the kinds of thing the examples create, with no members yet. A new
+# entity is sorted into the deepest kind whose signature it matches, and the kind learns from its members.
+root: gen:obj:root
+nodes:
+  - {id: gen:obj:root, name: Economic object, parent: null}
+  - {id: gen:obj:actor, name: Actor, parent: gen:obj:root, signature: {required: {kind: [agency, company, person]}}}
+  - {id: gen:obj:firm, name: Firm, parent: gen:obj:actor, signature: {required: {kind: [company]}}}
+  - {id: gen:obj:airline, name: Airline, parent: gen:obj:firm, signature: {required: {sector: [airlines]}}}
+  - {id: gen:obj:cargo_airline, name: Cargo airline, parent: gen:obj:airline, signature: {required: {business: [cargo]}}}
+  - {id: gen:obj:regional_airline, name: Regional airline, parent: gen:obj:airline, signature: {required: {business: [regional]}}}
+  - {id: gen:obj:monetary_authority, name: Monetary authority, parent: gen:obj:actor, signature: {required: {function: [monetary_policy]}}}
+  - {id: gen:obj:central_bank, name: Central bank, parent: gen:obj:monetary_authority, signature: {any_of: {attribute_kinds: [policy_rate]}}}
+  - {id: gen:obj:macro, name: Macro factor, parent: gen:obj:root, signature: {required: {kind: [macro_factor]}}}
+  - {id: gen:obj:price_level, name: Price level, parent: gen:obj:macro, signature: {any_of: {attribute_kinds: [inflation_rate]}}}
+  - {id: gen:obj:commodity, name: Commodity market, parent: gen:obj:root, signature: {any_of: {attribute_kinds: [commodity_price]}}}
+  - {id: gen:obj:configuration, name: Configuration, parent: gen:obj:root, signature: {required: {object_type: [superentity]}}}
+  - {id: gen:obj:shock_config, name: Shock configuration, parent: gen:obj:configuration}
+  - {id: gen:obj:market_config, name: Market configuration, parent: gen:obj:configuration}

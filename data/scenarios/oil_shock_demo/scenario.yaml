@@ -6,7 +6,7 @@ title: Oil shock, export controls, and a new central bank
 start: 2026-01-26
 seed: 11
 initialization:
-  construction_dir: data/construction
+  construction_dir: data/worlds/economy
   taxonomy_dir: data/taxonomy
   seeds: data/scenarios/oil_shock_demo/superentity_seeds.yaml
   layout: data/scenarios/oil_shock_demo/figure1_layout.yaml
@@ -17,6 +17,7 @@ initialization:
 world:
   truth: data/scenarios/oil_shock_demo/truth.yaml
 config_overrides: configs/demo.yaml
+checklist: true
 steps:
   - at: 2026-01-26T00:00:00Z
     caption: "The starting picture: economic ideas in eight categories (the grid) and the real actors around them, central banks, OPEC+, chipmakers, airlines, and banks, grouped into superentities. Hover anything; right-click for options."
@@ -28,7 +29,7 @@ steps:
     caption: "Update through Feb 2: OPEC+ cuts output. Oil producers gain and airlines' fuel costs jump. News that changes the graph waits for your approval."
   - at: 2026-02-09T15:00:00Z
     update: {}
-    caption: "Fuzzy to real: news about chip export controls refines step by step into a concrete new subentity, chip exports, and NVIDIA's China revenue starts to fall."
+    caption: "Fuzzy to real: news about chip export controls refines step by step into a concrete new subentity, chip exports, and NVIDIA's China sales start to fall."
   - at: 2026-02-16T12:00:00Z
     update:
       user_market_events: [ME-04]

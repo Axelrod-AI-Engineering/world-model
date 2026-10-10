@@ -1,0 +1,57 @@
+{
+  "market_event_id": "ME-17",
+  "rationale": "Hand-drawn. Majors added rigs and raised production guidance.",
+  "spans": [
+    [
+      14,
+      25,
+      0
+    ]
+  ],
+  "events": [
+    {
+      "id": "GUE-ME17",
+      "kind": "real",
+      "event_type": "supply_response",
+      "occurred_at": "2026-03-23T17:00:00Z",
+      "recorded_at": "2026-03-23T17:00:00Z",
+      "produced_by": "hand_drawn",
+      "confidence": 0.85,
+      "market_event_id": "ME-17",
+      "evidence": [
+        {
+          "id": "EV-ME17",
+          "source_type": "news",
+          "excerpt": "US oil majors lift output as prices stay high",
+          "observed_at": "2026-03-23T17:00:00Z",
+          "strength": 0.6,
+          "market_event_id": "ME-17"
+        }
+      ],
+      "ops": [
+        {
+          "op": "change_value",
+          "target": {
+            "kind": "concrete",
+            "subentity_id": "exxonmobil.production"
+          },
+          "delta": 1.0,
+          "mode": "standardized",
+          "persistence": "step",
+          "at": "2026-03-23T17:00:00Z"
+        },
+        {
+          "op": "reweight_interaction",
+          "interaction_id": "e75",
+          "supports": true,
+          "strength": 0.3
+        }
+      ],
+      "mentions": [
+        "US oil majors",
+        "output"
+      ],
+      "tags": []
+    }
+  ]
+}

@@ -54,6 +54,14 @@ entities:
   exxonmobil: [600, 575]
   delta: [816, 575]
   united_airlines: [1032, 575]
+  # the design partner's context (addition): the BoJ beside the other central banks, the carry trade above
+  # dollar FX, and the chip supply chain's Japanese tiers and Intel under the chipmakers, so the first view
+  # still fits at a readable size
+  boj: [-48, 170]
+  yen_carry: [816, 150]
+  ibiden: [1290, 575]
+  intel: [1506, 575]
+  ajinomoto: [1290, 627]
 hulls:
   S1: {rect: [74, 224, 620, 106]}
   S3: {path: "M506 224H1126V330H722V277H506Z"}

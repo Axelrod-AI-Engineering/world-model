@@ -3,24 +3,24 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict
 
-from axelrod_wm.core.distributions import DistSummary, Gaussian, from_link_moments
-from axelrod_wm.core.interaction import EdgeDynamics
-from axelrod_wm.core.taxonomy import Taxonomy, TaxonomyKind
-from axelrod_wm.engine.propagation import Channel, PropagationResult
+from axelrod_wm.dynamics.propagation import Channel, PropagationResult
 from axelrod_wm.engine.registry import registry
+from axelrod_wm.model.distributions import DistSummary, Gaussian, from_link_moments
+from axelrod_wm.model.interaction import EdgeDynamics
+from axelrod_wm.model.taxonomy import Taxonomy, TaxonomyKind
 
 if TYPE_CHECKING:
-    from axelrod_wm.control.mutator import MutationTxn
-    from axelrod_wm.engine.abduction import InductionResult
     from axelrod_wm.engine.context import ProcessContext
-    from axelrod_wm.engine.shared import ParsedEvent
     from axelrod_wm.events.graph_update import GraphUpdateEvent
     from axelrod_wm.memory.long_term import LongTermMemory
     from axelrod_wm.memory.working import WorkingMemory
+    from axelrod_wm.repo.mutator import MutationTxn
+    from axelrod_wm.shared.process import ParsedEvent
+    from axelrod_wm.shared.recognize import InductionResult
 
 
 class EventParser(ABC):
@@ -41,9 +41,22 @@ class Classification(BaseModel):
 
 
 class Classifier(ABC):
+    """Sorts an item (an entity, an interaction, a superentity pattern) down its taxonomy.
+
+    # DECISION (restructure): sorting and incorporating are separate. `classify` finds the path and gives
+    # the item its kind and inherited priors (working memory); `incorporate` adds the item to the kind and
+    # may split a crowded node (long-term memory). Working-memory learning classifies with
+    # incorporate=False and leaves incorporation to long-term learning; construction and structural
+    # changes do both at once.
+    """
+
     @abstractmethod
     def classify(self, taxonomy: TaxonomyKind, item_id: str, is_new: bool,
-                 ctx: ProcessContext, txn: MutationTxn | None) -> Classification: ...
+                 ctx: ProcessContext, txn: MutationTxn | None, *, incorporate: bool = True) -> Classification: ...
+
+    def incorporate(self, c: Classification, ctx: ProcessContext, txn: MutationTxn) -> list[str]:
+        """Add a classified item to its generalization in long-term memory. Returns new node ids."""
+        return []
 
 
 class TaxonomyGrower(ABC):
@@ -168,6 +181,7 @@ class Analysis(BaseModel):
     expected_moves: dict[str, DistSummary]               # at the horizon, |median| >= 0.1
     levels: PropagationResult | None = None              # the shocked run (levels)
     horizon_days: int = 0
+    transmission: list[Any] = []                         # material effects by order, with paths (addition)
 
 
 class Analyzer(ABC):

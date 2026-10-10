@@ -9,8 +9,14 @@
 //    (clicking one opens a read-only view of that state).
 import { api } from "../api.js";
 import { sparkline } from "../charts/sparkline.js";
+import { names } from "../names.js";
 import { on, openVersion, store } from "../store.js";
 import { esc, fmt, fmtTime } from "../util.js";
+
+// the taxonomy grower names a split by its feature ("Asset repricing (source_features=region=US)"): read it as words
+const prettyGen = (name) => String(name)
+  .replace(/\((source|target)_features=([\w-]+)=([^)]+)\)/g, (_, end, k, v) => `(${end} ${k.replace(/_/g, " ")}: ${v.replace(/_/g, " ")})`)
+  .replace(/\(([\w-]+)=([^)]+)\)/g, (_, k, v) => `(${k.replace(/_/g, " ")}: ${v.replace(/_/g, " ")})`);
 
 export function initMemory({ onSelect } = {}) {
   const drawer = document.getElementById("drawer");
@@ -57,6 +63,9 @@ export function initMemory({ onSelect } = {}) {
       if (!pats.has(p.generalization_id)) pats.set(p.generalization_id, []);
       pats.get(p.generalization_id).push(p);
     }
+    // the open node (Oct 9): every kind's reserve for a kind not seen yet, alpha / (support + alpha), as an empty leaf
+    const openLeaf = (n) => (n.open == null ? "" : `<li class="open-leaf" title="The chance that the next ${kind === "object" ? "object" : "interaction"} classified here is of a kind not seen yet">
+      <span class="toggle"></span><span class="on-dot" aria-hidden="true"></span> <span class="muted">not seen yet · ${Math.round(100 * n.open)}%</span></li>`);
     const li = (id, depth) => {
       const n = nodes.get(id);
       if (!n) return "";
@@ -65,15 +74,16 @@ export function initMemory({ onSelect } = {}) {
       const closed = toggled.has(id) ? !auto : auto;
       const ps = pats.get(id) ?? [];
       return `<li><span class="toggle" data-tog="${esc(id)}">${kids.length ? (closed ? "▸" : "▾") : ""}</span>
-        <span class="tnode ${onPath.has(id) ? "on-path" : ""}" title="${esc(id)}">${esc(n.name)}
-          <span class="badge">${fmt(n.support, 0)}</span>${n.origin === "grown" ? `<span class="badge ltm">grown</span>` : ""}</span>
+        <span class="tnode ${onPath.has(id) ? "on-path" : ""}" title="${esc(id)}">${esc(prettyGen(n.name))}
+          <span class="badge">${fmt(n.support, 0)}</span>${n.origin === "inference" ? `<span class="badge ltm" title="Split off by long-term memory">grown</span>` : ""}</span>
         ${ps.length ? `<span class="pats">${ps.map((p) => `<a href="#" class="badge ${p.status === "admitted" ? "ltm" : ""}" data-pat="${esc(p.id)}"
-          title="support ${fmt(p.support)}${p.track_record != null ? `, track record ${fmt(p.track_record)}` : ""}">${esc(p.id)} · ${esc(p.name)}${p.status === "candidate" ? " (candidate)" : ""}</a>`).join("")}</span>` : ""}
-        ${kids.length && !closed ? `<ul>${kids.map((k) => li(k, depth + 1)).join("")}</ul>` : ""}</li>`;
+          title="support ${fmt(p.support)}${p.track_record != null ? `, track record ${fmt(p.track_record)}` : ""}${p.open != null ? `; ${Math.round(100 * p.open)}% reserved for a group not seen yet` : ""}">${esc(p.id)} · ${esc(p.name)}${p.status === "candidate" ? " (candidate)" : ""}</a>`).join("")}</span>` : ""}
+        ${kids.length && !closed ? `<ul>${kids.map((k) => li(k, depth + 1)).join("")}${openLeaf(n)}</ul>` : !kids.length ? `<ul>${openLeaf(n)}</ul>` : ""}</li>`;
     };
     body.innerHTML = `<p class="small muted">${kind === "object"
       ? "Every entity and superentity is classified down this tree. Supports count what was classified; the latest classification path is highlighted. Superentities sit at the configuration they generalize to."
-      : "Every interaction is classified down this tree, from general to specific relations. New links inherit priors from where they land."}</p>
+      : "Every interaction is classified down this tree, from general to specific relations. New interactions inherit priors from where they land."}
+      Each kind ends in an empty node: the share kept for a kind not seen yet, which shrinks as the kind gathers support.</p>
       <div class="tree"><ul>${li(t.root_id, 0)}</ul></div>`;
     for (const tg of body.querySelectorAll("[data-tog]")) {
       tg.addEventListener("click", () => {
@@ -135,6 +145,7 @@ export function initMemory({ onSelect } = {}) {
   async function renderPrior() {
     const [m, vs] = await Promise.all([api.memory(), api.versions()]);
     const p = m.prior_states;
+    const nm = names();
     body.innerHTML = `<p class="small muted">${p.episodes} daily episodes (${p.non_routine_episodes} with news beyond routine data), ${p.explanations}
       stored explanations, and every state version. Recall draws analogs from the episodes.</p>
       <div class="two-col"><div>
@@ -143,7 +154,7 @@ export function initMemory({ onSelect } = {}) {
         <tbody>${p.recent_episodes.map((e) => `<tr class="${e.routine ? "" : "hl"}"><td class="mono">${esc(e.day)}</td>
           <td>${e.event_types.map(esc).join(", ") || "<span class='faint'>routine data</span>"}</td>
           <td>${e.tags.map((t) => `<span class="badge">${esc(t)}</span>`).join(" ")}</td>
-          <td class="small">${e.active_patterns.map(esc).join(", ")}</td></tr>`).join("")}</tbody></table>
+          <td class="small">${e.active_patterns.map((p) => `<span title="${esc(nm.node(p))}">${esc(p)}</span>`).join(", ")}</td></tr>`).join("")}</tbody></table>
         <h4 style="margin-top:14px">Stored explanations</h4>
         ${p.explanations_recent.map((x) => `<div class="card"><div class="meta"><span class="badge ${x.kind === "forecast" ? "hyp" : "real"}">${esc(x.kind)}</span>
           <span class="mono">${esc(x.subject)}</span></div><div class="small">${esc(x.text)}</div></div>`).join("") || "<p class='empty'>none yet</p>"}
@@ -171,5 +182,7 @@ export function initMemory({ onSelect } = {}) {
   on("memory", () => { if (isOpen()) later(400); });
   on("versions", () => { if (isOpen() && tab === "prior") later(800); });
   on("readonly", () => { if (isOpen() && tab === "prior") render(); });
-  return { setOpen, isOpen, close: () => setOpen(false) };
+  // open on one tab (the learning tasks' "Show me")
+  const openTab = (name) => { tab = name; setOpen(true); render(); };
+  return { setOpen, isOpen, openTab, close: () => setOpen(false) };
 }

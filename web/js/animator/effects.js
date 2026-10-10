@@ -21,12 +21,12 @@ const el = (sel) => ({ el: document.querySelector(sel) });
 
 // Durations at 1x, in milliseconds.
 export const DURATIONS = {
-  "update.started": 400, "scrape.result": 300, "update.collected": 500, "update.day": 150, "daily.propagated": 150,
-  "market_event.received": 600, "translate.result": 400, "refine.step": 700, "review.queued": 300,
-  "parse.created": 500, "classify.path": 450, "recall.result": 600, "induce.bound": 800, "prefill.adjusted": 300,
-  "propagation.frame": 120, "fold.posterior": 500, "fold.edge": 400, "generalize.updated": 300, "frontier.*": 500,
-  "abduce.*": 900, "isolate.networks": 700, "predict.network": 400, "couple.done": 600, "unify.scenarios": 700,
-  "forecast.ready": 800, "explain.stored": 600, "consolidation.done": 250, "update.done": 600,
+  "update.started": 200, "scrape.result": 120, "update.collected": 250, "update.day": 80, "daily.propagated": 90,
+  "market_event.received": 350, "translate.result": 240, "refine.step": 380, "review.queued": 200,
+  "parse.created": 280, "classify.path": 220, "recall.result": 320, "induce.bound": 400, "prefill.adjusted": 160,
+  "propagation.frame": 60, "fold.posterior": 280, "fold.edge": 220, "generalize.updated": 120, "frontier.*": 260,
+  "abduce.*": 450, "isolate.networks": 350, "predict.network": 160, "couple.done": 300, "unify.scenarios": 350,
+  "forecast.ready": 400, "explain.stored": 300, "consolidation.done": 120, "update.done": 300,
 };
 
 export const BATCHABLE = new Set(["fold.posterior", "fold.edge", "generalize.updated", "prefill.adjusted",
@@ -47,8 +47,7 @@ const isRoutine = (p) => p.channel === "data_feed" || p.kind === "data" || Strin
 
 const EFFECTS = {
   async "update.started"([ev], ctx) {
-    const p = ev.payload;
-    if (p.requested_by !== "init") ctx.toast?.(`Update ${p.update_id}: collecting news and data through ${p.until}.`);
+    // the update strip says what is happening; no toast on top of it
     await sleep(duration(ev.kind, ctx));
   },
   async "scrape.result"([ev], ctx) {
@@ -88,11 +87,11 @@ const EFFECTS = {
     emit("flash-inbox", ev.payload.market_event_id);
     if (ctx.guide?.active(ev.scope) && ctx.guide.run.kind === "learn") {
       const ends = (ev.payload.events ?? []).flatMap((e) => (e.ops ?? []).flatMap((o) => (o.ends ?? []).map((x) => x.ref))).filter(Boolean);
-      await ctx.guide.say(`The translator reads it as ${nOps} graph operation${nOps === 1 ? "" : "s"}. A wide band is fuzzy (“a kind of thing”); it narrows as each end becomes real.`, ends.slice(0, 6));
+      await ctx.guide.say(`The translator reads it as ${nOps} graph operation${nOps === 1 ? "" : "s"}. A wide band is a fuzzy end (a generalization); it narrows as each end becomes a real subentity.`, ends.slice(0, 6));
       return;
     }
     const routine = String(ev.payload.market_event_id ?? "").startsWith("ME-D-");
-    await sleep(routine ? 30 : duration(ev.kind, ctx, Math.max(1, nOps)));
+    await sleep(routine ? 30 : duration(ev.kind, ctx, Math.min(2, Math.max(1, nOps))));
   },
   async "refine.step"([ev], ctx) {
     const p = ev.payload;
@@ -128,8 +127,8 @@ const EFFECTS = {
     const ids = evs.map((e) => e.payload.item_id);
     const levels = Math.max(...evs.map((e) => e.payload.path?.length ?? 1));
     // interaction ids have no position on the canvas, so the renderer skips them
-    ctx.renderer.pulse(ids, css("--ltm-line"), duration(evs[0].kind, ctx, Math.min(levels, 4)));
-    await sleep(duration(evs[0].kind, ctx, Math.min(levels, 4)));
+    ctx.renderer.pulse(ids, css("--ltm-line"), duration(evs[0].kind, ctx, Math.min(levels, 2)));
+    await sleep(duration(evs[0].kind, ctx, Math.min(levels, 2)));
   },
   async "recall.result"([ev], ctx) {
     const pats = (ev.payload.patterns ?? []).slice().sort((a, b) => (b.attention ?? 0) - (a.attention ?? 0));
@@ -137,7 +136,7 @@ const EFFECTS = {
     // the recalled superentities light up one after another
     for (const p of pats.slice(0, 4)) {
       if (p.instance) ctx.renderer.flashHull(p.instance, duration(ev.kind, ctx));
-      if (run?.guided) await sleep(220);
+      if (run?.guided) await sleep(90);
     }
     if (run?.guided && pats.length) {
       await ctx.guide.say(`Memory recalls what this resembles: ${pats.slice(0, 3).map((p) => hullLabel(p.id)).join(", ")}.`,
@@ -164,7 +163,7 @@ const EFFECTS = {
       ctx.guide.say("First, a quick look at where the shock ripples through the whole graph, day by day.", run.shocked, { wait: false });
     }
     if (run?.guided) ctx.guide.note(`${run.label} · day ${p.day}`);
-    await ctx.renderer.halos(p.z ?? {}, run?.guided ? 110 : duration(ev.kind, ctx), { dotted: learn });
+    await ctx.renderer.halos(p.z ?? {}, run?.guided ? 55 : duration(ev.kind, ctx), { dotted: learn });
   },
   async "analyze.done"([ev], ctx) {
     await sleep(Math.min(400, duration("fold.posterior", ctx)));
@@ -212,7 +211,7 @@ const EFFECTS = {
     ctx.refresh?.();
     await sleep(duration("abduce.*", ctx));
   },
-  // -- forecasting (the performance task), step by step ----------------------------------------------
+  // -- forecasting (inference), step by step ----------------------------------------------
   async "thesis.posed"([ev], ctx) {
     const p = ev.payload;
     const shocked = [...new Set((p.ops ?? []).flatMap((o) => (o.ends ?? []).map((e) => e.ref)).filter(Boolean))];
@@ -223,8 +222,8 @@ const EFFECTS = {
     ctx.renderer.setOverlayGroups([]);
     if (guided) {
       ctx.guide.frame(shocked.length ? shocked : null);
-      await ctx.guide.say(`A what-if: “${p.question}” Let me show you how the model forecasts it.`, shocked);
-      await ctx.guide.say(`It starts as a hypothetical event: ${(p.ops ?? []).map((o) => o.summary).join("; ").replace(/\b([a-z][\w]*\.[a-z][\w.]*)\b/g, (m) => subName(m)) || "no shock: a baseline"}.`, shocked);
+      const shock = (p.ops ?? []).map((o) => o.summary).join("; ").replace(/\b([a-z][\w]*\.[a-z][\w.]*)\b/g, (m) => subName(m)) || "no shock: a baseline";
+      await ctx.guide.say(`“${p.question}” becomes a hypothetical event: ${shock}. Here is how the model forecasts it.`, shocked);
     }
     await ctx.renderer.pulse(shocked, css("--hyp-line"), duration("parse.created", ctx));
   },
@@ -248,16 +247,16 @@ const EFFECTS = {
       for (const n of run.nets) run.byId.set(n.id, n);
       if (run.guided) {
         ctx.guide.frame([...ents]);
-        ctx.guide.say(`It picks the networks this question touches: ${nets.length} superentities it recalled, plus a residual of other links that matter.`, [...ents], { wait: false });
+        ctx.guide.say(`It picks the ${nets.length} networks this question touches and runs each on its own first, so each one's share is clear.`, [...ents], { wait: false });
       }
       // the networks draw themselves in, one after another
       const shown = [];
       for (const n of run.nets) {
         shown.push({ key: n.key, members: n.members ?? [], color: n.color, label: n.label });
         ctx.renderer.setOverlayGroups([...shown]);
-        await sleep(run.guided ? 280 : Math.max(60, duration(ev.kind, ctx) / Math.max(4, run.nets.length)));
+        await sleep(run.guided ? 110 : Math.max(30, duration(ev.kind, ctx) / Math.max(4, run.nets.length)));
       }
-      if (run.guided) await ctx.guide.say(`Each network is run on its own first, so it is clear what each pattern contributes.`, [...ents]);
+      if (run.guided) await sleep(900);
       return;
     }
     await sleep(duration(ev.kind, ctx));
@@ -275,7 +274,7 @@ const EFFECTS = {
       if (run.guided && n) {
         const top = Object.entries(ev.payload.summaries ?? {}).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))[0];
         const lead = top ? ` By the horizon: ${subName(top[0])} ${top[1] > 0 ? "▲" : "▼"} ${Math.abs(top[1]).toFixed(2)} sd.` : "";
-        if (run.done <= 2) await ctx.guide.say(`Simulating ${run.label}, day by day along each link's delay and lag.${lead}`, n.members ?? []);
+        if (run.done === 1) await ctx.guide.say(`Simulating ${run.label}, day by day along each interaction's delay and lag.${lead}`, n.members ?? []);
         else ctx.guide.say(`Simulating ${run.done} of ${run.nets.length}: ${run.label}`, n.members ?? [], { wait: false });
       } else await sleep(duration(ev.kind, ctx));
     }
@@ -324,14 +323,14 @@ const EFFECTS = {
         // the chain in names: the shock, then the value each link on the path moves
         const links = new Map((store.view?.links ?? []).map((l) => [l.id, l]));
         const steps = [nodeName(first.shock_id), ...(first.interaction_ids ?? []).map((i) => nodeName(links.get(i)?.target ?? i))];
-        ctx.guide.say(`Why: ${steps.join(" → ")}. A comet runs along each link of the main paths.`,
+        ctx.guide.say(`Why: ${steps.join(" → ")}. A comet runs along each interaction of the main paths.`,
           [first.shock_id, first.target_id], { wait: false });
       }
       // a comet runs along each of the top paths, link by link
       for (const p of paths.slice(0, 3)) {
-        for (const iid of p.interaction_ids ?? []) await ctx.renderer.pulseLinks([iid], css("--hyp-ink"), run?.guided ? 420 : 260);
+        for (const iid of p.interaction_ids ?? []) await ctx.renderer.pulseLinks([iid], css("--hyp-ink"), run?.guided ? 180 : 140);
       }
-      if (run?.guided) await sleep(900);
+      if (run?.guided) await sleep(300);
       return;
     }
     await sleep(duration(ev.kind, ctx));
@@ -343,9 +342,8 @@ const EFFECTS = {
     await sleep(duration(ev.kind, ctx));
     if (run) {
       if (run.guided) {
-        await ctx.guide.say("The forecast is ready: fan charts for each target, on the right.", el('#right-tabs [data-tab="forecast"]'));
-        await ctx.guide.say("And a written brief, with the news that bears on it, on the left.", el("#btn-briefs"));
-        await ctx.guide.end();
+        await ctx.guide.end("Ready: fan charts on the right, and a written brief with the news behind it on the left.",
+          el('#right-tabs [data-tab="forecast"]'));
       }
       setTimeout(() => ctx.renderer.setOverlayGroups([]), 400);
       runs.delete(ev.scope);

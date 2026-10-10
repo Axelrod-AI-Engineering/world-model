@@ -304,9 +304,43 @@ def brief_view(ctl: Any, forecast_id: str) -> dict:
     caveats = list(ex.assumptions) if ex is not None else []
     caveats.append(f"Computed at state version v{fc.based_on_version} from {len(fc.scenarios)} scenario(s); "
                    f"{len(fc.networks)} network(s) were run.")
+    # a policy what-if (a held decision, or a change to a decision variable an entity memory profiles) assumes
+    # every other interaction keeps working as before
+    mems = eng.ltm.entity_memories
+
+    def is_decision(sid: str) -> bool:
+        mem = mems.get(ent_of(sid))
+        return mem is not None and sid in mem.profiles
+
+    policy = sorted({op.target.subentity_id for op in (thesis.event.ops if thesis is not None else [])
+                     if getattr(op, "op", "") == "change_value" and getattr(op.target, "subentity_id", None)
+                     and (getattr(op, "intervention", False) or is_decision(op.target.subentity_id))})
+    if policy:
+        caveats.append(f"Changing {', '.join(sub(s) for s in policy)} assumes the other interactions stay as they are "
+                       "when this policy changes. If the change alters other actors' behavior, they would not "
+                       "(the Lucas critique).")
     caveats.append("All news and data in this demo are synthetic; real company names make the graph concrete, not "
                    "claims about those companies.")
+    # how it travels (addition): effects by order, the main transmission path, and the watchlist's coverage
+    from axelrod_wm.api.views import transmission_view
+
+    tx = transmission_view(fc, eng.wm, ctl.watchlist())
+    vals = tx["values"]
+    pool = [v for v in vals if v["material"]] or vals
+    main = max(pool, key=lambda v: (v["order"], abs(v["peak"]))) if pool else None
+    travels = {"orders": tx["orders"], "path": main,
+               "path_text": (" → ".join([main["path"][0]["source"]] + [f"{h['label']} ({h['delay_days']} d) → {h['target']}"
+                                                                      for h in main["path"]])) if main and main["path"] else "",
+               "watchlist": None}
+    if tx["watchlist"]:
+        counts: dict[str, int] = {}
+        for n in tx["watchlist"]["names"]:
+            counts[n["status"]] = counts.get(n["status"], 0) + 1
+        travels["watchlist"] = {"name": tx["watchlist"]["name"], "counts": counts,
+                                "moves": [{"name": n["name"], "order": n["best"]["order"], "peak": n["best"]["peak"]}
+                                          for n in tx["watchlist"]["names"] if n["status"] == "moves"]}
     return {
+        "travels": travels,
         "forecast_id": fc.id, "thesis_id": fc.thesis_id, "question": fc.question or (thesis.question if thesis else ""),
         "posed_at": start.isoformat(), "horizon": horizon, "horizon_days": fc.horizon_days, "version": fc.based_on_version,
         "bottom_line": bottom, "effects": effects[:6],

@@ -25,16 +25,16 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 from pydantic import BaseModel, ConfigDict
 
-from axelrod_wm.core.distributions import Link, family_link, from_link, parse_distribution, to_link
-from axelrod_wm.core.temporal import kernel_days
 from axelrod_wm.engine.registry import register
 from axelrod_wm.engine.rng import make_rng
 from axelrod_wm.events.market import MarketEvent, MarketEventChannel, MarketEventKind
-from axelrod_wm.ingest.sources import MarketEventSource, in_window
+from axelrod_wm.intake.sources import MarketEventSource, in_window
+from axelrod_wm.model.distributions import Link, family_link, from_link, parse_distribution, to_link
+from axelrod_wm.model.temporal import kernel_days
 
 if TYPE_CHECKING:
-    from axelrod_wm.core.taxonomy import AttributeVocabulary
     from axelrod_wm.engine.initialize import ConstructionSpec
+    from axelrod_wm.model.taxonomy import AttributeVocabulary
 
 RELEASE_TIME = time(21, 0)
 MEETING_TIME = time(19, 0)
@@ -98,7 +98,7 @@ class _Chan:
 
 
 def default_noise(attribute_kind: str | None, vocab: AttributeVocabulary | None) -> float:
-    from axelrod_wm.core.taxonomy import default_obs_noise
+    from axelrod_wm.model.taxonomy import default_obs_noise
 
     return default_obs_noise(attribute_kind or "", vocab)
 

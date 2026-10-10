@@ -1,0 +1,12 @@
+# The production demo (Oct 8 restructure): the same chain of features as the small demo, shown in a busier system,
+# the oil-shock world after three years of synthetic history. It builds on oil_shock_demo (its world, history, and
+# init cache) and replaces the scripted steps with examples: src/axelrod_wm/sim/examples/prod.py.
+id: prod_demo
+title: "Production demo: each feature in a busier world"
+base: oil_shock_demo
+examples: prod
+start: 2026-01-26
+initialization:
+  construction_dir: data/worlds/economy
+  taxonomy_dir: data/taxonomy
+steps: []

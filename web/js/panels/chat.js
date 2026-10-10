@@ -16,7 +16,7 @@ export function initChat() {
   function render() {
     box.innerHTML = `
       <header><b>Ask about this</b><span class="faint small">${esc(context)}</span><span class="spacer"></span>
-        <button class="close" aria-label="Close the chat">✕</button></header>
+        <button class="ghost win-max-btn" data-max type="button" aria-label="Full screen" title="Full screen (or back)">⤢</button><button class="close" aria-label="Close the chat">✕</button></header>
       <div class="msgs">${thread.map((m) => `<div class="msg ${m.who}">${m.quote ? `<blockquote>${esc(m.quote)}</blockquote>` : ""}${m.text ? `<div>${esc(m.text)}</div>` : ""}</div>`).join("")}</div>
       <form class="ask"><input type="text" placeholder="Ask a follow-up question…" aria-label="Your question"><button class="primary" type="submit">Send</button></form>`;
     box.querySelector(".close").addEventListener("click", close);

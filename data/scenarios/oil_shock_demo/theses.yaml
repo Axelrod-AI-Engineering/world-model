@@ -30,6 +30,71 @@ theses:
           mode: relative
           persistence: step
           at: 2026-07-01T00:00:00Z
+  # A design partner's questions (addition, from a portfolio manager's notes): an investor tracking about 50
+  # names on a thesis of elevated rates in the US, Japan, and the euro area, with the risk that the yen carry
+  # trade unwinds if US returns fall; and the chip supply chain's second- and third-order effects from Japan's
+  # upstream tiers to TSMC and NVIDIA. The Ask tab lists them as ready-made questions.
+  # T-03 holds the three policy rates themselves (a hard intervention): "rates stay elevated", whoever sets them
+  - id: T-03
+    question: What if rates stay elevated in the US, Japan, and the euro area?
+    mode: scaffolded
+    horizon_days: 270
+    targets: [yen_carry.positioning, yen_carry.usd_jpy, asset_prices.equity_index, asset_prices.equity_volatility,
+              jpmorgan.net_interest_margin, regional_banks.share_index, asset_prices.house_prices]
+    target_groups:
+      - {kind: sector, ref: banking}
+      - {kind: entity, ref: yen_carry}
+    event:
+      kind: hypothetical
+      event_type: policy
+      occurred_at: 2026-07-01T00:00:00Z
+      ops:
+        - {op: change_value, target: {kind: concrete, subentity_id: interest_rates.us_policy_rate}, delta: 0.5,
+           mode: absolute, persistence: step, intervention: true, window_days: 270, at: 2026-07-01T00:00:00Z}
+        - {op: change_value, target: {kind: concrete, subentity_id: interest_rates.euro_policy_rate}, delta: 0.5,
+           mode: absolute, persistence: step, intervention: true, window_days: 270, at: 2026-07-01T00:00:00Z}
+        - {op: change_value, target: {kind: concrete, subentity_id: interest_rates.japan_policy_rate}, delta: 0.25,
+           mode: absolute, persistence: step, intervention: true, window_days: 270, at: 2026-07-01T00:00:00Z}
+  - id: T-04
+    question: What if US stocks fall by 15%? Does the yen carry trade unwind?
+    mode: scaffolded
+    horizon_days: 182
+    targets: [yen_carry.positioning, yen_carry.usd_jpy, asset_prices.equity_volatility, dollar_fx.em_fx_volatility,
+              financial_crises.banking_stress, regional_banks.share_index]
+    event:
+      kind: hypothetical
+      event_type: market
+      occurred_at: 2026-07-01T00:00:00Z
+      ops:
+        - {op: change_value, target: {kind: concrete, subentity_id: asset_prices.equity_index}, delta: -0.15,
+           mode: relative, persistence: step, at: 2026-07-01T00:00:00Z}
+  - id: T-05
+    question: What if a shortage cuts Japan's build-up film output by 20%?
+    mode: scaffolded
+    horizon_days: 365
+    targets: [ibiden.substrate_output, tsmc.advanced_packaging, nvidia.datacenter_revenue, amd.datacenter_revenue,
+              nvidia.share_price, tsmc.revenue]
+    target_groups:
+      - {kind: sector, ref: semiconductors}
+    event:
+      kind: hypothetical
+      event_type: supply_shock
+      occurred_at: 2026-07-01T00:00:00Z
+      ops:
+        - {op: change_value, target: {kind: concrete, subentity_id: ajinomoto.film_output}, delta: -0.2,
+           mode: relative, persistence: step, at: 2026-07-01T00:00:00Z}
+  - id: T-06
+    question: What if Intel's server CPU share jumps by 30 points?
+    mode: scaffolded
+    horizon_days: 270
+    targets: [intel.cpu_share, amd.datacenter_revenue, amd.share_price]
+    event:
+      kind: hypothetical
+      event_type: market
+      occurred_at: 2026-07-01T00:00:00Z
+      ops:
+        - {op: change_value, target: {kind: concrete, subentity_id: intel.cpu_share}, delta: 0.3,
+           mode: absolute, persistence: step, at: 2026-07-01T00:00:00Z}
 hypotheses:
   - id: H-fed-hold
     kind: entity_decision
@@ -39,3 +104,95 @@ hypotheses:
     decision_window_days: 270
     origin: human
     subject_entity_ids: [federal_reserve]
+  # The hypothesis frontier's other entries (addition): the two kinds the vision names, the presence or
+  # absence of interactions and the proposed decisions of entities. Co-movements on the correlation frontier
+  # add presence hypotheses of their own as the model notices them. `probability` is the starting belief;
+  # the scorer replaces it from an interaction's existence or an entity memory's decision record when it can.
+  # proposed decisions of entities (native units: % for policy rates, mb/d for quotas, index points for rules)
+  - id: H-fed-hike50
+    kind: entity_decision
+    statement: The Fed raises its target rate by 50 bp at its next meeting.
+    decision_subentity_id: federal_reserve.policy_stance
+    decision_change: 0.5
+    decision_window_days: 60
+    probability: 0.25
+    origin: human
+  - id: H-boj-hike
+    kind: entity_decision
+    statement: The BoJ raises its policy rate by 25 bp within 120 days.
+    decision_subentity_id: boj.policy_stance
+    decision_change: 0.25
+    decision_window_days: 120
+    probability: 0.3
+    origin: human
+  - id: H-ecb-hold
+    kind: entity_decision
+    statement: The ECB holds its deposit rate through the oil shock.
+    decision_subentity_id: ecb.policy_stance
+    decision_change: 0.0
+    decision_window_days: 270
+    probability: 0.5
+    origin: human
+  - id: H-opec-cut
+    kind: entity_decision
+    statement: OPEC+ cuts its output quota by another 1 mb/d within 90 days.
+    decision_subentity_id: opec_plus.quota
+    decision_change: -1.0
+    decision_window_days: 90
+    probability: 0.3
+    origin: human
+  - id: H-bis-tighten
+    kind: entity_decision
+    statement: US Commerce tightens its chip export rules again this quarter (+10 index points).
+    decision_subentity_id: us_commerce.chip_rule_stringency
+    decision_change: 10.0
+    decision_window_days: 90
+    probability: 0.45
+    origin: human
+  # the presence of interactions the graph does not have yet
+  - id: H-ec-samsung
+    kind: interaction_present
+    statement: Export controls cut Samsung's memory revenue.
+    source_id: legal_regulatory.export_controls
+    target_id: samsung.memory_revenue
+    probability: 0.4
+    origin: human
+  - id: H-rates-traffic
+    kind: interaction_present
+    statement: Higher US policy rates cool Delta's passenger traffic.
+    source_id: interest_rates.us_policy_rate
+    target_id: delta.passenger_traffic
+    probability: 0.3
+    origin: human
+  - id: H-oil-tsmc
+    kind: interaction_present
+    statement: Dearer energy squeezes TSMC's operating margin.
+    source_id: resources_energy.oil_price
+    target_id: tsmc.operating_margin
+    probability: 0.25
+    origin: human
+  # the absence of interactions the graph has now
+  - id: H-hedge-united
+    kind: interaction_absent
+    statement: Fuel hedging breaks the pass-through from oil to United's jet fuel cost.
+    interaction_id: d-united_airlines-oil_price-fuel_cost
+    source_id: resources_energy.oil_price
+    target_id: united_airlines.fuel_cost
+    probability: 0.2
+    origin: human
+  - id: H-oil-cpi-absent
+    kind: interaction_absent
+    statement: Oil no longer moves headline inflation, now that energy weighs less in the basket.
+    interaction_id: e08
+    source_id: resources_energy.oil_price
+    target_id: inflation.headline_cpi
+    probability: 0.1
+    origin: human
+  - id: H-yields-msft-absent
+    kind: interaction_absent
+    statement: Long-term yields no longer restrain Microsoft's AI capex.
+    interaction_id: e64
+    source_id: interest_rates.long_term_yields
+    target_id: microsoft.ai_capex
+    probability: 0.3
+    origin: human

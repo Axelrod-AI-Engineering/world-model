@@ -9,7 +9,7 @@ from typing import Any, Union
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from axelrod_wm.core.serialization import canonical_json, sha256_text
+from axelrod_wm.model.serialization import canonical_json, sha256_text
 
 
 class _Section(BaseModel):
@@ -131,6 +131,21 @@ class RefinementConfig(_Section):
     bind_margin: float = 0.15
     evidence_bonus: float = 0.2
     pending_ttl_days: float = 60
+    # hedged fuzzy ends (Oct 8): a mention binds outright only when it names one candidate; otherwise it stays a
+    # hedge, a Dirichlet posterior over its candidates plus an open-world reserve, until evidence settles it
+    hedge_prior: float = 1.0            # Dirichlet pseudo-counts spread over the candidates by their resolver scores
+    hedge_open_mass: float = 0.5        # pseudo-count kept for a candidate not in the graph yet
+    hedge_max_candidates: int = 4
+    commit_posterior: float = 0.75      # the bound a candidate must pass (with recognition-many checks) to resolve
+    mention_weight: float = 1.5         # pseudo-count a later article adds to a candidate it names (times confidence)
+    move_weight: float = 1.0            # pseudo-count a move consistent with the interaction adds (times confidence)
+    soft_edge_concentration: float = 2.0   # existence Beta strength of a hedge's soft interactions at the start
+
+
+class OpenWorldConfig(_Section):
+    """The open node every node carries (Oct 9): the probability mass the graph does not account for yet."""
+    concentration: float = 1.0          # a kind's or a superentity's pseudo-count for something not seen yet (CRP alpha)
+    prior_sd2: float = 1.0              # sd^2 of movement a value is assumed to have, all of it open, before any data
 
 
 class HypothesesConfig(_Section):
@@ -239,6 +254,7 @@ class EngineConfig(_Section):
     frontier: FrontierConfig = FrontierConfig()
     abduction: AbductionConfig = AbductionConfig()
     refinement: RefinementConfig = RefinementConfig()
+    open_world: OpenWorldConfig = OpenWorldConfig()
     hypotheses: HypothesesConfig = HypothesesConfig()
     evaluation: EvaluationConfig = EvaluationConfig()
     review: ReviewConfig = ReviewConfig()

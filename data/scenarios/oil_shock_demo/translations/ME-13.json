@@ -1,0 +1,66 @@
+{
+  "market_event_id": "ME-13",
+  "rationale": "Hand-drawn. Hyperscalers are spreading AI accelerator orders beyond the market leader.",
+  "spans": [
+    [
+      16,
+      63,
+      0
+    ]
+  ],
+  "events": [
+    {
+      "id": "GUE-ME13",
+      "kind": "real",
+      "event_type": "supply_deal",
+      "occurred_at": "2026-03-02T15:00:00Z",
+      "recorded_at": "2026-03-02T15:00:00Z",
+      "produced_by": "hand_drawn",
+      "confidence": 0.85,
+      "market_event_id": "ME-13",
+      "evidence": [
+        {
+          "id": "EV-ME13",
+          "source_type": "news",
+          "excerpt": "Cloud providers sign multiyear deals with a second GPU supplier",
+          "observed_at": "2026-03-02T15:00:00Z",
+          "strength": 0.6,
+          "market_event_id": "ME-13"
+        }
+      ],
+      "ops": [
+        {
+          "op": "add_interaction",
+          "source": {
+            "kind": "concrete",
+            "subentity_id": "microsoft.ai_capex"
+          },
+          "target": {
+            "kind": "concrete",
+            "subentity_id": "amd.datacenter_revenue"
+          },
+          "label": "buys GPUs from",
+          "polarity": 1,
+          "interaction_generalization_id": "gen:int:supply_relationship"
+        },
+        {
+          "op": "change_value",
+          "target": {
+            "kind": "concrete",
+            "subentity_id": "amd.datacenter_revenue"
+          },
+          "delta": 0.8,
+          "mode": "standardized",
+          "persistence": "step",
+          "at": "2026-03-02T15:00:00Z"
+        }
+      ],
+      "mentions": [
+        "cloud providers",
+        "GPU",
+        "supplier"
+      ],
+      "tags": []
+    }
+  ]
+}

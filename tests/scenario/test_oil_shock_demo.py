@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from axelrod_wm.control.mutator import ChangeSet, apply_changeset
-from axelrod_wm.events.ledger import LedgerKind
-from axelrod_wm.memory.snapshots import MemoryBackend, load_state, state_hash
+from axelrod_wm.repo.ledger import LedgerKind
+from axelrod_wm.repo.mutator import ChangeSet, apply_changeset
+from axelrod_wm.repo.snapshots import MemoryBackend, load_state, state_hash
 from axelrod_wm.sim.runner import build_runner
 from axelrod_wm.sim.scenario import thesis_from_spec
 
@@ -23,7 +23,7 @@ def ledger_digest(runner) -> list[tuple]:
 
 
 def state_hash_of(payload: dict) -> str:
-    from axelrod_wm.core.serialization import canonical_json, sha256_text
+    from axelrod_wm.model.serialization import canonical_json, sha256_text
 
     return sha256_text(canonical_json(payload))
 

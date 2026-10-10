@@ -1,0 +1,16 @@
+# The small demo (Oct 8 restructure): a blank canvas and a chain of examples. Each example shows one feature of the
+# framework through sample articles; it runs through learning on a staged copy and stops at the human review. Running
+# example n plays examples 1 to n - 1 first; running an earlier one rewinds to it. The examples and their articles are
+# in src/axelrod_wm/sim/examples/small.py. All data are synthetic.
+id: small_demo
+title: "Small demo: build a world model from a blank canvas"
+canvas: blank
+examples: small
+start: 2026-01-05
+seed: 7
+initialization:
+  construction_dir: data/worlds/small_demo
+  taxonomy_dir: data/worlds/small_demo/taxonomy
+  layout: data/scenarios/small_demo/layout.yaml
+config_overrides: configs/small_demo.yaml
+steps: []

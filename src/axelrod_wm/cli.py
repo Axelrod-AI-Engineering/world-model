@@ -22,7 +22,7 @@ SESSION_FILE = "session.json"
 
 def _runner(scenario: str, *, headless: bool = True, auto_approve: bool = False, seed: Optional[int] = None,
             trace: bool = True, storage=None, config: Optional[str] = None):
-    from axelrod_wm.memory.snapshots import MemoryBackend
+    from axelrod_wm.repo.snapshots import MemoryBackend
     from axelrod_wm.sim.runner import build_runner
     from axelrod_wm.trace import RecordingTracer
 
@@ -38,7 +38,7 @@ def _runner(scenario: str, *, headless: bool = True, auto_approve: bool = False,
 
 def _session_storage(config: Optional[str], scenario: str):
     from axelrod_wm.engine.config import load_config
-    from axelrod_wm.memory.snapshots import FilesBackend
+    from axelrod_wm.repo.snapshots import FilesBackend
     from axelrod_wm.sim.scenario import ScenarioScript
 
     script = ScenarioScript.load(scenario)
@@ -225,6 +225,140 @@ def evaluate(scenario: str = typer.Argument("oil_shock_demo"),
         fz = fz.replace(tzinfo=UTC)
     rep = r.controller.evaluate(EvaluationRequest(freeze_at=fz, market_event_ids=market_events, horizon_days=horizon_days))
     typer.echo(json.dumps(rep.model_dump(mode="json"), indent=2))
+
+
+# -- the flowchart, contracts, the two demos, and the log ----------------------------
+@app.command()
+def flows(svg: Optional[str] = typer.Option(None, "--svg", help="Also write the flowchart as an SVG here.")) -> None:
+    """Print the flowcharts of learning and of inference (each stage's input and output), then each stage's own
+    flowchart, step by step."""
+    from axelrod_wm.flows import INFERENCE, INFERENCE_FLOWS, STAGE_FLOWS, WORLD_MODEL
+    from axelrod_wm.flows.render import flow_markdown, render_svg
+
+    for f in (WORLD_MODEL, *STAGE_FLOWS, INFERENCE, *INFERENCE_FLOWS):
+        typer.echo(flow_markdown(f))
+    if svg:
+        Path(svg).parent.mkdir(parents=True, exist_ok=True)
+        Path(svg).write_text(render_svg(WORLD_MODEL))
+        typer.echo(f"wrote {svg}")
+
+
+@app.command()
+def contracts() -> None:
+    """Print every component's contract: process, cadence, inputs, outputs, writes, and when it runs."""
+    from axelrod_wm.engine.contracts import contracts_table
+
+    typer.echo(contracts_table())
+
+
+def _example_demo(scenario: str, example: Optional[str], port: int, host: str, headless: bool, list_only: bool,
+                  config: Optional[str]) -> None:
+    from axelrod_wm.sim.examples.session import examples_text, run_examples
+
+    if list_only or headless:
+        if list_only:
+            if scenario == "small_demo":
+                from axelrod_wm.sim.examples.small import SMALL as catalog
+            else:
+                from axelrod_wm.sim.examples.prod import PROD as catalog
+            for ex in catalog.examples:
+                more = [e.title for e in catalog.library if e.feature == ex.feature]
+                typer.echo(f"{ex.n:>2} {ex.id:<12} [{ex.memory}] {ex.title}" + (f"  (+{len(more)} more like it)" if more else ""))
+            return
+        t = time.time()
+        records, _runner = run_examples(scenario, upto=example)
+        typer.echo(examples_text(records))
+        typer.echo(f"{len(records)} examples in {time.time() - t:.1f}s")
+        return
+    import uvicorn
+
+    from axelrod_wm.api.app import create_app
+
+    where = f" at example {example}" if example else ""
+    typer.echo(f"Serving {scenario}{where} at http://{host}:{port}")
+    uvicorn.run(create_app(config, scenario, start_example=example), host=host, port=port, log_level="warning")
+
+
+@app.command("small_demo")
+def small_demo(example: Optional[str] = typer.Argument(None, help="Open at this example (its number or id): the examples "
+                                                                  "before it are played, and it waits for review."),
+               port: int = typer.Option(8765, "--port"), host: str = typer.Option("127.0.0.1", "--host"),
+               headless: bool = typer.Option(False, "--headless", help="Print each example's review in the terminal "
+                                                                        "instead (up to EXAMPLE, if given)."),
+               list_only: bool = typer.Option(False, "--list", help="List the examples and stop."),
+               config: Optional[str] = typer.Option(None, "--config")) -> None:
+    """The small demo: a blank canvas built up one feature at a time, each from a sample article."""
+    _example_demo("small_demo", example, port, host, headless, list_only, config)
+
+
+@app.command("prod_demo")
+def prod_demo(example: Optional[str] = typer.Argument(None, help="Open at this example (its number or id)."),
+              port: int = typer.Option(8765, "--port"), host: str = typer.Option("127.0.0.1", "--host"),
+              headless: bool = typer.Option(False, "--headless", help="Print each example's review in the terminal instead."),
+              list_only: bool = typer.Option(False, "--list", help="List the examples and stop."),
+              config: Optional[str] = typer.Option(None, "--config")) -> None:
+    """The production demo: the same features in the oil-shock world after three years of synthetic history."""
+    _example_demo("prod_demo", example, port, host, headless, list_only, config)
+
+
+def _session_runner(config: Optional[str]):
+    """The var/axelrod session that `axelrod init` and `axelrod update` keep, resumed read-only."""
+    path = Path("var/axelrod")
+    sess_file = path / SESSION_FILE if config is None else _session_storage(config, "oil_shock_demo")[0] / SESSION_FILE
+    if not sess_file.exists():
+        typer.echo("no session: run `axelrod init <scenario>` first", err=True)
+        raise typer.Exit(code=1)
+    session = json.loads(sess_file.read_text())
+    cfg_path = config or session.get("config")
+    _path, storage = _session_storage(cfg_path, session["scenario"])
+    r = _runner(session["scenario"], seed=session.get("seed"), trace=False, storage=storage, config=cfg_path)
+    r.resume(session)
+    return r
+
+
+@app.command("log")
+def log_cmd(limit: int = typer.Option(30, "--limit"), process: list[str] = typer.Option([], "--process"),
+            memory: Optional[str] = typer.Option(None, "--memory", help="working, long_term, or both."),
+            config: Optional[str] = typer.Option(None, "--config")) -> None:
+    """The session's commits, newest first: version, process, memory, message, and who vetted it."""
+    from axelrod_wm.repo.history import log
+
+    eng = _session_runner(config).controller.engine
+    for c in log(eng, limit=limit, processes=set(process) or None, memory=memory):
+        who = f" [{c.vetted_by}]" if c.vetted_by else ""
+        typer.echo(f"v{c.version:<6} {c.recorded_at:%Y-%m-%d %H:%M} {c.process:<16} {c.memory:<9} {c.message}{who}")
+
+
+@app.command("show")
+def show_cmd(version: int, config: Optional[str] = typer.Option(None, "--config")) -> None:
+    """One commit: its process, message, and the structure it changed."""
+    from axelrod_wm.repo.history import show
+
+    out = show(_session_runner(config).controller.engine, version)
+    if out is None:
+        typer.echo(f"no commit produced version {version}", err=True)
+        raise typer.Exit(code=1)
+    c = out["commit"]
+    typer.echo(f"v{c['version']} {c['id']} {c['process']} ({c['memory']}): {c['message']}")
+    typer.echo(f"  cause {c['cause']}; {c['total_changes']} changes; vetted by {c['vetted_by'] or '-'}")
+    for kind, verbs in c["counts"].items():
+        typer.echo(f"  {kind}: " + ", ".join(f"{n} {v}" for v, n in verbs.items()))
+    for ch in out["changes"]:
+        typer.echo(f"  {ch['action']:<8} {ch['kind']:<24} {ch['name']}")
+
+
+@app.command("diff")
+def diff_cmd(from_version: int, to_version: Optional[int] = typer.Argument(None),
+             config: Optional[str] = typer.Option(None, "--config")) -> None:
+    """What changed between two versions: commits by process and memory, and the net structural changes."""
+    from axelrod_wm.repo.history import diff
+
+    out = diff(_session_runner(config).controller.engine, from_version, to_version)
+    typer.echo(f"v{out['from_version']} -> v{out['to_version']}: {out['commits']} commits")
+    typer.echo("  by process: " + ", ".join(f"{k} {v}" for k, v in sorted(out["by_process"].items())))
+    typer.echo("  by memory: " + ", ".join(f"{k} {v}" for k, v in sorted(out["by_memory"].items())))
+    for ch in out["changes"]:
+        typer.echo(f"  {ch['action']:<8} {ch['kind']:<24} {ch['name']}")
 
 
 @app.command("export-trace")

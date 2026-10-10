@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from axelrod_wm.control.review import ProposalStatus
 from axelrod_wm.events.graph_update import Specificity
+from axelrod_wm.repo.review import ProposalStatus
 from tests.conftest import make_controller, market_event, warm_taxonomies
 
 

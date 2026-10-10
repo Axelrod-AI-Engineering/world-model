@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from axelrod_wm.control import review as _review  # noqa: F401  (review_policy)
-from axelrod_wm.core.distributions import LinkKalmanUpdater, PosteriorUpdater
 from axelrod_wm.engine.registry import registry
 from axelrod_wm.evaluation import backtest as _backtest  # noqa: F401  (scorer)
-from axelrod_wm.ingest import refiner as _refiner  # noqa: F401  (refiner)
-from axelrod_wm.ingest import resolver as _resolver  # noqa: F401  (entity_resolver)
-from axelrod_wm.ingest import translators as _translators  # noqa: F401  (translator)
-from axelrod_wm.memory.snapshots import FilesBackend, MemoryBackend, StorageBackend
+from axelrod_wm.intake import refiner as _refiner  # noqa: F401  (refiner)
+from axelrod_wm.intake import resolver as _resolver  # noqa: F401  (entity_resolver)
+from axelrod_wm.intake import translators as _translators  # noqa: F401  (translator)
+from axelrod_wm.model.distributions import LinkKalmanUpdater, PosteriorUpdater
+from axelrod_wm.repo import review as _review  # noqa: F401  (review_policy)
+from axelrod_wm.repo.snapshots import FilesBackend, MemoryBackend, StorageBackend
 
 _pu = registry("posterior_updater", PosteriorUpdater)
 if "link_kalman" not in _pu.names():

@@ -11,11 +11,11 @@ from typing import TYPE_CHECKING
 from pydantic import BaseModel, ConfigDict
 
 if TYPE_CHECKING:
-    from axelrod_wm.control.mutator import MutationTxn
     from axelrod_wm.engine.context import ProcessContext
-    from axelrod_wm.engine.learning import FoldResult
+    from axelrod_wm.learning.fold import FoldResult
     from axelrod_wm.memory.long_term import LongTermMemory
     from axelrod_wm.memory.working import WorkingMemory
+    from axelrod_wm.repo.mutator import MutationTxn
 
 
 class CoMovementStatus(StrEnum):
@@ -93,6 +93,8 @@ class CoMovement(BaseModel):
     hypothesis_id: str | None = None
     proposal_id: str | None = None
     verified_days: list[int] = []            # day indices of counted verifications (the last 20)
+    passed_days: list[int] = []              # day indices of the checks it passed (the last 20; Oct 9)
+    logged_day: int | None = None            # the day it was first seen (not a check)
 
 
 def pair_key(a: str, b: str) -> str:
@@ -158,11 +160,17 @@ def comovement_pair(dev, earlier: str, later: str, lag: int, day: int, width: in
 
 def backfilled(co: CoMovement, dev, day: int, width: int, backfill_days: int) -> CoMovement:
     """A copy of `co` with corr and response filled with one pair every `width` days (non-overlapping
-    windows) over the last `backfill_days` before `day`."""
+    windows) over the last `backfill_days` before `day`. A window is skipped unless the later subentity was
+    observed in it after its first report: with no report, an innovation of 0 means "not measured", not "did
+    not move"; and a first report only sets the level, against a prior too vague to be surprised."""
     out = co.model_copy(deep=True)
     width = max(1, int(width))
     days = list(range(day - width, day - int(backfill_days) - 1, -width))[::-1]
+    seen = dev.observed_days(co.later_id, day - int(backfill_days) - width, day)
+    first = seen[0] if seen else None
     for d in days:
+        if not any(d - width < s <= d and s != first for s in seen):
+            continue
         x, y, r = comovement_pair(dev, co.earlier_id, co.later_id, co.lag_days, d, width)
         if x == 0.0 and y == 0.0 and r == 0.0:
             continue

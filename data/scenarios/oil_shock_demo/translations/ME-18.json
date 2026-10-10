@@ -1,0 +1,58 @@
+{
+  "market_event_id": "ME-18",
+  "rationale": "Hand-drawn. Carriers locked in more of this year's fuel at current prices.",
+  "spans": [
+    [
+      9,
+      27,
+      2
+    ]
+  ],
+  "events": [
+    {
+      "id": "GUE-ME18",
+      "kind": "real",
+      "event_type": "hedging",
+      "occurred_at": "2026-03-23T18:00:00Z",
+      "recorded_at": "2026-03-23T18:00:00Z",
+      "produced_by": "hand_drawn",
+      "confidence": 0.85,
+      "market_event_id": "ME-18",
+      "evidence": [
+        {
+          "id": "EV-ME18",
+          "source_type": "news",
+          "excerpt": "Airlines extend fuel hedges through the rest of 2026",
+          "observed_at": "2026-03-23T18:00:00Z",
+          "strength": 0.6,
+          "market_event_id": "ME-18"
+        }
+      ],
+      "ops": [
+        {
+          "op": "annotate_interaction",
+          "interaction_id": "d-united_airlines-oil_price-fuel_cost",
+          "note": "Hedges dampen the pass-through from crude to jet fuel",
+          "valid_from": "2026-03-23T18:00:00Z"
+        },
+        {
+          "op": "annotate_interaction",
+          "interaction_id": "e78",
+          "note": "Hedges dampen the pass-through from crude to jet fuel",
+          "valid_from": "2026-03-23T18:00:00Z"
+        },
+        {
+          "op": "reweight_interaction",
+          "interaction_id": "d-united_airlines-oil_price-fuel_cost",
+          "supports": false,
+          "strength": 0.3
+        }
+      ],
+      "mentions": [
+        "airlines",
+        "fuel hedges"
+      ],
+      "tags": []
+    }
+  ]
+}

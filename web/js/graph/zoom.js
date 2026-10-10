@@ -1,7 +1,8 @@
-// Zoom and pan (§13.3). DECISION: zoom is only geometry. The plan's semantic zoom chose the level of
-// detail from the zoom factor; the user found that confusing, so detail is chosen per node (right-click,
-// double-click) or for everything at once with the Superentities / Entities / Subentities buttons, and
-// zooming never opens or closes anything. The faint grid pans and scales with the canvas.
+// Zoom and pan (§13.3). The faint grid pans and scales with the canvas. Detail is chosen per node (right-click,
+// double-click) or for everything at once with the Superentities / Entities / Subentities buttons.
+// DECISION (Oct 9): with "Auto" on, detail follows zoom after all (the user asked for it): once a zoom settles, the
+// renderer closes superentities into cards when zoomed far out and opens the entities in view when zoomed in
+// (renderer.applyAutoDetail). Picking a level by hand turns Auto off, so the old geometry-only zoom is one click away.
 /* global d3 */
 
 export function createZoom(svg, root, { onZoom, grid } = {}) {
@@ -11,7 +12,7 @@ export function createZoom(svg, root, { onZoom, grid } = {}) {
     .on("zoom", (ev) => {
       root.attr("transform", ev.transform);
       grid?.(ev.transform);
-      onZoom?.(ev.transform);
+      onZoom?.(ev.transform, !!ev.sourceEvent);      // the second argument: a person moved the view
     });
   svg.call(zoom).on("dblclick.zoom", null);
 
@@ -22,11 +23,11 @@ export function createZoom(svg, root, { onZoom, grid } = {}) {
   return {
     zoom,
     transform: () => d3.zoomTransform(svg.node()),
-    by(factor, duration = 250) {
+    by(factor, duration = 180) {
       svg.transition().duration(duration).call(zoom.scaleBy, factor);
     },
     // fit a box [[x0, y0], [x1, y1]] inside the viewport, leaving room for overlays
-    fit(bounds, duration = 450, { maxK = 1.25, minK = 0.2, pad = { top: 64, right: 24, bottom: 64, left: 24 } } = {}) {
+    fit(bounds, duration = 320, { maxK = 1.25, minK = 0.2, pad = { top: 64, right: 24, bottom: 64, left: 24 } } = {}) {
       if (!bounds) return;
       const { width, height } = size();
       const [[x0, y0], [x1, y1]] = bounds;
@@ -40,14 +41,20 @@ export function createZoom(svg, root, { onZoom, grid } = {}) {
       to(d3.zoomIdentity.translate(cx - ((x0 + x1) / 2) * k, cy - ((y0 + y1) / 2) * k).scale(k), duration);
     },
     // return to a saved camera ({x, y, k}), e.g. when undo reverses a preset that refit the view
-    set(t, duration = 450) {
+    set(t, duration = 280) {
       if (!t) return;
       to(d3.zoomIdentity.translate(t.x, t.y).scale(t.k), duration);
     },
-    centerOn(x, y, k = null, duration = 450) {
+    // dx shifts the center, e.g. to the middle of what the side panels leave visible
+    centerOn(x, y, k = null, duration = 300, dx = 0) {
       const { width, height } = size();
       const kk = k ?? Math.max(d3.zoomTransform(svg.node()).k, 1);
-      to(d3.zoomIdentity.translate(width / 2 - x * kk, height / 2 - y * kk).scale(kk), duration);
+      to(d3.zoomIdentity.translate(width / 2 + dx - x * kk, height / 2 - y * kk).scale(kk), duration);
+    },
+    // move the view by screen pixels
+    panBy(dx, dy, duration = 260) {
+      const t = d3.zoomTransform(svg.node());
+      to(d3.zoomIdentity.translate(t.x + dx, t.y + dy).scale(t.k), duration);
     },
   };
 }

@@ -1,0 +1,63 @@
+{
+  "market_event_id": "ME-14",
+  "rationale": "Hand-drawn. The biggest banks said deposits rose as customers moved money from smaller lenders.",
+  "spans": [
+    [
+      12,
+      34,
+      0
+    ],
+    [
+      35,
+      61,
+      1
+    ]
+  ],
+  "events": [
+    {
+      "id": "GUE-ME14",
+      "kind": "real",
+      "event_type": "deposit_flows",
+      "occurred_at": "2026-03-09T22:30:00Z",
+      "recorded_at": "2026-03-09T22:30:00Z",
+      "produced_by": "hand_drawn",
+      "confidence": 0.85,
+      "market_event_id": "ME-14",
+      "evidence": [
+        {
+          "id": "EV-ME14",
+          "source_type": "news",
+          "excerpt": "Large banks report deposit inflows as regional lenders wobble",
+          "observed_at": "2026-03-09T22:30:00Z",
+          "strength": 0.6,
+          "market_event_id": "ME-14"
+        }
+      ],
+      "ops": [
+        {
+          "op": "change_value",
+          "target": {
+            "kind": "concrete",
+            "subentity_id": "jpmorgan.deposits"
+          },
+          "delta": 1.2,
+          "mode": "standardized",
+          "persistence": "step",
+          "at": "2026-03-09T22:30:00Z"
+        },
+        {
+          "op": "reweight_interaction",
+          "interaction_id": "e86",
+          "supports": true,
+          "strength": 0.5
+        }
+      ],
+      "mentions": [
+        "large banks",
+        "deposits",
+        "regional lenders"
+      ],
+      "tags": []
+    }
+  ]
+}
