@@ -113,3 +113,8 @@ var/              runtime data: init cache, sessions, snapshots, ledger, traces 
 ```
 
 [docs/architecture.md](docs/architecture.md) maps each module to its section of the plan.
+
+## Railway deployment
+
+See [.railway/README.md](.railway/README.md) for the dev infrastructure, deployment,
+persistent storage, and validation workflow.
