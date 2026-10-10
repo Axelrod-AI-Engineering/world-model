@@ -52,6 +52,17 @@ partials and claim only its resources. This repository does not edit Core.
 Core's older whole-project planner must not be applied against the expanded dev
 environment: it can propose deleting services owned by other repositories.
 
-Public domain creation is a separate exposure change. The initial deployment
-stays private until approved. A Railway-generated domain, if authorized later,
-should be declared in this partial's networking.serviceDomains after creation.
+## Basic Auth
+
+The hosted demo requires `WORLD_MODEL_REQUIRE_BASIC_AUTH=1` and both
+`WORLD_MODEL_BASIC_AUTH_USERNAME` / `WORLD_MODEL_BASIC_AUTH_PASSWORD`. Credentials
+are generated securely and kept in Railway; IaC preserves them. A private,
+gitignored operator copy is in `var/railway/dev-basic-auth.txt` (mode 0600).
+Missing credentials prevent server startup when auth is required. Local use
+without these variables remains unchanged.
+
+All HTTP content and mutations, including static assets and API documentation,
+and the WebSocket stream require Basic Auth. GET/HEAD `/api/health` is the sole
+readiness exception. Browser credentials cached after the initial login also
+authenticate the same-origin WebSocket handshake. Public access uses Railway
+HTTPS. This remains a shared demo session, rather than separate per-user state.
