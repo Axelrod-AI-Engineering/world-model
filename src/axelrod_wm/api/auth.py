@@ -13,7 +13,8 @@ class BasicAuthMiddleware:
         self.app = app
         self.username = os.environ.get("WORLD_MODEL_BASIC_AUTH_USERNAME", "")
         self.password = os.environ.get("WORLD_MODEL_BASIC_AUTH_PASSWORD", "")
-        required = os.environ.get("WORLD_MODEL_REQUIRE_BASIC_AUTH") == "1"
+        required = (os.environ.get("WORLD_MODEL_REQUIRE_BASIC_AUTH") == "1"
+                    or bool(os.environ.get("RAILWAY_ENVIRONMENT_ID")))
         if (required or self.username or self.password) and not (self.username and self.password):
             raise RuntimeError("Basic Auth requires both username and password")
 

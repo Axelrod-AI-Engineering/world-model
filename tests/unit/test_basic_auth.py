@@ -71,3 +71,20 @@ def test_required_auth_rejects_missing_credentials(monkeypatch):
     monkeypatch.delenv("WORLD_MODEL_BASIC_AUTH_PASSWORD", raising=False)
     with pytest.raises(RuntimeError, match="both username and password"):
         BasicAuthMiddleware(None)
+
+
+def test_railway_requires_auth_even_without_explicit_flag(monkeypatch):
+    monkeypatch.setenv("RAILWAY_ENVIRONMENT_ID", "dev-environment")
+    for name in ("WORLD_MODEL_REQUIRE_BASIC_AUTH", "WORLD_MODEL_BASIC_AUTH_USERNAME",
+                 "WORLD_MODEL_BASIC_AUTH_PASSWORD"):
+        monkeypatch.delenv(name, raising=False)
+    with pytest.raises(RuntimeError, match="both username and password"):
+        BasicAuthMiddleware(None)
+
+
+def test_local_demo_without_credentials_remains_available(monkeypatch):
+    for name in ("RAILWAY_ENVIRONMENT_ID", "WORLD_MODEL_REQUIRE_BASIC_AUTH",
+                 "WORLD_MODEL_BASIC_AUTH_USERNAME", "WORLD_MODEL_BASIC_AUTH_PASSWORD"):
+        monkeypatch.delenv(name, raising=False)
+    middleware = BasicAuthMiddleware(None)
+    assert not middleware.username
