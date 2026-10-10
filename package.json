@@ -1,0 +1,7 @@
+{
+  "name": "axelrod-world-model-infrastructure",
+  "private": true,
+  "devDependencies": {
+    "railway": "3.13.1"
+  }
+}

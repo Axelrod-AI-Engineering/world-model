@@ -144,3 +144,8 @@ uv run --with playwright pytest tests/ui --runslow   # the smoke test alone (run
 - `data/worlds/<world>/` holds a world's construction files. `data/taxonomy/objects.yaml` gives each kind of firm its default values and links.
 - `data/scenarios/<scenario>/` holds a script, seeds, a layout, market events and their reviewed translations, and the synthetic world's truth. The small demo is a blank canvas (`canvas: blank`). The production demo builds on `oil_shock_demo` (`base:`). Their examples, articles, and "more like this" events are in `src/axelrod_wm/sim/examples/`.
 - Choices where the plan was silent carry `# DECISION:` comments. `grep -rn DECISION src configs data web` lists them.
+
+## Railway deployment
+
+See [.railway/README.md](.railway/README.md) for the dev infrastructure, deployment,
+persistent storage, and validation workflow.

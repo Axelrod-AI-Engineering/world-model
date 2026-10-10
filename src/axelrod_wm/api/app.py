@@ -219,6 +219,9 @@ def create_app(config_path: str | None = None, scenario: str = "oil_shock_demo",
             state.runner.pause()
 
     app = FastAPI(title="Axelrod World Model", version="0.1.0", lifespan=lifespan)
+    from axelrod_wm.api.auth import BasicAuthMiddleware
+
+    app.add_middleware(BasicAuthMiddleware)
     app.state.axelrod = state
 
     @app.exception_handler(UnboundThesis)
