@@ -75,7 +75,7 @@ def test_read_endpoints_after_load(client):
     assert "pairs" in series and series["lag_days"] == fr[0]["lag_days"]
     hyps = client.get("/api/hypotheses?sort=voi").json()
     assert any(x["hypothesis"]["id"] == "H-fed-hold" for x in hyps)
-    assert client.get("/api/scenarios").json()[0]["id"] == "oil_shock_demo"
+    assert {"oil_shock_demo", "small_demo", "emily_demo"} <= {s["id"] for s in client.get("/api/scenarios").json()}
     layout = client.get("/api/layouts/figure1").json()
     assert layout
     assert client.get("/api/entities/nope").status_code == 404

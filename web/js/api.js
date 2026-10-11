@@ -129,6 +129,10 @@ export const api = {
   manual: (spec, by = "backend user") => post("/manual", { manual: spec, by }),
   vocabulary: () => get("/vocabulary"),
   runLibrary: (id) => post(`/library/${q(id)}`),
+  importLocalList: () => get("/import/local"),
+  importLocal: (name) => get(`/import/local/${q(name)}`),
+  importPreview: (bundle) => post("/import/preview", { bundle }),
+  importRun: (bundle, ids = null) => post("/import", { bundle, ids }),
 };
 
 // The /ws stream (§12.3): {"type": "hello", "since_seq": n}, then trace and status messages.

@@ -129,8 +129,11 @@ class ScenarioScript(_M):
     config_overrides: str | None = None
     checklist: bool = False           # the scenario keeps a checklist (sim/checklist.py): oil_shock_demo
     # "scripted": built from construction files and history, then stepped; "blank": an empty canvas that a
-    # chain of examples builds up (the small demo, sim/examples)
-    canvas: Literal["scripted", "blank"] = "scripted"
+    # chain of examples builds up (the small demo, sim/examples); "seeded": construction files and superentities
+    # only, brought up to date by imports (emily_demo, sim/imports)
+    canvas: Literal["scripted", "blank", "seeded"] = "scripted"
+    imports: bool = False             # new information arrives as import bundles (sim/imports.py)
+    imports_dir: str | None = None    # a server-side folder of bundles, when it exists (never committed)
     examples: str | None = None       # a demo with a chain of examples: "small" or "prod" (sim/examples)
     base: str | None = None           # a demo built on another scenario's world and history (prod_demo)
     steps: list[ScenarioStep]
@@ -207,6 +210,7 @@ def list_scenarios() -> list[dict[str, str]]:
         if p.exists():
             raw = yaml.safe_load(p.read_text()) or {}
             out.append({"id": raw.get("id", d.name), "title": raw.get("title", d.name),
-                        "canvas": raw.get("canvas", "scripted"), "examples": raw.get("examples")})
+                        "canvas": raw.get("canvas", "scripted"), "examples": raw.get("examples"),
+                        "imports": bool(raw.get("imports"))})
     return out
 

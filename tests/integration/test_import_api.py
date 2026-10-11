@@ -1,0 +1,81 @@
+"""An imported model (emily_demo, sim/imports.py) through the API: seeded, a bundle previewed and imported, each item
+reviewed in date order, and a ready-made question posed."""
+
+from __future__ import annotations
+
+import json
+import time
+from pathlib import Path
+
+import pytest
+from fastapi.testclient import TestClient
+
+from axelrod_wm.api.app import create_app
+from axelrod_wm.repo.snapshots import MemoryBackend
+
+SAMPLE = json.loads((Path(__file__).resolve().parents[1] / "fixtures" / "import_bundle_sample.json").read_text())
+
+
+@pytest.fixture(scope="module")
+def client():
+    app = create_app(scenario="emily_demo", storage=MemoryBackend(), trace_dir=None, play_delay=0.0)
+    with TestClient(app) as c:
+        yield c
+
+
+def settle(client: TestClient, timeout: float = 120.0) -> dict:
+    """The API drives a resumed update in the background: wait until it rests."""
+    t0 = time.time()
+    while time.time() - t0 < timeout:
+        st = client.get("/api/sim/status").json()
+        if st["state"] != "running":
+            return st
+        time.sleep(0.1)
+    raise AssertionError("the import kept running")
+
+
+def test_seeded_model(client):
+    st = client.get("/api/sim/status").json()
+    assert st["imports"] is True and st["canvas"] == "seeded" and st["examples"] is None
+    view = client.get("/api/state").json()
+    assert {"boj", "dollar_yen", "tokio_marine", "toyota"} <= {e["id"] for e in view["entities"]}
+    assert {h["pattern_id"] for h in view["hulls"]} >= {"E1", "E2", "E6"}
+    ready = client.get("/api/scenario-theses").json()
+    assert {t["id"] for t in ready} >= {"E-T1", "E-T4"}
+
+
+def test_preview_import_and_review_in_date_order(client):
+    pv = client.post("/api/import/preview", json={"bundle": SAMPLE}).json()
+    assert [x["id"] for x in pv["items"]] == ["T-001", "T-002", "T-003"]       # by date
+    first = pv["items"][0]
+    assert first["status"] == "new" and first["changes"] == 1 and first["dropped"]
+    bad = client.post("/api/import/preview", json={"bundle": {"items": [{"id": 1}]}})
+    assert bad.status_code in (400, 409, 422)
+
+    out = client.post("/api/import", json={"bundle": SAMPLE, "ids": ["T-001", "T-002"]}).json()
+    assert out["imported"] == ["T-001", "T-002"] and out["proposal"]["proposal"]["market_event_id"] == "IM-T-001"
+    seen = []
+    while True:
+        settle(client)
+        pending = client.get("/api/proposals?status=pending").json()
+        if not pending:
+            break
+        pid = pending[0]["proposal"]["id"]
+        seen.append(pending[0]["proposal"]["market_event_id"])
+        assert client.post(f"/api/proposals/{pid}/approve", json={"by": "emily"}).status_code == 200
+    assert seen == ["IM-T-001", "IM-T-002"]
+    again = client.post("/api/import/preview", json={"bundle": SAMPLE}).json()
+    assert {x["id"]: x["status"] for x in again["items"]} == {"T-001": "imported", "T-002": "imported", "T-003": "new"}
+    assert client.post("/api/import", json={"bundle": SAMPLE, "ids": ["T-001"]}).status_code in (400, 409)
+
+
+def test_ready_made_question_forecasts_the_book(client):
+    fv = client.post("/api/theses/E-T4/pose").json()
+    moved = {v["id"] for v in fv["transmission"]["values"]}
+    assert "dollar_yen.usd_jpy" in moved or "dollar_yen.usd_jpy" in {s["id"] for s in fv["transmission"]["shocked"]}
+    book = {n["id"]: n["status"] for n in fv["transmission"]["watchlist"]["names"]}
+    assert book["tokio_marine"] in ("moves", "small")
+
+
+def test_local_bundles_listed_only_where_the_folder_exists(client):
+    assert isinstance(client.get("/api/import/local").json(), list)

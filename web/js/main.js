@@ -21,6 +21,7 @@ import { initChat } from "./panels/chat.js";
 import { initConsole } from "./panels/console.js";
 import { initDecisions } from "./panels/decisions.js";
 import { initExamples } from "./panels/examples.js";
+import { initImport } from "./panels/import.js";
 import { initChecks } from "./panels/checks.js";
 import { initPaths } from "./panels/paths.js";
 import { initFind } from "./panels/find.js";
@@ -53,7 +54,7 @@ const SHORTCUTS = [
   ["Canvas", [[`${MOD}Z`, "Undo a view change (open, close, move, layout)"], [`${REDO_KEY}`, "Redo"],
               ["1 · 2 · 3", "Superentities · entities · subentities"], ["0", "Auto: detail follows zoom"], ["K", "Color: what pills are colored by, and the key"], ["[ · ]", "Up a level · down into the first part (superentities within superentities)"], ["+ · − · F", "Zoom in · zoom out · fit"],
               [`/ · ${MOD}K`, "Find or filter: words, kinds, “moved”, “open>0.8”, “learned”; widen to neighborhoods"], ["D", "Draw a proposed edge"], ["Esc", "Close the top thing"]]],
-  ["Demo", [["E", "Examples (the tutorial)"], ["→", "Next scripted step"], ["Space", "Play or pause"],
+  ["Demo", [["E", "Tutorial"], ["I", "Import research (imported models)"], ["→", "Next scripted step"], ["Space", "Play or pause"],
             ["⇧← · ⇧→", "Step through the timeline"], ["U", "Request an update"]]],
   ["Walkthrough", [["W", "How it learned (the latest news) or how it inferred (the latest question)"], ["← · →", "Previous · next step (while open)"]]],
   ["Panels", [["I", "Console: the commit log (Learn)"], ["N", "News"], ["B", "Forecast briefs"], ["Q", "Ask a question"], ["M", "Long-term memory"], ["C", "Checks: what the model is testing"], ["G", "Transmission grid: input, each order, output"], ["X", "Isolate the selection: what drives it and what it moves"],
@@ -281,6 +282,20 @@ async function boot() {
     onProposal: async (pid) => { await refreshGraph(); openLeft("review"); review.focus(pid); },
     onQuestion: (q) => { setMode("predict", false); thesis.setQuestion(q); openRight("thesis"); },
     onReset: () => loadScenario(store.status?.scenario_id ?? "small_demo"),
+  });
+  // DECISION (Oct 11): an imported model's Tutorial is the small demo: it loads in place of the model, and Back
+  // (top bar) loads the model again. The scenario to return to is kept for this tab only.
+  const RETURN = "axelrod.tutorialReturn";
+  const returnTo = () => { try { return sessionStorage.getItem(RETURN); } catch { return null; } };
+  async function openTutorial() {
+    if (!store.status?.imports) { examples.toggle(); return; }
+    try { sessionStorage.setItem(RETURN, store.status.scenario_id); } catch { /* the tutorial still opens */ }
+    await loadScenario("small_demo");
+    examples.open();
+  }
+  const importer = initImport({
+    toast,
+    onProposal: async (pid) => { await refreshGraph(); openLeft("review"); review.focus(pid); },
   });
   on("open-examples", () => examples.open());
   on("run-example", (id) => { setMode("learn", false); examples.run(id); });
@@ -705,6 +720,11 @@ async function boot() {
 
   async function loadScenario(id) {
     clearStaged();
+    // another world: what was open about this one (a forecast, its grid, the side panels) does not carry over
+    if (paths.isOpen()) paths.close();
+    if (importer.isOpen()) importer.close();
+    clearForecastCanvas();
+    closeRight();
     await guarded(async () => {
       const st = await api.load(id, true);
       setStatus(st);
@@ -819,8 +839,8 @@ async function boot() {
     if (empty && !hint.dataset.on) {
       hint.dataset.on = "1";
       hint.innerHTML = `<div class="eh-t">A blank canvas</div>
-        <p>Build a world model from the ground up. Each example event isolates one part of the framework, runs through learning on a
-        staged copy, and stops at your review.</p><button class="primary" data-ex>Pick the first example</button>`;
+        <p>Build a world model from the ground up. Each step of the tutorial isolates one part of the framework, runs through learning on a
+        staged copy, and stops at your review.</p><button class="primary" data-ex>Start the tutorial</button>`;
       hint.querySelector("[data-ex]").addEventListener("click", () => examples.open());
     }
     if (!empty) delete hint.dataset.on;
@@ -851,6 +871,12 @@ async function boot() {
     lastState = st.state;
     document.body.classList.toggle("canvas-blank", st.canvas === "blank");
     document.body.classList.toggle("has-examples", !!st.examples);
+    document.body.classList.toggle("has-imports", !!st.imports);
+    $("#btn-examples").classList.toggle("primary", !!st.examples);
+    const back = returnTo();
+    const showBack = !!back && back !== st.scenario_id && !!st.examples;
+    $("#btn-return").classList.toggle("hidden", !showBack);
+    if (showBack) $("#btn-return").textContent = "← Back to your model";
     if (!store.graph?.today) $("#sim-date").textContent = fmtDay(st.sim_time);
     if (store.readOnlyVersion == null) $("#sim-version").textContent = `v${st.version}`;
     $("#step-label").textContent = `${stepShown()} / ${st.total_steps}`;
@@ -899,7 +925,7 @@ async function boot() {
   on("open-methods", ({ tab, anchor } = {}) => methods.open(tab, anchor));
   // full screen (Oct 8): every window over the canvas has a ⤢ button; it fills the space between the bars, and again
   // restores it. Double-clicking a window's header does the same.
-  const WINDOWS = "#methods, #examples, #manual, #checks, #paths, #console, #chat, #walkthrough, #left-panel, #right-panel, #drawer";
+  const WINDOWS = "#methods, #examples, #import, #manual, #checks, #paths, #console, #chat, #walkthrough, #left-panel, #right-panel, #drawer";
   const toggleMax = (win) => {
     const on_ = !win.classList.contains("win-max");
     win.classList.toggle("win-max", on_);
@@ -920,7 +946,14 @@ async function boot() {
     if (win && !ev.target.closest("button, input, a")) toggleMax(win);
   });
   $("#btn-console").addEventListener("click", () => consolePane.toggle());
-  $("#btn-examples").addEventListener("click", () => examples.toggle());
+  $("#btn-examples").addEventListener("click", () => openTutorial());
+  $("#btn-import").addEventListener("click", () => importer.toggle());
+  $("#btn-return").addEventListener("click", async () => {
+    const back = returnTo();
+    try { sessionStorage.removeItem(RETURN); } catch { /* nothing kept */ }
+    examples.close();
+    if (back) await loadScenario(back);
+  });
 
   // -- views (restructure): Learn for backend users, who update the one world model; Predict for everyone
   // else, who pose theses against committed versions and never change it --------------------------------
@@ -935,6 +968,7 @@ async function boot() {
     if (mode === "predict") {
       if (consolePane.isOpen()) consolePane.close();
       if (examples.isOpen()) examples.close();
+      if (importer.isOpen()) importer.close();
       if (!left.hidden && left.dataset.tab === "review") closeLeft();
       if (store.settings.draw) setDraw(false);
       if (announce) once("mode-predict", "Predict: pose a thesis against the committed version. Nothing you do here is learned.");
@@ -1125,6 +1159,7 @@ async function boot() {
       if (checks.isOpen()) { checks.close(); return; }
       if (colorKey.isOpen()) { colorKey.close(); return; }
       if (examples.isOpen()) { examples.close(); return; }
+      if (importer.isOpen()) { importer.close(); return; }
       if (methods.isOpen()) { methods.close(); return; }
       if (chat.isOpen()) { chat.close(); return; }
       if (guide.run) { guide.stop(); return; }
@@ -1141,7 +1176,7 @@ async function boot() {
     if (ev.metaKey || ev.ctrlKey || ev.altKey) return;
     // inside a panel, arrows scroll and Space presses the focused button, as anywhere else; the demo keys act
     // from the canvas and the top bar
-    const inPanel = !!ev.target.closest?.("#left-panel, #right-panel, #drawer, #admin, #methods, #console, #examples, #checks, #paths, #walkthrough, #tooltip");
+    const inPanel = !!ev.target.closest?.("#left-panel, #right-panel, #drawer, #admin, #methods, #console, #examples, #import, #checks, #paths, #walkthrough, #tooltip");
     const onControl = !!ev.target.closest?.("button, a, summary, select, [role=button], [role=tab]");
     if (ev.key === " " && (onControl || inPanel)) return;
     if ((ev.key === "ArrowRight" || ev.key === "ArrowLeft") && inPanel && !walk.isOpen()) return;
@@ -1153,7 +1188,8 @@ async function boot() {
     if (ev.key === "?") { ev.preventDefault(); showShortcuts(); }
     else if (ev.key === "w" || ev.key === "W") toggleWalk();
     else if ((ev.key === "i" || ev.key === "I") && store.settings.mode !== "predict") consolePane.toggle();
-    else if ((ev.key === "e" || ev.key === "E") && store.settings.mode !== "predict" && store.status?.examples) examples.toggle();
+    else if ((ev.key === "e" || ev.key === "E") && store.settings.mode !== "predict" && (store.status?.examples || store.status?.imports)) openTutorial();
+    else if ((ev.key === "i" || ev.key === "I") && store.settings.mode !== "predict" && store.status?.imports) importer.toggle();
     else if (ev.key === "n" || ev.key === "N") toggleLeft("inbox");
     else if (ev.key === "b" || ev.key === "B") toggleLeft("briefs");
     else if (ev.key === ",") admin.toggle();

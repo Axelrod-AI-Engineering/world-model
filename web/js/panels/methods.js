@@ -74,7 +74,7 @@ export function initMethods() {
     <p>${esc(sub?.summary ?? ph.detail)}</p>
     <dl class="fc-io-row"><dt>In</dt><dd>${esc(ph.input)}</dd><dt>Out</dt><dd>${esc(ph.output)}</dd></dl>
     <figure class="flow stage-flow ${cls}" data-flow="${esc(ph.flow)}"><p class="empty small">Drawing…</p></figure>
-    ${xs.length ? `<p class="small"><b>Examples that show it:</b> ${xs.map((x) => `<button class="linkish" data-try="${esc(x.id)}"
+    ${xs.length ? `<p class="small"><b>Tutorial steps that show it:</b> ${xs.map((x) => `<button class="linkish" data-try="${esc(x.id)}"
       title="${esc(x.isolates)}">${x.n}. ${esc(x.title)}</button>`).join(" · ")}</p>` : ""}`;
   const KEY = `<p class="small muted">Solid steps always run; <span class="fc-key optional">dashed</span> steps run only when their condition holds.
     A diamond is a decision, and its answers label its arrows; an arrow that climbs back is a loop. WM and LTM mark what writes working and long-term memory.</p>`;
@@ -85,7 +85,7 @@ export function initMethods() {
     const byId = new Map(flows.map((f) => [f.id, f]));
     const tutorial = !!store.status?.examples;
     return `<h1>How it learns</h1>
-      <p class="meta">One world model, built like version control. ${tutorial ? "Examples in the top bar run each step below on the canvas." : "The small demo builds one from a blank canvas, one example at a time."}</p>
+      <p class="meta">One world model, built like version control. ${tutorial ? "Tutorial in the top bar runs each step below on the canvas." : "The small demo builds one from a blank canvas, one tutorial step at a time."}</p>
       <div class="abstract"><p>Backend users <b>teach</b> the model (Learn); everyone else only <b>asks</b> it (Predict).
         Every change starts as an article and runs through learning on a <b>staged copy</b>: first working memory, then long-term memory.
         A person then checks every change to both memories, including the second- and third-order ripple, keeps what makes sense,

@@ -1,0 +1,35 @@
+# Emily's object taxonomy: the kinds of actor in a cross-asset PM's world. Every firm has a share price driven by its
+# profit (a default value and link); banks, insurers, and exporters are the kinds a new name is sorted into by its
+# sector feature, and inherit the priors of the kind's members once it has some.
+root: gen:obj:root
+nodes:
+  - {id: gen:obj:root, name: Economic object, parent: null}
+  - {id: gen:obj:actor, name: Actor, parent: gen:obj:root, signature: {required: {kind: [agency, company, person]}}}
+  - {id: gen:obj:monetary_authority, name: Monetary authority, parent: gen:obj:actor, signature: {required: {function: [monetary_policy]}}}
+  - {id: gen:obj:central_bank, name: Central bank, parent: gen:obj:monetary_authority, signature: {any_of: {attribute_kinds: [policy_rate]}}, instances: [federal_reserve, boj, ecb]}
+  - id: gen:obj:firm
+    name: Firm
+    parent: gen:obj:actor
+    signature: {required: {kind: [company]}}
+    defaults:
+      - {slot: share_price, name: share price, attribute_kind: asset_price, unit: local ccy, mean: 100.0, scale: 0.08}
+    default_links:
+      - {source: operating_profit, target: share_price, label: drives, effect: 0.5,
+         kernel: {delay_days: 1, lag_days: 21, duration_days: null}, generalization: gen:int:asset_repricing}
+      - {source: net_interest_income, target: share_price, label: drives, effect: 0.5,
+         kernel: {delay_days: 1, lag_days: 21, duration_days: null}, generalization: gen:int:asset_repricing}
+      - {source: trading_revenue, target: share_price, label: drives, effect: 0.4,
+         kernel: {delay_days: 1, lag_days: 21, duration_days: null}, generalization: gen:int:asset_repricing}
+  - {id: gen:obj:insurer, name: Insurer, parent: gen:obj:firm, signature: {required: {sector: [insurance]}}, instances: [tokio_marine, zurich]}
+  - {id: gen:obj:bank, name: Bank, parent: gen:obj:firm, signature: {required: {sector: [banking]}}, instances: [jpmorgan, citigroup, morgan_stanley, unicredit]}
+  - {id: gen:obj:exporter, name: Exporter, parent: gen:obj:firm, signature: {required: {sector: [autos, machinery]}}, instances: [toyota, komatsu]}
+  - {id: gen:obj:telecom, name: Telecom operator, parent: gen:obj:firm, signature: {required: {sector: [telecom]}}, instances: [softbank_corp]}
+  - {id: gen:obj:financial_condition, name: Financial condition, parent: gen:obj:root, signature: {required: {kind: [macro_factor, market]}, any_of: {attribute_kinds: [interest_rate, fx_rate, capital_flow]}}}
+  - {id: gen:obj:yield_curve, name: Yield curve, parent: gen:obj:financial_condition, instances: [us_treasuries, jgbs]}
+  - {id: gen:obj:currency, name: Currency and carry, parent: gen:obj:financial_condition, instances: [dollar_yen]}
+  - {id: gen:obj:price_level, name: Economy, parent: gen:obj:root, instances: [us_economy, japan_economy, euro_economy]}
+  - {id: gen:obj:supply_factor, name: Commodity, parent: gen:obj:root, instances: [oil]}
+  - {id: gen:obj:configuration, name: Configuration, parent: gen:obj:root, signature: {required: {object_type: [superentity]}}}
+  - {id: gen:obj:policy_config, name: Policy configuration, parent: gen:obj:configuration, instances: [E1, E2]}
+  - {id: gen:obj:shock_config, name: Shock configuration, parent: gen:obj:configuration, instances: [E3]}
+  - {id: gen:obj:market_config, name: Exposure configuration, parent: gen:obj:configuration, instances: [E4, E5, E6]}
