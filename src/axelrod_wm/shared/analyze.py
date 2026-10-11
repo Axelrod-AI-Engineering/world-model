@@ -54,4 +54,6 @@ class PropagationAnalyzer(Analyzer):
         trans = transmission_map(sorted({s.subentity_id for s in parsed.shocks}), channels, effect.z_of, H,
                                  int(ctx.config.propagation.min_delay_days))
         return Analysis(event_id=parsed.event_id, result=effect, expected_moves=expected, levels=shocked,
-                        horizon_days=H, transmission=[e for e in trans if e.material][:24])
+                        horizon_days=H, transmission=[e for e in trans if e.material][:24],
+                        channels=channels, transmission_all=trans,
+                        shocked=sorted({s.subentity_id for s in parsed.shocks}))

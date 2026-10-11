@@ -1,0 +1,190 @@
+# The production demo's own superentities (Oct 11), applied on top of the oil world's seeds after it loads, so the oil
+# demo itself is unchanged. They add depth to the hierarchy: superentities of superentities, three levels deep.
+#   Global tightening    > Stagflation squeeze > Energy price shock, Credit tightening; Yen carry trade; Deposit flight
+#   Tech decoupling      > Semiconductor complex > AI chip supply chain, Chip packaging chain, GPU, foundry, and server
+#                          CPU rivalries; US-China tech rivalry
+#   Oil to airlines      > Oil producers, Airlines
+# Members and interactions are the union of the parts' plus the boundary interactions that join them.
+patterns:
+- id: S21
+  name: Semiconductor complex
+  description: 'The chip supply chain, its packaging tier, and the rivalries inside it: one industry that moves on the same
+    orders, rules, and capex cycle.'
+  palette: h21
+  sub_patterns:
+  - S11
+  - S18
+  - S12
+  - S13
+  - S20
+  members:
+  - microsoft
+  - nvidia
+  - tsmc
+  - asml
+  - tokyo_electron
+  - ajinomoto
+  - ibiden
+  - amd
+  - samsung
+  - intel
+  interactions:
+  - e55
+  - e56
+  - e57
+  - e53
+  - e54
+  - e98
+  - e99
+  - e100
+  - e101
+  - e59
+  - e62
+  - e102
+  - e69
+  support: 4
+- id: S22
+  name: Oil to airlines
+  description: 'Producers set the oil price, and the oil price sets airlines'' fuel bill: two groups joined by one cost.'
+  palette: h22
+  sub_patterns:
+  - S14
+  - S15
+  members:
+  - opec_plus
+  - saudi_aramco
+  - exxonmobil
+  - resources_energy
+  - delta
+  - united_airlines
+  interactions:
+  - e70
+  - e72
+  - e71
+  - e73
+  - e74
+  - e75
+  - e76
+  - e82
+  - e79
+  - e83
+  - e78
+  support: 4
+- id: S23
+  name: Global tightening
+  description: 'Stagflation, the yen carry trade, and deposit flight, joined through rates: when policy tightens everywhere,
+    each feeds the others.'
+  palette: h23
+  sub_patterns:
+  - S10
+  - S19
+  - S16
+  members:
+  - inflation
+  - resources_energy
+  - supply_chains
+  - confidence
+  - wars
+  - interest_rates
+  - credit_availability
+  - debt_cycle
+  - consumer_spending
+  - business_investment
+  - asset_prices
+  - federal_reserve
+  - boj
+  - yen_carry
+  - dollar_fx
+  - regional_banks
+  - jpmorgan
+  interactions:
+  - e08
+  - e16
+  - e33
+  - e34
+  - e01
+  - e02
+  - e03
+  - e04
+  - e06
+  - e13
+  - e14
+  - e15
+  - e24
+  - e25
+  - e26
+  - e27
+  - e28
+  - e30
+  - e31
+  - e32
+  - e45
+  - e20
+  - e43
+  - e41
+  - e91
+  - e93
+  - e92
+  - e94
+  - e95
+  - e96
+  - e97
+  - e86
+  - e84
+  - e88
+  - e89
+  support: 4
+- id: S24
+  name: Tech decoupling
+  description: "The US\u2013China rivalry reaches the whole semiconductor complex through export controls."
+  palette: h24
+  sub_patterns:
+  - S21
+  - S17
+  members:
+  - microsoft
+  - nvidia
+  - tsmc
+  - asml
+  - tokyo_electron
+  - ajinomoto
+  - ibiden
+  - amd
+  - samsung
+  - intel
+  - us_commerce
+  - china_mofcom
+  - legal_regulatory
+  interactions:
+  - e55
+  - e56
+  - e57
+  - e53
+  - e54
+  - e98
+  - e99
+  - e100
+  - e101
+  - e59
+  - e62
+  - e102
+  - e69
+  - e68
+  - e50
+  - e51
+  - e52
+  - e60
+  support: 4
+palettes:
+  h21:
+    fill: '#E3E1EF'
+    line: '#6E6A9E'
+  h22:
+    fill: '#EFE3D4'
+    line: '#97704A'
+  h23:
+    fill: '#E2E6EA'
+    line: '#5E7183'
+  h24:
+    fill: '#ECE0E6'
+    line: '#8C5E73'

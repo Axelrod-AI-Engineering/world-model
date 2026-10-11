@@ -46,6 +46,10 @@
          Learn, Ask in Predict), Review when something waits, and one menu for everything else. -->
     <nav class="tools" aria-label="Panels">
       <button id="btn-methods" class="tool" aria-expanded="false" title="How it works: learning, inference, the literature, and the implementation (H)">How it works</button>
+      <!-- DECISION (Oct 11): two buttons that show only when their thing exists: the transmission grid of the staged
+           ripple or the open forecast, and, in Predict, the briefs written so far -->
+      <button id="btn-grid" class="tool hidden" aria-expanded="false" title="The transmission grid: input, each order, output, moving day by day; the canvas isolates it (G)">Transmission</button>
+      <button id="btn-briefs-top" class="tool predict-only hidden" aria-expanded="false" title="A written reading of each forecast (B)">Briefs <span class="count" id="briefs-count-top">0</span></button>
       <button id="btn-ask" class="tool primary-ask predict-only" title="Ask a what-if question (pose a thesis) (Q)" aria-expanded="false">Ask</button>
       <button id="btn-review" class="tool learn-only idle" title="Review: what each change would commit, through the third-order ripple; approve all, some, or none" aria-expanded="false">Review <span class="count" id="review-count">0</span></button>
       <div class="menu-wrap">
@@ -90,9 +94,9 @@
           <button id="lvl-sub" title="Open every entity into its subentities (3)">Subentities</button>
           <button id="lvl-auto" aria-pressed="true" title="Detail follows zoom: zoom out for superentities, in for the values of what is in view (0)">Auto</button>
         </div>
-        <div class="seg" role="group" aria-label="Zoom">
-          <button id="zoom-out" class="icon" title="Zoom out (−)" aria-label="Zoom out">−</button>
-          <button id="zoom-in" class="icon" title="Zoom in (+)" aria-label="Zoom in">+</button>
+        <!-- DECISION (Oct 11): a zoom slider in place of − and +; it learns the zooms a person settles at (graph/zoom-slider.js) -->
+        <div id="zoom-slider" class="zoom-slider" role="group" aria-label="Zoom"></div>
+        <div class="seg" role="group" aria-label="Fit">
           <button id="btn-fit" class="icon" title="Fit everything (F)" aria-label="Fit everything">
             <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button>
         </div>

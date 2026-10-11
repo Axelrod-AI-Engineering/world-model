@@ -65,11 +65,16 @@ def test_the_demo_loads_opens_nodes_and_steps(server):
         # entities shared by two superentities wear a stripe per owner; overlapping outlines draw a lens
         assert page.locator('g.pill[data-id="nvidia"] .owners rect').count() == 3   # S11, S12, and S18 (the chip packaging chain)
         assert page.locator("g.lens").count() >= 1
-        # zoom is only zoom: zooming in opens nothing
-        page.click("#zoom-in")
-        page.click("#zoom-in")
+        # the zoom slider: + moves the thumb; a little zoom opens nothing (values open past the learned threshold)
+        before = int(page.locator("#zoom-range").input_value())
+        page.click(".zs-step[data-step='1.25']")
         page.wait_for_timeout(600)
+        assert int(page.locator("#zoom-range").input_value()) > before
         assert page.locator("g.row").count() == 0 and page.locator("g.card-super").count() == 0
+        # one more step passes the threshold: the few entities in the middle of the view open, not all of them
+        page.click(".zs-step[data-step='1.25']")
+        page.wait_for_timeout(800)
+        assert 0 < page.locator("g.row").count() < 40
         # detail presets
         page.keyboard.press("3")
         page.wait_for_timeout(1200)

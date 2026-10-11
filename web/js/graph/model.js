@@ -106,7 +106,10 @@ export function computeModel(view, groupsInfo, ui) {
   const host = new Map();
   for (const e of entities) {
     const gs = (ofEntity.get(e.id) ?? []).filter((k) => !byKey.get(k).transient);
-    if (!gs.length || gs.some((k) => state.get(k) === "open")) { visible.add(e.id); continue; }
+    // Oct 11: an open superentity keeps an entity on view only if it holds it directly, not through one of its parts;
+    // so folding a part hides that part's members even while the superentity around it stays open
+    const direct = (k) => !(byKey.get(k).children ?? []).some((c) => byKey.get(c)?.members.has(e.id));
+    if (!gs.length || gs.some((k) => state.get(k) === "open" && direct(k))) { visible.add(e.id); continue; }
     const cards = [...new Set(gs.map((k) => cardOf(byKey, state, k)).filter(Boolean))]
       .sort((a, b) => (byKey.get(b).level - byKey.get(a).level) || (byKey.get(b).members.size - byKey.get(a).members.size)
         || a.localeCompare(b));

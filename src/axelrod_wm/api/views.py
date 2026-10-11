@@ -793,7 +793,7 @@ def forecast_view(fc: Any, explanation: Any, wm: WorkingMemory, watchlist: dict 
                "entity": g.entities[g.subentities[sid].entity_id].name if sid in g.subentities else None, "effect": v}
               for sid, v in (fc.movers or {}).items()]
     return {"forecast": fc.model_dump(mode="json", exclude={"summary", "effect_summary", "z_summary", "groups",
-                                                            "effect_density", "movers", "transmission"}),
+                                                            "effect_density", "movers", "transmission", "paths"}),
             "movers": movers, "transmission": transmission_view(fc, wm, watchlist),
             "dates": dates, "targets": targets, "groups": groups,
             "scenarios": [{"id": s.id, "name": s.name, "weight": s.weight, "network_ids": s.network_ids,

@@ -131,3 +131,4 @@ class Forecast(BaseModel):
     transmission: list[TransmissionEntry] = []    # every value reached: order, main path, timing (addition)
     shocked: list[str] = []                        # the subentities the thesis changes directly
     constraints_binding: dict[str, float] = {}     # subentity -> weighted share of samples a soft bound bent
+    paths: dict | None = None                      # the transmission grid's source (inference/paths.py, Oct 11)

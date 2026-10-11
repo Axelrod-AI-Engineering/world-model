@@ -224,8 +224,7 @@ export function initThesis({ toast }) {
     try {
       const fv = await api.poseThesis(thesis);
       emit("asked", fv);
-      emit("show-forecast", fv);
-      toast(`Forecast ${fv.forecast.id} ready.`, "hyp");
+      emit("show-forecast", fv);     // the forecast opens itself: no toast
     } catch (e) {
       err.textContent = errorText(e);
     } finally {

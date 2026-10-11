@@ -290,7 +290,8 @@ export function initForecast({ renderer, activateTab, onWalk }) {
       </div>`;
       if (sel) {
         html += `<div class="section"><div class="ask-row"><h4 style="flex:1;margin:0">Transmission path</h4>
-            <button id="fc-tx-show" title="Light this path on the canvas">Show on the canvas</button></div>
+            <button id="fc-tx-show" title="Light this path on the canvas">Show on the canvas</button>
+            <button id="fc-tx-grid" title="Input, each order, and output as a grid, moving day by day (G)">As a grid</button></div>
           <div class="small muted"><b>${esc(sel.name)}</b> (${esc(sel.entity)}) is a ${esc(sel.order_word)} effect: ${sdSpan(sel.peak)} at its peak on day ${sel.peak_day},
             ${sdSpan(sel.effect)} at the horizon. The first effect can arrive after about ${sel.arrives_day} days, the sum of the delays below.</div>
           ${chainHtml(sel, byId)}</div>`;
@@ -326,6 +327,7 @@ export function initForecast({ renderer, activateTab, onWalk }) {
       txSel = v.id; orderTab = v.order; render(); showPath(fv);
     });
     box.querySelector("#fc-tx-show")?.addEventListener("click", () => showPath(fv));
+    box.querySelector("#fc-tx-grid")?.addEventListener("click", () => emit("paths-open", { kind: "forecast", id: fv.forecast.id }));
   }
 
   // light one transmission path on the canvas: its values' entities and its interactions

@@ -13,7 +13,14 @@ const CLEAR = 8;                // clearance kept around non-members
 const BAND = 8;                 // half-width of the band that joins far-apart members
 const MAX_BRIDGE_GAP = 96;      // neighbors closer than this (and aligned) join with a full-height bridge
 
-const cssVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+// read once a frame (reading computed style on every tick forced the page's styles to be recomputed)
+const cssCache = new Map();
+const cssVar = (name) => {
+  if (!cssCache.size) requestAnimationFrame(() => cssCache.clear());
+  let v = cssCache.get(name);
+  if (v == null) { v = getComputedStyle(document.documentElement).getPropertyValue(name).trim(); cssCache.set(name, v); }
+  return v;
+};
 
 // The extended pastel list leaves out violet and orchid, which mean real and hypothetical events.
 const EXTENDED = [["#F6E7C1", "#B39443"], ["#DDE8C8", "#7E9B55"], ["#F2D6C2", "#B97E57"], ["#D3E4EC", "#5F8DA6"],
@@ -216,6 +223,47 @@ function bridges(rects) {
 
 const smooth = d3.line().curve(d3.curveBasisClosed);
 
+// Thin a traced ring for drawing (Oct 11). Marching squares leaves a point on every cell along a box's side; a smoothed
+// closed curve through a straight run of points is the same straight line through its two ends, so only the points
+// within KEEP of a turn are kept. The curve near each turn is unchanged, and an outline has a tenth of the points to
+// stroke and dash, which zoomed in had made every frame that moved an outline slow to draw.
+const KEEP = 3;
+function thin(ring) {
+  const n = ring.length;
+  if (n < 12) return ring;
+  const turn = new Uint8Array(n);
+  for (let i = 0; i < n; i++) {
+    const [ax, ay] = ring[(i - 1 + n) % n];
+    const [bx, by] = ring[i];
+    const [cx, cy] = ring[(i + 1) % n];
+    if (Math.abs((bx - ax) * (cy - by) - (by - ay) * (cx - bx)) > 1e-3 * CELL * CELL) turn[i] = 1;
+  }
+  const keep = new Uint8Array(n);
+  for (let i = 0; i < n; i++) {
+    if (!turn[i]) continue;
+    for (let k = -KEEP; k <= KEEP; k++) keep[(i + k + n) % n] = 1;
+  }
+  const out = ring.filter((_, i) => keep[i]);
+  return out.length >= 3 ? out : ring;
+}
+
+// A remembered outline (Oct 11): tracing is the canvas's costliest step, and most ticks move nothing near a given
+// outline, so each one is traced again only when its members, or the boxes in its reach, moved by a pixel or more.
+const traced = new Map();
+export function hullContourCached(key, members, obstacles, pad = PAD) {
+  if (!members.length) { traced.delete(key); return null; }
+  let x0 = Infinity; let y0 = Infinity; let x1 = -Infinity; let y1 = -Infinity;
+  for (const r of members) { x0 = Math.min(x0, r.x0); y0 = Math.min(y0, r.y0); x1 = Math.max(x1, r.x1); y1 = Math.max(y1, r.y1); }
+  const m = 2 * pad + 2 * CELL + CLEAR;
+  const near = obstacles.filter((r) => r.x1 > x0 - m && r.x0 < x1 + m && r.y1 > y0 - m && r.y0 < y1 + m);
+  const sig = `${pad}|${[members, near].map((rs) => rs.map((r) => `${Math.round(r.x0)},${Math.round(r.y0)},${Math.round(r.x1)},${Math.round(r.y1)}`).join(";")).join("|")}`;
+  const hit = traced.get(key);
+  if (hit && hit.sig === sig) return hit.c;
+  const c = hullContour(members, near, pad);
+  traced.set(key, { sig, c });
+  return c;
+}
+
 // Trace a group's outline. `members` and `obstacles` are rects {x0, y0, x1, y1} in canvas coordinates.
 // Returns {d, anchor, bbox} or null.
 export function hullContour(members, obstacles, pad = PAD) {
@@ -289,7 +337,7 @@ export function hullContour(members, obstacles, pad = PAD) {
     for (let r = 0; r < poly.length; r++) {
       const ring = poly[r].slice(0, -1).map(([gx, gy]) => [x0 + gx * CELL, y0 + gy * CELL]);
       if (ring.length < 3) continue;
-      d += smooth(ring);
+      d += smooth(thin(ring));
       if (r === 0) {
         const area = Math.abs(d3.polygonArea(ring));
         if (!best || area > best.area) best = { area, ring };
@@ -312,10 +360,12 @@ export function hullContour(members, obstacles, pad = PAD) {
     { x: Math.max(...near(bottom)) - 6, y: bottom - 1, align: "right" },
   ];
   // points on the outline's top edges (inside just below, outside just above): where tabs may sit
+  // (tested against the thinned ring: dropping points from straight runs leaves the polygon as it was)
   const topEdge = [];
+  const poly = thin(best.ring);
   for (let k = 0; k < best.ring.length; k += 2) {
     const [x, y] = best.ring[k];
-    if (d3.polygonContains(best.ring, [x, y + 6]) && !d3.polygonContains(best.ring, [x, y - 6])) topEdge.push([x, y]);
+    if (d3.polygonContains(poly, [x, y + 6]) && !d3.polygonContains(poly, [x, y - 6])) topEdge.push([x, y]);
   }
   topEdge.sort((a, b) => (a[1] - b[1]) + 0.1 * (a[0] - b[0]));
   return { d, anchor: corners[0], corners, ring: best.ring, topEdge, bbox: { x0: bx0, y0: by0, x1: bx1, y1: by1 } };
