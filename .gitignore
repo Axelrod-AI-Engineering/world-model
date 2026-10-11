@@ -9,3 +9,5 @@ build/
 *.egg-info/
 node_modules/
 .DS_Store
+# Emily demo source material (broker research, expert calls, client models): never committed or uploaded
+data/emily_data/
