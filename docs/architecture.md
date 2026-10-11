@@ -71,7 +71,7 @@ The first screen is the graph, a caption, and one row of controls; panels open o
 | `js/animator/` | The trace player and the guide |
 | `js/charts/` | Fan charts, distribution glyphs, sparklines |
 | `js/graph/layout-hier.js`, `isolate.js` | The hierarchical layout (regions within regions, causes left of effects, nothing overlapping); isolating one node's drivers and effects |
-| `js/graph/lod.js`, `attention.js`, `zoom-slider.js`, `zoom.js` | Detail that follows zoom node by node; what a person looks at and at what zoom (learned, in the browser); the zoom slider; the gliding wheel |
+| `js/graph/lod.js`, `attention.js`, `zoom-slider.js`, `zoom.js` | Detail that follows zoom node by node; what a person looks at and at what zoom (learned, in the browser); the zoom slider; the gliding wheel and the buffered (composited) zoom |
 | `js/panels/paths.js` | The transmission grid: input, each order, output; four ways of isolating what is relevant (`inference/paths.py`) |
 | `js/names.js`, `js/util.js`; `js/graph/legend.js` | Names for ids, so every panel reads the same way; small DOM helpers; the key of categories and symbols |
 

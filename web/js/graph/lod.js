@@ -30,7 +30,7 @@ export function createLOD(r, attention) {
   const pinned = new Set();        // kept open whatever the zoom (an isolated graph's entities)
 
   function viewBox(t, margin = 0) {
-    const rect = r.svg.node().getBoundingClientRect();
+    const rect = r.zoom.rect();
     const i = r.insets?.() ?? { left: 0, right: 0 };
     const x0 = (i.left - t.x) / t.k;
     const x1 = (rect.width - i.right - t.x) / t.k;

@@ -40,7 +40,14 @@ export class GraphRenderer {
 
 const LABEL_SETTLE = 3;         // layouts in a row a hidden label needs room before it shows again
 const TAB_REACH = 180;          // world units: a tab further than this from its free spots starts afresh
-const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+// theme colors, read once a frame: reading computed style on every tick forced the page's styles to be recomputed
+const cssCache = new Map();
+const css = (name) => {
+  if (!cssCache.size) requestAnimationFrame(() => cssCache.clear());
+  let v = cssCache.get(name);
+  if (v == null) { v = getComputedStyle(document.documentElement).getPropertyValue(name).trim(); cssCache.set(name, v); }
+  return v;
+};
 const NAME_FONT = "600 13px Instrument Sans";
 const ROW_FONT = "500 11.5px Instrument Sans";
 const TAB_FONT = "700 13px Instrument Sans";
@@ -126,10 +133,13 @@ export class SvgRenderer extends GraphRenderer {
     this.tabSpots = new Map();   // where each superentity's tab last sat (world units)
     this.lastMove = 0;
     this.personZoomUntil = 0;
-    this.zoom = createZoom(this.svg, this.root, { grid, onZoom: (t, byUser) => {
+    this.zoom = createZoom(this.svg, this.root, { grid, onRest: () => this.releaseLayout(), onZoom: (t, byUser) => {
       this.lastMove = performance.now();
       if (byUser) {
         this.autoFrame = false;
+        // buffered (Oct 11): a layout still floating holds still while a person zooms or pans, so the moving view is
+        // one composited layer that nothing redraws underneath; it floats on from where it was once the view rests
+        this.holdLayout();
         // while a person zooms or pans, what slides under a still cursor is not being pointed at: no hover pop-ups or
         // focus dimming flick on and off; the canvas takes the pointer again once the view has rested
         if (!document.body.classList.contains("zooming")) {
@@ -147,6 +157,7 @@ export class SvgRenderer extends GraphRenderer {
     } });
     // attention: every half second the view is still, the nodes in its middle count as looked at
     this.attentionTimer = setInterval(() => this.observeAttention(), 500);
+    this.sim.on("end.contours", () => { if (this.contourStale) this.updateContours(true); });
     this.sim.on("end.frame", () => {
       // not while a walkthrough or a staged review frames what it is showing
       const framed = document.body.classList.contains("staging") || document.querySelector("#walkthrough:not(.hidden)");
@@ -159,6 +170,19 @@ export class SvgRenderer extends GraphRenderer {
       ev.preventDefault();
       this.handlers.onContext?.(ev, { kind: "canvas" });
     });
+  }
+
+  holdLayout() {
+    if (this.layoutHeld || performance.now() - (this.lastTickAt ?? 0) > 120) return;
+    this.layoutHeld = true;
+    this.sim.stop();
+  }
+
+  releaseLayout() {
+    if (this.contourStale) this.updateContours();
+    if (!this.layoutHeld) return;
+    this.layoutHeld = false;
+    this.sim.restart();
   }
 
   makeMarkers() {
@@ -1644,6 +1668,7 @@ export class SvgRenderer extends GraphRenderer {
   // -- tick -------------------------------------------------------------------------------------------
   ticked(force = false) {
     if (!this.view || !this.model) return;
+    this.lastTickAt = performance.now();
     const nodes = [...this.nodes.values()];
     for (const n of nodes) {
       if (n.hGoal == null) continue;
@@ -1665,7 +1690,7 @@ export class SvgRenderer extends GraphRenderer {
     this.tickFrontier();
     this.tickGhosts();
     this.tickCount += 1;
-    if (force || this.contourDirty || (this.tickCount % 2 === 0 && this.moved())) this.updateContours();
+    if (force || this.contourDirty || (this.tickCount % 2 === 0 && this.moved())) this.updateContours(force);
     if (this.fuzzySel && this.sim.alpha() > 0.03) this.drawFuzzy(false);
     this.tickOverlays();
     if (force || this.labelsDirty || this.tickCount % 5 === 0) this.layoutLabels();
@@ -1777,11 +1802,27 @@ export class SvgRenderer extends GraphRenderer {
     });
   }
 
-  updateContours() {
+  // the world-space box the view shows, grown by `margin` of its size on each side
+  viewWorld(margin = 0) {
+    const t = this.zoom.transform();
+    const { width, height } = this.zoom.rect();
+    const w = width / t.k;
+    const h = height / t.k;
+    const x0 = -t.x / t.k;
+    const y0 = -t.y / t.k;
+    return { x0: x0 - w * margin, y0: y0 - h * margin, x1: x0 + w * (1 + margin), y1: y0 + h * (1 + margin) };
+  }
+
+  // DECISION (Oct 11): while the layout floats, only outlines in or near the view are traced again; one off screen
+  // keeps its last outline until it comes into view or the layout settles (`full`). Zoomed in, most outlines are off
+  // screen, and tracing them all on every tick was most of a tick.
+  updateContours(full = false) {
     this.contourDirty = false;
     const nodes = [...this.nodes.values()];
     const rects = new Map(nodes.map((n) => [n.id, rectOf(n)]));
     this.lastContourPos = new Map(nodes.map((n) => [n.id, [n.x, n.y, n.h]]));
+    const v = full ? null : this.viewWorld(0.35);
+    this.contourStale = false;
     for (const g of this.openGroups ?? []) {
       const ids = new Set();
       for (const m of g.members) {
@@ -1789,12 +1830,19 @@ export class SvgRenderer extends GraphRenderer {
         if (b) ids.add(b);
       }
       const members = [...ids].map((id) => rects.get(id)).filter(Boolean);
+      if (v && this.contours.get(g.key) && members.length) {
+        let x0 = Infinity; let y0 = Infinity; let x1 = -Infinity; let y1 = -Infinity;
+        for (const r of members) { x0 = Math.min(x0, r.x0); y0 = Math.min(y0, r.y0); x1 = Math.max(x1, r.x1); y1 = Math.max(y1, r.y1); }
+        if (x1 < v.x0 || x0 > v.x1 || y1 < v.y0 || y0 > v.y1) { this.contourStale = true; continue; }
+      }
       const obstacles = nodes.filter((n) => !ids.has(n.id)).map((n) => rects.get(n.id));
       const c = hullContourCached(g.key, members, obstacles, PAD + NEST_PAD * g.level);
       this.contours.set(g.key, c);
     }
     this.hullSel?.each((g, i, els) => {
-      d3.select(els[i]).select("path.shape").attr("d", this.contours.get(g.key)?.d ?? null);
+      const path = els[i].querySelector("path.shape");
+      const d = this.contours.get(g.key)?.d ?? null;
+      if (path && path.getAttribute("d") !== d) d3.select(path).attr("d", d);
     });
     this.drawLenses();
     const netPlaced = [];
@@ -1969,7 +2017,7 @@ export class SvgRenderer extends GraphRenderer {
     const r = this.screenOf(id);
     if (!r) return;
     const i = this.insets?.() ?? { left: 0, right: 0 };
-    const box = this.svg.node().getBoundingClientRect();
+    const box = this.zoom.rect();
     const lo = box.left + i.left + margin;
     const hi = box.right - i.right - margin;
     if (hi - lo < 40) return;
@@ -2227,7 +2275,7 @@ export class SvgRenderer extends GraphRenderer {
     const r = t ? this.shapeOf(t, 0) : null;
     if (!r) return null;
     const tr = this.zoom.transform();
-    const box = this.svg.node().getBoundingClientRect();
+    const box = this.zoom.rect();
     const [x0, y0] = tr.apply([r.x, r.y]);
     const [x1, y1] = tr.apply([r.x + r.w, r.y + r.h]);
     return { left: box.left + x0, top: box.top + y0, right: box.left + x1, bottom: box.top + y1 };

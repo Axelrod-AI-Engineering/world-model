@@ -94,6 +94,10 @@ body.offline #clock::after { content: "offline"; font-size: 10px; color: var(--d
 body.strip #stage { top: calc(var(--topbar-h) + 36px); }
 #canvas { position: absolute; inset: 0; background: var(--paper); overflow: hidden; outline: none; }
 #canvas > svg { width: 100%; height: 100%; display: block; user-select: none; }
+/* buffered zoom (graph/zoom.js): the svg slides as one composited layer while the view moves; overflow shows what was
+   drawn past its edge, so a pan reveals the graph rather than blank paper */
+#canvas > svg { overflow: visible; transform-origin: 0 0; }
+#canvas.buffering > svg { will-change: transform; }
 #canvas.draw-mode > svg { cursor: crosshair; }
 .floating { position: absolute; z-index: 5; }
 /* the part of the canvas the side panels leave visible: main.js sets the insets, and the caption, banners, and

@@ -5,19 +5,46 @@
 /* global d3 */
 
 const K_EXTENT = [0.2, 3.5];
+// DECISION (Oct 11): zooming and panning are buffered, like map tiles. While the view moves, the drawing already made is
+// slid and scaled as one composited layer (a CSS transform on the svg), so no frame re-lays out or repaints the
+// graph; the real transform is committed once the view rests, or sooner once the layer has been scaled so far it
+// would blur. Zoomed in, a frame used to repaint every value row, outline, and label.
+const REST_MS = 140;
+const SHARP = [0.67, 1.5];       // commit mid-gesture once the buffered scale leaves this range
 
-export function createZoom(svg, root, { onZoom, grid } = {}) {
+export function createZoom(svg, root, { onZoom, onRest, grid } = {}) {
+  const node = svg.node();
+  const host = node.parentNode;   // the zoom lives on the svg's container, which never moves
+  const ours = (ev) => ev.target === host || node.contains(ev.target);
   let gliding = false;
+  let committed = d3.zoomIdentity;
+  let restTimer = 0;
+  function commit(t = d3.zoomTransform(host)) {
+    clearTimeout(restTimer);
+    restTimer = 0;
+    committed = t;
+    root.attr("transform", t);
+    grid?.(t);
+    node.style.transform = "";
+    host.classList.remove("buffering");
+  }
+  function buffer(t) {
+    const s = t.k / committed.k;
+    if (s < SHARP[0] || s > SHARP[1]) { commit(t); return; }
+    host.classList.add("buffering");
+    node.style.transform = `translate(${t.x - s * committed.x}px,${t.y - s * committed.y}px) scale(${s})`;
+  }
   const zoom = d3.zoom()
     .scaleExtent(K_EXTENT)
-    // the wheel is ours (below); d3 keeps drag-to-pan and pinch on touch screens
-    .filter((ev) => ev.type !== "wheel" && !ev.button && !ev.ctrlKey && ev.type !== "dblclick")
+    // the wheel is ours (below); d3 keeps drag-to-pan and pinch on touch screens, on the canvas only (not its overlays)
+    .filter((ev) => ev.type !== "wheel" && !ev.button && !ev.ctrlKey && ev.type !== "dblclick" && ours(ev))
     .on("zoom", (ev) => {
-      root.attr("transform", ev.transform);
-      grid?.(ev.transform);
+      buffer(ev.transform);
+      clearTimeout(restTimer);
+      restTimer = setTimeout(() => { commit(); onRest?.(); }, REST_MS);
       onZoom?.(ev.transform, !!ev.sourceEvent || gliding);      // the second argument: a person moved the view
     });
-  svg.call(zoom).on("dblclick.zoom", null);
+  d3.select(host).call(zoom).on("dblclick.zoom", null);
 
   // the gliding wheel: notches (or a trackpad's stream of small deltas, or a pinch, which arrives as ctrl+wheel) move a
   // target scale; each frame the view covers a share of the remaining distance in log scale, about the cursor
@@ -25,7 +52,7 @@ export function createZoom(svg, root, { onZoom, grid } = {}) {
   let anchor = null;
   let raf = 0;
   const glide = () => {
-    const t = d3.zoomTransform(svg.node());
+    const t = d3.zoomTransform(host);
     const lk = Math.log(t.k);
     const lt = Math.log(target);
     const done = Math.abs(lt - lk) < 0.003;
@@ -33,32 +60,36 @@ export function createZoom(svg, root, { onZoom, grid } = {}) {
     const wx = (anchor[0] - t.x) / t.k;
     const wy = (anchor[1] - t.y) / t.k;
     gliding = true;
-    svg.call(zoom.transform, d3.zoomIdentity.translate(anchor[0] - wx * k, anchor[1] - wy * k).scale(k));
+    d3.select(host).call(zoom.transform, d3.zoomIdentity.translate(anchor[0] - wx * k, anchor[1] - wy * k).scale(k));
     gliding = false;
     if (done) { target = null; raf = 0; return; }
     raf = requestAnimationFrame(glide);
   };
-  svg.node().addEventListener("wheel", (ev) => {
+  host.addEventListener("wheel", (ev) => {
+    if (!ours(ev)) return;
     ev.preventDefault();
-    svg.interrupt();
+    d3.select(host).interrupt();
     const unit = ev.deltaMode === 1 ? 0.05 : ev.deltaMode === 2 ? 1 : 0.002;
     const f = Math.pow(2, -ev.deltaY * unit * (ev.ctrlKey ? 4 : 1));
-    const base = target ?? d3.zoomTransform(svg.node()).k;
+    const base = target ?? d3.zoomTransform(host).k;
     target = Math.max(K_EXTENT[0], Math.min(K_EXTENT[1], base * f));
-    const r = svg.node().getBoundingClientRect();
+    const r = host.getBoundingClientRect();
     anchor = [ev.clientX - r.left, ev.clientY - r.top];
     if (!raf) raf = requestAnimationFrame(glide);
   }, { passive: false });
 
-  const size = () => svg.node().getBoundingClientRect();
-  const to = (next, duration) => (duration ? svg.transition().duration(duration).call(zoom.transform, next)
-    : svg.call(zoom.transform, next));
+  const size = () => host.getBoundingClientRect();
+  // jumps buffer too (the slider's drag is a stream of them); screen boxes measured meanwhile include the layer's slide
+  const to = (next, duration) => (duration ? d3.select(host).transition().duration(duration).call(zoom.transform, next)
+    : d3.select(host).call(zoom.transform, next));
 
   return {
     zoom,
-    transform: () => d3.zoomTransform(svg.node()),
+    transform: () => d3.zoomTransform(host),
+    // the canvas's box on screen (the svg itself slides while a zoom is buffered)
+    rect: () => host.getBoundingClientRect(),
     by(factor, duration = 180) {
-      svg.transition().duration(duration).call(zoom.scaleBy, factor);
+      d3.select(host).transition().duration(duration).call(zoom.scaleBy, factor);
     },
     // fit a box [[x0, y0], [x1, y1]] inside the viewport, leaving room for overlays
     fit(bounds, duration = 320, { maxK = 1.25, minK = 0.2, pad = { top: 64, right: 24, bottom: 64, left: 24 } } = {}) {
@@ -82,12 +113,12 @@ export function createZoom(svg, root, { onZoom, grid } = {}) {
     // dx shifts the center, e.g. to the middle of what the side panels leave visible
     centerOn(x, y, k = null, duration = 300, dx = 0) {
       const { width, height } = size();
-      const kk = k ?? Math.max(d3.zoomTransform(svg.node()).k, 1);
+      const kk = k ?? Math.max(d3.zoomTransform(host).k, 1);
       to(d3.zoomIdentity.translate(width / 2 + dx - x * kk, height / 2 - y * kk).scale(kk), duration);
     },
     // move the view by screen pixels
     panBy(dx, dy, duration = 260) {
-      const t = d3.zoomTransform(svg.node());
+      const t = d3.zoomTransform(host);
       to(d3.zoomIdentity.translate(t.x + dx, t.y + dy).scale(t.k), duration);
     },
   };
@@ -102,8 +133,10 @@ export function installGrid(svg, defs) {
     .attr("width", 120).attr("height", 120);
   const majorLine = major.append("path").attr("d", "M120 0H0V120").attr("fill", "none").attr("class", "grid-major-line");
   const bg = svg.insert("g", ":first-child").attr("class", "grid-bg").attr("pointer-events", "none");
-  bg.append("rect").attr("width", "100%").attr("height", "100%").attr("fill", "url(#grid-minor)");
-  bg.append("rect").attr("width", "100%").attr("height", "100%").attr("fill", "url(#grid-major)");
+  // three canvases wide and tall, so a buffered pan or zoom out never slides past its edge
+  for (const id of ["grid-minor", "grid-major"]) {
+    bg.append("rect").attr("x", "-100%").attr("y", "-100%").attr("width", "300%").attr("height", "300%").attr("fill", `url(#${id})`);
+  }
   return (t) => {
     const tr = `translate(${t.x},${t.y}) scale(${t.k})`;
     minor.attr("patternTransform", tr);
