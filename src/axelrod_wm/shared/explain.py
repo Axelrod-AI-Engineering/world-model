@@ -68,8 +68,13 @@ def top_paths(channels: list[Channel], shocks: list[tuple[str, float]], targets:
             continue
         if key not in best_edge or _sig(ch) > _sig(best_edge[key]):
             best_edge[key] = ch
+    # costs must be non-negative for Dijkstra: a learned effect can exceed one standard unit, so significance is taken
+    # relative to the strongest edge's when that passes 1 (paths of one length keep their order; each edge then costs
+    # log(scale) more, a slight preference for shorter paths)
+    top = max((_sig(ch) for ch in best_edge.values()), default=1.0)
+    scale = max(top, 1.0)
     for (s, t), ch in best_edge.items():
-        g.add_edge(s, t, weight=-math.log(max(_sig(ch), 1e-6)), channel=ch)
+        g.add_edge(s, t, weight=-math.log(max(_sig(ch) / scale, 1e-6)), channel=ch)
     out: list[PathContribution] = []
     for shock_id, size in shocks:
         for tgt in targets:
