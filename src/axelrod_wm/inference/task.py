@@ -155,12 +155,16 @@ class InferenceTask:
             chans = list(coupled[top_s.id].channels)
         trans = transmission_map(sorted({s.subentity_id for s in shocks}), chans, mix.effect,
                                  int(ctx.notes["horizon_days"]), int(ctx.config.propagation.min_delay_days))
+        from axelrod_wm.inference.paths import source_of
+
+        grid_src = source_of(sorted({s.subentity_id for s in shocks}), chans, mix.effect, int(ctx.notes["horizon_days"]),
+                             trans, int(ctx.config.propagation.min_delay_days)) if chans else None
         reached = {e.subentity_id for e in trans} | {s.subentity_id for s in shocks}
         binding = {sid: round(v, 4) for sid, v in sorted(hits.items()) if v >= 0.05 and sid in reached}
         forecast = forecast.model_copy(update={"groups": groups, "effect_density": densities,
                                                "movers": movers(mix, coupled, shocked), "transmission": trans,
                                                "shocked": sorted({s.subentity_id for s in shocks}),
-                                               "constraints_binding": binding})
+                                               "constraints_binding": binding, "paths": grid_src})
         if scenarios:
             from axelrod_wm.dynamics.regressors import emit_frames
 

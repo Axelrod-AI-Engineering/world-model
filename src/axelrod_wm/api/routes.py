@@ -598,6 +598,70 @@ async def get_forecast_brief(request: Request, forecast_id: str) -> dict:
     return await st.call(lambda: brief_view(st.controller, forecast_id))
 
 
+def _grid_view(ctl, src: dict | None, method: str, outputs: list[str] | None, title: str) -> dict:
+    """The transmission grid (Oct 11): one way of isolating a shock's relevant paths, with names and entities."""
+    from axelrod_wm.inference.paths import METHODS, isolate
+
+    if method not in METHODS:
+        raise HTTPException(400, f"method must be one of {sorted(METHODS)}")
+    if not src or not src.get("values"):
+        return {"method": method, "methods": [{"id": k, "label": v} for k, v in METHODS.items()], "title": title,
+                "empty": True, "values": {}, "edges": [], "inputs": [], "outputs": []}
+    g = ctl.engine.wm.graph
+    grid = isolate(src, method, outputs)
+    for sid, v in grid["values"].items():
+        s = g.subentities.get(sid)
+        eid = s.entity_id if s is not None else sid.split(".")[0]
+        v.update(name=s.name if s is not None else sid.split(".")[-1].replace("_", " "), unit=s.unit if s is not None else "",
+                 entity_id=eid, entity=g.entities[eid].name if eid in g.entities else eid)
+    for e in grid["edges"]:
+        inter = g.interactions.get(e["key"].split(":")[0])
+        e["label"] = inter.label if inter is not None else ""
+    grid["title"] = title
+    return grid
+
+
+@router.get("/paths/proposal/{proposal_id}")
+async def proposal_paths(request: Request, proposal_id: str, method: str = "relevant", outputs: str | None = Query(None),
+                         keep: str | None = Query(None), conf: float | None = Query(None, ge=0, le=1),
+                         opconf: str | None = Query(None), ripple: str | None = Query(None)) -> dict:
+    """A staged event's ripple as a grid: input, first, second, third order, output; `method` picks what is relevant
+    (inference/paths.py METHODS). Stages the proposal the way the review does, with the same parameters."""
+    from axelrod_wm.control.stage import stage
+
+    st = S(request)
+    kept = None if keep is None else [int(x) for x in keep.split(",") if x.strip()]
+    outs = [x for x in (outputs or "").split(",") if x.strip()] or None
+
+    def run() -> dict:
+        r = stage(st.controller, proposal_id, kept, with_graph=False, confidence=conf,
+                  op_confidence=_op_confidence(opconf), ripple=_ripple(ripple))
+        return _grid_view(st.controller, r.paths, method, outs, r.headline or proposal_id)
+
+    return await st.call(run)
+
+
+@router.get("/paths/forecast/{forecast_id}")
+async def forecast_paths(request: Request, forecast_id: str, method: str = "relevant",
+                         outputs: str | None = Query(None)) -> dict:
+    """A forecast's transmission as a grid; the outputs are the question's targets unless given."""
+    st = S(request)
+    outs = [x for x in (outputs or "").split(",") if x.strip()] or None
+
+    def run() -> dict:
+        ctl = st.controller
+        fc = ctl.forecast(forecast_id)
+        if fc is None:
+            raise KeyError(forecast_id)
+        # the outputs: what the question asked about by name; a question that names none reports everything that moves,
+        # so its grid ends where the chains end instead (inference/paths.default_outputs)
+        thesis = getattr(ctl, "theses", {}).get(fc.thesis_id)
+        asked = [t for t in (thesis.targets if thesis is not None else []) if t not in set(fc.shocked)]
+        return _grid_view(ctl, fc.paths, method, outs or asked or None, fc.question or forecast_id)
+
+    return await st.call(run)
+
+
 @router.get("/forecasts/{forecast_id}")
 async def get_forecast(request: Request, forecast_id: str) -> dict:
     st = S(request)

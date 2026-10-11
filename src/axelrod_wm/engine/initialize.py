@@ -565,11 +565,14 @@ class Initializer:
         obj_home = {iid: gid for gid, n in og.taxonomy.nodes.items() for iid in n.instance_ids}
         created = []
         with eng.mutator.begin("seeds", at=now) as txn:
+            # a second seed file (a demo's own, on top of its base world's) adds to what the first set
             palettes = dict(DEFAULT_PALETTES)
+            palettes.update(getattr(og, "palettes", None) or {})
             palettes.update(seeds.palettes)
             txn.set("ltm.object_generalizations.palettes", palettes)
-            txn.set("ltm.object_generalizations.super_interaction_labels",
-                    {f"{d['source']}->{d['target']}": d["label"] for d in seeds.super_interaction_labels})
+            labels = dict(getattr(og, "super_interaction_labels", None) or {})
+            labels.update({f"{d['source']}->{d['target']}": d["label"] for d in seeds.super_interaction_labels})
+            txn.set("ltm.object_generalizations.super_interaction_labels", labels)
             for ps in seeds.patterns:
                 for m in ps.members:
                     if m not in graph.entities:

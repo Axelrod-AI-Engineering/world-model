@@ -133,7 +133,8 @@ body.strip #stage { top: calc(var(--topbar-h) + 36px); }
 #stage.cramped #search-box:not(:focus-within) { opacity: 0; pointer-events: none; }
 #stage.cramped #btn-draw { display: none; }
 #gesture-hint {
-  bottom: 16px; left: calc(var(--inset-l) + 130px); right: calc(var(--inset-r) + 600px); margin-inline: auto; width: fit-content;
+  /* above the row of canvas controls, so it never covers one of them */
+  bottom: 62px; left: calc(var(--inset-l) + 14px); right: calc(var(--inset-r) + 14px); margin-inline: auto; width: fit-content;
   display: flex; gap: 8px; align-items: center; padding: 5px 6px 5px 14px; border-radius: 999px; font-size: 12px; color: var(--ink-2);
   background: rgba(255, 253, 248, 0.94); border: 1px solid var(--rule); box-shadow: var(--shadow); transition: opacity 0.25s;
 }
@@ -146,6 +147,33 @@ body.strip #stage { top: calc(var(--topbar-h) + 36px); }
 #canvas-controls .seg button { padding: 6px 11px; font-size: 12px; }
 #canvas-controls .seg button.icon { padding: 6px 9px; font-size: 14px; line-height: 1; }
 #canvas-controls #btn-draw { padding: 6px 11px; font-size: 12px; }
+/* the zoom slider (Oct 11): log scale; bands for what each zoom shows; learned detents */
+.zoom-slider { display: flex; align-items: center; gap: 2px; padding: 0 4px; height: 30px; background: var(--sheet);
+  border: 1px solid var(--rule); border-radius: 999px; box-shadow: var(--shadow); }
+.zoom-slider .zs-step { border: 0; background: none; padding: 4px 7px; font-size: 14px; line-height: 1; color: var(--ink-2); }
+.zoom-slider .zs-track { position: relative; width: 132px; height: 22px; }
+.zoom-slider .zs-bands { position: absolute; left: 7px; right: 7px; top: 10px; height: 3px; display: flex; border-radius: 2px; overflow: hidden; }
+/* one color by default; Admin > Settings colors it by what each zoom shows */
+body:not(.zoom-bands) .zoom-slider .zs-bands span { background: var(--ink-3); opacity: .45; }
+.zoom-slider .zs-bands span { display: block; height: 100%; }
+.zoom-slider .b-cards { background: var(--butter-line, #D2BB72); }
+.zoom-slider .b-ents { background: var(--wm-line, #A9C6A9); }
+.zoom-slider .b-vals { background: var(--real-line); }
+.zoom-slider .zs-detents { position: absolute; left: 7px; right: 7px; top: 0; height: 100%; pointer-events: none; }
+.zoom-slider .zs-detent { position: absolute; top: 1px; width: 9px; height: 9px; margin-left: -4.5px; padding: 0; border-radius: 50%;
+  border: 1.5px solid var(--ink-2); background: var(--sheet); pointer-events: auto; cursor: pointer; }
+.zoom-slider .zs-detent:hover { background: var(--ink-2); }
+.zoom-slider input[type=range] { position: absolute; inset: 0; width: 100%; margin: 0; background: none; -webkit-appearance: none; appearance: none; }
+.zoom-slider input[type=range]::-webkit-slider-runnable-track { height: 22px; background: none; }
+.zoom-slider input[type=range]::-moz-range-track { height: 22px; background: none; }
+.zoom-slider input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; margin-top: 5px; border-radius: 50%;
+  background: var(--sheet); border: 2px solid var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.18); }
+.zoom-slider input[type=range]::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50%; background: var(--sheet); border: 2px solid var(--ink); }
+/* values appear softly as an entity opens */
+/* a value wipes in at full strength as its entity opens: never half-transparent text */
+@keyframes row-in { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+.pill g.row { animation: row-in 0.26s ease-out both; }
+@media (prefers-reduced-motion: reduce) { .pill g.row { animation: none; } }
 
 /* key: the eight categories and the symbols */
 #key {
@@ -365,7 +393,11 @@ body.has-examples .pill.fresh rect.body { stroke: var(--pill-line); stroke-dasha
 .hull:hover path.shape { stroke-width: 2.2; }
 .hull-tab rect { fill: var(--sheet); stroke-width: 1.25; }
 .hull-tab text { font: 700 13px var(--font-ui); dominant-baseline: central; }
-.hull-tab { cursor: pointer; }
+.hull-tab { cursor: pointer; transition: transform .3s cubic-bezier(.2,.7,.2,1); }
+.hull-tab.placing { transition: none; }
+/* while the view zooms or pans, the canvas's content takes no hover (the svg itself still takes the wheel and drag) */
+body.zooming #canvas svg > g { pointer-events: none; }
+@media (prefers-reduced-motion: reduce) { .hull-tab { transition: none; } }
 .hull-tab:hover rect { stroke-width: 2; }
 .edge path.line { fill: none; stroke: var(--edge); stroke-linecap: round; opacity: 0.42; transition: opacity 0.2s; }
 .edge.focus path.line { opacity: 1; }
@@ -921,6 +953,8 @@ g.netline.dim { opacity: 0.32; transition: opacity 0.3s; }
    read committed versions; nothing is learned, so the learning controls go away. */
 .seg.mode button { padding: 4px 11px; font-size: 12.5px; }
 body.mode-predict .learn-only { display: none !important; }
+/* Predict shows a caption only when it is about a question; a Learn example's story stays in Learn */
+body.mode-predict #caption:not(.hyp) { display: none; }
 body.mode-learn .predict-only { display: none !important; }
 button.linkish { background: none; border: 0; padding: 0; color: var(--real-ink); text-decoration: underline; text-decoration-color: var(--real-line); text-underline-offset: 2px; cursor: pointer; font: inherit; }
 button.linkish:hover { color: var(--ink); background: none; }
@@ -1279,7 +1313,7 @@ figure.stage-flow[class*="st-"] { --fl-band: color-mix(in srgb, var(--sf) 32%, v
 .walk-ph.skip { opacity: 0.38; border-style: dashed; background: transparent; cursor: default; }
 /* full screen: any window over the canvas fills the space between the top and bottom bars */
 .win-max-btn { font-size: 14px; line-height: 1; padding: 3px 7px; color: var(--ink-2); }
-:is(#methods, #examples, #console, #chat, #walkthrough, #left-panel, #right-panel, #drawer).win-max {
+:is(#methods, #examples, #console, #chat, #walkthrough, #left-panel, #right-panel, #drawer, #paths).win-max {
   position: fixed !important; top: calc(var(--topbar-h) + 8px) !important; left: 12px !important; right: 12px !important;
   bottom: calc(var(--bottom-h) + 8px) !important; width: auto !important; height: auto !important; max-width: none !important;
   max-height: none !important; transform: none !important; z-index: 80 !important; }
@@ -1474,3 +1508,72 @@ figure.stage-flow[class*="st-"] { --fl-band: color-mix(in srgb, var(--sf) 32%, v
 body.finding #caption { opacity: 0; pointer-events: none; transition: opacity .2s; }
 /* the review or news panel covers the top-left corner: the levels path steps aside while it is open */
 #stage.left-open #levels { display: none; }
+
+/* the transmission grid (Oct 11): input, each order, output; rows are entities; values move day by day */
+/* it keeps clear of the open side panels while 900px fit between them, and gives way on the left first */
+.manual.paths { --room: calc(100% - var(--inset-l) - var(--inset-r) - 20px);
+  left: clamp(10px, calc(var(--inset-l) + 10px), calc(100% - var(--inset-r) - 910px));
+  width: max(min(1120px, var(--room)), min(900px, calc(100% - 20px))); }
+.px-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 4px 0 2px; }
+.px-top .seg button { padding: 5px 10px; font-size: 12px; }
+.px-play { min-width: 34px; padding: 4px 8px; }
+.px-iso { font-size: 12px; padding: 4px 10px; }
+.px-iso[aria-pressed="true"] { background: var(--real-fill); border-color: var(--real-line); color: var(--real-ink); }
+.px-day { width: 180px; }
+.px-help { margin: 4px 0 8px; }
+.px-wrap { position: relative; overflow: auto; max-height: calc(100vh - 260px); padding-bottom: 4px; }
+.px-edges { position: absolute; left: 0; top: 0; pointer-events: none; z-index: 0; overflow: visible; }
+.px-table { position: relative; z-index: 1; display: grid; grid-template-columns: 120px repeat(5, minmax(108px, 1fr)); gap: 6px 20px; align-items: start; }
+.px-table.skeleton { grid-template-columns: repeat(5, minmax(120px, 1fr)); opacity: 1; }
+.px-colhead { font: 600 11px var(--font-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2);
+  padding: 4px 8px; border-radius: 6px; border-left: 3px solid var(--rule); background: var(--paper); }
+.px-colhead.o0 { border-color: var(--o0-line); } .px-colhead.o1 { border-color: var(--o1-line); }
+.px-colhead.o2 { border-color: var(--o2-line); } .px-colhead.o3 { border-color: var(--o3-line); }
+.px-colhead.out { border-color: var(--out-line); }
+.px-ent { font: 600 12.5px var(--font-ui); color: var(--ink); padding: 8px 0 0; overflow-wrap: anywhere; line-height: 1.3; }
+.px-cell { display: flex; flex-direction: column; gap: 6px; min-height: 8px; }
+.px-chip { display: grid; grid-template-columns: minmax(0, 1fr) auto; white-space: normal; grid-template-areas: "name num" "meter meter"; gap: 3px 6px; text-align: left;
+  padding: 6px 8px; border-radius: 8px; border: 1px dashed var(--rule); background: var(--sheet); color: var(--ink-3); cursor: pointer;
+  transition: border-color .25s, color .25s, box-shadow .25s; }
+.px-chip.moved { border-style: solid; color: var(--ink); box-shadow: var(--shadow); }
+.px-cell.o0 .px-chip.moved { border-color: var(--o0-line); } .px-cell.o1 .px-chip.moved { border-color: var(--o1-line); }
+.px-cell.o2 .px-chip.moved { border-color: var(--o2-line); } .px-cell.o3 .px-chip.moved { border-color: var(--o3-line); }
+.px-cell.out .px-chip.moved { border-color: var(--out-line); }
+.px-name { grid-area: name; font-size: 12px; overflow-wrap: anywhere; line-height: 1.3; min-width: 0; }
+.px-chip.asked .px-name { font-weight: 600; }
+.px-num { grid-area: num; font-size: 11px; }
+.px-chip.moved .px-num { color: var(--up); }
+.px-chip.moved:has(.bar.down) .px-num { color: var(--down); }
+.px-meter { grid-area: meter; position: relative; height: 8px; border-radius: 4px; background: var(--rule-soft); overflow: hidden; }
+.px-meter i { position: absolute; top: 0; bottom: 0; }
+.px-meter .band { background: var(--rule); border-radius: 4px; }
+.px-meter .bar { top: 1.5px; bottom: 1.5px; background: var(--up); border-radius: 3px; }
+.px-meter .bar.down { background: var(--down); }
+.px-meter .zero { left: 50%; width: 1px; background: var(--ink-3); }
+.px-edge { fill: none; stroke: var(--rule); stroke-linecap: round; transition: stroke .3s, opacity .2s; }
+.px-edge.live { stroke-dasharray: 6 5; animation: px-flow .9s linear infinite; }
+.px-edge.live.up { stroke: var(--up); } .px-edge.live.down { stroke: var(--down); }
+.px-edge.done { animation: none; stroke-dasharray: none; }
+.px-edge.hot { stroke-width: 4; }
+.px-edge.dim { opacity: .25; }
+@keyframes px-flow { to { stroke-dashoffset: -11; } }
+@media (prefers-reduced-motion: reduce) { .px-edge.live { animation: none; } }
+.px-loading { display: flex; align-items: center; gap: 10px; padding: 10px 2px 14px; color: var(--ink-2); font-size: 13px; }
+.px-foot { margin-top: 10px; }
+.rv-grid { margin-left: auto; font-size: 11.5px; padding: 2px 8px; }
+.rv-sec h4:has(.rv-grid) { display: flex; align-items: baseline; gap: 8px; }
+/* the output column reads first: a little larger, names in bold */
+.px-cell.out .px-chip { padding: 8px 10px; }
+.px-cell.out .px-name { font-weight: 600; font-size: 12.5px; }
+/* isolate (Oct 11): what is shown, and the way back */
+#isolate-banner { top: 14px; left: calc(var(--inset-l) + 14px); right: calc(var(--inset-r) + 290px); margin-inline: auto; width: fit-content;
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 6px 8px 6px 14px; font-size: 12.5px; color: var(--ink);
+  background: var(--sheet); border: 1px solid var(--real-line); border-radius: 999px; box-shadow: var(--shadow); z-index: 30; }
+#isolate-banner.hidden { display: none; }
+#isolate-banner select { font: 12px var(--font-ui); padding: 1px 4px; }
+#isolate-banner .seg button { padding: 3px 9px; font-size: 11.5px; }
+body.isolated #caption { display: none; }
+.px-ord { display: inline-block; min-width: 14px; margin-right: 5px; padding: 0 3px; border-radius: 4px; font: 600 10px var(--font-mono);
+  font-style: normal; text-align: center; color: var(--ink-2); border: 1px solid var(--rule); }
+.px-ord.o1 { background: var(--o1-fill); border-color: var(--o1-line); } .px-ord.o2 { background: var(--o2-fill); border-color: var(--o2-line); }
+.px-ord.o3 { background: var(--o3-fill); border-color: var(--o3-line); }

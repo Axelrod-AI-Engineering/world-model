@@ -252,6 +252,9 @@ export function initAdmin({ renderer, actions }) {
       <div class="seg" role="group">${[["first", "First time"], ["always", "Every time"], ["off", "Off"]]
         .map(([k, l]) => `<button data-guide="${k}" aria-pressed="${gm === k}">${l}</button>`).join("")}</div>
       <div class="row" style="margin-top:6px"><button class="ghost small" data-a="guide-again">Show it on the next forecast</button></div>
+      <h4>Canvas</h4>
+      <div class="toggles"><label class="tog"><input type="checkbox" data-tog="zoombands" ${document.body.classList.contains("zoom-bands") ? "checked" : ""}> Color the zoom bar by what each zoom shows</label>
+        <label class="tog"><input type="checkbox" data-tog="gridauto" ${store.settings.gridAuto !== false ? "checked" : ""}> Open the transmission grid with each review and forecast</label></div>
       <h4>Story</h4>
       <div class="toggles"><label class="tog"><input type="checkbox" data-tog="captions" ${store.settings.captions !== false ? "checked" : ""}> Story captions above the canvas</label></div>
       <h4>Animation</h4>
@@ -308,6 +311,13 @@ export function initAdmin({ renderer, actions }) {
         else if (k === "f1links") actions.setFigure1Links(c.checked);
         else if (k === "reduced") actions.setReducedMotion(c.checked);
         else if (k === "captions") actions.setCaptions(c.checked);
+        else if (k === "zoombands") {
+          document.body.classList.toggle("zoom-bands", c.checked);
+          try { localStorage.setItem("axelrod.zoomBands", c.checked ? "1" : "0"); } catch { /* private window */ }
+        } else if (k === "gridauto") {
+          store.settings.gridAuto = c.checked;
+          try { localStorage.setItem("axelrod.gridAuto", c.checked ? "1" : "0"); } catch { /* private window */ }
+        }
       });
     }
   }

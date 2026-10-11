@@ -182,6 +182,10 @@ class Analysis(BaseModel):
     levels: PropagationResult | None = None              # the shocked run (levels)
     horizon_days: int = 0
     transmission: list[Any] = []                         # material effects by order, with paths (addition)
+    # what the transmission grid needs, kept by reference so nothing is computed unless a grid is asked for (Oct 11)
+    channels: list[Any] = []
+    transmission_all: list[Any] = []
+    shocked: list[str] = []
 
 
 class Analyzer(ABC):

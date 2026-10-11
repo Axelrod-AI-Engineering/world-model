@@ -70,6 +70,14 @@ export const api = {
     return get(`/proposals/${q(id)}/stage${qs ? `?${qs}` : ""}`);
   },
   checks: () => get("/checks"),
+  // the transmission grid (Oct 11): one way of isolating what matters (method), for a staged proposal or a forecast
+  pathsProposal: (id, method, { keep = null, conf = null, ripple = null } = {}) => {
+    const qs = [`method=${q(method)}`, keep ? `keep=${keep.join(",")}` : "", conf != null ? `conf=${conf}` : "",
+                ripple && Object.keys(ripple).length ? `ripple=${encodeURIComponent(Object.entries(ripple).map(([s, p]) => `${s}:${p ?? ""}`).join(","))}` : ""]
+      .filter(Boolean).join("&");
+    return get(`/paths/proposal/${q(id)}?${qs}`);
+  },
+  pathsForecast: (id, method) => get(`/paths/forecast/${q(id)}?method=${q(method)}`),
   find: (q) => get(`/find?q=${encodeURIComponent(q)}`),
   reject: (id, note, by = "human") => post(`/proposals/${q(id)}/reject`, { by, note }),
   edit: (id, event, by = "human") => post(`/proposals/${q(id)}/edit`, { by, event }),

@@ -169,7 +169,6 @@ export function initHypotheses({ toast }) {
         try {
           const fv = await api.poseHypothesis(id, base);
           emit("show-forecast", fv);
-          toast(`Posed ${fv.forecast.thesis_id}.`, "hyp");
         } catch (err) { toast(errorText(err), "err"); }
       });
       for (const st of ["supported", "refuted"]) {

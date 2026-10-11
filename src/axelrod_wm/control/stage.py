@@ -23,7 +23,7 @@ from contextlib import contextmanager
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Iterator
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from axelrod_wm.events.graph_update import op_confidence as op_confidence_of
 from axelrod_wm.flows import WORLD_MODEL, flow_path
@@ -131,6 +131,7 @@ class StagedReview(BaseModel):
     confidence: float = 1.0          # the reviewer's confidence in the article's changes (Oct 8)
     evidence: dict | None = None     # a frontier promotion: the checks the pair passed, each with its articles
     bounds: dict = {}                # the checks' bounds from the config (Oct 9): commit_posterior, recognition
+    paths: dict | None = Field(default=None, exclude=True)   # the transmission grid's source; served by /api/paths
 
 
 # ---------------------------------------------------------------------------------------------------
@@ -733,7 +734,8 @@ def _review(ctl: WorldModelController, p: Proposal, kept: list[int], items: list
                         source=me.source if me is not None else None,
                         world_event=p.world_event, keep=kept, items=items, stages=stages, moves=moves, ripple=ripple,
                         learned=learned, lessons=lessons, raises=raises, commits=commits, marks=marks, graph=graph,
-                        version=version, error=error)
+                        version=version, error=error,
+                        paths=_grid_source(result, ctl))
 
 
 def _lessons(changesets: list[ChangeSet], live_wm: Any, live_ltm: Any, wm: Any, ltm: Any, sub_name: Any) -> list[str]:
@@ -956,3 +958,14 @@ def format_review(r: StagedReview) -> str:
 
 
 __all__ = ["Adjustment", "Learned", "StageIO", "StagedItem", "StagedReview", "closure", "format_review", "sandbox", "stage", "subset"]
+
+
+def _grid_source(result: Any, ctl: Any) -> dict | None:
+    """The transmission grid's source for a staged event (inference/paths.py), from the analysis the staging ran."""
+    an = getattr(getattr(result, "shared", None), "analysis", None)
+    if an is None or an.result is None or not an.shocked:
+        return None
+    from axelrod_wm.inference.paths import source_of
+
+    return source_of(an.shocked, an.channels, an.result.z_of, an.horizon_days, an.transmission_all,
+                     int(ctl.engine.config.propagation.min_delay_days))

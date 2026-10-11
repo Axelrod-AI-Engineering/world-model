@@ -44,6 +44,8 @@ The full demo runs on Railway's `dev` environment at **https://world-model-dev.u
 | [docs/interface.md](docs/interface.md) | A tour of the interface: the top bar, the canvas, the panels, and every shortcut |
 | [docs/cli.md](docs/cli.md) | The command line and configuration |
 | [docs/architecture.md](docs/architecture.md) | A map from the code to its processes, and the invariants |
+| [docs/ml-stack.md](docs/ml-stack.md) | The ML stack as built, stated formally, with its adversarial review |
+| [docs/ml-roadmap.md](docs/ml-roadmap.md) | The plan to replace each heuristic with a method we can defend |
 | [docs/deployment.md](docs/deployment.md) | The Railway dev deployment, Basic Auth, and running the container locally |
 | [docs/development.md](docs/development.md) | Tests, the repository layout, conventions, and the demo videos |
 | [docs/plan.md](docs/plan.md) | The original specification, which the code's § references point to |

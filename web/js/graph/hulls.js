@@ -216,6 +216,23 @@ function bridges(rects) {
 
 const smooth = d3.line().curve(d3.curveBasisClosed);
 
+// A remembered outline (Oct 11): tracing is the canvas's costliest step, and most ticks move nothing near a given
+// outline, so each one is traced again only when its members, or the boxes in its reach, moved by a pixel or more.
+const traced = new Map();
+export function hullContourCached(key, members, obstacles, pad = PAD) {
+  if (!members.length) { traced.delete(key); return null; }
+  let x0 = Infinity; let y0 = Infinity; let x1 = -Infinity; let y1 = -Infinity;
+  for (const r of members) { x0 = Math.min(x0, r.x0); y0 = Math.min(y0, r.y0); x1 = Math.max(x1, r.x1); y1 = Math.max(y1, r.y1); }
+  const m = 2 * pad + 2 * CELL + CLEAR;
+  const near = obstacles.filter((r) => r.x1 > x0 - m && r.x0 < x1 + m && r.y1 > y0 - m && r.y0 < y1 + m);
+  const sig = `${pad}|${[members, near].map((rs) => rs.map((r) => `${Math.round(r.x0)},${Math.round(r.y0)},${Math.round(r.x1)},${Math.round(r.y1)}`).join(";")).join("|")}`;
+  const hit = traced.get(key);
+  if (hit && hit.sig === sig) return hit.c;
+  const c = hullContour(members, near, pad);
+  traced.set(key, { sig, c });
+  return c;
+}
+
 // Trace a group's outline. `members` and `obstacles` are rects {x0, y0, x1, y1} in canvas coordinates.
 // Returns {d, anchor, bbox} or null.
 export function hullContour(members, obstacles, pad = PAD) {

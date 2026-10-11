@@ -6,6 +6,8 @@
 | [interface.md](interface.md) | A tour of the interface: the top bar, the canvas, the panels, and every shortcut |
 | [cli.md](cli.md) | The command line, configuration, and environment variables |
 | [architecture.md](architecture.md) | A map from the code to its processes, and the invariants |
+| [ml-stack.md](ml-stack.md) | The ML stack as built, stated formally, with its adversarial review |
+| [ml-roadmap.md](ml-roadmap.md) | The plan to replace each heuristic with a method we can defend |
 | [deployment.md](deployment.md) | The Railway dev deployment, Basic Auth, and running the container locally |
 | [development.md](development.md) | Tests, the repository layout, conventions, and the demo videos |
 | [plan.md](plan.md) | The original specification (historical) |

@@ -159,6 +159,10 @@ export function initReview({ openModal, toast, onFocusGraph }) {
       </footer>`;
     card.querySelector(".rv-scroll").scrollTop = scroll;
     card.querySelector('[data-act="approve"]').addEventListener("click", () => approve(p.id));
+    card.querySelector("[data-grid]")?.addEventListener("click", () => {
+      const c = confOf(p.id);
+      emit("paths-open", { kind: "proposal", id: p.id, keep: [...keepOf(p.id)].sort((a, b) => a - b), conf: c.all, ripple: c.ripple });
+    });
     card.querySelector('[data-act="reject"]').addEventListener("click", () => reject(p.id));
     card.querySelector('[data-act="defer"]').addEventListener("click", () => act(() => api.defer(p.id, "backend user"), `Deferred ${p.id}.`, p.id));
     card.querySelector('[data-act="edit"]').addEventListener("click", () => edit(p.id));
@@ -425,7 +429,8 @@ export function initReview({ openModal, toast, onFocusGraph }) {
           ${w < 1 ? `<button class="linkish small" data-rip-reset="${sid}">as the analysis expects</button>` : `<span class="small muted">the probability it arrives</span>`}</div>` : ""}</li>`;
     };
     if (byOrder.size) {
-      working.push(`<section class="rv-sec"><h4>The ripple <span class="small muted">does each order make sense? deselect or weigh a value's ripple</span></h4>
+      working.push(`<section class="rv-sec"><h4>The ripple <span class="small muted">does each order make sense? deselect or weigh a value's ripple</span>
+          <button class="ghost small rv-grid" data-grid type="button" title="Input, each order, and output as a grid, moving day by day (G)">As a grid</button></h4>
         ${[...byOrder.entries()].sort((a, b) => a[0] - b[0]).map(([k, xs]) => `<div class="rv-order o${k}">
           <div class="rv-oh"><span class="sw o${k}" aria-hidden="true"></span>${esc(ORDER[k] ?? `Order ${k}`)}</div>
           <ul>${xs.map(ripRow).join("")}</ul></div>`).join("")}

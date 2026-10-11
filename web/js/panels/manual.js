@@ -153,8 +153,9 @@ export function initManual({ toast, onProposal }) {
       const out = exampleId ? await api.runExample(exampleId, spec) : await api.manual(spec);
       const pid = out.proposal_id ?? out.proposal?.id;
       close();
-      toast(exampleId ? "Staged: check the review, then approve all, some, or none." : "Staged for your review.");
+      // the review opens on it, so no toast
       if (pid) onProposal?.(pid);
+      else toast("Staged for your review.");
     } catch (e) {
       busy = false;
       render();

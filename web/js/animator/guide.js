@@ -106,6 +106,16 @@ export class Guide {
   // Hop next to a target and say one line. `target`: an id or ids on the canvas, {el} for a DOM element.
   async say(text, target, { wait = true, ms = null } = {}) {
     if (!this.run) return;
+    // a passing line (wait: false) that follows another within a moment changes the words in place: no hop, no pop,
+    // so a quick run of steps does not make the guide flicker across the canvas (Oct 11)
+    const now = performance.now();
+    if (!wait && now - (this.lastPop ?? 0) < 2200) {
+      this.spot(target);
+      this.txt.textContent = text;
+      this.sub.textContent = "";
+      return;
+    }
+    this.lastPop = now;
     const rect = this.rectOf(target);
     this.spot(target);
     this.moveTo(rect);

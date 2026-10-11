@@ -12,6 +12,8 @@ import { CATEGORY_NAMES } from "./graph/layouts.js";
 import { closeMenu, menuOpen, openMenu } from "./graph/menu.js";
 import { kinKey } from "./graph/model.js";
 import { SvgRenderer } from "./graph/renderer.js";
+import { initZoomSlider } from "./graph/zoom-slider.js";
+import { isolationSet } from "./graph/isolate.js";
 import { initAdmin } from "./panels/admin.js";
 import { initBriefs } from "./panels/briefs.js";
 import { initCaption } from "./panels/caption.js";
@@ -20,6 +22,7 @@ import { initConsole } from "./panels/console.js";
 import { initDecisions } from "./panels/decisions.js";
 import { initExamples } from "./panels/examples.js";
 import { initChecks } from "./panels/checks.js";
+import { initPaths } from "./panels/paths.js";
 import { initFind } from "./panels/find.js";
 import { initLevels } from "./panels/levels.js";
 import { entityLens, groupLens, linkLens } from "./graph/lens.js";
@@ -53,7 +56,7 @@ const SHORTCUTS = [
   ["Demo", [["E", "Examples (the tutorial)"], ["→", "Next scripted step"], ["Space", "Play or pause"],
             ["⇧← · ⇧→", "Step through the timeline"], ["U", "Request an update"]]],
   ["Walkthrough", [["W", "How it learned (the latest news) or how it inferred (the latest question)"], ["← · →", "Previous · next step (while open)"]]],
-  ["Panels", [["I", "Console: the commit log (Learn)"], ["N", "News"], ["B", "Forecast briefs"], ["Q", "Ask a question"], ["M", "Long-term memory"], ["C", "Checks: what the model is testing"],
+  ["Panels", [["I", "Console: the commit log (Learn)"], ["N", "News"], ["B", "Forecast briefs"], ["Q", "Ask a question"], ["M", "Long-term memory"], ["C", "Checks: what the model is testing"], ["G", "Transmission grid: input, each order, output"], ["X", "Isolate the selection: what drives it and what it moves"],
               ["H", "How it works, the literature, the implementation"], [",", "Admin: story, map, view, settings"], ["A · R", "Approve · reject the focused proposal"], ["?", "This sheet"]]],
 ];
 
@@ -71,8 +74,11 @@ function openModal(markup, setup) {
 }
 
 // A toast; with `action` ({label, run}) it carries one button, e.g. "Report" after an update.
+// DECISION (Oct 11): toasts are for errors, for work that finished out of sight, and for results nothing else on screen
+// shows; a toast repeating one still on screen is dropped, and at most two show at once.
 function toast(text, kind = "real", action = null) {
   const box = $("#toast");
+  if ([...box.children].some((t) => t.firstChild?.textContent === text)) return;
   const t = document.createElement("div");
   t.className = `t ${kind}`;
   t.textContent = text;
@@ -84,8 +90,14 @@ function toast(text, kind = "real", action = null) {
     t.classList.add("act");
   }
   box.prepend(t);
-  while (box.children.length > 3) box.lastChild.remove();
+  while (box.children.length > 2) box.lastChild.remove();
   setTimeout(() => t.remove(), kind === "err" ? 9000 : action ? 7000 : 3600);
+}
+
+// a toast that explains something the first time only (per browser)
+function once(key, text) {
+  try { if (localStorage.getItem(`axelrod.told.${key}`)) return; localStorage.setItem(`axelrod.told.${key}`, "1"); } catch { /* say it */ }
+  toast(text);
 }
 
 // counts read "0" most of the time; a zero count hides itself so only news that needs you shows
@@ -126,7 +138,13 @@ async function boot() {
   // the part of the canvas they leave visible, so nothing useful hides under an open panel
   const stage = $("#stage");
   let insets = { left: 0, right: 0 };
-  renderer.insets = () => insets;
+  // an open transmission grid that isolates the canvas covers its top: fits frame what is kept below it
+  renderer.insets = () => {
+    const pane = renderer.isolated?.way === "grid" ? document.getElementById("paths") : null;
+    if (!pane || pane.classList.contains("hidden") || pane.classList.contains("win-max")) return insets;
+    const c = $("#canvas").getBoundingClientRect();
+    return { ...insets, top: Math.max(0, Math.min(pane.getBoundingClientRect().bottom - c.top + 8, c.height - 260)) };
+  };
   function syncInsets() {
     const c = $("#canvas").getBoundingClientRect();
     const l = left.hidden ? 0 : Math.max(0, Math.round(left.getBoundingClientRect().right - c.left));
@@ -141,6 +159,7 @@ async function boot() {
   for (const p of [left, right]) new ResizeObserver(syncInsets).observe(p);
   window.addEventListener("resize", syncInsets);
   function activateTab(name) {
+    if (right.dataset.tab === "forecast" && name !== "forecast") clearForecastCanvas();
     for (const b of document.querySelectorAll("#right-tabs [data-tab]")) b.setAttribute("aria-selected", String(b.dataset.tab === name));
     for (const p of document.querySelectorAll("#right-body .tabpanel")) p.classList.toggle("active", p.id === `tab-${name}`);
     right.dataset.tab = name;
@@ -152,7 +171,23 @@ async function boot() {
     activateTab(name);
     syncInsets();
   }
+  // leaving a forecast or its brief (Oct 11): the paths it lit stop dimming the rest of the canvas
+  // (the forecast's animation and the guide stop drawing on it too, even if they are still running)
+  function clearForecastCanvas() {
+    if (store.walkthrough) return;
+    store.forecastDismissed = true;
+    if (window.axelrod?.guide?.run) window.axelrod.guide.stop();
+    renderer.setOverlayGroups([]);
+    renderer.focusOverlay?.(null);
+    renderer.setFlows({});
+    renderer.clearHalos();
+    if (!store.highlight) return;
+    store.highlight = null;
+    renderer.setHighlight(store.isolatedHighlight ?? null);
+    emit("highlight", null);
+  }
   function closeRight() {
+    if (right.dataset.tab === "forecast") clearForecastCanvas();
     right.hidden = true;
     $("#btn-ask").setAttribute("aria-expanded", "false");
     syncInsets();
@@ -170,6 +205,7 @@ async function boot() {
     emit("tab-left", name);
   }
   function closeLeft() {
+    if (left.dataset.tab === "briefs") clearForecastCanvas();
     left.hidden = true;
     left.classList.remove("wide");
     $("#btn-inbox").setAttribute("aria-expanded", "false");
@@ -189,7 +225,7 @@ async function boot() {
   const inspector = initInspector({
     onSelect: (sel) => select(sel), focusNode: (id) => renderer.focusNode(id), renderer,
     onAction: (act, arg) => {
-      if (act === "toggle-entity") { renderer.toggleEntity(arg); select(store.selection); }
+      if (act === "toggle-entity") { renderer.toggleEntityByHand(arg); select(store.selection); }
       else if (act === "ask-entity") { thesis.prefill(arg); openRight("thesis"); }
       else if (act === "toggle-group") { renderer.toggleGroup(arg); select(store.selection); }
       else if (act === "close-parts") renderer.setGroupChildren(arg, true);
@@ -234,11 +270,16 @@ async function boot() {
     onProposal: async (pid) => { await refreshGraph(); openLeft("review"); review.focus(pid); },
   });
   const checks = initChecks({ toast, onSelect: (sel) => select(sel) });
+  // the grid's part of the graph, isolated on the canvas (Oct 11): only its entities, laid out causes-left like the
+  // grid's columns, its interactions lit, framed in the room the grid window leaves; closing the grid brings it all back
+  const paths = initPaths({ toast, onSelect: (sel) => select(sel),
+    onShow: (g, lay) => isolateGrid(g, lay), onIsolate: (g, lay) => (g ? isolateGrid(g, lay) : unisolate()),
+    onHide: () => { if (renderer.isolated?.way === "grid") unisolate(); } });
   const examples = initExamples({
     toast,
     onManual: (spec, id) => { setMode("learn", false); manual.open(spec, { example: id }); },
     onProposal: async (pid) => { await refreshGraph(); openLeft("review"); review.focus(pid); },
-    onQuestion: (q) => { setMode("predict"); thesis.setQuestion(q); openRight("thesis"); toast("Predict: ask it. A forecast runs on a branch; nothing is learned."); },
+    onQuestion: (q) => { setMode("predict", false); thesis.setQuestion(q); openRight("thesis"); },
     onReset: () => loadScenario(store.status?.scenario_id ?? "small_demo"),
   });
   on("open-examples", () => examples.open());
@@ -309,6 +350,9 @@ async function boot() {
     const onGraph = (ev) => { if (ev.target.closest?.("g.pill, g.card-super, g.hull, g.edge, g.row, g.frontier")) done(); };
     for (const t of ["click", "dblclick", "contextmenu"]) svg.addEventListener(t, onGraph, true);
     hint.querySelector(".x").addEventListener("click", done);
+    // it has said its piece once the canvas has been zoomed or panned, or after a while
+    svg.addEventListener("wheel", done, { once: true, passive: true });
+    setTimeout(() => { if (hint.isConnected) done(); }, 20000);
   }
 
   let levels = null;
@@ -450,11 +494,15 @@ async function boot() {
       openMenu(at, {
         title: e?.name ?? target.id, subtitle: (e?.category_tags ?? []).map((t) => CATEGORY_NAMES[t] ?? t).join(", "),
         items: [
-          { label: open ? "Hide its subentities" : "Show its subentities", kbd: "dbl-click", action: () => renderer.toggleEntity(target.id) },
+          { label: open ? "Hide its subentities" : "Show its subentities", kbd: "dbl-click", action: () => renderer.toggleEntityByHand(target.id) },
           { label: "Inspect", kbd: "click", action: () => select({ kind: "entity", id: target.id }) },
           { label: "What if it moves?", action: () => { thesis.prefill(target.id); openRight("thesis"); } },
           { label: "Forecast it", action: () => forecastIt("entity", target.id) },
           ...walkItem(target.id),
+          { sep: true }, { group: "Isolate" },
+          { label: "What drives it and what it moves", kbd: "X", action: () => isolate([target.id], "both") },
+          { label: "Only what drives it", action: () => isolate([target.id], "up") },
+          { label: "Only what it moves", action: () => isolate([target.id], "down") },
           ...(gs.length ? [{ sep: true }, { group: "Its superentities" }] : []),
           ...gs.map((k) => {
             const closed = renderer.ui.collapsed.has(k);
@@ -478,7 +526,8 @@ async function boot() {
           { label: "What if it moves?", action: () => { thesis.prefill(target.id); openRight("thesis"); } },
           { label: "Forecast it", action: () => forecastIt("subentity", target.id) },
           ...walkItem(target.id),
-          { label: "Hide this entity's subentities", action: () => renderer.toggleEntity(s.entity_id, false) },
+          { label: "Hide this entity's subentities", action: () => renderer.toggleEntityByHand(s.entity_id, false) },
+          { label: "Isolate what drives it and what it moves", kbd: "X", action: () => isolate([s.entity_id], "both") },
           ...(used.length ? [{ sep: true }, { group: "Superentities that use it" }] : []),
           ...used.map((k) => {
             const h = renderer.groupsInfo.byKey.get(k).hulls[0];
@@ -707,7 +756,23 @@ async function boot() {
   }
   // a staged review opens the entities it touches, so their values and order tints show
   let fittedFor = null;
+  // the transmission grid is the default view of a ripple (Oct 11): it opens once per proposal and per forecast
+  let gridShownFor = null;
+  // what the Transmission button opens: the staged ripple, or the forecast last shown
+  let gridTarget = null;
+  function setGridTarget(t) {
+    gridTarget = t;
+    $("#btn-grid").classList.toggle("hidden", !t);
+  }
+  function autoGrid(kind, id, has) {
+    if (has) setGridTarget({ kind, id });
+    else if (gridTarget?.kind === kind) setGridTarget(null);
+    if (store.settings.gridAuto === false || !has || gridShownFor === `${kind}:${id}` || store.booting) return;
+    gridShownFor = `${kind}:${id}`;
+    emit("paths-open", { kind, id });
+  }
   function showStagedItems(r) {
+    autoGrid("proposal", r.proposal_id, (r.ripple ?? []).length > 0);
     const ents = new Set();
     for (const id of [...(r.marks?.new ?? []), ...Object.keys(r.marks?.orders ?? {})]) {
       const e = String(id).split(".")[0];
@@ -729,7 +794,12 @@ async function boot() {
       <span class="lg o0">the event's move</span> <span class="lg o1">1st order</span> <span class="lg o2">2nd</span> <span class="lg o3">3rd</span>`;
     banner.classList.remove("hidden");
   }
-  on("staged", (r) => { if (!r) { $("#staged-banner").classList.add("hidden"); fittedFor = null; } });
+  on("staged", (r) => {
+    if (r) { if ((r.ripple ?? []).length && r.proposal_id) setGridTarget({ kind: "proposal", id: r.proposal_id }); return; }
+    $("#staged-banner").classList.add("hidden");
+    fittedFor = null;
+    if (gridTarget?.kind === "proposal") setGridTarget(null);
+  });
   on("staged-hover", (refs) => {
     if (!refs) { renderer.setHighlight(store.highlight); return; }
     const ents = new Set(refs.map((x) => String(x).split(".")[0]).filter((e) => (store.view?.entities ?? []).some((x) => x.id === e)));
@@ -807,11 +877,29 @@ async function boot() {
   $("#btn-review").addEventListener("click", () => toggleLeft("review"));
   $("#btn-ask").addEventListener("click", () => (!right.hidden && right.dataset.tab === "thesis" ? closeRight() : openRight("thesis")));
   $("#btn-briefs").addEventListener("click", () => toggleLeft("briefs"));
+  $("#btn-briefs-top").addEventListener("click", () => toggleLeft("briefs"));
+  // the transmission grid: the staged ripple or the forecast last shown; again closes it
+  $("#btn-grid").addEventListener("click", () => {
+    const pid = store.staged?.review?.proposal_id;
+    if (paths.isOpen()) paths.close();
+    else if (gridTarget) emit("paths-open", gridTarget);
+    else if (pid) emit("paths-open", { kind: "proposal", id: pid });
+    else paths.open();
+  });
+  new MutationObserver(() => $("#btn-grid").setAttribute("aria-expanded", String(paths.isOpen())))
+    .observe($("#paths"), { attributes: true, attributeFilter: ["class"] });
+  // Briefs sits in the bar (Predict) once there is one to read
+  const briefsTop = $("#briefs-count-top");
+  new MutationObserver(() => {
+    const n = +($("#briefs-count").textContent || 0);
+    briefsTop.textContent = String(n);
+    $("#btn-briefs-top").classList.toggle("hidden", !n);
+  }).observe($("#briefs-count"), { childList: true, characterData: true, subtree: true });
   $("#btn-methods").addEventListener("click", () => methods.toggle());
   on("open-methods", ({ tab, anchor } = {}) => methods.open(tab, anchor));
   // full screen (Oct 8): every window over the canvas has a ⤢ button; it fills the space between the bars, and again
   // restores it. Double-clicking a window's header does the same.
-  const WINDOWS = "#methods, #examples, #manual, #checks, #console, #chat, #walkthrough, #left-panel, #right-panel, #drawer";
+  const WINDOWS = "#methods, #examples, #manual, #checks, #paths, #console, #chat, #walkthrough, #left-panel, #right-panel, #drawer";
   const toggleMax = (win) => {
     const on_ = !win.classList.contains("win-max");
     win.classList.toggle("win-max", on_);
@@ -837,6 +925,7 @@ async function boot() {
   // -- views (restructure): Learn for backend users, who update the one world model; Predict for everyone
   // else, who pose theses against committed versions and never change it --------------------------------
   function setMode(mode, announce = true) {
+    if (mode === "learn") clearForecastCanvas();
     store.settings.mode = mode;
     document.body.classList.toggle("mode-learn", mode === "learn");
     document.body.classList.toggle("mode-predict", mode === "predict");
@@ -848,9 +937,9 @@ async function boot() {
       if (examples.isOpen()) examples.close();
       if (!left.hidden && left.dataset.tab === "review") closeLeft();
       if (store.settings.draw) setDraw(false);
-      if (announce) toast("Predict: pose a thesis against the committed version. Nothing you do here is learned.");
+      if (announce) once("mode-predict", "Predict: pose a thesis against the committed version. Nothing you do here is learned.");
     } else if (announce) {
-      toast("Learn: update the world model. Every change is vetted and committed; the Console shows each step.");
+      once("mode-learn", "Learn: update the world model. Every change is vetted and committed; the Console shows each step.");
     }
   }
   $("#mode-learn").addEventListener("click", () => setMode("learn"));
@@ -881,14 +970,18 @@ async function boot() {
     renderer.autoDetail = on_;
     autoBtn.setAttribute("aria-pressed", String(on_));
     try { localStorage.setItem("axelrod.autoDetail", on_ ? "1" : "0"); } catch { /* private window */ }
-    if (on_) { renderer.autoLevel = renderer.detailLevel() ?? "entity"; renderer.scheduleAutoDetail(0); }
+    if (on_) { renderer.lod.reset(); renderer.scheduleAutoDetail(0); }
   }
   try { if (localStorage.getItem("axelrod.autoDetail") === "0") setAuto(false); } catch { /* ignore */ }
-  autoBtn.addEventListener("click", () => { setAuto(!renderer.autoDetail); toast(renderer.autoDetail ? "Detail follows zoom: zoom out for superentities, in for values." : "Detail stays where you set it."); });
+  // Oct 11: the zoom bar is one color unless colored by level (Admin > Settings); the grid opens with each review
+  try {
+    document.body.classList.toggle("zoom-bands", localStorage.getItem("axelrod.zoomBands") === "1");
+    store.settings.gridAuto = localStorage.getItem("axelrod.gridAuto") !== "0";
+  } catch { store.settings.gridAuto = true; }
+  autoBtn.addEventListener("click", () => setAuto(!renderer.autoDetail));
   for (const [k, b] of Object.entries(detailButtons)) b.addEventListener("click", () => { setAuto(false); renderer.setDetail(k); });
   $("#btn-fit").addEventListener("click", () => renderer.fit());
-  $("#zoom-in").addEventListener("click", () => renderer.zoomBy(1.25));
-  $("#zoom-out").addEventListener("click", () => renderer.zoomBy(0.8));
+  initZoomSlider($("#zoom-slider"), renderer, { names: (id) => renderer.entityName(id) });
   function setDraw(on_) {
     store.settings.draw = on_;
     $("#btn-draw").setAttribute("aria-pressed", String(on_));
@@ -904,7 +997,7 @@ async function boot() {
     admin?.refresh();
     if (nUndo && !hinted && !store.booting) {
       hinted = true;
-      toast(`${MOD}Z undoes view changes · ? lists every shortcut`);
+      once("undo", `${MOD}Z undoes view changes · ? lists every shortcut`);
     }
   }
   function undo() {
@@ -934,19 +1027,80 @@ async function boot() {
     if (name === "hypotheses") hyps.render();
     if (name === "decisions") decisions.render();
   });
-  on("show-forecast", () => openRight("forecast"));
+  on("show-forecast", (fv) => {
+    openRight("forecast");
+    if ((fv?.transmission?.values ?? []).length && fv.forecast?.id) setGridTarget({ kind: "forecast", id: fv.forecast.id });
+  });
   on("ask-started", ({ question }) => {
+    store.forecastDismissed = false;
     progress.run = { scope: null, question, phase: "posed", nets: 0, total: 0, current: "" };
     emit("forecasting", progress.run);
     openRight("forecast");
   });
   on("asked", (fv) => {
+    autoGrid("forecast", fv.forecast?.id, (fv.transmission?.values ?? []).length > 0);
     if (progress.run && progress.run.scope == null) { progress.run = null; emit("forecasting", null); }
     if (guide.run) briefs.expect(fv.forecast.thesis_id);
     else setTimeout(() => briefs.open(fv.forecast.id), 300);
   });
   on("walkthrough", (w) => { if (w) guide.stop(); });
   on("open-forecast", () => openRight("forecast"));
+
+  // -- isolate (Oct 11): one node's upstream and downstream, on their own ------------------------------------
+  const isoBanner = document.createElement("div");
+  isoBanner.id = "isolate-banner";
+  isoBanner.className = "floating hidden";
+  isoBanner.setAttribute("role", "status");
+  $("#canvas").appendChild(isoBanner);
+  const WAY = { both: "what drives it and what it moves", up: "what drives it", down: "what it moves" };
+  function isolate(ids, way = "both", hops = 3) {
+    const keep = isolationSet(store.view, ids, way, hops);
+    const name = ids.map((id) => renderer.entityName(id)).join(", ");
+    renderer.setIsolation({ ids, keep, way, hops });
+    isoBanner.innerHTML = `<b>Isolated:</b> ${esc(name)} <span class="muted">· ${esc(WAY[way])}, up to
+      <select data-hops aria-label="How many interactions away">${[1, 2, 3, 4, 5].map((h) => `<option ${h === hops ? "selected" : ""}>${h}</option>`).join("")}</select>
+      interactions away · ${keep.size} of ${store.view?.entities?.length ?? 0} entities</span>
+      <span class="seg">${Object.keys(WAY).map((w) => `<button data-way="${w}" aria-pressed="${w === way}">${{ both: "Both", up: "Drivers", down: "Effects" }[w]}</button>`).join("")}</span>
+      <button class="primary small" data-show-all title="Show the whole graph again (Esc)">Show all</button>`;
+    isoBanner.classList.remove("hidden");
+    isoBanner.querySelector("[data-hops]").addEventListener("change", (ev) => isolate(ids, way, +ev.target.value));
+    for (const b of isoBanner.querySelectorAll("[data-way]")) b.addEventListener("click", () => isolate(ids, b.dataset.way, hops));
+    isoBanner.querySelector("[data-show-all]").addEventListener("click", () => unisolate());
+  }
+  function unisolate() {
+    if (!renderer.isolated) return false;
+    const wasGrid = renderer.isolated.way === "grid";
+    renderer.setIsolation(null);
+    isoBanner.classList.add("hidden");
+    if (wasGrid) { store.isolatedHighlight = null; renderer.setHighlight(store.highlight); }
+    return true;
+  }
+  const GRID_DX = 330;      // world units between the grid's columns on the canvas
+  const GRID_DY = 84;       // and between its rows
+  function isolateGrid(g, lay) {
+    const known = new Set((store.view?.entities ?? []).map((e) => e.id));
+    const keep = new Set(Object.values(g.values ?? {}).map((v) => v.entity_id).filter((e) => known.has(e)));
+    if (!keep.size) return;
+    const same = renderer.isolated?.way === "grid" && renderer.isolated.keep.size === keep.size
+      && [...keep].every((e) => renderer.isolated.keep.has(e));
+    // the grid itself says what is isolated and switches it off, so no banner over the canvas
+    isoBanner.classList.add("hidden");
+    // each entity sits where the grid puts it: its column (where it is first reached) and its row, so the canvas reads
+    // left to right the way the grid does
+    const homes = new Map((lay?.rows ?? []).filter((r) => keep.has(r.id))
+      .map((r, i) => [r.id, { x: 600 + (r.col - (lay.cols - 1) / 2) * GRID_DX, y: 440 + i * GRID_DY }]));
+    const moved = renderer.isolated?.way === "grid" && [...homes].some(([id, h]) => {
+      const o = renderer.isolated.homes?.get(id);
+      return !o || o.x !== h.x || o.y !== h.y;
+    });
+    if (!same || moved) renderer.setIsolation({ ids: [...keep], keep, way: "grid", hops: 0, open: false, homes });
+    const hot = new Set((g.edges ?? []).map((e) => e.key));
+    store.isolatedHighlight = { entities: keep, links: hot, hulls: new Set(), hot };
+    renderer.setHighlight(store.isolatedHighlight);
+    // frame what is kept below the grid window, between the side panels (renderer.insets has the room)
+    setTimeout(() => renderer.frame([...keep], { duration: same && !moved ? 300 : 420, maxK: 1.1 }), same && !moved ? 0 : 140);
+  }
+
 
   // -- keyboard (§13.8) ----------------------------------------------------------------------------------
   document.addEventListener("keydown", (ev) => {
@@ -966,6 +1120,8 @@ async function boot() {
       if (walk.isOpen()) { walk.close(); return; }
       if (consolePane.isOpen()) { consolePane.close(); return; }
       if (manual.isOpen()) { manual.close(); return; }
+      if (paths.isOpen()) { paths.close(); return; }
+      if (unisolate()) return;
       if (checks.isOpen()) { checks.close(); return; }
       if (colorKey.isOpen()) { colorKey.close(); return; }
       if (examples.isOpen()) { examples.close(); return; }
@@ -985,7 +1141,7 @@ async function boot() {
     if (ev.metaKey || ev.ctrlKey || ev.altKey) return;
     // inside a panel, arrows scroll and Space presses the focused button, as anywhere else; the demo keys act
     // from the canvas and the top bar
-    const inPanel = !!ev.target.closest?.("#left-panel, #right-panel, #drawer, #admin, #methods, #console, #examples, #checks, #walkthrough, #tooltip");
+    const inPanel = !!ev.target.closest?.("#left-panel, #right-panel, #drawer, #admin, #methods, #console, #examples, #checks, #paths, #walkthrough, #tooltip");
     const onControl = !!ev.target.closest?.("button, a, summary, select, [role=button], [role=tab]");
     if (ev.key === " " && (onControl || inPanel)) return;
     if ((ev.key === "ArrowRight" || ev.key === "ArrowLeft") && inPanel && !walk.isOpen()) return;
@@ -1005,6 +1161,16 @@ async function boot() {
     else if (ev.key === "q" || ev.key === "Q") $("#btn-ask").click();
     else if (ev.key === "m" || ev.key === "M") memory.setOpen(!memory.isOpen());
     else if (ev.key === "c" || ev.key === "C") checks.toggle();
+    else if (ev.key === "x" || ev.key === "X") {
+      // isolate the selected entity (or the entity of the selected value); again to show everything
+      const sel = store.selection;
+      const eid = sel?.kind === "entity" ? sel.id : sel?.kind === "subentity" ? sel.id.split(".")[0] : null;
+      if (renderer.isolated) unisolate();
+      else if (eid) isolate([eid], "both");
+      else toast("Select an entity or a value first, then X isolates what drives it and what it moves.");
+    } else if (ev.key === "g" || ev.key === "G") {
+      $("#btn-grid").click();
+    }
     else if (ev.key === "k" || ev.key === "K") colorKey.toggle();
     else if (ev.key === "[") levels?.up();
     else if (ev.key === "]") levels?.down();
@@ -1042,6 +1208,8 @@ async function boot() {
   // DECISION (Oct 8): the example demos float in the gravity layout (entities arrive one article at a time, so a fixed
   // figure cannot place them well); so does any world with no hand-placed Figure 1. Admin › View switches back.
   const status0 = store.status ?? await api.status().catch(() => null);
+  // what this person looks at, and at what zoom, is learned per world (graph/attention.js)
+  renderer.useAttention(status0?.scenario_id ?? "default");
   if (status0?.examples || !Object.keys(layout?.entities ?? {}).length) {
     store.settings.layout = "gravity";
     renderer.quiet = true;                 // the default, not a view change to undo

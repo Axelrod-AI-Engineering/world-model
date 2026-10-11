@@ -31,7 +31,7 @@ Every step is a component with a contract (`engine/contracts.py`; `axelrod contr
 | `shared/` | The read that learning and inference share (`process.py`): parse, classify (sorting, plus the `incorporate` half that long-term learning runs), recall, recognition (binding patterns), prefill, analyze, explain |
 | `dynamics/` | Kernel recursions, regressors, Monte Carlo propagation with common random numbers and soft bounds, and the daily model (predict and record) |
 | `learning/` | `working_memory.py` (the event commit, and the day's open, record, and close); `long_term.py` (the event's lessons); `consolidate.py` (the daily distillation); `fold.py`; `generalize.py`; `kernel_learning.py`; `frontier_test.py`; `abduction.py` (schema induction); `structural.py` (approved structural changes); `task.py` (`LearningTask`, which runs the two processes) |
-| `inference/` | `task.py` (the inference task), isolate, predict, couple, unify, groups (forecasts for an entity, sector, superentity, or category), transmission (orders and paths), value of information, forecast records, decisions |
+| `inference/` | `task.py` (the inference task), `paths.py` (the transmission grid's source and its five ways of isolating what is relevant, the default discounting each further order), isolate, predict, couple, unify, groups (forecasts for an entity, sector, superentity, or category), transmission (orders and paths), value of information, forecast records, decisions |
 | `engine/` | The slot registry, config, `ProcessContext`, the interfaces, `contracts.py` (every slot's contract), `build_engine`, named random substreams, initialization (construction with each kind's defaults, seeds, the history replay) |
 | `control/` | `WorldModelController`, the façade the API, CLI, and runner call. It covers proposals, review, structure edits (`propose_group`, `propose_dissolve`, `propose_retire`), theses, and decisions. `updates.py` is the update run. `stage.py` is the staged review: an event's learning on a sandboxed copy of the state, reported change by change. |
 | `flows/` | Learning's overview as data, five stages with their input and output (`__init__.py`); each stage's own flowchart, with every condition, branch, and loop (`stages.py`); inference's overview and its six stage flowcharts (`inference.py`); the renderer to SVG and text (`render.py`) |
@@ -70,6 +70,9 @@ The first screen is the graph, a caption, and one row of controls; panels open o
 | `js/panels/*.js` | Inbox, inspector, thesis, forecast, briefs, hypotheses, decisions, memory, pipeline, timeline, caption, walkthrough, admin, chat |
 | `js/animator/` | The trace player and the guide |
 | `js/charts/` | Fan charts, distribution glyphs, sparklines |
+| `js/graph/layout-hier.js`, `isolate.js` | The hierarchical layout (regions within regions, causes left of effects, nothing overlapping); isolating one node's drivers and effects |
+| `js/graph/lod.js`, `attention.js`, `zoom-slider.js`, `zoom.js` | Detail that follows zoom node by node; what a person looks at and at what zoom (learned, in the browser); the zoom slider; the gliding wheel |
+| `js/panels/paths.js` | The transmission grid: input, each order, output; four ways of isolating what is relevant (`inference/paths.py`) |
 | `js/names.js`, `js/util.js`; `js/graph/legend.js` | Names for ids, so every panel reads the same way; small DOM helpers; the key of categories and symbols |
 
 The front end never computes model results: it renders the server's views and applies trace payloads.

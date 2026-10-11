@@ -238,6 +238,8 @@ const EFFECTS = {
       for (const c of n.channels ?? []) links.add(c);
       if (n.instance_id) hulls.add(n.instance_id);
     }
+    // once a person has left the forecast (main.js clearForecastCanvas), its animation stops dimming the canvas
+    if (store.forecastDismissed) { await sleep(duration(ev.kind, ctx)); return; }
     store.highlight = { entities: ents, links, hulls, hot: new Set() };
     ctx.renderer.setHighlight(store.highlight);
     emit("highlight", store.highlight);
@@ -310,7 +312,7 @@ const EFFECTS = {
     const ev = evs[evs.length - 1];
     const paths = ev.payload.top_paths ?? [];
     const run = runOf(ev);
-    if (paths.length && String(ev.refs?.[1] ?? "").startsWith("FC-")) {
+    if (paths.length && String(ev.refs?.[1] ?? "").startsWith("FC-") && !store.forecastDismissed) {
       ctx.renderer.clearHalos();
       ctx.renderer.setFlows({});
       const hot = new Set(paths.flatMap((p) => p.interaction_ids ?? p));

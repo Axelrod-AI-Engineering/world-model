@@ -597,10 +597,21 @@ class ProdDemoRunner(ExampleSession, ScenarioRunner):
                             "feature in a busier system.")
             super().load()                    # the oil world: construction, seeds, history (cached), hypotheses
             ctl = self.controller
+            self.load_own_seeds()
             ctl.set_review_policy("review_all")
             self.install_translator()
             self._broadcast()
             return self.status()
+
+    def load_own_seeds(self) -> None:
+        """The production demo's own superentities (Oct 11): superentities of superentities, three levels deep, added
+        on top of the oil world's seeds so the oil demo itself is unchanged (data/scenarios/prod_demo)."""
+        from axelrod_wm.engine.initialize import Initializer, SeedFile, resolve_path
+
+        path = resolve_path("data/scenarios/prod_demo/superentity_seeds.yaml")
+        if path.exists():
+            eng = self.controller.engine
+            Initializer(eng).load_seeds(SeedFile.load(path), now=eng.wm.clock)
 
     def resume(self, session: dict) -> RunnerStatus:
         raise ControllerError("the demos do not keep sessions; load them again")
