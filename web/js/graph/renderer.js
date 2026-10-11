@@ -1087,6 +1087,12 @@ export class SvgRenderer extends GraphRenderer {
     document.body.dataset.colorBy = mode;
   }
 
+  // sid -> z to show instead of today's (a forecast's effect), or null for today's state
+  setRowOverride(map) {
+    this.rowOverride = map && map.size ? map : null;
+    this.pillSel?.each((d, i, nodes) => this.drawRows(d3.select(nodes[i]).select("g.rows"), d));
+  }
+
   drawRows(g, d) {
     const pal = this.view?.palettes ?? {};
     const rows = d.open ? d.rows.map((sid, k) => ({ sid, k, s: this.subIndex.get(sid), w: d.w, eid: d.id })) : [];
@@ -1125,9 +1131,12 @@ export class SvgRenderer extends GraphRenderer {
       const gl = d3.select(nodes[i]).select("g.glyph").attr("transform", `translate(${r.w / 2 - 84},0)`);
       densityCurve(gl, r.s?.density, { width: 32, height: 10, marker: r.s?.summary?.q50 });
     });
+    // a forecast shown in Predict (Oct 11): the values it reaches show its effect, not today's state
+    const zOf = (r) => this.rowOverride?.get(r.sid) ?? r.s?.z;
     ra.select("text.rz").attr("x", (r) => r.w / 2 - 9)
-      .attr("fill", (r) => (r.s?.z > 0.25 ? css("--up") : r.s?.z < -0.25 ? css("--down") : css("--ink-3")))
-      .text((r) => (r.s ? `${r.s.z > 0.25 ? "▲" : r.s.z < -0.25 ? "▼" : ""}${Math.abs(r.s.z).toFixed(1)} sd` : ""));
+      .classed("forecast", (r) => !!this.rowOverride?.has(r.sid))
+      .attr("fill", (r) => (zOf(r) > 0.25 ? css("--up") : zOf(r) < -0.25 ? css("--down") : css("--ink-3")))
+      .text((r) => { const z = zOf(r); return r.s ? `${z > 0.25 ? "▲" : z < -0.25 ? "▼" : ""}${Math.abs(z).toFixed(1)} sd` : ""; });
     ra.each((r, i, nodes) => openNode(d3.select(nodes[i]).select("g.open-slot"), r.w / 2, 0, r.s?.open, { min: 1.5, max: 4, stub: 2.5 }));
     ra.on("click", (ev, r) => { ev.stopPropagation(); this.handlers.onSelect?.({ kind: "subentity", id: r.sid }); })
       .on("dblclick", (ev) => ev.stopPropagation())

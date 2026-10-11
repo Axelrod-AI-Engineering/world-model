@@ -1,16 +1,28 @@
 # The demos
 
-There are three demos. All three serve the same interface ([interface.md](interface.md)) over the same engine.
+There are four demos. All four serve the same interface ([interface.md](interface.md)) over the same engine.
 
 | Demo | Command | What it is |
 |---|---|---|
 | **Small demo** | `uv run axelrod small_demo` | A blank canvas. The 24 examples build a world model from nothing, one feature at a time. Start here. |
 | **Production demo** | `uv run axelrod prod_demo` | The same 24 examples in the oil-shock world, after three years of synthetic history, with a deeper hierarchy: superentities of superentities, three levels deep (Global tightening › Stagflation squeeze › Energy price shock; Tech decoupling › Semiconductor complex › AI chip supply chain; Oil to airlines) |
 | **Full demo** | `uv run axelrod demo` | The oil-shock scenario: 53 real actors and ideas and 18 scripted steps. The [hosted demo](deployment.md) runs this one. |
+| **Emily's demo** | `uv run axelrod demo --scenario emily_demo` | The ordinary use case: a PM's world model brought up to date by importing research, then forecasts of her book. See [below](#emilys-demo). |
 
 The small and production demos serve http://127.0.0.1:8765. The full demo serves http://127.0.0.1:8000 unless you pass `--port`.
 
-## The examples (small and production demos)
+## Emily's demo
+
+What an ordinary week with the product looks like for a cross-asset PM. The model starts with her view of the chain (oil → inflation and growth → the Fed and the BoJ → the US–Japan rate gap → USD/JPY → her names: Tokio Marine, Zurich, Toyota, Komatsu, SoftBank Corp, JPMorgan, Citi, Morgan Stanley, UniCredit), in six superentities. It has no synthetic history.
+
+1. **Import** (`I`, Learn) opens a bundle: research a collection agent has read and categorized, as dated items. Choose a JSON file, or one from the server's imports folder when it has one. The dialog shows the items as a timeline by day, with each item's source, category, relevance, and what it would change (a level, a move, a new link, or evidence for or against one), and what does not map onto the model.
+2. **Importing** folds the chosen items in on their own dates through one update, which stops at each item for review, oldest first. The review highlights the phrases each change comes from. When the last one is decided, the caption says the model is up to date.
+3. **Predict** opens on a blank canvas. Ask a question, or pick one of her four ready-made scenarios (from her Fed-versus-BoJ table and her yen simulator). The forecast brings forward only what it reaches, with the forecast's effect on each value; **Show the whole model** shows everything, as of the version the forecast used.
+4. **Tutorial** opens the small demo in place of the model, and **Back to your model** returns.
+
+The bundle format (`axelrod.import/v1`) is in `src/axelrod_wm/intake/bundle.py`; a synthetic sample is `tests/fixtures/import_bundle_sample.json`. Emily's own bundle is built from client research and lives in `data/emily_data/`, which is never committed or uploaded: on the hosted demo, import it with the file picker.
+
+## The tutorial (small and production demos)
 
 ```bash
 uv run axelrod small_demo              # a blank canvas
@@ -20,7 +32,7 @@ uv run axelrod small_demo --list       # the examples, and how many "more like t
 uv run axelrod small_demo --headless   # every example's review, printed in the terminal
 ```
 
-**Examples** (`E`) in the top bar lists 24 examples. Most show one feature of the framework through one or more sample articles. Two show a backend user adding what they know with no article at all. Each title names the idea it tests, for example "Analogy: a new shock recalls an old one".
+**Tutorial** (`E`) in the top bar lists 24 steps, called examples below. Most show one feature of the framework through one or more sample articles. Two show a backend user adding what they know with no article at all. Each title names the idea it tests, for example "Analogy: a new shock recalls an old one".
 
 | Memory | Examples |
 |---|---|

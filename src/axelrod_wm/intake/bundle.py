@@ -117,6 +117,7 @@ class ImportBundle(BaseModel):
     collected_by: str = "research agent"
     collected_at: datetime | None = None
     description: str = ""
+    synthetic: bool = False            # made up for a demo or a test (the review shows a "synthetic" badge)
     items: list[ImportItem]
 
 
@@ -164,13 +165,13 @@ def item_text(item: ImportItem) -> str:
     return f"{item.headline}\n{item.summary}" if item.summary else item.headline
 
 
-def market_event_of(item: ImportItem, event_id: str) -> MarketEvent:
+def market_event_of(item: ImportItem, event_id: str, synthetic: bool = False) -> MarketEvent:
     kind = MarketEventKind(item.kind)
     channel = MarketEventChannel.DATA_FEED if item.kind == "data" else MarketEventChannel.SCRAPER
     return MarketEvent(id=event_id, kind=kind, channel=channel, source=item.source, headline=item.headline,
                        body=item.summary, published_at=item.published_at,
                        occurred_at=item.occurred_at or item.published_at, mentions=list(item.entities),
-                       tags=[*item.tags, *([item.category] if item.category else [])], url=item.url, synthetic=True)
+                       tags=[*item.tags, *([item.category] if item.category else [])], url=item.url, synthetic=synthetic)
 
 
 def translate_item(item: ImportItem, event: MarketEvent, graph: Any) -> tuple[TranslationResult, list[str]]:

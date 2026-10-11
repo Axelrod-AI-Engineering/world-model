@@ -1609,3 +1609,28 @@ body.isolated #caption { display: none; }
   border-top: 1px solid var(--rule-soft); }
 .import .emore { margin: 6px 0 2px 54px; }
 @media (max-width: 560px) { .imp-meta, .import .emore { margin-left: 0; } .imp-cat { display: none; } }
+
+/* -- Predict's canvas (Oct 11): blank until a forecast brings forward what it reaches ------------------------ */
+#predict-hint { left: calc(var(--inset-l) + 14px); right: calc(var(--inset-r) + 14px); margin-inline: auto; width: fit-content; }
+#predict-hint.hidden { display: none; }
+#predict-hint.predict-empty { top: 36%; max-width: 420px; padding: 18px 22px; text-align: center; border-radius: 14px;
+  background: rgba(255, 253, 248, 0.96); border: 1px dashed var(--rule-strong); box-shadow: var(--shadow); font-size: 13px; color: var(--ink-2); }
+#predict-hint .eh-t { font: 700 18px var(--font-head); color: var(--ink); margin-bottom: 4px; }
+#predict-hint p { margin: 0 0 12px; line-height: 1.5; }
+#predict-hint .predict-acts { display: flex; gap: 8px; justify-content: center; align-items: center; flex-wrap: wrap; }
+#predict-hint.predict-bar { top: auto; bottom: 58px; display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; padding: 5px 6px 5px 14px;
+  border-radius: 999px; background: rgba(255, 253, 248, 0.96); border: 1px solid var(--rule); box-shadow: var(--shadow); font-size: 12px;
+  color: var(--ink-2); max-width: min(720px, calc(100% - var(--inset-l) - var(--inset-r) - 28px)); }
+#predict-hint.predict-bar b { color: var(--ink); }
+body.mode-learn #predict-hint { display: none; }
+/* every change of state animates briefly, so what happened is visible (Oct 11) */
+#predict-hint:not(.hidden) { animation: panel-in .18s ease-out; }
+body.predict-blank #levels { opacity: 0; pointer-events: none; }
+#levels { transition: opacity .18s; }
+.imp-row { animation: panel-in .16s ease-out both; }
+.imp-row.picked-off { opacity: .55; }
+.imp-row { transition: opacity .15s, background .15s; }
+.examples.import:not(.hidden) { animation: panel-in .18s ease-out; }
+.imp-tools { display: flex; align-items: center; gap: 4px; margin: 0 16px 4px; flex-wrap: wrap; }
+@media (prefers-reduced-motion: reduce) { #predict-hint, .imp-row, .examples.import { animation: none !important; } }
+text.rz.forecast { font-style: italic; }

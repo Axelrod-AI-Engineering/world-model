@@ -4,6 +4,7 @@
   "collected_by": "research agent (test fixture)",
   "collected_at": "2026-09-20T00:00:00Z",
   "description": "Three synthetic items for tests. Nothing here is a claim about a real firm.",
+  "synthetic": true,
   "items": [
     {
       "id": "T-002",

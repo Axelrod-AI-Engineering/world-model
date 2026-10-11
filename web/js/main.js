@@ -725,6 +725,8 @@ async function boot() {
     if (importer.isOpen()) importer.close();
     clearForecastCanvas();
     closeRight();
+    predict.keep = new Set();
+    predict.all = false;
     await guarded(async () => {
       const st = await api.load(id, true);
       setStatus(st);
@@ -847,9 +849,17 @@ async function boot() {
     $("#sim-version").textContent = `v${g.version}${store.readOnlyVersion != null ? " · read-only" : ""}`;
     if (g.today) $("#sim-date").textContent = fmtDay(g.today);
     if (store.selection) renderer.select(store.selection);
+    predictCanvas();
   });
   const refreshRibbons = () => renderer.setExtras(extras());
   on("proposals", refreshRibbons);
+  // a staged proposal's grid closes once that proposal is decided (the canvas comes back with it)
+  on("proposals", () => {
+    if (gridTarget?.kind === "proposal" && !(store.proposals ?? []).some((pv) => pv.proposal.id === gridTarget.id && pv.proposal.status === "pending")) {
+      if (paths.isOpen()) paths.close();
+      setGridTarget(null);
+    }
+  });
   // a review queue that opened by itself closes by itself once it is empty
   on("proposals", () => {
     if (reviewOpenedForYou && !(store.proposals ?? []).length && !left.hidden && left.dataset.tab === "review") {
@@ -957,8 +967,23 @@ async function boot() {
 
   // -- views (restructure): Learn for backend users, who update the one world model; Predict for everyone
   // else, who pose theses against committed versions and never change it --------------------------------
+  // Predict's canvas state (see predictCanvas below); set up before setMode first runs
+  const predict = { keep: new Set(), all: false, question: "", effects: new Map() };
+  const predictHint = document.createElement("div");
+  predictHint.id = "predict-hint";
+  predictHint.className = "floating hidden";
+  predictHint.setAttribute("role", "status");
+  $("#canvas").appendChild(predictHint);
   function setMode(mode, announce = true) {
-    if (mode === "learn") clearForecastCanvas();
+    if (mode === "learn") {
+      clearForecastCanvas();
+      // Predict's windows (a forecast, its brief, its grid) belong to Predict: Learn opens on the model itself
+      if (store.settings.mode === "predict") {
+        if (!right.hidden && ["forecast", "thesis"].includes(right.dataset.tab)) closeRight();
+        if (!left.hidden && left.dataset.tab === "briefs") closeLeft();
+        if (paths.isOpen() && gridTarget?.kind === "forecast") paths.close();
+      }
+    }
     store.settings.mode = mode;
     document.body.classList.toggle("mode-learn", mode === "learn");
     document.body.classList.toggle("mode-predict", mode === "predict");
@@ -970,11 +995,14 @@ async function boot() {
       if (examples.isOpen()) examples.close();
       if (importer.isOpen()) importer.close();
       if (!left.hidden && left.dataset.tab === "review") closeLeft();
+      // Learn's windows belong to Learn: a staged proposal's grid closes, and Predict opens on its own canvas
+      if (paths.isOpen() && gridTarget?.kind !== "forecast") paths.close();
       if (store.settings.draw) setDraw(false);
       if (announce) once("mode-predict", "Predict: pose a thesis against the committed version. Nothing you do here is learned.");
     } else if (announce) {
       once("mode-learn", "Learn: update the world model. Every change is vetted and committed; the Console shows each step.");
     }
+    predictCanvas();
   }
   $("#mode-learn").addEventListener("click", () => setMode("learn"));
   $("#mode-predict").addEventListener("click", () => setMode("predict"));
@@ -1063,6 +1091,7 @@ async function boot() {
   });
   on("show-forecast", (fv) => {
     openRight("forecast");
+    showForecastOnCanvas(fv);
     if ((fv?.transmission?.values ?? []).length && fv.forecast?.id) setGridTarget({ kind: "forecast", id: fv.forecast.id });
   });
   on("ask-started", ({ question }) => {
@@ -1072,6 +1101,7 @@ async function boot() {
     openRight("forecast");
   });
   on("asked", (fv) => {
+    showForecastOnCanvas(fv);
     autoGrid("forecast", fv.forecast?.id, (fv.transmission?.values ?? []).length > 0);
     if (progress.run && progress.run.scope == null) { progress.run = null; emit("forecasting", null); }
     if (guide.run) briefs.expect(fv.forecast.thesis_id);
@@ -1103,11 +1133,83 @@ async function boot() {
   }
   function unisolate() {
     if (!renderer.isolated) return false;
+    // in Predict, leaving the forecast's view means asking to see the whole model
+    if (renderer.isolated.way === "predict") { predict.all = true; predictCanvas(); return true; }
     const wasGrid = renderer.isolated.way === "grid";
     renderer.setIsolation(null);
     isoBanner.classList.add("hidden");
     if (wasGrid) { store.isolatedHighlight = null; renderer.setHighlight(store.highlight); }
+    predictCanvas();
     return true;
+  }
+
+  // -- Predict's canvas (Oct 11): prediction is for people outside the team, so it opens on a blank canvas, and a
+  // forecast brings forward what it reaches: the values it shocks, the entities it moves, and the watched names it
+  // touches. The whole model stays one click away ("Show the whole model"), as it was when the forecast was made.
+  function forecastEntities(fv) {
+    const known = new Set((store.view?.entities ?? []).map((e) => e.id));
+    const t = fv?.transmission ?? {};
+    const out = new Set();
+    for (const s of t.shocked ?? []) out.add(String(s.id).split(".")[0]);
+    for (const v of t.values ?? []) if (v.material) out.add(v.entity_id);
+    for (const n of t.watchlist?.names ?? []) if (n.status === "moves" || n.status === "shocked") out.add(n.id);
+    return new Set([...out].filter((e) => known.has(e)));
+  }
+  function predictCanvas() {
+    const on = store.settings.mode === "predict" && !store.walkthrough && !!store.view?.entities?.length;
+    if (!on) {
+      renderer.setRowOverride(null);
+      document.body.classList.remove("predict-blank");
+      if (renderer.isolated?.way === "predict") renderer.setIsolation(null);
+      predictHint.classList.add("hidden");
+      return;
+    }
+    document.body.classList.toggle("predict-blank", !predict.all && !predict.keep.size);
+    renderer.setRowOverride(!predict.all && predict.keep.size ? predict.effects : null);
+    if (renderer.isolated?.way === "grid") { predictHint.classList.add("hidden"); return; }   // the grid shows it
+    const total = store.view.entities.length;
+    if (predict.all) {
+      renderer.setRowOverride(null);
+      if (renderer.isolated?.way === "predict") { renderer.setIsolation(null); setTimeout(() => renderer.frameAll(420), 60); }
+      predictHint.className = "floating predict-bar";
+      predictHint.innerHTML = `<span><b>The whole model</b> <span class="muted">· ${total} entities, as of this version</span></span>
+        ${predict.keep.size ? `<button class="small" data-back>Back to the forecast</button>` : `<button class="small" data-blank>Clear the canvas</button>`}`;
+      return;
+    }
+    const keep = predict.keep;
+    const was = renderer.isolated?.way === "predict" ? renderer.isolated.keep : null;
+    const same = was && was.size === keep.size && [...keep].every((e) => was.has(e));
+    if (!same) renderer.setIsolation({ ids: [...keep], keep, way: "predict", hops: 0, open: keep.size <= 6 });
+    if (!keep.size) {
+      predictHint.className = "floating predict-empty";
+      predictHint.innerHTML = `<div class="eh-t">Ask about your world</div>
+        <p>Pose a what-if. The forecast brings forward the actors and ideas it reaches, in the order the shock travels.</p>
+        <div class="predict-acts"><button class="primary" data-ask>Ask a question</button>
+          <button class="ghost small" data-all>Show the whole model</button></div>`;
+    } else {
+      predictHint.className = "floating predict-bar";
+      const q = predict.question.length > 64 ? `${predict.question.slice(0, 62).trimEnd()}…` : predict.question;
+      predictHint.innerHTML = `<span><b>What the forecast reaches</b> <span class="muted">· ${keep.size} of ${total} entities${q ? ` · <span title="${esc(predict.question)}">${esc(q)}</span>` : ""}</span></span>
+        <button class="small" data-all>Show the whole model</button>`;
+      if (!same) setTimeout(() => renderer.frame([...keep], { duration: 420, maxK: 1.1 }), 140);
+    }
+  }
+  predictHint.addEventListener("click", (ev) => {
+    const b = ev.target.closest("button");
+    if (!b) return;
+    if (b.dataset.ask != null) $("#btn-ask").click();
+    else if (b.dataset.all != null) { predict.all = true; predictCanvas(); }
+    else if (b.dataset.back != null) { predict.all = false; predictCanvas(); }
+    else if (b.dataset.blank != null) { predict.all = false; predict.keep = new Set(); predictCanvas(); }
+  });
+  function showForecastOnCanvas(fv) {
+    const keep = forecastEntities(fv);
+    if (!keep.size) return;
+    predict.effects = new Map((fv?.transmission?.values ?? []).map((v) => [v.id, v.peak]));
+    predict.keep = keep;
+    predict.all = false;
+    predict.question = fv?.forecast?.question ?? fv?.thesis?.question ?? "";
+    predictCanvas();
   }
   const GRID_DX = 330;      // world units between the grid's columns on the canvas
   const GRID_DY = 84;       // and between its rows

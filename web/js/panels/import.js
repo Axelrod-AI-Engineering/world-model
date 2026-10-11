@@ -31,8 +31,10 @@ export function initImport({ toast, onProposal }) {
       st.bundle = bundle;
       st.picked = new Set(st.preview.items.filter((x) => x.status !== "imported" && x.changes > 0).map((x) => x.id));
       st.open = null;
+      st.fresh = true;          // the rows arrive one after another, once
     } catch (err) { st.error = errorText(err); }
     render();
+    st.fresh = false;
   }
 
   async function readFile(file) {
@@ -50,7 +52,8 @@ export function initImport({ toast, onProposal }) {
   function row(x) {
     const off = x.status === "imported" || x.changes === 0;
     const kinds = x.change_kinds.map((k) => CHANGE[k] ?? k).join(", ");
-    return `<li class="imp-row ${esc(x.status)}${st.open === x.id ? " open" : ""}" data-id="${esc(x.id)}">
+    return `<li class="imp-row ${esc(x.status)}${st.open === x.id ? " open" : ""}${!st.picked.has(x.id) ? " picked-off" : ""}" data-id="${esc(x.id)}"
+      style="animation-delay:${st.fresh ? Math.min(400, 12 * st.rowIndex++) : 0}ms${st.fresh ? "" : ";animation:none"}">
       <div class="imp-line">
         <input type="checkbox" data-pick="${esc(x.id)}" ${st.picked.has(x.id) ? "checked" : ""} ${off || st.busy ? "disabled" : ""}
           aria-label="Import ${esc(x.headline)}">
@@ -83,6 +86,7 @@ export function initImport({ toast, onProposal }) {
       days[days.length - 1].items.push(x);
     }
     const n = st.picked.size;
+    st.rowIndex = 0;
     pane.innerHTML = `
       <header><div class="etitle">Import</div><span class="spacer"></span>
         <button class="ghost win-max-btn" data-max type="button" aria-label="Full screen" title="Full screen (or back)">⤢</button><button class="close" aria-label="Close (Esc)">✕</button></header>
@@ -95,8 +99,8 @@ export function initImport({ toast, onProposal }) {
           <span class="muted">· your model is at ${day(p.model_date)}</span>
           ${p.description ? `<div class="muted">${esc(p.description)}</div>` : ""}</div>
         <div class="chips efilter" role="group" aria-label="Show">${[["all", "All"], ...cats.map((c) => [c, c])].map(([k, l]) =>
-          `<button class="cchip" data-filter="${esc(k)}" aria-pressed="${st.filter === k}">${esc(l)}</button>`).join("")}
-          <span class="spacer"></span><button class="ghost small" data-all>Select all</button><button class="ghost small" data-none>None</button></div>
+          `<button class="cchip" data-filter="${esc(k)}" aria-pressed="${st.filter === k}">${esc(l)}</button>`).join("")}</div>
+        <div class="imp-tools small muted">Select <button class="ghost small" data-all>all</button><button class="ghost small" data-none>none</button></div>
         <div class="imp-list">${days.map((g) => `<h4 class="imp-day">${day(g.d + "T12:00:00Z")}</h4><ol class="elist">${g.items.map(row).join("")}</ol>`).join("")}</div>
         <footer class="imp-foot"><span class="muted small">${n ? `${n} item${n === 1 ? "" : "s"}, reviewed one by one in date order` : "Pick the items to import"}</span>
           <span class="spacer"></span><button class="primary" data-go ${n && !st.busy ? "" : "disabled"}>${st.busy ? "Importing…" : `Import ${n || ""}`}</button></footer>` : ""}`;

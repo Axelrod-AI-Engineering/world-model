@@ -146,7 +146,7 @@ class ImportRunner(ScenarioRunner):
         done_day = ctl.engine.wm.deviations.date_of(int(ctl.engine.wm.last_processed_day))
         rows = []
         for item in sorted(b.items, key=lambda x: x.published_at):
-            me = market_event_of(item, self.event_id(item))
+            me = market_event_of(item, self.event_id(item), b.synthetic)
             res, dropped = translate_item(item, me, graph)
             ops = res.events[0].ops if res.events else []
             status = "imported" if me.id in self.imported else "late" if item.published_at.date() <= done_day else "new"
@@ -172,7 +172,7 @@ class ImportRunner(ScenarioRunner):
             chosen.sort(key=lambda x: x.published_at)
             events = []
             for item in chosen:
-                me = market_event_of(item, self.event_id(item))
+                me = market_event_of(item, self.event_id(item), b.synthetic)
                 self.imported[me.id] = item
                 events.append(me)
             last = max(chosen[-1].published_at, ctl.now)
@@ -196,6 +196,15 @@ class ImportRunner(ScenarioRunner):
         run = ctl.updates.get(ctl.active_update) if ctl.active_update else None
         state = "awaiting_review" if ctl.pending_proposals() else (
             "running" if run is not None and run.state == UpdateState.RUNNING else "idle")
+        # the last import's reviews are all done: say so, and point to what comes next
+        last = self.import_log[-1] if self.import_log else None
+        done = ctl.updates.get(last["update_id"]) if last else None
+        if state == "idle" and done is not None and done.state == UpdateState.DONE and not last.get("closed"):
+            last["closed"] = True
+            report = done.report
+            kept = f"{report.approved} approved, {report.rejected} rejected" if report else "all reviewed"
+            self.caption = (f"Up to date through {ctl.now:%b %-d}: “{last['title']}” is in ({kept}). "
+                            "Switch to Predict to ask what happens next.")
         return RunnerStatus(scenario_id=self.script.id, step_index=0, total_steps=0, sim_time=ctl.now, state=state,
                             update_id=ctl.active_update, pending_proposals=len(ctl.pending_proposals()),
                             caption=self.caption, version=ctl.engine.version, loaded=self.loaded, error=self.error,
