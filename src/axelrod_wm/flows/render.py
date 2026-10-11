@@ -62,6 +62,7 @@ STYLE = """
 .fl-elabel { font: 500 10.5px var(--font-mono, 'IBM Plex Mono', ui-monospace, monospace); fill: var(--ink-2, #665E54);
   paint-order: stroke; stroke: var(--fl-band, #F7F2EA); stroke-width: 4px; stroke-linejoin: round; }
 .fl-arrow { fill: var(--edge, #857C70); }
+.fl-term { font: 600 12px var(--font-ui, 'Instrument Sans', 'Helvetica Neue', sans-serif); fill: var(--ink, #2F2A25); }
 .fl-legend { font: 400 11px var(--font-ui, 'Instrument Sans', 'Helvetica Neue', sans-serif); fill: var(--ink-2, #665E54); }
 .fl-node.fl-hit .fl-box { stroke: var(--real-line, #7C64C4); stroke-width: 2.4; }
 .fl-node.fl-miss { opacity: .38; }
@@ -139,7 +140,7 @@ def layout(flow: Flow, bare: bool = False) -> tuple[dict[str, _Box], dict, float
     # left lanes for edges that skip down the main line (interval coloring)
     skips = []
     for e in flow.edges:
-        if e.src in index and e.dst in index and index[e.dst] != index[e.src] + 1:
+        if e.drawn and e.src in index and e.dst in index and index[e.dst] != index[e.src] + 1:
             skips.append(e)
     lanes: dict[tuple[str, str], int] = {}
     taken: list[list[tuple[int, int]]] = []
@@ -304,6 +305,12 @@ def _edge_svg(flow: Flow, e, boxes: dict[str, _Box], meta: dict) -> str:
         parts.append(_arrow(b.x - 1, b.cy, "right"))
         if label:
             parts.append(f'<text class="fl-elabel" x="{b.x - 10}" y="{b.cy - 7}" text-anchor="end">{label}</text>')
+    elif b.y < a.y:                                                # a side node loops back up (re-stage)
+        x1 = a.right + 18
+        parts.append(f'<path class="fl-edge side" {attrs} d="M{a.right},{a.cy} H{x1} V{b.cy} H{b.right + 1}"/>')
+        parts.append(_arrow(b.right + 1, b.cy, "left"))
+        if label:
+            parts.append(f'<text class="fl-elabel" x="{x1 + 6}" y="{b.cy - 6}">{label}</text>')
     else:                                                          # a side node rejoins the main line
         ex = b.right - 40
         ym = b.y - 12
@@ -314,10 +321,27 @@ def _edge_svg(flow: Flow, e, boxes: dict[str, _Box], meta: dict) -> str:
     return f'<g class="fl-edge-g" {attrs}>' + "".join(parts) + "</g>"
 
 
+def _glossary(flow: Flow, width: float, y: float) -> tuple[list[str], float]:
+    """The flow's terms under the legend: each term in bold, then what it means here."""
+    if not flow.terms:
+        return [], y
+    out = [f'<text class="fl-phase" x="20" y="{y + 12:.1f}">Terms</text>']
+    y += 30
+    term_w = 150
+    for t in flow.terms:
+        lines = _wrap(t.meaning, width - 40 - term_w, 12)
+        out.append(f'<text class="fl-term" x="20" y="{y:.1f}">{escape(t.term)}</text>')
+        for i, line in enumerate(lines):
+            out.append(f'<text class="fl-legend" x="{20 + term_w}" y="{y + 16 * i:.1f}">{escape(line)}</text>')
+        y += 16 * len(lines) + 8
+    return out, y
+
+
 def render_svg(flow: Flow, bare: bool = False) -> str:
     boxes, meta, width, height = layout(flow, bare)
     legend_y = height + 8
-    height = legend_y + 40
+    glossary, height = _glossary(flow, width, legend_y + 34)
+    height = max(height, legend_y + 40)
     out = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width:.0f} {height:.0f}" width="{width:.0f}" '
            f'height="{height:.0f}" role="img" aria-labelledby="fl-{flow.id}-t fl-{flow.id}-d" class="fl-flow" '
            f'data-flow="{flow.id}">',
@@ -346,7 +370,8 @@ def render_svg(flow: Flow, bare: bool = False) -> str:
         for j, line in enumerate(_wrap(title, TITLE_COL - 18, 10.5)):
             out.append(f'<text class="fl-phase" x="20" y="{top_y + 20 + 14 * j:.1f}">{escape(line)}</text>')
     for e in flow.edges:
-        out.append(_edge_svg(flow, e, boxes, meta))
+        if e.drawn:
+            out.append(_edge_svg(flow, e, boxes, meta))
     for b in boxes.values():
         out.append(_node_svg(b))
     # legend
@@ -364,6 +389,7 @@ def render_svg(flow: Flow, bare: bool = False) -> str:
                '<text class="fl-legend" x="412" y="0">commit</text>'
                '<text class="fl-legend" x="470" y="0">WM / LTM: writes working / long-term memory</text>'
                '</g>')
+    out += glossary
     out.append("</svg>")
     return "\n".join(out)
 
@@ -384,6 +410,8 @@ def flow_markdown(flow: Flow) -> str:
             mark = {"decision": "◆ ", "store": "▣ ", "start": "▶ ", "end": "■ "}.get(n.kind, "")
             lines.append(f"1. {mark}{n.label}" + (f" ({'; '.join(tags)})" if tags else ""))
         lines.append("")
+    if flow.terms:
+        lines += ["## Terms", ""] + [f"- **{t.term}:** {t.meaning}" for t in flow.terms] + [""]
     return "\n".join(lines)
 
 

@@ -38,6 +38,14 @@ const WORDS = [
   ["Hypothesis frontier", "Open questions ranked by how much answering them would move the forecasts being watched."],
 ];
 
+// the flowchart's own terms first (flows/__init__.py, one source for the chart and this list), then the rest
+const plain = (w) => w.toLowerCase().replace(/^the /, "");
+function words(overview) {
+  const terms = (overview?.terms ?? []).map((t) => [t.term, t.meaning]);
+  const have = new Set(terms.map(([w]) => plain(w)));
+  return [...terms, ...WORDS.filter(([w]) => !have.has(plain(w)))];
+}
+
 const FILLS = [
   ["Construction files", "entities, values, interactions, each kind's defaults", "by whoever writes them", "both memories (construction)"],
   ["News, filings, analyst notes", "a graph update event: new or retired structure, moved values", "yes: a staged review", "working, then long-term memory"],
@@ -100,7 +108,7 @@ export function initMethods() {
       <table><thead><tr><th>Input</th><th>Arrives as</th><th>Reviewed</th><th>Writes</th></tr></thead>
         <tbody>${FILLS.map((r) => `<tr>${r.map((c) => `<td>${esc(c)}</td>`).join("")}</tr>`).join("")}</tbody></table>
       <h2 id="words">Words</h2>
-      <table><tbody>${WORDS.map(([w, d]) => `<tr><th>${esc(w)}</th><td>${esc(d)}</td></tr>`).join("")}</tbody></table>
+      <table><tbody>${words(overview).map(([w, d]) => `<tr><th>${esc(w)}</th><td>${esc(d)}</td></tr>`).join("")}</tbody></table>
       <p class="meta">All news and data are synthetic. Real company and agency names make the graph concrete; nothing here is a claim about them.</p>`;
   }
 

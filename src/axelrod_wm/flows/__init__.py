@@ -45,6 +45,16 @@ class FlowEdge(BaseModel):
     src: str
     dst: str
     label: str = ""
+    drawn: bool = True                # False: a way around an optional step that its "if" caption already says
+
+
+class FlowTerm(BaseModel):
+    """A word the flowchart uses, with what it means here (the glossary under the chart)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    term: str
+    meaning: str
 
 
 class FlowPhase(BaseModel):
@@ -70,6 +80,7 @@ class Flow(BaseModel):
     phases: list[FlowPhase]
     nodes: list[FlowNode]
     edges: list[FlowEdge]
+    terms: list[FlowTerm] = []
 
     def node(self, node_id: str) -> FlowNode:
         return next(n for n in self.nodes if n.id == node_id)
@@ -78,20 +89,25 @@ class Flow(BaseModel):
         return next(p for p in self.phases if p.id == phase_id)
 
 
-def _flow(fid: str, title: str, summary: str, phases: list[dict], nodes: list[dict], edges: list[tuple]) -> Flow:
+def _flow(fid: str, title: str, summary: str, phases: list[dict], nodes: list[dict], edges: list[tuple],
+          terms: list[tuple[str, str]] | None = None) -> Flow:
+    """An edge is (src, dst), (src, dst, label), or (src, dst, label, drawn)."""
     return Flow(id=fid, title=title, summary=summary, phases=[FlowPhase(**p) for p in phases],
                 nodes=[FlowNode(**n) for n in nodes],
-                edges=[FlowEdge(src=e[0], dst=e[1], label=e[2] if len(e) > 2 else "") for e in edges])
+                edges=[FlowEdge(src=e[0], dst=e[1], label=e[2] if len(e) > 2 else "", drawn=e[3] if len(e) > 3 else True)
+                       for e in edges],
+                terms=[FlowTerm(term=t, meaning=m) for t, m in terms or []])
 
 
 WORLD_MODEL = _flow(
     "world-model", "Learning",
-    "Everything that can happen to an event. Learning stages it in two parts, working memory and then long-term "
-    "memory; a person then checks every change to both, including the second- and third-order ripple, and only "
-    "what they approve is committed. Inference reads committed versions and never writes.",
+    "Everything that can happen to a market event. The usual path runs straight down; edge cases branch to the right "
+    "and rejoin it. Learning stages the event in two parts, working memory and then long-term memory; a person "
+    "then checks every change to both, including the second- and third-order ripple, and only what they approve "
+    "is committed. Inference reads committed versions and never writes.",
     [
         dict(id="intake", title="Intake",
-             input="A market event (news, a data release, a filing) or a backend user's edit",
+             input="A market event (news, a data release, a filing, an imported item) or a backend user's edit",
              output="A graph update event: operations with concrete ends",
              detail="A translator turns the event into operations: add or retire an entity, subentity, or "
                     "interaction; change or observe a value; group or dissolve a superentity. An end that names a "
@@ -127,37 +143,40 @@ WORLD_MODEL = _flow(
                     "vetted it, and any version can be reopened read-only or compared with another."),
     ],
     [
+        # DECISION (Oct 11): the happy path, a news item that moves a value, runs straight down the middle; edge cases
+        # (a fuzzy end, a new item, hedged ends, an actor's decision, a partial or rejected review) branch off to the
+        # right and rejoin it. Optional steps on the main line are dashed, and their "if" says when they run.
         # intake
-        dict(id="event", label="A market event or a backend user's edit", kind="start", phase="intake",
-             trace=["market_event.received"]),
-        dict(id="translate", label="Translate it into operations", phase="intake", component="translator",
-             trace=["translate.result"]),
-        dict(id="refine", label="Refine fuzzy ends: generalization → entity → subentity, or hedge across the candidates",
-             phase="intake", mandatory=False, when="an end names a generalization, not a subentity", component="refiner",
+        dict(id="event", label="A market event: news, a data release, a filing, an imported item, or a backend user's "
+                                "edit", kind="start", phase="intake", trace=["market_event.received"]),
+        dict(id="translate", label="Translate it into operations: one graph update event", phase="intake",
+             component="translator", trace=["translate.result"]),
+        dict(id="refine", label="Refine a fuzzy end: kind → entity → subentity, or hedge across the candidates",
+             phase="intake", mandatory=False, when="an end names a kind, not a value", component="refiner", side=True,
              trace=["refine.step", "refine.pending"]),
         # working memory
-        dict(id="parse", label="Apply new or retired structure; collect the event's moves", phase="working",
+        dict(id="parse", label="Apply the operations: add or retire items; collect the event's moves", phase="working",
              component="parser", writes="working", trace=["parse.created", "parse.retired"]),
-        dict(id="classify", label="Classify new items; they inherit their kind's priors", phase="working",
-             mandatory=False, when="the event adds structure", component="classifier", writes="working",
+        dict(id="classify", label="Classify each new item into a kind; it inherits the kind's priors", phase="working",
+             mandatory=False, when="the event adds items", component="classifier", writes="working", side=True,
              trace=["classify.path"]),
         dict(id="recall", label="Recall similar superentities and past days", phase="working", component="recaller",
              trace=["recall.result"]),
-        dict(id="ripple", label="Simulate the ripple: first, second, third order", phase="working", mandatory=False,
-             when="the event moves a value", component="analyzer", trace=["analyze.done"]),
-        dict(id="fold", label="Fold: update observed values and the effects that feed them", phase="working",
+        dict(id="ripple", label="Simulate the ripple: first-, second-, and third-order moves", phase="working",
+             mandatory=False, when="the event moves a value", component="analyzer", trace=["analyze.done"]),
+        dict(id="fold", label="Fold: update observed values and the interactions that feed them", phase="working",
              mandatory=False, when="the event reports a value", component="folder", writes="working",
              trace=["fold.posterior", "fold.edge"]),
         dict(id="hedges", label="Weigh hedged fuzzy ends; propose a resolution once one passes the bound",
              phase="working", mandatory=False, when="fuzzy ends are hedged", component="refiner", writes="working",
-             trace=["refine.weighed", "refine.resolution_proposed"]),
+             side=True, trace=["refine.weighed", "refine.resolution_proposed"]),
         # long-term memory
         dict(id="kinds", label="Kinds learn their new members and statistics", phase="long_term",
              component="generalization_updater", writes="long_term", trace=["generalize.updated", "generalize.split"]),
         dict(id="memory", label="Entity memory records an actor's decision", phase="long_term", mandatory=False,
-             when="the event shows an actor deciding", component="consolidator", writes="long_term"),
-        dict(id="frontier", label="Correlation frontier: pair unexplained moves; propose a link once a pair holds",
-             phase="long_term", component="frontier", writes="long_term",
+             when="the event shows an actor deciding", component="consolidator", writes="long_term", side=True),
+        dict(id="frontier", label="Correlation frontier: pair unexplained moves; propose an interaction once a pair "
+                                  "holds", phase="long_term", component="frontier", writes="long_term",
              trace=["frontier.logged", "frontier.promotion_proposed"]),
         dict(id="support", label="Superentity support: propose a collapse when a group recurs, an expansion when one "
                                  "fades", phase="long_term", component="inducer", writes="long_term", cadence="per day",
@@ -165,28 +184,47 @@ WORLD_MODEL = _flow(
         dict(id="explain", label="Explain what was learned", phase="long_term", component="explainer",
              writes="long_term", trace=["explain.stored"]),
         # human review
-        dict(id="check", label="A person checks every staged change to both memories, through the third-order ripple, "
-                                "at the confidence they set",
-             phase="review", trace=["review.queued"]),
+        dict(id="check", label="The staged changes form a proposal: a person checks each one, through the "
+                               "third-order ripple, at the confidence they set", phase="review", trace=["review.queued"]),
         dict(id="decide", label="Approve?", kind="decision", phase="review", trace=["review.decided"]),
+        dict(id="restage", label="Re-stage without what was deselected", phase="review", side=True),
         dict(id="rejected", label="Rejected: nothing changes (logged)", kind="end", phase="review", side=True),
         # commit
         dict(id="commit_wm", label="Commit to working memory", kind="store", phase="commit", writes="working",
              trace=["state.version"]),
-        dict(id="commit_ltm", label="Commit to long-term memory: a new version", kind="store", phase="commit",
+        dict(id="commit_ltm", label="Commit to long-term memory", kind="store", phase="commit",
              writes="long_term", trace=["state.version"]),
-        dict(id="version", label="A new version in the log; inference reads committed versions", kind="end",
+        dict(id="version", label="A new version in the log; inference reads committed versions only", kind="end",
              phase="commit"),
     ],
-    [("event", "translate"), ("translate", "refine"), ("refine", "parse"), ("translate", "parse", "concrete"),
-     ("parse", "classify"), ("classify", "recall"), ("parse", "recall", "no new items"),
-     ("recall", "ripple"), ("ripple", "fold"), ("recall", "fold", "no move"), ("fold", "hedges"),
-     ("hedges", "kinds"), ("fold", "kinds", "no fuzzy ends"),
-     ("ripple", "hedges", "nothing observed"),
-     ("kinds", "memory"), ("memory", "frontier"), ("kinds", "frontier", "no decision"), ("frontier", "support"),
-     ("support", "explain"), ("explain", "check"), ("check", "decide"),
-     ("decide", "rejected", "no (nothing changes)"), ("decide", "check", "some (re-stage)"),
-     ("decide", "commit_wm", "yes (commit)"), ("commit_wm", "commit_ltm"), ("commit_ltm", "version")],
+    [  # the happy path, straight down
+     ("event", "translate"), ("translate", "parse"), ("parse", "recall"), ("recall", "ripple"), ("ripple", "fold"),
+     ("fold", "kinds"), ("kinds", "frontier"), ("frontier", "support"), ("support", "explain"), ("explain", "check"),
+     ("check", "decide"), ("decide", "commit_wm", "yes"), ("commit_wm", "commit_ltm"), ("commit_ltm", "version"),
+     # edge cases: branches that rejoin it
+     ("translate", "refine", "an end is fuzzy"), ("refine", "parse"),
+     ("parse", "classify", "new items"), ("classify", "recall"),
+     ("fold", "hedges", "hedged ends"), ("hedges", "kinds"),
+     ("kinds", "memory", "an actor decided"), ("memory", "frontier"),
+     ("decide", "restage", "some"), ("restage", "check", "check again"),
+     ("decide", "rejected", "no"),
+     # ways around the optional steps on the main line (their "if" says it; not drawn)
+     ("recall", "fold", "no move", False), ("ripple", "kinds", "nothing observed", False)],
+    [
+        ("Market event", "Something that happened and was published: news, a data release, a filing, or an imported "
+                         "item. Its publication time decides the day it is folded in."),
+        ("Imported item", "One dated piece of research in an import bundle, already read and categorized by a research "
+                          "agent. Importing makes it a market event."),
+        ("Operation", "One change: add or retire an item, change or observe a value, group or dissolve a superentity."),
+        ("Graph update event", "The operations one market event stands for, with the evidence behind them."),
+        ("Item", "Anything in the graph: an entity (an actor or an idea), a subentity (one of its values), an "
+                 "interaction (a causal link), or a superentity (a recurring group)."),
+        ("Kind", "A node of the taxonomy. Every item is classified into one and inherits its priors; kinds learn "
+                 "from their members."),
+        ("Ripple", "The moves a change sets off downstream, order by order."),
+        ("Proposal", "The staged changes from one event, waiting for a person's review."),
+        ("Version", "One commit. Any version can be reopened read-only or compared with another."),
+    ],
 )
 
 from axelrod_wm.flows.inference import INFERENCE, INFERENCE_FLOWS  # noqa: E402  (they use the models above)
@@ -203,4 +241,5 @@ def flow_path(flow: Flow, trace_kinds: set[str]) -> list[str]:
     return [n.id for n in flow.nodes if set(n.trace) & trace_kinds]
 
 
-__all__ = ["FLOWS", "INFERENCE", "INFERENCE_FLOWS", "STAGE_FLOWS", "WORLD_MODEL", "Flow", "FlowEdge", "FlowNode", "FlowPhase", "flow_path"]
+__all__ = ["FLOWS", "INFERENCE", "INFERENCE_FLOWS", "STAGE_FLOWS", "WORLD_MODEL", "Flow", "FlowEdge", "FlowNode", "FlowPhase",
+           "FlowTerm", "flow_path"]
