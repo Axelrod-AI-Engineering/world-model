@@ -1054,7 +1054,8 @@ button.cchip[aria-pressed="true"] b { color: var(--sheet); }
 .modal .memberpick label { display: inline-flex; gap: 4px; align-items: center; font-size: 12px; white-space: nowrap; }
 
 /* -- the tutorial and the staged review (Oct 8 restructure) ---------------------------------------- */
-body.has-examples .scripted-only, body:not(.has-examples) .examples-only { display: none !important; }
+body.has-examples .scripted-only, body:not(.has-examples):not(.has-imports) .examples-only { display: none !important; }
+body.has-imports .scripted-only, body:not(.has-imports) .import-only { display: none !important; }
 :root { --o0-fill: #DAD0F4; --o0-line: #7C64C4; --o1-fill: #F7E1D3; --o1-line: #E0B092;
         --o2-fill: #F5EAC6; --o2-line: #D2BB72; --o3-fill: #F5E4E9; --o3-line: #D9A9B8; }
 
@@ -1581,3 +1582,55 @@ body.isolated #caption { display: none; }
   font-style: normal; text-align: center; color: var(--ink-2); border: 1px solid var(--rule); }
 .px-ord.o1 { background: var(--o1-fill); border-color: var(--o1-line); } .px-ord.o2 { background: var(--o2-fill); border-color: var(--o2-line); }
 .px-ord.o3 { background: var(--o3-fill); border-color: var(--o3-line); }
+
+/* -- Import (Oct 11): research a collection agent read and categorized, as a dated timeline ------------------ */
+.examples.import { width: min(620px, calc(100% - 20px)); }
+.imp-src { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 4px 16px 8px; }
+.imp-file { display: inline-flex; align-items: center; cursor: pointer; border: 1px solid var(--real-line); border-radius: var(--radius);
+  padding: 4px 10px; background: var(--real-line); color: #fff; font-weight: 600; }
+.imp-file:focus-within { box-shadow: var(--focus); }
+.imp-head { margin: 4px 16px 6px; line-height: 1.5; }
+.imp-list { padding-bottom: 4px; }
+.imp-day { margin: 10px 16px 2px; font: 600 11.5px var(--font-ui); color: var(--ink-2); text-transform: uppercase; letter-spacing: .04em; }
+.imp-row { padding: 6px 8px; border-radius: 8px; }
+.imp-row.open { background: var(--rule-soft); }
+.imp-row.imported { opacity: .6; }
+.imp-line { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.imp-line .et { flex: 1; min-width: 0; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.imp-time { font-size: 11px; width: 38px; flex: none; }
+.imp-cat { font-size: 11px; padding: 1px 7px; border-radius: 999px; background: var(--rule-soft); color: var(--ink-2); white-space: nowrap; }
+.imp-n { color: var(--ink-2); white-space: nowrap; }
+.imp-late { color: var(--real-ink); }
+.imp-meta { margin: 2px 0 0 54px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.imp-rel { display: inline-block; width: 44px; height: 4px; border-radius: 2px; background: var(--rule-soft); overflow: hidden; }
+.imp-rel i { display: block; height: 100%; background: var(--real-line); }
+.imp-tags { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0; }
+.imp-foot { position: sticky; bottom: 0; display: flex; align-items: center; gap: 8px; padding: 10px 16px; background: var(--sheet);
+  border-top: 1px solid var(--rule-soft); }
+.import .emore { margin: 6px 0 2px 54px; }
+@media (max-width: 560px) { .imp-meta, .import .emore { margin-left: 0; } .imp-cat { display: none; } }
+
+/* -- Predict's canvas (Oct 11): blank until a forecast brings forward what it reaches ------------------------ */
+#predict-hint { left: calc(var(--inset-l) + 14px); right: calc(var(--inset-r) + 14px); margin-inline: auto; width: fit-content; }
+#predict-hint.hidden { display: none; }
+#predict-hint.predict-empty { top: 36%; max-width: 420px; padding: 18px 22px; text-align: center; border-radius: 14px;
+  background: rgba(255, 253, 248, 0.96); border: 1px dashed var(--rule-strong); box-shadow: var(--shadow); font-size: 13px; color: var(--ink-2); }
+#predict-hint .eh-t { font: 700 18px var(--font-head); color: var(--ink); margin-bottom: 4px; }
+#predict-hint p { margin: 0 0 12px; line-height: 1.5; }
+#predict-hint .predict-acts { display: flex; gap: 8px; justify-content: center; align-items: center; flex-wrap: wrap; }
+#predict-hint.predict-bar { top: auto; bottom: 58px; display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; padding: 5px 6px 5px 14px;
+  border-radius: 999px; background: rgba(255, 253, 248, 0.96); border: 1px solid var(--rule); box-shadow: var(--shadow); font-size: 12px;
+  color: var(--ink-2); max-width: min(720px, calc(100% - var(--inset-l) - var(--inset-r) - 28px)); }
+#predict-hint.predict-bar b { color: var(--ink); }
+body.mode-learn #predict-hint { display: none; }
+/* every change of state animates briefly, so what happened is visible (Oct 11) */
+#predict-hint:not(.hidden) { animation: panel-in .18s ease-out; }
+body.predict-blank #levels { opacity: 0; pointer-events: none; }
+#levels { transition: opacity .18s; }
+.imp-row { animation: panel-in .16s ease-out both; }
+.imp-row.picked-off { opacity: .55; }
+.imp-row { transition: opacity .15s, background .15s; }
+.examples.import:not(.hidden) { animation: panel-in .18s ease-out; }
+.imp-tools { display: flex; align-items: center; gap: 4px; margin: 0 16px 4px; flex-wrap: wrap; }
+@media (prefers-reduced-motion: reduce) { #predict-hint, .imp-row, .examples.import { animation: none !important; } }
+text.rz.forecast { font-style: italic; }

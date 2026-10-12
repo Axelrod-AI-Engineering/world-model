@@ -281,7 +281,7 @@ def op_confidence(event: GraphUpdateEvent, op: Any) -> float:
     return float(min(1.0, max(0.0, event.user_confidence if c is None else c)))
 
 
-TRANSLATOR_NAMES = frozenset({"hand_drawn", "data_feed", "template", "llm"})
+TRANSLATOR_NAMES = frozenset({"hand_drawn", "data_feed", "template", "llm", "structured"})
 
 
 class EventValidationError(ValueError):

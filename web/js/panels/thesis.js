@@ -13,7 +13,10 @@ const ECONOMY_EXAMPLES = ["What if oil prices doubled next quarter?", "What if N
   "What if OPEC cuts output by 10%?", "What if the Fed raises rates by 100bp?", "What if jet fuel spikes next month?"];
 const TUTORIAL_EXAMPLES = ["What if oil rose by 30% next quarter?", "What if oil prices doubled next quarter?",
   "What if the Fed raised rates by 100bp?"];
-const examples = () => (!!store.status?.examples ? TUTORIAL_EXAMPLES : ECONOMY_EXAMPLES);
+// an imported model (emily_demo): a PM's questions about policy, the yen, and the names
+const BOOK_EXAMPLES = ["What if the BoJ hiked by 0.5 next quarter?", "What if the Fed cut rates by 0.75 next quarter?",
+  "What if the yen rose by 5% next month?", "What if oil prices spiked next quarter?"];
+const examples = () => (store.status?.imports ? BOOK_EXAMPLES : store.status?.examples ? TUTORIAL_EXAMPLES : ECONOMY_EXAMPLES);
 const KIND_LABEL = { sub: "value", actor: "actor", idea: "idea", superentity: "superentity", sector: "sector", category: "category" };
 const ACTOR_KINDS = new Set(["agency", "company", "person"]);
 
@@ -32,7 +35,16 @@ export function initThesis({ toast }) {
   let horizon = 270;
   let adding = false;
   let ready = [];            // the scenario's ready-made questions (a design partner's), posed whole
-  api.scenarioTheses().then((l) => { ready = l.filter((t) => !t.scripted); render(); }).catch(() => {});
+  let readyFor = null;
+  const loadReady = () => api.scenarioTheses().then((l) => { ready = l.filter((t) => !t.scripted); render(); }).catch(() => {});
+  loadReady();
+  // another scenario (the Tutorial, or back to the model) has other ready-made questions
+  on("status", (st) => {
+    if (!st?.scenario_id || st.scenario_id === readyFor) return;
+    const first = readyFor == null;
+    readyFor = st.scenario_id;
+    if (!first) { ready = []; loadReady(); }
+  });
   let query = "";
 
   const view = () => store.graph ?? store.view;
@@ -90,6 +102,13 @@ export function initThesis({ toast }) {
     if (view()?.entities?.length) {
       const known = new Set(catalog().map((x) => `${x.kind}:${x.ref}`));
       picks = picks.filter((p) => known.has(`${p.kind}:${p.ref}`));
+      const have = new Set(subs.map((x) => x.id));
+      shocks = shocks.filter((x) => !x.sid || have.has(x.sid));
+      // an imported model's book: the yen and the names it moves
+      if (!picks.length && store.status?.imports) {
+        picks = [{ kind: "sub", ref: "dollar_yen.usd_jpy" }, { kind: "actor", ref: "tokio_marine" }, { kind: "actor", ref: "toyota" },
+          { kind: "actor", ref: "jpmorgan" }].filter((p) => known.has(`${p.kind}:${p.ref}`));
+      }
     }
     const decisions = subs.filter((s) => s.decision_variable);
     const sugg = suggestions();
@@ -103,7 +122,7 @@ export function initThesis({ toast }) {
       <div class="chips" style="margin-top:8px"><span class="faint small">Try</span>
         ${examples().map((q, i) => `<button class="pick ghosted" data-ex="${i}">${esc(q)}</button>`).join("")}</div>
       ${ready.length ? `<div class="section"><h4>Ready-made questions</h4>
-        <div class="small muted">A design partner's theses, each with several shocks and interventions already set.</div>
+        <div class="small muted">${store.status?.imports ? "Your scenarios" : "A design partner's theses"}, each with several shocks and interventions already set.</div>
         <div class="chips" style="margin-top:4px">${ready.map((t) => `<button class="pick ghosted" data-ready="${esc(t.id)}" title="Pose ${esc(t.id)} as written">${esc(t.question)}</button>`).join("")}</div></div>` : ""}
       <div class="section"><h4>Forecast for</h4>
         <div class="chips">${picks.map((p, i) => `<span class="pick ${p.kind}"><span class="k">${esc(KIND_LABEL[p.kind])}</span>${esc(labelOf(p))}

@@ -76,7 +76,8 @@ class RunnerStatus(BaseModel):
     error: str | None = None
     next_step_at: datetime | None = None  # the next scripted step: the Update dialog's default "until"
     canvas: str = "scripted"              # "blank" for the small demo's empty canvas
-    examples: str | None = None           # a demo with examples ("small", "prod"): the UI shows Examples, not Step
+    examples: str | None = None           # a demo with examples ("small", "prod"): the UI shows Tutorial, not Step
+    imports: bool = False                 # a model fed by import bundles: the UI shows Import (sim/imports.py)
 
 
 class StepReport(BaseModel):
@@ -674,7 +675,12 @@ def build_runner(scenario: str = "oil_shock_demo", *, interactive: bool = False,
         overrides = [script.config_overrides] if script.config_overrides else []
         cfg = load_config(config_path, overrides=overrides)
     cls = ScenarioRunner
-    if script.examples is not None:
+    if script.imports:
+        from axelrod_wm.sim.imports import ImportRunner
+
+        cls = ImportRunner
+        record_checklist = False
+    elif script.examples is not None:
         from axelrod_wm.sim.examples.session import ProdDemoRunner, SmallDemoRunner
 
         if script.base is not None:

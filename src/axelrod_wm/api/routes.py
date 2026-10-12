@@ -71,6 +71,8 @@ class PolicyBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     policy: str
+    approve_pending: bool = False       # with auto_approve_all: also approve what waits now
+    by: str = "backend user"
 
 
 class PoseBody(BaseModel):
@@ -152,14 +154,25 @@ async def get_config(request: Request) -> dict:
 @router.patch("/config/review")
 async def patch_review(request: Request, body: PolicyBody) -> dict:
     st = S(request)
-    if body.policy not in ("default", "auto_approve_all"):
+    if body.policy not in ("review_all", "default", "auto_approve_all"):
         raise HTTPException(422, f"unknown review policy {body.policy!r}")
 
-    def run() -> dict:
-        st.controller.set_review_policy(body.policy)
-        return _config(st)
+    def run() -> tuple[dict, str | None]:
+        ctl = st.controller
+        ctl.set_review_policy(body.policy)
+        drive = None
+        if body.approve_pending and body.policy == "auto_approve_all":
+            # auto-accept from now on, and for what already waits: approve the queue, then let the run go on (the
+            # rest of it is approved by the policy as it arrives)
+            for p in list(ctl.pending_proposals()):
+                ctl.approve(p.id, by=body.by, note="approved when auto-accept was turned on")
+                drive = _resume_if_awaited(st, p.id) or drive
+        return _config(st), drive
 
-    return await st.call(run)
+    out, drive = await st.call(run)
+    if drive is not None:
+        st.start_drive(drive)
+    return out
 
 
 # -- state and records -------------------------------------------------------------------------
@@ -1216,6 +1229,56 @@ async def run_library_event(request: Request, event_id: str) -> dict:
         if out["proposal_id"]:
             out["proposal"] = _proposal_after(st, out["proposal_id"])
         runner._broadcast()
+        return out
+
+    return await st.call(run)
+
+
+# -- imports (Oct 11): research a collection agent read and categorized (sim/imports.py) ----------------
+def _importer(st: AppState) -> Any:
+    runner = st.ensure_loaded()
+    if not hasattr(runner, "import_items"):
+        raise HTTPException(404, "the loaded scenario takes no imports; load emily_demo")
+    return runner
+
+
+class ImportBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    bundle: dict                        # an axelrod.import/v1 bundle (intake/bundle.py)
+    ids: list[str] | None = None        # the items to import; all when absent
+
+
+@router.get("/import/local")
+async def local_bundles(request: Request) -> list[dict]:
+    """Bundles in the scenario's imports folder on this server (empty when it has none, as on the hosted demo)."""
+    st = S(request)
+    return await st.call(lambda: _importer(st).local_bundles())
+
+
+@router.get("/import/local/{name}")
+async def local_bundle(request: Request, name: str) -> dict:
+    st = S(request)
+    return await st.call(lambda: _importer(st).local_bundle(name))
+
+
+@router.post("/import/preview")
+async def preview_import(request: Request, body: ImportBody) -> dict:
+    """What importing would do, item by item, without changing anything."""
+    st = S(request)
+    return await st.call(lambda: _importer(st).preview(body.bundle))
+
+
+@router.post("/import")
+async def run_import(request: Request, body: ImportBody) -> dict:
+    """Fold the chosen items in on their own dates. The update pauses at each item's review, in date order."""
+    st = S(request)
+
+    def run() -> dict:
+        runner = _importer(st)
+        out = runner.import_items(body.bundle, body.ids)
+        if out["waiting_on"]:
+            out["proposal"] = _proposal_after(st, out["waiting_on"])
         return out
 
     return await st.call(run)

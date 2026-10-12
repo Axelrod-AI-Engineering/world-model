@@ -1,0 +1,47 @@
+# Emily's superentities: the configurations a cross-asset PM reasons in. Given by members and interactions (§14.4).
+patterns:
+  - id: E3
+    name: Oil shock
+    description: "Expensive oil lifts inflation everywhere within a quarter and weighs on US growth after two; how long it stays above $100 matters more than the peak."
+    palette: h2
+    members: [oil, us_economy, japan_economy, euro_economy]
+    interactions: [m01, m02, m03, m04, m05]
+    support: 6
+  - id: E1
+    name: Policy divergence
+    description: "The Fed and the BoJ answer the same shock differently: the Fed holds or hikes on US inflation, the BoJ hikes on Japanese wages."
+    palette: h8
+    members: [us_economy, japan_economy, federal_reserve, boj, us_treasuries, jgbs]
+    interactions: [m06, m07, m08, m09, m11, m12, m13, m14]
+    support: 6
+  - id: E2
+    name: Rate gap and the yen
+    description: "The US-Japan two-year gap moves USD/JPY; a narrowing gap strengthens the yen and can unwind the carry trade."
+    palette: h19
+    members: [boj, us_treasuries, dollar_yen]
+    interactions: [m15, m16, m17, m18]
+    support: 5
+  - id: E4
+    name: Yen exporters
+    description: "Japanese exporters whose profit rises with a weaker yen: each yen of USD/JPY is worth tens of billions."
+    palette: h4
+    members: [dollar_yen, toyota, komatsu]
+    interactions: [m29, m30]
+    support: 4
+  - id: E5
+    name: Rate-sensitive banks
+    description: "Banks whose interest income follows their central bank's rate, and a dealer whose trading thrives on rate volatility."
+    palette: h1
+    members: [federal_reserve, ecb, us_treasuries, jpmorgan, citigroup, morgan_stanley, unicredit]
+    interactions: [m25, m26, m27, m28]
+    support: 4
+  - id: E6
+    name: Insurers' reinvestment
+    description: "Insurers reinvest maturing bonds at today's yields, so higher yields lift investment income over years; a weaker yen also lifts Tokio Marine's translated overseas profit."
+    palette: h3
+    members: [us_treasuries, jgbs, dollar_yen, tokio_marine, zurich]
+    interactions: [m19, m20, m21, m24]
+    support: 4
+palettes:
+  h8: {fill: "#E6E3C8", line: "#A39A5B"}
+  h19: {fill: "#DCE3EE", line: "#5F7AA3"}

@@ -1,0 +1,43 @@
+# Question rules for Emily's world (§7.4): "What if the BoJ hiked by 25 bp next quarter?" A subject phrase maps to a
+# value; a verb phrase gives the change; a timeframe sets when. Names first, so "Tokio Marine" wins over "marine".
+subjects:
+  - {pattern: "tokio marine(?:'s)?(?: international| overseas)(?: profit| segment)?", subentity: tokio_marine.international_profit}
+  - {pattern: "tokio marine(?:'s)?(?: shares| stock| share price)?", subentity: tokio_marine.share_price}
+  - {pattern: "zurich(?: insurance)?", subentity: zurich.share_price}
+  - {pattern: "toyota(?:'s)?(?: profit| earnings)", subentity: toyota.operating_profit}
+  - {pattern: "toyota", subentity: toyota.share_price}
+  - {pattern: "komatsu", subentity: komatsu.share_price}
+  - {pattern: "softbank(?: corp)?", subentity: softbank_corp.share_price}
+  - {pattern: "jpmorgan|jpm", subentity: jpmorgan.share_price}
+  - {pattern: "citi(?:group)?", subentity: citigroup.share_price}
+  - {pattern: "morgan stanley", subentity: morgan_stanley.share_price}
+  - {pattern: "unicredit", subentity: unicredit.share_price}
+  - {pattern: "yen carry(?: trade)?|carry trade|carry positions?", subentity: dollar_yen.carry_positioning}
+  - {pattern: "(?:the )?boj|bank of japan|japan(?:ese)? (?:policy )?rates?", subentity: boj.policy_rate}
+  - {pattern: "(?:the )?ecb|euro(?:pean)? rates?", subentity: ecb.policy_rate}
+  - {pattern: "dollar-yen|usd/jpy|usdjpy|(?:the )?yen", subentity: dollar_yen.usd_jpy}
+  - {pattern: "(?:30|thirty)[- ]year jgbs?|super-long jgbs?", subentity: jgbs.yield_30y}
+  - {pattern: "jgbs?|jgb yields|japanese yields", subentity: jgbs.yield_10y}
+  - {pattern: "(?:2|two)[- ]year (?:treasur(?:y|ies)|yields?)", subentity: us_treasuries.yield_2y}
+  - {pattern: "treasur(?:y|ies)|us yields|bond yields", subentity: us_treasuries.yield_10y}
+  - {pattern: "japan(?:ese)? wages?|shunto", subentity: japan_economy.wage_growth}
+  - {pattern: "japan(?:ese)? inflation", subentity: japan_economy.core_cpi}
+  - {pattern: "euro(?: area)? inflation", subentity: euro_economy.headline_cpi}
+  - {pattern: "oil(?: prices?)?|brent|crude", subentity: oil.brent}
+  - {pattern: "(?:the )?fed(?:eral reserve)?|(?:us )?policy rates?|interest rates|rates", subentity: federal_reserve.policy_rate}
+  - {pattern: "(?:us )?growth|gdp", subentity: us_economy.gdp_growth}
+  - {pattern: "inflation|cpi", subentity: us_economy.headline_cpi}
+verbs:
+  - {pattern: "(?:prices? )?(?:doubled|double|doubles)", mode: relative, delta: 1.0}
+  - {pattern: "(?:halved|halve|halves|fell by half)", mode: relative, delta: -0.5}
+  - {pattern: "(?:rose|rise|rises|jumped|jump|jumps|climbed|climb|increased|increase|went up|go up|surged|hiked|hike|raised|raise)s?(?: [a-z]+)? by (?P<num>[0-9.]+) ?(?P<unit>%|percent|bp|basis points|sd|standard deviations)?", sign: 1.0}
+  - {pattern: "(?:fell|fall|falls|dropped|drop|drops|declined|decline|decreased|decrease|went down|go down|cut|cuts)s?(?: [a-z]+)? by (?P<num>[0-9.]+) ?(?P<unit>%|percent|bp|basis points|sd|standard deviations)?", sign: -1.0}
+  - {pattern: "(?:held|hold|holds|stayed|stay) (?:steady|flat|unchanged)", mode: absolute, delta: 0.0}
+  - {pattern: "(?:spiked|spike|spikes|soared|soar|soars|surged|surge|surges)", mode: standardized, delta: 2.0}
+  - {pattern: "(?:crashed|crash|crashes|collapsed|collapse|collapses|plunged|plunge|plunges)", mode: standardized, delta: -2.0}
+timeframes:
+  - {pattern: "next quarter|in three months|in 3 months", days: 90}
+  - {pattern: "next month|in a month", days: 30}
+  - {pattern: "next year|in a year", days: 365}
+  - {pattern: "next week", days: 7}
+  - {pattern: "tomorrow|today|now", days: 0}

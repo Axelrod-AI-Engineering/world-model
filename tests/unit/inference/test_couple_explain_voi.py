@@ -66,6 +66,17 @@ def test_path_shares_on_a_linear_chain_sum_to_one():
     assert d.interaction_ids == ["ab", "bc", "cd"] and d.gain == pytest.approx(2.0 * 0.8 * 0.5 * -0.6)
 
 
+def test_paths_survive_a_learned_effect_above_one():
+    # effects past one standard unit (learned from large moves) made path costs negative, and a cycle through them
+    # broke Dijkstra ("Contradictory paths found"); costs are rescaled by the strongest edge
+    betas = {("a", "d"): 3.0, ("a", "f"): 0.5, ("c", "a"): 3.0, ("d", "a"): 0.5, ("e", "b"): 2.5, ("f", "b"): 0.5,
+             ("f", "e"): 3.0}
+    chans = [_chain_channel(s, t, b) for (s, t), b in betas.items()]
+    paths = top_paths(chans, [("a", 1.0)], ["f", "b"], horizon=182, min_delay=1)
+    assert {p.target_id for p in paths} == {"f", "b"}
+    assert next(p for p in paths if p.target_id == "f").interaction_ids == ["af"]
+
+
 def _hyp(eng, p, hid="H-t"):
     return Hypothesis(id=hid, kind=HypothesisKind.INTERACTION_PRESENT, statement="e43 holds", interaction_id="e43",
                       source_id="inflation.headline_cpi", target_id="federal_reserve.policy_stance", probability=p,

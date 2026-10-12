@@ -21,6 +21,7 @@ import { initChat } from "./panels/chat.js";
 import { initConsole } from "./panels/console.js";
 import { initDecisions } from "./panels/decisions.js";
 import { initExamples } from "./panels/examples.js";
+import { initImport } from "./panels/import.js";
 import { initChecks } from "./panels/checks.js";
 import { initPaths } from "./panels/paths.js";
 import { initFind } from "./panels/find.js";
@@ -53,7 +54,7 @@ const SHORTCUTS = [
   ["Canvas", [[`${MOD}Z`, "Undo a view change (open, close, move, layout)"], [`${REDO_KEY}`, "Redo"],
               ["1 · 2 · 3", "Superentities · entities · subentities"], ["0", "Auto: detail follows zoom"], ["K", "Color: what pills are colored by, and the key"], ["[ · ]", "Up a level · down into the first part (superentities within superentities)"], ["+ · − · F", "Zoom in · zoom out · fit"],
               [`/ · ${MOD}K`, "Find or filter: words, kinds, “moved”, “open>0.8”, “learned”; widen to neighborhoods"], ["D", "Draw a proposed edge"], ["Esc", "Close the top thing"]]],
-  ["Demo", [["E", "Examples (the tutorial)"], ["→", "Next scripted step"], ["Space", "Play or pause"],
+  ["Demo", [["E", "Tutorial"], ["I", "Import research (imported models)"], ["→", "Next scripted step"], ["Space", "Play or pause"],
             ["⇧← · ⇧→", "Step through the timeline"], ["U", "Request an update"]]],
   ["Walkthrough", [["W", "How it learned (the latest news) or how it inferred (the latest question)"], ["← · →", "Previous · next step (while open)"]]],
   ["Panels", [["I", "Console: the commit log (Learn)"], ["N", "News"], ["B", "Forecast briefs"], ["Q", "Ask a question"], ["M", "Long-term memory"], ["C", "Checks: what the model is testing"], ["G", "Transmission grid: input, each order, output"], ["X", "Isolate the selection: what drives it and what it moves"],
@@ -281,6 +282,20 @@ async function boot() {
     onProposal: async (pid) => { await refreshGraph(); openLeft("review"); review.focus(pid); },
     onQuestion: (q) => { setMode("predict", false); thesis.setQuestion(q); openRight("thesis"); },
     onReset: () => loadScenario(store.status?.scenario_id ?? "small_demo"),
+  });
+  // DECISION (Oct 11): an imported model's Tutorial is the small demo: it loads in place of the model, and Back
+  // (top bar) loads the model again. The scenario to return to is kept for this tab only.
+  const RETURN = "axelrod.tutorialReturn";
+  const returnTo = () => { try { return sessionStorage.getItem(RETURN); } catch { return null; } };
+  async function openTutorial() {
+    if (!store.status?.imports) { examples.toggle(); return; }
+    try { sessionStorage.setItem(RETURN, store.status.scenario_id); } catch { /* the tutorial still opens */ }
+    await loadScenario("small_demo");
+    examples.open();
+  }
+  const importer = initImport({
+    toast,
+    onProposal: async (pid) => { await refreshGraph(); openLeft("review"); review.focus(pid); },
   });
   on("open-examples", () => examples.open());
   on("run-example", (id) => { setMode("learn", false); examples.run(id); });
@@ -683,9 +698,15 @@ async function boot() {
   async function guarded(fn) {
     try { return await fn(); } catch (err) { toast(errorText(err), "err"); return null; }
   }
+  // the review policy (Admin › Settings › Review): every change waits, only structural changes wait, or auto-accept
   const setPolicy = (p) => guarded(async () => {
-    store.config = { ...(store.config ?? {}), ...(await api.setReviewPolicy(p)) };
-    toast(p === "default" ? "Structural changes now wait for your review." : "Everything is approved automatically.");
+    const waiting = (store.proposals ?? []).filter((pv) => pv.proposal.status === "pending").length;
+    const also = p === "auto_approve_all" && waiting > 0
+      && window.confirm(`Auto-accept from now on. Also approve the ${waiting} change${waiting === 1 ? "" : "s"} waiting now?`);
+    store.config = { ...(store.config ?? {}), ...(await api.setReviewPolicy(p, also)) };
+    if (also) await refreshGraph();
+    toast({ review_all: "Every change now waits for your review.", default: "Structural changes now wait for your review; the rest applies at once.",
+            auto_approve_all: also ? `Auto-accept is on, and the ${waiting} waiting were approved.` : "Auto-accept is on: changes apply as they arrive." }[p]);
   });
   const setLayout = (mode) => {
     store.settings.layout = mode;
@@ -703,11 +724,36 @@ async function boot() {
   }
   if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) setReducedMotion(true);
 
+  // DECISION (Oct 8): the example demos float in the gravity layout (entities arrive one article at a time, so a fixed
+  // figure cannot place them well); so does any world with no hand-placed Figure 1. Admin › View switches back.
+  // (Oct 11) Applied on every load, not only the first page: a world loaded in place gets its own layout and mode.
+  function applyWorldLayout(layout, st) {
+    if (store.layout !== undefined && st?.scenario_id !== store.worldId) renderer.resetHomes();
+    store.worldId = st?.scenario_id;
+    store.layout = layout;
+    renderer.setLayout(layout);
+    // what this person looks at, and at what zoom, is learned per world (graph/attention.js)
+    renderer.useAttention(st?.scenario_id ?? "default");
+    const mode = st?.examples || !Object.keys(layout?.entities ?? {}).length ? "gravity" : "figure1";
+    store.settings.layout = mode;
+    renderer.quiet = true;                 // the default, not a view change to undo
+    renderer.setLayoutMode(mode);
+    renderer.quiet = false;
+  }
+
   async function loadScenario(id) {
     clearStaged();
+    // another world: what was open about this one (a forecast, its grid, the side panels) does not carry over
+    if (paths.isOpen()) paths.close();
+    if (importer.isOpen()) importer.close();
+    clearForecastCanvas();
+    closeRight();
+    predict.keep = new Set();
+    predict.all = false;
     await guarded(async () => {
       const st = await api.load(id, true);
       setStatus(st);
+      applyWorldLayout(await api.layout().catch(() => null), st);
       backToLive();
       await refreshGraph();
       renderer.fit();
@@ -819,17 +865,25 @@ async function boot() {
     if (empty && !hint.dataset.on) {
       hint.dataset.on = "1";
       hint.innerHTML = `<div class="eh-t">A blank canvas</div>
-        <p>Build a world model from the ground up. Each example event isolates one part of the framework, runs through learning on a
-        staged copy, and stops at your review.</p><button class="primary" data-ex>Pick the first example</button>`;
+        <p>Build a world model from the ground up. Each step of the tutorial isolates one part of the framework, runs through learning on a
+        staged copy, and stops at your review.</p><button class="primary" data-ex>Start the tutorial</button>`;
       hint.querySelector("[data-ex]").addEventListener("click", () => examples.open());
     }
     if (!empty) delete hint.dataset.on;
     $("#sim-version").textContent = `v${g.version}${store.readOnlyVersion != null ? " · read-only" : ""}`;
     if (g.today) $("#sim-date").textContent = fmtDay(g.today);
     if (store.selection) renderer.select(store.selection);
+    predictCanvas();
   });
   const refreshRibbons = () => renderer.setExtras(extras());
   on("proposals", refreshRibbons);
+  // a staged proposal's grid closes once that proposal is decided (the canvas comes back with it)
+  on("proposals", () => {
+    if (gridTarget?.kind === "proposal" && !(store.proposals ?? []).some((pv) => pv.proposal.id === gridTarget.id && pv.proposal.status === "pending")) {
+      if (paths.isOpen()) paths.close();
+      setGridTarget(null);
+    }
+  });
   // a review queue that opened by itself closes by itself once it is empty
   on("proposals", () => {
     if (reviewOpenedForYou && !(store.proposals ?? []).length && !left.hidden && left.dataset.tab === "review") {
@@ -851,6 +905,12 @@ async function boot() {
     lastState = st.state;
     document.body.classList.toggle("canvas-blank", st.canvas === "blank");
     document.body.classList.toggle("has-examples", !!st.examples);
+    document.body.classList.toggle("has-imports", !!st.imports);
+    $("#btn-examples").classList.toggle("primary", !!st.examples);
+    const back = returnTo();
+    const showBack = !!back && back !== st.scenario_id && !!st.examples;
+    $("#btn-return").classList.toggle("hidden", !showBack);
+    if (showBack) $("#btn-return").textContent = "← Back to your model";
     if (!store.graph?.today) $("#sim-date").textContent = fmtDay(st.sim_time);
     if (store.readOnlyVersion == null) $("#sim-version").textContent = `v${st.version}`;
     $("#step-label").textContent = `${stepShown()} / ${st.total_steps}`;
@@ -899,7 +959,7 @@ async function boot() {
   on("open-methods", ({ tab, anchor } = {}) => methods.open(tab, anchor));
   // full screen (Oct 8): every window over the canvas has a ⤢ button; it fills the space between the bars, and again
   // restores it. Double-clicking a window's header does the same.
-  const WINDOWS = "#methods, #examples, #manual, #checks, #paths, #console, #chat, #walkthrough, #left-panel, #right-panel, #drawer";
+  const WINDOWS = "#methods, #examples, #import, #manual, #checks, #paths, #console, #chat, #walkthrough, #left-panel, #right-panel, #drawer";
   const toggleMax = (win) => {
     const on_ = !win.classList.contains("win-max");
     win.classList.toggle("win-max", on_);
@@ -920,12 +980,34 @@ async function boot() {
     if (win && !ev.target.closest("button, input, a")) toggleMax(win);
   });
   $("#btn-console").addEventListener("click", () => consolePane.toggle());
-  $("#btn-examples").addEventListener("click", () => examples.toggle());
+  $("#btn-examples").addEventListener("click", () => openTutorial());
+  $("#btn-import").addEventListener("click", () => importer.toggle());
+  $("#btn-return").addEventListener("click", async () => {
+    const back = returnTo();
+    try { sessionStorage.removeItem(RETURN); } catch { /* nothing kept */ }
+    examples.close();
+    if (back) await loadScenario(back);
+  });
 
   // -- views (restructure): Learn for backend users, who update the one world model; Predict for everyone
   // else, who pose theses against committed versions and never change it --------------------------------
+  // Predict's canvas state (see predictCanvas below); set up before setMode first runs
+  const predict = { keep: new Set(), all: false, question: "", effects: new Map() };
+  const predictHint = document.createElement("div");
+  predictHint.id = "predict-hint";
+  predictHint.className = "floating hidden";
+  predictHint.setAttribute("role", "status");
+  $("#canvas").appendChild(predictHint);
   function setMode(mode, announce = true) {
-    if (mode === "learn") clearForecastCanvas();
+    if (mode === "learn") {
+      clearForecastCanvas();
+      // Predict's windows (a forecast, its brief, its grid) belong to Predict: Learn opens on the model itself
+      if (store.settings.mode === "predict") {
+        if (!right.hidden && ["forecast", "thesis"].includes(right.dataset.tab)) closeRight();
+        if (!left.hidden && left.dataset.tab === "briefs") closeLeft();
+        if (paths.isOpen() && gridTarget?.kind === "forecast") paths.close();
+      }
+    }
     store.settings.mode = mode;
     document.body.classList.toggle("mode-learn", mode === "learn");
     document.body.classList.toggle("mode-predict", mode === "predict");
@@ -935,12 +1017,16 @@ async function boot() {
     if (mode === "predict") {
       if (consolePane.isOpen()) consolePane.close();
       if (examples.isOpen()) examples.close();
+      if (importer.isOpen()) importer.close();
       if (!left.hidden && left.dataset.tab === "review") closeLeft();
+      // Learn's windows belong to Learn: a staged proposal's grid closes, and Predict opens on its own canvas
+      if (paths.isOpen() && gridTarget?.kind !== "forecast") paths.close();
       if (store.settings.draw) setDraw(false);
       if (announce) once("mode-predict", "Predict: pose a thesis against the committed version. Nothing you do here is learned.");
     } else if (announce) {
       once("mode-learn", "Learn: update the world model. Every change is vetted and committed; the Console shows each step.");
     }
+    predictCanvas();
   }
   $("#mode-learn").addEventListener("click", () => setMode("learn"));
   $("#mode-predict").addEventListener("click", () => setMode("predict"));
@@ -1029,6 +1115,7 @@ async function boot() {
   });
   on("show-forecast", (fv) => {
     openRight("forecast");
+    showForecastOnCanvas(fv);
     if ((fv?.transmission?.values ?? []).length && fv.forecast?.id) setGridTarget({ kind: "forecast", id: fv.forecast.id });
   });
   on("ask-started", ({ question }) => {
@@ -1038,6 +1125,7 @@ async function boot() {
     openRight("forecast");
   });
   on("asked", (fv) => {
+    showForecastOnCanvas(fv);
     autoGrid("forecast", fv.forecast?.id, (fv.transmission?.values ?? []).length > 0);
     if (progress.run && progress.run.scope == null) { progress.run = null; emit("forecasting", null); }
     if (guide.run) briefs.expect(fv.forecast.thesis_id);
@@ -1069,11 +1157,83 @@ async function boot() {
   }
   function unisolate() {
     if (!renderer.isolated) return false;
+    // in Predict, leaving the forecast's view means asking to see the whole model
+    if (renderer.isolated.way === "predict") { predict.all = true; predictCanvas(); return true; }
     const wasGrid = renderer.isolated.way === "grid";
     renderer.setIsolation(null);
     isoBanner.classList.add("hidden");
     if (wasGrid) { store.isolatedHighlight = null; renderer.setHighlight(store.highlight); }
+    predictCanvas();
     return true;
+  }
+
+  // -- Predict's canvas (Oct 11): prediction is for people outside the team, so it opens on a blank canvas, and a
+  // forecast brings forward what it reaches: the values it shocks, the entities it moves, and the watched names it
+  // touches. The whole model stays one click away ("Show the whole model"), as it was when the forecast was made.
+  function forecastEntities(fv) {
+    const known = new Set((store.view?.entities ?? []).map((e) => e.id));
+    const t = fv?.transmission ?? {};
+    const out = new Set();
+    for (const s of t.shocked ?? []) out.add(String(s.id).split(".")[0]);
+    for (const v of t.values ?? []) if (v.material) out.add(v.entity_id);
+    for (const n of t.watchlist?.names ?? []) if (n.status === "moves" || n.status === "shocked") out.add(n.id);
+    return new Set([...out].filter((e) => known.has(e)));
+  }
+  function predictCanvas() {
+    const on = store.settings.mode === "predict" && !store.walkthrough && !!store.view?.entities?.length;
+    if (!on) {
+      renderer.setRowOverride(null);
+      document.body.classList.remove("predict-blank");
+      if (renderer.isolated?.way === "predict") renderer.setIsolation(null);
+      predictHint.classList.add("hidden");
+      return;
+    }
+    document.body.classList.toggle("predict-blank", !predict.all && !predict.keep.size);
+    renderer.setRowOverride(!predict.all && predict.keep.size ? predict.effects : null);
+    if (renderer.isolated?.way === "grid") { predictHint.classList.add("hidden"); return; }   // the grid shows it
+    const total = store.view.entities.length;
+    if (predict.all) {
+      renderer.setRowOverride(null);
+      if (renderer.isolated?.way === "predict") { renderer.setIsolation(null); setTimeout(() => renderer.frameAll(420), 60); }
+      predictHint.className = "floating predict-bar";
+      predictHint.innerHTML = `<span><b>The whole model</b> <span class="muted">· ${total} entities, as of this version</span></span>
+        ${predict.keep.size ? `<button class="small" data-back>Back to the forecast</button>` : `<button class="small" data-blank>Clear the canvas</button>`}`;
+      return;
+    }
+    const keep = predict.keep;
+    const was = renderer.isolated?.way === "predict" ? renderer.isolated.keep : null;
+    const same = was && was.size === keep.size && [...keep].every((e) => was.has(e));
+    if (!same) renderer.setIsolation({ ids: [...keep], keep, way: "predict", hops: 0, open: keep.size <= 6 });
+    if (!keep.size) {
+      predictHint.className = "floating predict-empty";
+      predictHint.innerHTML = `<div class="eh-t">Ask about your world</div>
+        <p>Pose a what-if. The forecast brings forward the actors and ideas it reaches, in the order the shock travels.</p>
+        <div class="predict-acts"><button class="primary" data-ask>Ask a question</button>
+          <button class="ghost small" data-all>Show the whole model</button></div>`;
+    } else {
+      predictHint.className = "floating predict-bar";
+      const q = predict.question.length > 64 ? `${predict.question.slice(0, 62).trimEnd()}…` : predict.question;
+      predictHint.innerHTML = `<span><b>What the forecast reaches</b> <span class="muted">· ${keep.size} of ${total} entities${q ? ` · <span title="${esc(predict.question)}">${esc(q)}</span>` : ""}</span></span>
+        <button class="small" data-all>Show the whole model</button>`;
+      if (!same) setTimeout(() => renderer.frame([...keep], { duration: 420, maxK: 1.1 }), 140);
+    }
+  }
+  predictHint.addEventListener("click", (ev) => {
+    const b = ev.target.closest("button");
+    if (!b) return;
+    if (b.dataset.ask != null) $("#btn-ask").click();
+    else if (b.dataset.all != null) { predict.all = true; predictCanvas(); }
+    else if (b.dataset.back != null) { predict.all = false; predictCanvas(); }
+    else if (b.dataset.blank != null) { predict.all = false; predict.keep = new Set(); predictCanvas(); }
+  });
+  function showForecastOnCanvas(fv) {
+    const keep = forecastEntities(fv);
+    if (!keep.size) return;
+    predict.effects = new Map((fv?.transmission?.values ?? []).map((v) => [v.id, v.peak]));
+    predict.keep = keep;
+    predict.all = false;
+    predict.question = fv?.forecast?.question ?? fv?.thesis?.question ?? "";
+    predictCanvas();
   }
   const GRID_DX = 330;      // world units between the grid's columns on the canvas
   const GRID_DY = 84;       // and between its rows
@@ -1125,6 +1285,7 @@ async function boot() {
       if (checks.isOpen()) { checks.close(); return; }
       if (colorKey.isOpen()) { colorKey.close(); return; }
       if (examples.isOpen()) { examples.close(); return; }
+      if (importer.isOpen()) { importer.close(); return; }
       if (methods.isOpen()) { methods.close(); return; }
       if (chat.isOpen()) { chat.close(); return; }
       if (guide.run) { guide.stop(); return; }
@@ -1141,7 +1302,7 @@ async function boot() {
     if (ev.metaKey || ev.ctrlKey || ev.altKey) return;
     // inside a panel, arrows scroll and Space presses the focused button, as anywhere else; the demo keys act
     // from the canvas and the top bar
-    const inPanel = !!ev.target.closest?.("#left-panel, #right-panel, #drawer, #admin, #methods, #console, #examples, #checks, #paths, #walkthrough, #tooltip");
+    const inPanel = !!ev.target.closest?.("#left-panel, #right-panel, #drawer, #admin, #methods, #console, #examples, #import, #checks, #paths, #walkthrough, #tooltip");
     const onControl = !!ev.target.closest?.("button, a, summary, select, [role=button], [role=tab]");
     if (ev.key === " " && (onControl || inPanel)) return;
     if ((ev.key === "ArrowRight" || ev.key === "ArrowLeft") && inPanel && !walk.isOpen()) return;
@@ -1153,7 +1314,8 @@ async function boot() {
     if (ev.key === "?") { ev.preventDefault(); showShortcuts(); }
     else if (ev.key === "w" || ev.key === "W") toggleWalk();
     else if ((ev.key === "i" || ev.key === "I") && store.settings.mode !== "predict") consolePane.toggle();
-    else if ((ev.key === "e" || ev.key === "E") && store.settings.mode !== "predict" && store.status?.examples) examples.toggle();
+    else if ((ev.key === "e" || ev.key === "E") && store.settings.mode !== "predict" && (store.status?.examples || store.status?.imports)) openTutorial();
+    else if ((ev.key === "i" || ev.key === "I") && store.settings.mode !== "predict" && store.status?.imports) importer.toggle();
     else if (ev.key === "n" || ev.key === "N") toggleLeft("inbox");
     else if (ev.key === "b" || ev.key === "B") toggleLeft("briefs");
     else if (ev.key === ",") admin.toggle();
@@ -1203,19 +1365,8 @@ async function boot() {
   const [layout, scenarios, cfg] = await Promise.all([
     api.layout().catch(() => null), api.scenarios().catch(() => []), api.config().catch(() => null)]);
   installGeneralizations(renderer);
-  store.layout = layout;
-  renderer.setLayout(layout);
-  // DECISION (Oct 8): the example demos float in the gravity layout (entities arrive one article at a time, so a fixed
-  // figure cannot place them well); so does any world with no hand-placed Figure 1. Admin › View switches back.
   const status0 = store.status ?? await api.status().catch(() => null);
-  // what this person looks at, and at what zoom, is learned per world (graph/attention.js)
-  renderer.useAttention(status0?.scenario_id ?? "default");
-  if (status0?.examples || !Object.keys(layout?.entities ?? {}).length) {
-    store.settings.layout = "gravity";
-    renderer.quiet = true;                 // the default, not a view change to undo
-    renderer.setLayoutMode("gravity");
-    renderer.quiet = false;
-  }
+  applyWorldLayout(layout, status0);
   store.scenarios = scenarios;
   store.config = cfg;
 

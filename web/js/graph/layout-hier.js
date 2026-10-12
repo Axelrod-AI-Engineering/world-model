@@ -11,8 +11,9 @@
 // entity in several superentities is placed in one of them (the most specific, with the most interactions inside);
 // the others' outlines reach to it.
 
-const GAP = { entity: [22, 14], region: [40, 32] };   // [x, y] gaps between items
+const GAP = { entity: [22, 14], region: [72, 56] };   // [x, y] gaps between items; regions stand well apart (Oct 11)
 const PAD = 30;                                          // room around a region's contents for its outline and tab
+const ASPECT = 1.3;                                      // the width to height every arrangement aims for (Oct 11)
 
 export function hierarchicalLayout(nodes, links, groups, { center = { x: 600, y: 440 } } = {}) {
   const byId = new Map(nodes.map((n) => [n.id, n]));
@@ -34,6 +35,17 @@ export function hierarchicalLayout(nodes, links, groups, { center = { x: 600, y:
     const leafmost = holders.filter((g) => !holders.some((h) => h !== g && g.children.includes(h.key)));
     leafmost.sort((a, b) => linksIn(b, n.id) - linksIn(a, n.id) || a.members.size - b.members.size || (a.key < b.key ? -1 : 1));
     if (leafmost.length) primary.set(n.id, leafmost[0].key);
+  }
+  // DECISION (Oct 11): every superentity keeps a home. One whose members all live elsewhere would vanish as a region
+  // (its outline is drawn around its home members only), so it takes the member most joined to it from a region that
+  // can spare one; the order is fixed, so the result is the same every time.
+  const homes = () => { const c = new Map(); for (const k of primary.values()) c.set(k, (c.get(k) ?? 0) + 1); return c; };
+  for (const g of [...live].sort((a, b) => a.members.size - b.members.size || (a.key < b.key ? -1 : 1))) {
+    if (hidden(g) || g.children.some((c) => gByKey.has(c)) || homes().get(g.key)) continue;
+    const count = homes();
+    const spare = [...g.members].filter((m) => primary.has(m) && (count.get(primary.get(m)) ?? 0) > 1)
+      .sort((a, b) => linksIn(g, b) - linksIn(g, a) || (a < b ? -1 : 1));
+    if (spare.length) primary.set(spare[0], g.key);
   }
   // the region tree: each region's items are its open parts that hold something, its own entities, and the cards of
   // its closed parts
@@ -90,7 +102,8 @@ export function hierarchicalLayout(nodes, links, groups, { center = { x: 600, y:
         return { id, w: sub.w, h: sub.h, region: true };
       }
       const n = byId.get(id);
-      return { id, w: n?.w ?? 180, h: n?.h ?? 30, region: false };
+      // a folded superentity's card is spaced like a region (it stands for one), so cards never crowd each other
+      return { id, w: n?.w ?? 180, h: n?.h ?? 30, region: n?.kind === "card" };
     });
     // interactions between this region's items, summed
     const agg = new Map();
@@ -138,6 +151,7 @@ export function hierarchicalLayout(nodes, links, groups, { center = { x: 600, y:
   layoutRegion("");
   place("", center.x, center.y);
   result.regions = regionCenters;
+  result.primary = primary;             // entity -> its home region (outlines are drawn around their homes)
   return result;
 }
 
@@ -201,12 +215,25 @@ function solve(items, pairs, rank, root = false) {
       layer.forEach((it, i) => order.set(it.id, i));
     }
   }
-  // the tallest a column may be before it wraps: about the height of a square holding everything
+  // DECISION (Oct 11): a region is laid out a little wider than tall. Columns (one per causal rank) wrap into side-by-side
+  // sub-columns at a height chosen from a range so the region's width to height is nearest ASPECT.
   const area = items.reduce((t, it) => t + (it.w + gap(it)[0]) * (it.h + gap(it)[1]), 0);
-  const maxH = Math.max(260, Math.sqrt(area) * 0.9);
+  let best = null;
+  for (const f of [0.35, 0.45, 0.55, 0.65, 0.8, 0.95, 1.15, 1.4, 1.8, 2.5]) {
+    const out = layered(L, Math.max(90, Math.sqrt(area) * f), gap);
+    const score = Math.abs(Math.log(out.w / Math.max(out.h, 1) / ASPECT));
+    if (!best || score < best.score - 1e-9) best = { ...out, score };
+  }
+  for (const [id, p] of best.pos) pos.set(id, p);
+  return pos;
+}
+
+// columns of a region's layers, each wrapping into sub-columns no taller than maxH; returns positions and the size
+function layered(L, maxH, gap) {
+  const pos = new Map();
   let x = 0;
+  let hMax = 0;
   for (const layer of L) {
-    // split the layer into sub-columns no taller than maxH
     const cols = [[]];
     let h = 0;
     for (const it of layer) {
@@ -218,6 +245,7 @@ function solve(items, pairs, rank, root = false) {
     for (const col of cols) {
       const w = Math.max(...col.map((it) => it.w + gap(it)[0]));
       const total = col.reduce((t, it) => t + it.h + gap(it)[1], 0);
+      hMax = Math.max(hMax, total);
       let y = -total / 2;
       for (const it of col) {
         const ih = it.h + gap(it)[1];
@@ -227,14 +255,32 @@ function solve(items, pairs, rank, root = false) {
       x += w;
     }
   }
-  return pos;
+  return { pos, w: x, h: hMax };
 }
 
+// the root: regions in causal order, packed row by row at the width whose result is nearest ASPECT (wider than tall)
 function shelves(items, rank, pos) {
   const gap = (it) => (it.region ? GAP.region : GAP.entity);
   const sorted = [...items].sort((a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0) || b.w * b.h - a.w * a.h);
-  const area = sorted.reduce((t, it) => t + (it.w + gap(it)[0]) * (it.h + gap(it)[1]), 0);
-  const width = Math.max(Math.max(...sorted.map((it) => it.w + gap(it)[0])), Math.sqrt(area * 1.7));
+  const widest = Math.max(...sorted.map((it) => it.w + gap(it)[0]));
+  const total = sorted.reduce((t, it) => t + it.w + gap(it)[0], 0);
+  const pack = (width) => {
+    let rowsW = 0; let h = 0; let w = 0; let rh = 0;
+    for (const it of sorted) {
+      const iw = it.w + gap(it)[0];
+      if (w + iw > width && w > 0) { rowsW = Math.max(rowsW, w); h += rh; w = 0; rh = 0; }
+      w += iw; rh = Math.max(rh, it.h + gap(it)[1]);
+    }
+    return { w: Math.max(rowsW, w), h: h + rh };
+  };
+  let width = widest;
+  let bestScore = Infinity;
+  for (let k = 0; k <= 30; k++) {
+    const cand = widest + (total - widest) * (k / 30);
+    const { w, h } = pack(cand);
+    const score = Math.abs(Math.log(w / Math.max(h, 1) / ASPECT));
+    if (score < bestScore - 1e-9) { bestScore = score; width = cand; }
+  }
   const rows = [[]];
   let w = 0;
   for (const it of sorted) {

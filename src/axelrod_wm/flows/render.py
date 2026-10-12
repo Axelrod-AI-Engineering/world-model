@@ -62,6 +62,7 @@ STYLE = """
 .fl-elabel { font: 500 10.5px var(--font-mono, 'IBM Plex Mono', ui-monospace, monospace); fill: var(--ink-2, #665E54);
   paint-order: stroke; stroke: var(--fl-band, #F7F2EA); stroke-width: 4px; stroke-linejoin: round; }
 .fl-arrow { fill: var(--edge, #857C70); }
+.fl-term { font: 600 12px var(--font-ui, 'Instrument Sans', 'Helvetica Neue', sans-serif); fill: var(--ink, #2F2A25); }
 .fl-legend { font: 400 11px var(--font-ui, 'Instrument Sans', 'Helvetica Neue', sans-serif); fill: var(--ink-2, #665E54); }
 .fl-node.fl-hit .fl-box { stroke: var(--real-line, #7C64C4); stroke-width: 2.4; }
 .fl-node.fl-miss { opacity: .38; }
@@ -139,7 +140,7 @@ def layout(flow: Flow, bare: bool = False) -> tuple[dict[str, _Box], dict, float
     # left lanes for edges that skip down the main line (interval coloring)
     skips = []
     for e in flow.edges:
-        if e.src in index and e.dst in index and index[e.dst] != index[e.src] + 1:
+        if e.drawn and e.src in index and e.dst in index and index[e.dst] != index[e.src] + 1:
             skips.append(e)
     lanes: dict[tuple[str, str], int] = {}
     taken: list[list[tuple[int, int]]] = []
@@ -170,6 +171,10 @@ def layout(flow: Flow, bare: bool = False) -> tuple[dict[str, _Box], dict, float
     top = 30 + 22 * (len(title_lines) - 1) + 18 * len(sum_lines) + 18
     if bare:                       # a page that supplies its own title and summary
         top, title_lines, sum_lines = 4.0, [], []
+    # the key and the terms come first, before the chart they explain (Oct 11)
+    extras_y = top
+    if not bare:
+        top += _extras_height(flow)
 
     boxes: dict[str, _Box] = {}
     y = top + 14
@@ -201,7 +206,7 @@ def layout(flow: Flow, bare: bool = False) -> tuple[dict[str, _Box], dict, float
         lane_out.setdefault(key[0], []).append(key)
         lane_in.setdefault(key[1], []).append(key)
     return boxes, {"lanes": lanes, "index": index, "left": left, "room": room, "side_x": side_x, "phase_spans": phase_spans,
-                   "title_lines": title_lines, "sum_lines": sum_lines, "top": top, "lane_out": lane_out,
+                   "title_lines": title_lines, "sum_lines": sum_lines, "top": top, "extras_y": extras_y, "lane_out": lane_out,
                    "lane_in": lane_in}, width, height
 
 
@@ -304,6 +309,12 @@ def _edge_svg(flow: Flow, e, boxes: dict[str, _Box], meta: dict) -> str:
         parts.append(_arrow(b.x - 1, b.cy, "right"))
         if label:
             parts.append(f'<text class="fl-elabel" x="{b.x - 10}" y="{b.cy - 7}" text-anchor="end">{label}</text>')
+    elif b.y < a.y:                                                # a side node loops back up (re-stage)
+        x1 = a.right + 18
+        parts.append(f'<path class="fl-edge side" {attrs} d="M{a.right},{a.cy} H{x1} V{b.cy} H{b.right + 1}"/>')
+        parts.append(_arrow(b.right + 1, b.cy, "left"))
+        if label:
+            parts.append(f'<text class="fl-elabel" x="{b.right + 12}" y="{b.cy - 6}">{label}</text>')
     else:                                                          # a side node rejoins the main line
         ex = b.right - 40
         ym = b.y - 12
@@ -314,10 +325,62 @@ def _edge_svg(flow: Flow, e, boxes: dict[str, _Box], meta: dict) -> str:
     return f'<g class="fl-edge-g" {attrs}>' + "".join(parts) + "</g>"
 
 
+GLOSS_TERM_W = 150
+GLOSS_TEXT_W = 700
+
+
+def _extras_height(flow: Flow) -> float:
+    """Room for the key and the terms at the top of the chart."""
+    h = 34.0
+    if flow.terms:
+        h += 30 + sum(16 * len(_wrap(t.meaning, GLOSS_TEXT_W, 12)) + 8 for t in flow.terms)
+    return h + 10
+
+
+def _legend(flow: Flow, y: float) -> str:
+    """The key: only the shapes this chart uses."""
+    kinds = {n.kind for n in flow.nodes}
+    optional = any(not n.mandatory for n in flow.nodes)
+    items = ['<rect x="0" y="-11" width="26" height="15" rx="4" class="fl-box"/>'
+             '<text class="fl-legend" x="32" y="0">step</text>']
+    x = 78
+    if optional:
+        items.append(f'<rect x="{x}" y="-11" width="26" height="15" rx="4" class="fl-box" stroke-dasharray="4 3"/>'
+                     f'<text class="fl-legend" x="{x + 32}" y="0">optional step</text>')
+        x += 128
+    if "decision" in kinds:
+        items.append(f'<polygon points="{x},-3.5 {x + 6},-11 {x + 20},-11 {x + 26},-3.5 {x + 20},4 {x + 6},4" class="fl-box" '
+                     'style="fill: var(--butter-fill, #F5EAC6); stroke: var(--butter-line, #D2BB72)"/>'
+                     f'<text class="fl-legend" x="{x + 32}" y="0">check (yes / no)</text>')
+        x += 140
+    if "store" in kinds:
+        items.append(f'<rect x="{x}" y="-11" width="26" height="15" rx="3" class="fl-box" '
+                     'style="fill: var(--out-fill, #F7E1D3); stroke: var(--out-line, #E0B092)"/>'
+                     f'<text class="fl-legend" x="{x + 32}" y="0">commit</text>')
+        x += 92
+    if any(n.writes for n in flow.nodes):
+        items.append(f'<text class="fl-legend" x="{x}" y="0">WM / LTM: writes working / long-term memory</text>')
+    return f'<g class="fl-legend-g" transform="translate(20,{y + 14:.1f})">' + "".join(items) + "</g>"
+
+
+def _glossary(flow: Flow, y: float) -> list[str]:
+    """The flow's terms: each term in bold, then what it means here."""
+    if not flow.terms:
+        return []
+    out = [f'<text class="fl-phase" x="20" y="{y + 12:.1f}">Terms</text>']
+    y += 30
+    for t in flow.terms:
+        lines = _wrap(t.meaning, GLOSS_TEXT_W, 12)
+        out.append(f'<text class="fl-term" x="20" y="{y:.1f}">{escape(t.term)}</text>')
+        for i, line in enumerate(lines):
+            out.append(f'<text class="fl-legend" x="{20 + GLOSS_TERM_W}" y="{y + 16 * i:.1f}">{escape(line)}</text>')
+        y += 16 * len(lines) + 8
+    return out
+
+
 def render_svg(flow: Flow, bare: bool = False) -> str:
     boxes, meta, width, height = layout(flow, bare)
-    legend_y = height + 8
-    height = legend_y + 40
+    width = max(width, 20 + GLOSS_TERM_W + GLOSS_TEXT_W + 24) if not bare else width
     out = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width:.0f} {height:.0f}" width="{width:.0f}" '
            f'height="{height:.0f}" role="img" aria-labelledby="fl-{flow.id}-t fl-{flow.id}-d" class="fl-flow" '
            f'data-flow="{flow.id}">',
@@ -346,24 +409,13 @@ def render_svg(flow: Flow, bare: bool = False) -> str:
         for j, line in enumerate(_wrap(title, TITLE_COL - 18, 10.5)):
             out.append(f'<text class="fl-phase" x="20" y="{top_y + 20 + 14 * j:.1f}">{escape(line)}</text>')
     for e in flow.edges:
-        out.append(_edge_svg(flow, e, boxes, meta))
+        if e.drawn:
+            out.append(_edge_svg(flow, e, boxes, meta))
     for b in boxes.values():
         out.append(_node_svg(b))
-    # legend
-    lx, ly = 20, legend_y + 14
-    out.append(f'<g class="fl-legend-g" transform="translate({lx},{ly})">'
-               '<rect x="0" y="-11" width="26" height="15" rx="4" class="fl-box"/>'
-               '<text class="fl-legend" x="32" y="0">step (always runs)</text>'
-               '<rect x="150" y="-11" width="26" height="15" rx="4" class="fl-box" stroke-dasharray="4 3"/>'
-               '<text class="fl-legend" x="182" y="0">optional step</text>'
-               '<polygon points="282,-3.5 288,-11 302,-11 308,-3.5 302,4 288,4" class="fl-box" '
-               'style="fill: var(--butter-fill, #F5EAC6); stroke: var(--butter-line, #D2BB72)"/>'
-               '<text class="fl-legend" x="314" y="0">decision</text>'
-               '<rect x="380" y="-11" width="26" height="15" rx="3" class="fl-box" '
-               'style="fill: var(--out-fill, #F7E1D3); stroke: var(--out-line, #E0B092)"/>'
-               '<text class="fl-legend" x="412" y="0">commit</text>'
-               '<text class="fl-legend" x="470" y="0">WM / LTM: writes working / long-term memory</text>'
-               '</g>')
+    if not bare:
+        out.append(_legend(flow, meta["extras_y"]))
+        out += _glossary(flow, meta["extras_y"] + 34)
     out.append("</svg>")
     return "\n".join(out)
 
@@ -384,6 +436,8 @@ def flow_markdown(flow: Flow) -> str:
             mark = {"decision": "◆ ", "store": "▣ ", "start": "▶ ", "end": "■ "}.get(n.kind, "")
             lines.append(f"1. {mark}{n.label}" + (f" ({'; '.join(tags)})" if tags else ""))
         lines.append("")
+    if flow.terms:
+        lines += ["## Terms", ""] + [f"- **{t.term}:** {t.meaning}" for t in flow.terms] + [""]
     return "\n".join(lines)
 
 

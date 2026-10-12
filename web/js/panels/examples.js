@@ -15,7 +15,7 @@ export function initExamples({ toast, onProposal, onQuestion, onReset, onManual 
   pane.id = "examples";
   pane.className = "examples hidden";
   pane.setAttribute("role", "dialog");
-  pane.setAttribute("aria-label", "Examples");
+  pane.setAttribute("aria-label", "Tutorial");
   document.getElementById("stage").appendChild(pane);
   const st = { list: [], open: null, busy: null, filter: "all" };
 
@@ -31,12 +31,12 @@ export function initExamples({ toast, onProposal, onQuestion, onReset, onManual 
     if (x.status === "waiting") return `<button class="small" data-review="${esc(x.proposal_id ?? "")}">Review</button>`;
     // a manual addition opens the form, prefilled: the example shows how it is done (Oct 9)
     if (x.kind === "manual") {
-      return `<button class="${x.rewinds ? "" : "primary "}small" data-manual="${esc(x.id)}" title="${x.rewinds ? "Go back to just before this example" : x.plays_first
-        ? `Play examples ${i + 1 - x.plays_first} to ${i} first` : "Open it"}, then open the form, prefilled" ${st.busy ? "disabled" : ""}>${st.busy === x.id ? "Running…" : "Open the form"}</button>`;
+      return `<button class="${x.rewinds ? "" : "primary "}small" data-manual="${esc(x.id)}" title="${x.rewinds ? "Go back to just before this step" : x.plays_first
+        ? `Play steps ${i + 1 - x.plays_first} to ${i} first` : "Open it"}, then open the form, prefilled" ${st.busy ? "disabled" : ""}>${st.busy === x.id ? "Running…" : "Open the form"}</button>`;
     }
     const label = st.busy === x.id ? "Running…" : x.rewinds ? "Rewind to it" : "Run";
-    const title = x.rewinds ? `Go back to the state before example ${x.n} and run it again`
-      : x.plays_first ? `Plays examples ${i + 1 - x.plays_first} to ${i} first` : "Run it";
+    const title = x.rewinds ? `Go back to the state before step ${x.n} and run it again`
+      : x.plays_first ? `Plays steps ${i + 1 - x.plays_first} to ${i} first` : "Run it";
     return `<button class="${x.rewinds ? "" : "primary "}small" data-run="${esc(x.id)}" title="${esc(title)}" ${st.busy ? "disabled" : ""}>${label}</button>`;
   }
 
@@ -51,14 +51,14 @@ export function initExamples({ toast, onProposal, onQuestion, onReset, onManual 
     const shown = st.list.filter((x) => st.filter === "all" || x.memory === st.filter
       || (st.filter === "working" && x.memory === "intake"));
     pane.innerHTML = `
-      <header><div class="etitle">Examples</div><span class="spacer"></span>
+      <header><div class="etitle">Tutorial</div><span class="spacer"></span>
         <button class="ghost small" data-reset title="Start again from the beginning">Start over</button>
         <button class="ghost win-max-btn" data-max type="button" aria-label="Full screen" title="Full screen (or back)">⤢</button><button class="close" aria-label="Close (Esc)">✕</button></header>
-      <p class="small muted elede">Each example shows one feature through a sample article. It runs through learning on a staged copy and
-        stops at your review. Examples follow one another: running one plays the ones before it, and an earlier one rewinds to it.</p>
+      <p class="small muted elede">Each step shows one feature through a sample article. It runs through learning on a staged copy and
+        stops at your review. Steps follow one another: running one plays the ones before it, and an earlier one rewinds to it.</p>
       <div class="chips efilter" role="group" aria-label="Show">${[["all", "All"], ["working", "Working memory"], ["long_term", "Long-term memory"],
         ["review", "Review"], ["inference", "Inference"]].map(([k, l]) => `<button class="cchip" data-filter="${k}" aria-pressed="${st.filter === k}">${l}</button>`).join("")}</div>
-      ${waiting ? `<p class="small ewarn">Example ${waiting.n} waits for your review. Approve or reject it to go on, or pick an earlier example to rewind.</p>` : ""}
+      ${waiting ? `<p class="small ewarn">Step ${waiting.n} waits for your review. Approve or reject it to go on, or pick an earlier step to rewind.</p>` : ""}
       <ol class="elist">${shown.map((x) => {
         const i = st.list.indexOf(x);
         return `<li class="erow ${esc(x.status)}${st.open === x.id ? " open" : ""}${i === last ? " current" : ""}" data-id="${esc(x.id)}">
@@ -119,7 +119,7 @@ export function initExamples({ toast, onProposal, onQuestion, onReset, onManual 
   const playedFirst = (ids) => {
     const ns = ids.map((id) => st.list.find((e) => e.id === id)?.n).filter((n) => n != null);
     if (!ns.length) return "";
-    return ns.length === 1 ? `Played example ${ns[0]} first.` : `Played examples ${ns[0]}–${ns[ns.length - 1]} first.`;
+    return ns.length === 1 ? `Played step ${ns[0]} first.` : `Played steps ${ns[0]}–${ns[ns.length - 1]} first.`;
   };
   // a manual example: first bring the canvas to just before it (play or rewind the earlier examples), then open the
   // prefilled form over what they built (Oct 9)
@@ -130,7 +130,7 @@ export function initExamples({ toast, onProposal, onQuestion, onReset, onManual 
     render();
     try {
       const out = await api.prepareExample(id);
-      if (out.rewound) toast(`Rewound to just before example ${x.n}.`);
+      if (out.rewound) toast(`Rewound to just before step ${x.n}.`);
       else { const said = playedFirst(out.played ?? []); if (said) toast(said); }
       await refreshGraph();
       close();
@@ -144,7 +144,7 @@ export function initExamples({ toast, onProposal, onQuestion, onReset, onManual 
   }
 
   function run(id) {
-    return go(id, () => api.runExample(id), (out) => (out.rewound ? `Rewound to example ${st.list.find((e) => e.id === id)?.n}.`
+    return go(id, () => api.runExample(id), (out) => (out.rewound ? `Rewound to step ${st.list.find((e) => e.id === id)?.n}.`
       : playedFirst(out.played ?? [])));
   }
   function runLibrary(id) {

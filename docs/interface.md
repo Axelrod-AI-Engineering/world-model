@@ -7,7 +7,7 @@ The first screen is the graph, a caption, and one row of controls. Everything el
 **Learn** and **Predict** (top left) are two views of the same model. They differ only in their controls.
 
 - **Learn** is for backend users, who update the model. Every change is staged, reviewed, and committed.
-- **Predict** is for everyone else. It hides everything that learns, and **Ask** becomes the main action. Nothing done in Predict is learned.
+- **Predict** is for everyone else. It hides everything that learns, and **Ask** becomes the main action. Nothing done in Predict is learned. Predict opens on a blank canvas: a forecast brings forward the actors and ideas it reaches, each value showing the forecast's effect (in italics), and **Show the whole model** shows the rest. Going back to Learn closes Predict's windows.
 
 ## The top bar
 
@@ -17,7 +17,8 @@ The bar shows only what the moment needs. Left to right:
 |---|---|
 | **Learn / Predict** | Switch views |
 | Date and `v` number | The simulated date and the state version. The version goes up by one with each commit. |
-| **Examples** (`E`) | In the small and production demos: the chain of examples, each with its articles and **More like this** ([demos.md](demos.md)) |
+| **Import** (`I`) | In a model fed by imports (Emily's demo): bring in a bundle of research, each item reviewed on its date ([demos.md](demos.md#emilys-demo)) |
+| **Tutorial** (`E`) | In the small and production demos: the chain of examples, each with its articles and **More like this** ([demos.md](demos.md)). In Emily's demo it opens the small demo, with **Back to your model** |
 | **Update** (`U`), **Step ▸** (`→`), **Play** (`Space`) | In the full demo: read news and data up to a date, or follow the scripted story |
 | **How it works** (`H`) | Learning and inference, each stage with its flowchart; the literature review; the implementation and every component's contract |
 | **Transmission** (`G`) | Appears when a staged review has a ripple, or a forecast has paths: opens and closes the transmission grid |

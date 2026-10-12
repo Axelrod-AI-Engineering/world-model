@@ -11,14 +11,16 @@
 /* global d3 */
 import { categoryAnchors } from "./layouts.js";
 
-function forceHome(getMode) {
+function forceHome(getMode, getBlocks) {
   let nodes = [];
   function force(alpha) {
     const fig = getMode() === "figure1";
+    // superentities drawn as blocks (Oct 11): the layout places every box, so each glides straight home and stays
+    const blocks = !!getBlocks?.();
     const s = 0.22;
     for (const n of nodes) {
       if (n.fx != null || n.hx == null) continue;
-      if (fig && n.flow) {
+      if ((fig && n.flow) || blocks) {
         // a reflowed entity eases straight to its place (the reflow already keeps boxes apart)
         n.vx = (n.hx - n.x) * 0.5;
         n.vy = (n.hy - n.y) * 0.5;
@@ -83,11 +85,11 @@ const span = (l) => ((l.source.w ?? 160) + (l.target.w ?? 160)) / 2 + 80 + 110 *
 
 // The live simulation only carries boxes to their homes and keeps them apart; it holds the interaction list (the
 // "link" force, at zero strength) for the static layout to read.
-export function createSimulation({ getMode, onTick }) {
+export function createSimulation({ getMode, onTick, getBlocks }) {
   const sim = d3.forceSimulation()
     .alphaDecay(0.045)
     .velocityDecay(0.45)
-    .force("home", forceHome(getMode))
+    .force("home", forceHome(getMode, getBlocks))
     .force("link", d3.forceLink().id((d) => d.id).strength(0))
     .on("tick", onTick);
   sim.stop();

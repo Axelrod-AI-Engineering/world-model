@@ -209,7 +209,7 @@ class ExampleSession:
                                       "earlier example to rewind")
             rewound, played = self._reach(i)
             self.focus = None
-            self.caption = f"Example {ex.n}: {ex.title}. Fill in the form (it is prefilled), then stage it for review."
+            self.caption = f"Tutorial step {ex.n}: {ex.title}. Fill in the form (it is prefilled), then stage it for review."
             self._broadcast()
             return {"example": ex.id, "played": played, "rewound": rewound}
 
@@ -249,7 +249,7 @@ class ExampleSession:
 
     def _answer(self, ex: Example, pid: str | None, played: list[str], rewound: bool) -> dict:
         note = self.done[-1].get("note") if self.done and self.done[-1]["id"] == ex.id else None
-        self.caption = (f"Example {ex.n}: {ex.title}. {ex.isolates}." +
+        self.caption = (f"Tutorial step {ex.n}: {ex.title}. {ex.isolates}." +
                         (" Check the review, then approve all, some, or none." if pid else f" Skipped: {note}." if note else ""))
         self._broadcast()
         return {"example": ex.id, "proposal_id": pid, "question": ex.question, "played": played, "rewound": rewound,
@@ -546,7 +546,7 @@ class SmallDemoRunner(ExampleSession, ScenarioRunner):
             ctl.set_review_policy("review_all")
             self._loaded(ctl, eng.version, eng.ledger.next_seq - 1)
             ctl.advance_now(datetime.combine(self.script.start, time(0), tzinfo=UTC))
-            self.caption = "A blank canvas. Pick an example from Examples to start building the world model."
+            self.caption = "A blank canvas. Open the Tutorial and run its first step to start building the world model."
             self.tracer.emit(Phase.INIT, "scenario.loaded", refs=[self.script.id], scenario_id=self.script.id,
                              version=eng.version, steps=0)
             self._broadcast()
