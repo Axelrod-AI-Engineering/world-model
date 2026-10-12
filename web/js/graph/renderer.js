@@ -431,14 +431,18 @@ export class SvgRenderer extends GraphRenderer {
       ? hierarchicalLayout(copies, links, groups)
       : staticLayout(copies, links, { groups, groupByCategory: this.opts.groupByCategory });
     if (placed.regions) this.regionHomes = placed.regions;
-    if (placed.primary) this.homeRegion = placed.primary;
+    if (placed.primary && (placed.primary.size || !this.homeRegion)) this.homeRegion = placed.primary;
     for (const n of nodes) {
       const p = placed.get(n.id);
       if (!p || !movable(n)) continue;
       if (n.kind === "entity") {
         this.gravHomes.set(n.id, p);
       } else {
-        // a closed superentity: its members move with its card
+        // a closed superentity: its card goes where the layout put it, and its members move with it
+        if (this.blocks()) {
+          if (!this.regionHomes) this.regionHomes = new Map();
+          this.regionHomes.set(n.box.group.key, p);
+        }
         const was = this.homeOf(n.box);
         for (const m of n.box.group.members) {
           const h = this.gravHomes.get(m) ?? was;
@@ -1732,7 +1736,9 @@ export class SvgRenderer extends GraphRenderer {
       if (Math.abs(n.hGoal - n.h) < 0.5 && Math.abs(n.wGoal - n.w) < 0.5) { n.w = n.wGoal; n.h = n.hGoal; n.hGoal = n.wGoal = null; }
       else if (this.sim.alpha() < 0.05) this.sim.alpha(0.05);
     }
-    resolveCollisions(nodes, 3);
+    // in block mode the layout's homes never overlap, so boxes glide through one another to them; pushing them apart on
+    // the way could stop two that must swap places
+    if (!this.blocks()) resolveCollisions(nodes, 3);
     if (this.sim.alpha() < 0.02) {
       for (const n of nodes) {
         if (n.fx == null && Math.hypot(n.x - n.hx, n.y - n.hy) < 0.6) { n.x = n.hx; n.y = n.hy; }
@@ -1865,7 +1871,8 @@ export class SvgRenderer extends GraphRenderer {
   // no superentity is a part of two others. A world where parts are shared (the oil demo's composites) cannot be
   // drawn as nested blocks without overlap, so it keeps traced outlines.
   blocks() {
-    if (this.mode !== "gravity" || !this.homeRegion?.size || this.opts.groupByCategory) return false;
+    // the world's shape decides, not what is folded right now (folding every superentity leaves no homes for a moment)
+    if (this.mode !== "gravity" || this.opts.groupByCategory || !this.groupsInfo?.groups.length) return false;
     const live = new Set(this.groupsInfo.groups.filter((g) => !g.transient).map((g) => g.key));
     return this.groupsInfo.groups.every((g) => g.transient || g.parents.filter((k) => live.has(k)).length <= 1);
   }
