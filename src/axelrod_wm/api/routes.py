@@ -121,6 +121,12 @@ async def health(request: Request) -> dict:
     return {"ok": True, "version": version, "build": _build()}
 
 
+@router.get("/session")
+async def session(request: Request) -> dict:
+    """Who is signed in (api/auth.py); `login` is null when the server runs without sign-in."""
+    return {"login": request.scope.get("axelrod_login")}
+
+
 def _build() -> str | None:
     """The commit a hosted release was built from: Railway sets RAILWAY_GIT_COMMIT_SHA for a GitHub deploy."""
     import os

@@ -1052,6 +1052,13 @@ async function boot() {
   menuPanel.addEventListener("click", (ev) => { if (ev.target.closest("button")) setMenu(false); });
   document.addEventListener("click", (ev) => { if (!menuPanel.hidden && !ev.target.closest(".menu-wrap")) setMenu(false); });
   $("#btn-keys").addEventListener("click", () => showShortcuts());
+  // signed in on a hosted demo (Oct 12): the menu offers Sign out, with the login's name
+  api.session().then((r) => {
+    if (!r?.login) return;
+    const b = $("#btn-signout");
+    b.textContent = `Sign out (${r.login})`;
+    b.classList.remove("hidden");
+  }).catch(() => { /* no sign-in here */ });
   $("#btn-ask-learn").addEventListener("click", () => { setMode("predict"); openRight("thesis"); });
   $("#btn-manual").addEventListener("click", () => { closeMenu(); manual.open(); });
   $("#btn-checks").addEventListener("click", () => { closeMenu(); checks.toggle(); });
