@@ -44,4 +44,4 @@ uv run axelrod export-trace ...                            # copy a recorded tra
 | `WORLD_MODEL_BASIC_AUTH_USERNAME`, `WORLD_MODEL_BASIC_AUTH_PASSWORD` | When both are set, every page, API call, and WebSocket requires Basic Auth. Setting only one stops the server from starting. |
 | `WORLD_MODEL_REQUIRE_BASIC_AUTH=1` | Refuse to start without both credentials. On Railway this is automatic. |
 
-Without these variables, the local demos need no login. [deployment.md](deployment.md#basic-auth) covers the hosted setup.
+Without these variables, the local demos need no login. [deployment.md](deployment.md#sign-in) covers the hosted setup.

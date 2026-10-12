@@ -1,6 +1,6 @@
-# Architecture
+# Architecture as built
 
-A map from the code to its processes. The concepts, the flowcharts, and the literature review live in the demo itself (How it works, in the top bar; the review is `web/literature.md`); [flowchart.svg](flowchart.svg) is the overview as a picture. Section numbers (§) in the code refer to [plan.md](plan.md) (revision 2). For using the demo, see [interface.md](interface.md); for the hosted copy, [deployment.md](deployment.md).
+A map from the code as it is today to its processes. The target design, with modules, interfaces, and diagrams, is [design/README.md](design/README.md); [design/migration.md](design/migration.md) gets from here to there. The concepts, the flowcharts, and the literature review live in the demo itself (How it works, in the top bar; the review is `web/literature.md`); [flowchart.svg](flowchart.svg) is the overview as a picture. Section numbers (§) in the code refer to [archive/plan.md](archive/plan.md) (revision 2). For using the demo, see [interface.md](interface.md); for the hosted copy, [deployment.md](deployment.md).
 
 ## The flow in one paragraph
 

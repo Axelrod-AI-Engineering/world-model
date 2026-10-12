@@ -32,8 +32,8 @@ var/              runtime data: init caches, sessions, snapshots, ledger, traces
 ## Conventions
 
 - **The front end has no build step.** It is plain HTML, CSS, and ES modules, with d3 v7 vendored in `web/vendor/`. It never computes model results: it renders the server's views and replays trace events.
-- **Decisions.** Where [plan.md](plan.md) was silent, the simplest option was chosen and marked `# DECISION:`. `grep -rn DECISION src configs data web` lists them.
-- **§ references** in the code point to sections of [plan.md](plan.md), the original specification. The code has moved past it in places; where they differ, the code and these docs are current.
+- **Decisions.** Where [archive/plan.md](archive/plan.md) was silent, the simplest option was chosen and marked `# DECISION:`. `grep -rn DECISION src configs data web` lists them.
+- **§ references** in the code point to sections of [archive/plan.md](archive/plan.md), the original specification. The code has moved past it in places; where they differ, the code and these docs are current.
 - **The flowchart picture is checked.** After changing `flows/`, run `uv run axelrod flows --svg docs/flowchart.svg`; a test fails while it is stale.
 - **Data stays synthetic.** Real names make the graph concrete, but no headline reports a real event and nothing is a claim about any company.
 
