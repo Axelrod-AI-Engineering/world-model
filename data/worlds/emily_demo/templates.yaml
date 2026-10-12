@@ -35,6 +35,8 @@ verbs:
   - {pattern: "(?:held|hold|holds|stayed|stay) (?:steady|flat|unchanged)", mode: absolute, delta: 0.0}
   - {pattern: "(?:spiked|spike|spikes|soared|soar|soars|surged|surge|surges)", mode: standardized, delta: 2.0}
   - {pattern: "(?:crashed|crash|crashes|collapsed|collapse|collapses|plunged|plunge|plunges)", mode: standardized, delta: -2.0}
+  # a carry trade unwinding: positions are closed out fast, like a collapse
+  - {pattern: "(?:unwound|unwinds|unwinding|unwind)", mode: standardized, delta: -2.0}
 timeframes:
   - {pattern: "next quarter|in three months|in 3 months", days: 90}
   - {pattern: "next month|in a month", days: 30}

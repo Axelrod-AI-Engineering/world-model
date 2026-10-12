@@ -796,15 +796,16 @@ async function boot() {
     if (!r) return null;
     const m = r.marks ?? {};
     const orders = new Map(Object.entries(m.orders ?? {}).map(([k, v]) => [k, v]));
-    const path = new Set((r.ripple ?? []).flatMap((a) => a.via ?? []));
+    // the ripple's interactions, and the ones the event itself strengthens, weakens, or adds
+    const path = new Set([...(r.ripple ?? []).flatMap((a) => a.via ?? []),
+      ...(r.items ?? []).filter((it) => it.what === "interaction").flatMap((it) => it.refs ?? [])]);
     return { new: new Set(m.new ?? []), retired: store.staged.retired ?? new Set(m.retired ?? []), orders, path,
              collapsed: new Set(m.collapsed ?? []) };
   }
-  // a staged review opens the entities it touches, so their values and order tints show
-  let fittedFor = null;
-  // the transmission grid is the default view of a ripple (Oct 11): it opens once per proposal and per forecast
+  // the transmission grid is the default view of a forecast's ripple (Oct 11): it opens once per forecast. In Learn a
+  // staged review's path is drawn on the canvas instead (the lane, below).
   let gridShownFor = null;
-  // what the Transmission button opens: the staged ripple, or the forecast last shown
+  // what the Transmission button opens: the forecast last shown
   let gridTarget = null;
   function setGridTarget(t) {
     gridTarget = t;
@@ -817,33 +818,43 @@ async function boot() {
     gridShownFor = `${kind}:${id}`;
     emit("paths-open", { kind, id });
   }
+  // a staged review's transmission path, on the canvas (Oct 11, replaces opening the grid by itself in Learn): the
+  // entities it moves line up in a lane above the rest of the world model, one column per order, so the ripple reads
+  // left to right with the whole model still in frame. Drivers are the entities whose interactions into the moved
+  // values the event strengthens, weakens, or adds.
+  const LANE_COLS = [["drivers", "What drives it", "od"], ["0", "The event", "o0"], ["1", "1st order", "o1"],
+    ["2", "2nd order", "o2"], ["3", "3rd order and on", "o3"]];
+  function laneOf(r) {
+    const known = new Set((store.view?.entities ?? []).map((e) => e.id));
+    const entOf = (sid) => (store.view?.subentities ?? []).find((s) => s.id === sid)?.entity_id ?? String(sid).split(".")[0];
+    const col = new Map();
+    const put = (e, k) => { if (known.has(e) && (!col.has(e) || (col.get(e) !== "drivers" && +k < +col.get(e)))) col.set(e, k); };
+    for (const [sid, o] of Object.entries(r.marks?.orders ?? {})) put(entOf(sid), String(Math.min(3, o)));
+    for (const id of r.marks?.new ?? []) { const e = entOf(id); if (known.has(e) && !col.has(e)) col.set(e, "0"); }
+    const links = new Map((store.view?.links ?? []).map((l) => [l.id, l]));
+    for (const it of r.items ?? []) {
+      if (it.what !== "interaction") continue;
+      for (const ref of it.refs ?? []) {
+        const l = links.get(ref);
+        const e = l && entOf(l.source);
+        if (e && known.has(e) && !col.has(e)) col.set(e, "drivers");
+      }
+    }
+    const cols = LANE_COLS.map(([key, label, cls]) => ({ key, label, cls,
+      ids: [...col].filter(([, k]) => k === key).map(([e]) => e).sort() })).filter((c) => c.ids.length);
+    return cols.length ? { cols } : null;
+  }
   function showStagedItems(r) {
-    autoGrid("proposal", r.proposal_id, (r.ripple ?? []).length > 0);
-    const ents = new Set();
-    for (const id of [...(r.marks?.new ?? []), ...Object.keys(r.marks?.orders ?? {})]) {
-      const e = String(id).split(".")[0];
-      if ((store.view?.entities ?? []).some((x) => x.id === e)) ents.add(e);
-    }
-    // open the entities the event touches most: what it adds, its own move, and the first orders of its ripple
-    const near = new Set(ents);
-    const order = r.marks?.orders ?? {};
-    const firstOrders = Object.keys(order).filter((sid) => order[sid] <= 1).map((sid) => sid.split(".")[0]);
-    const focusSet = new Set([...(r.marks?.new ?? []).map((id) => String(id).split(".")[0]), ...firstOrders].filter((e) => near.has(e)));
-    for (const e of ents) if (!renderer.ui.expanded.has(e) && (ents.size <= 8 || focusSet.has(e))) renderer.toggleEntity(e, true);
-    if (fittedFor !== r.proposal_id) {
-      fittedFor = r.proposal_id;
-      const frameOn = [...(focusSet.size ? focusSet : near)];
-      setTimeout(() => (frameOn.length && (store.view?.entities ?? []).length > 12 ? renderer.frame(frameOn, { maxK: 1.1 }) : renderer.fit()), 380);
-    }
+    renderer.setLane(laneOf(r));
     const banner = $("#staged-banner");
     banner.innerHTML = `<b>Staged: not committed.</b> <span class="lg new">new</span> <span class="lg retired">retired</span>
       <span class="lg o0">the event's move</span> <span class="lg o1">1st order</span> <span class="lg o2">2nd</span> <span class="lg o3">3rd</span>`;
     banner.classList.remove("hidden");
   }
   on("staged", (r) => {
-    if (r) { if ((r.ripple ?? []).length && r.proposal_id) setGridTarget({ kind: "proposal", id: r.proposal_id }); return; }
+    if (r) return;
     $("#staged-banner").classList.add("hidden");
-    fittedFor = null;
+    renderer.setLane(null);
     if (gridTarget?.kind === "proposal") setGridTarget(null);
   });
   on("staged-hover", (refs) => {
@@ -1041,6 +1052,13 @@ async function boot() {
   menuPanel.addEventListener("click", (ev) => { if (ev.target.closest("button")) setMenu(false); });
   document.addEventListener("click", (ev) => { if (!menuPanel.hidden && !ev.target.closest(".menu-wrap")) setMenu(false); });
   $("#btn-keys").addEventListener("click", () => showShortcuts());
+  // signed in on a hosted demo (Oct 12): the menu offers Sign out, with the login's name
+  api.session().then((r) => {
+    if (!r?.login) return;
+    const b = $("#btn-signout");
+    b.textContent = `Sign out (${r.login})`;
+    b.classList.remove("hidden");
+  }).catch(() => { /* no sign-in here */ });
   $("#btn-ask-learn").addEventListener("click", () => { setMode("predict"); openRight("thesis"); });
   $("#btn-manual").addEventListener("click", () => { closeMenu(); manual.open(); });
   $("#btn-checks").addEventListener("click", () => { closeMenu(); checks.toggle(); });

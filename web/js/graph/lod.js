@@ -7,10 +7,10 @@
 //     is the width its outline had when last drawn, at today's zoom;
 //   - an entity in view opens into its values once the scale passes the learned threshold (attention.kOpen), and
 //     closes below 86% of it or once it leaves the view;
-//   - changes happen while the zoom is moving, a few per frame, nearest the middle of the view first, the way a map
-//     fills in its tiles from the center outward.
-// Nothing is re-laid out: boxes keep their homes, an opened entity grows in place, and its neighbors step aside and
-// come back when it closes. An entity a person opened or closed by hand stays that way until the zoom passes back
+//   - changes wait until the view rests, then all of them apply at once (Oct 11, supersedes "a few per frame"): with
+//     superentities drawn as blocks every change re-packs the hierarchy, so a drip of small changes moved the whole
+//     canvas again and again after a zoom. One pass means one re-pack and one glide.
+// Boxes then glide once to their new homes. An entity a person opened or closed by hand stays that way until the zoom passes back
 // through its threshold.
 
 const CARD_CLOSE = 170;
@@ -19,8 +19,8 @@ const READABLE_K = 0.6;          // below this scale names start to get small: o
 const LEVEL_STEP = 0.72;         // each level up the hierarchy folds this much further out than the level below it
 const OPEN_HYST = 0.86;
 const MAX_OPEN = 6;                // values open only for the few entities nearest the middle of the view
-const BUDGET = 2;                  // changes per step
 const STEP_MS = 70;
+const SETTLE_MS = 650;             // hover pop-ups wait this long after a change of detail, while the boxes glide
 const REST_MS = 120;               // how often a buffered change checks whether the view has rested
 
 export function createLOD(r, attention) {
@@ -127,16 +127,20 @@ export function createLOD(r, attention) {
     if (document.body.classList.contains("zooming")) { schedule(REST_MS); return; }
     const todo = wanted();
     if (!todo.length) return;
-    // closing superentities is cheap and shows the overview at once; values open a few at a time
-    const batch = todo[0].kind === "close-group" ? todo.filter((c) => c.kind === "close-group") : todo.slice(0, BUDGET);
-    for (const c of batch) {
+    for (const c of todo) {
       if (c.kind === "close-group") r.ui.collapsed.add(c.key);
       else if (c.kind === "open-group") r.ui.collapsed.delete(c.key);
       else if (c.kind === "open") r.ui.expanded.add(c.id);
       else r.ui.expanded.delete(c.id);
     }
+    // nothing pops up under the still cursor while the boxes glide to their new homes
+    document.body.classList.add("zooming");
+    clearTimeout(r.zoomingTimer);
+    r.zoomingTimer = setTimeout(() => document.body.classList.remove("zooming"), SETTLE_MS);
+    r.handlers.onHover?.(null);
     r.recompute("lod");
-    if (todo.length > batch.length) schedule(STEP_MS);
+    // DECISION: no follow-up pass. The re-pack moves boxes, which would change what sits in the middle of the view and
+    // start another round; detail is chosen again only when a person moves the view.
   }
 
   function schedule(ms = 0) {

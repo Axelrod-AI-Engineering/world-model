@@ -11,7 +11,7 @@ import yaml
 from fastapi import APIRouter, Body, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict
 
-from axelrod_wm.api.app import AppState
+from axelrod_wm.api.app import AppState, state_for
 from axelrod_wm.api.views import (
     entity_view,
     forecast_view,
@@ -38,7 +38,7 @@ router = APIRouter(prefix="/api")
 
 
 def S(request: Request) -> AppState:
-    return request.app.state.axelrod
+    return state_for(request.app, request.scope)
 
 
 def _json(model: Any) -> Any:
@@ -119,6 +119,12 @@ async def health(request: Request) -> dict:
     st = S(request)
     version = st.runner.controller.engine.version if st.runner is not None and st.runner.loaded else 0
     return {"ok": True, "version": version, "build": _build()}
+
+
+@router.get("/session")
+async def session(request: Request) -> dict:
+    """Who is signed in (api/auth.py); `login` is null when the server runs without sign-in."""
+    return {"login": request.scope.get("axelrod_login")}
 
 
 def _build() -> str | None:

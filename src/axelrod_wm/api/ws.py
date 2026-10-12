@@ -71,7 +71,9 @@ class _Session:
 @ws_router.websocket("/ws")
 async def stream(websocket: WebSocket) -> None:
     await websocket.accept()
-    state = websocket.app.state.axelrod
+    from axelrod_wm.api.app import state_for
+
+    state = state_for(websocket.app, websocket.scope)
     session = _Session(websocket, state)
     state.tracer.subscribe(asyncio.get_running_loop(), session.queue)
     try:

@@ -7,7 +7,7 @@ The full demo is hosted on Railway's `dev` environment at **https://world-model-
 | Piece | Where | What it does |
 |---|---|---|
 | Image | `Dockerfile` | Python 3.12 slim. Installs the frozen dependencies with uv (`uv sync --frozen --no-dev`) and copies `configs/`, `data/`, `web/`, and the start script. |
-| Start | `scripts/start-railway.sh` | Runs `axelrod demo --host 0.0.0.0 --port $PORT`: the full oil-shock demo ([demos.md](demos.md)) |
+| Start | `scripts/start-railway.sh` | Runs `axelrod demo --scenario $WORLD_MODEL_SCENARIO --host 0.0.0.0 --port $PORT`: on dev, the production demo for the main login, and Emily's demo for hers ([demos.md](demos.md), [A login per scenario](#a-login-per-scenario)) |
 | Infrastructure | `.railway/railway.ts` | The service, its volume, and its settings, as code |
 | Release checks | `scripts/persist-railway-fields.sh`, `scripts/verify-railway-drift.py` | Set the two fields Railway's IaC does not store, then reject any drift except known leftovers |
 | Auth | `src/axelrod_wm/api/auth.py` | Basic Auth on every request except the health check |
@@ -60,13 +60,25 @@ An upload or a successful build alone is not a healthy deployment. Check all of 
 2. Its metadata confirms restarts `ON_FAILURE` with a retry limit of 2, App Sleep off, the health check at `/api/health`, and the volume at `/app/var`.
 3. Over Railway SSH, `http://127.0.0.1:8080/api/health`, `/`, and `/api/state` all answer.
 
-## Basic Auth
+## Sign-in
 
-Every page, static file, API call, the API docs, and the WebSocket stream require Basic Auth. `GET` and `HEAD` on `/api/health` are the only exception: Railway's readiness probe has no credentials, and the health check exposes no data. The browser's cached login also authenticates the same-origin WebSocket.
+Every page, static file, API call, the API docs, and the WebSocket stream require a signed-in login. `GET` and `HEAD` on `/api/health` are the only exception: Railway's readiness probe has no credentials, and the health check exposes no data.
+
+- **The sign-in page** (`/login`, `src/axelrod_wm/api/login.html`) replaced the browser's Basic Auth prompt on Oct 12. A page opened without a session goes there and comes back after signing in; the API and the WebSocket answer 401 instead. Signing in sets an HttpOnly session cookie (the username and an expiry, HMAC-signed, 14 days), which also authenticates the WebSocket. **Sign out** (☰ menu, or `/logout`) clears it.
+- The signing key is `WORLD_MODEL_SESSION_SECRET` when set, else derived from the logins' passwords: sessions survive a restart, and changing any password signs everyone out. There is no user database.
+- Scripts can still send a Basic `Authorization` header; the server never asks for one.
 
 - Auth is **required** whenever `RAILWAY_ENVIRONMENT_ID` is set, and IaC also sets `WORLD_MODEL_REQUIRE_BASIC_AUTH=1`. When it is required, the server refuses to start without both `WORLD_MODEL_BASIC_AUTH_USERNAME` and `WORLD_MODEL_BASIC_AUTH_PASSWORD`.
 - The credentials were generated securely and live in Railway. IaC preserves them (`preserve()`) rather than setting them. An operator copy is in `var/railway/dev-basic-auth.txt` (gitignored, mode 0600).
-- Locally, without these variables, no login is needed. Set both to test auth locally.
+- Locally, without these variables, no login is needed, and `/login` goes straight to the demo. Set both to test sign-in locally.
+
+### A login per scenario
+
+`WORLD_MODEL_LOGINS` adds logins that each open their own scenario, as comma-separated `username:password:scenario` entries (no `:` or `,` inside a field). On dev it holds Emily's login, which opens `emily_demo`; the main login opens `WORLD_MODEL_SCENARIO` (`prod_demo` on dev; `oil_shock_demo` when unset). Each login gets an engine of its own, with its own storage (`var/axelrod/demo-<username>`) and trace stream, so reviews under one login never show under another. Everyone who signs in with the same login still shares that login's session. The variable lives in Railway only, like the main credentials.
+
+The browser keeps a Basic Auth login until it is closed: to switch logins, use a private window, or sign in through `https://<username>@world-model-dev.up.railway.app`.
+
+Emily's research bundle (`data/emily_data/`) is never uploaded (`.gitignore`, `.dockerignore`). On the hosted demo, import it with the file picker.
 
 ## Running the container locally
 

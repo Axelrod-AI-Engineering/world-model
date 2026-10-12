@@ -39,4 +39,4 @@ var/              runtime data: init caches, sessions, snapshots, ledger, traces
 
 ## Demo videos
 
-`docs/media/` holds the two-minute devlog, its voiceover, and the one-minute learning video. [scripts/video/README.md](../scripts/video/README.md) explains how they were recorded and edited.
+`docs/media/` holds the videos and their voiceovers locally; it is gitignored, so ask the team for the files. [scripts/video/README.md](../scripts/video/README.md) explains how they were recorded and edited.

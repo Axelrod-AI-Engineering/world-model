@@ -86,6 +86,7 @@ export const api = {
   scenarioTheses: () => get("/scenario-theses"),
   learningTasks: () => get("/learning-tasks"),
   poseStoredThesis: (id) => post(`/theses/${q(id)}/pose`, {}),
+  session: () => get("/session"),
   ask: (question, horizon_days) => post("/theses", horizon_days ? { question, horizon_days } : { question }),
   forecasts: () => get("/forecasts"),
   forecast: (id) => get(`/forecasts/${q(id)}`),

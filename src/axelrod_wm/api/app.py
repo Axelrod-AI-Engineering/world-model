@@ -188,23 +188,40 @@ async def _daily_schedule(state: AppState) -> None:
         state.start_drive(run_id)
 
 
+def state_for(app: Any, scope: Any) -> AppState:
+    """The engine a request's login opens (api/auth.py): its own, or the main one."""
+    return app.state.axelrod_by_login.get(scope.get("axelrod_login"), app.state.axelrod)
+
+
 def create_app(config_path: str | None = None, scenario: str = "oil_shock_demo", *,
                storage: StorageBackend | None = None, trace_dir: str | Path | None = "var/axelrod/traces",
                load_on_startup: bool = True, play_delay: float = 0.4,
                cache_dir: str | Path | None = None, start_example: str | None = None) -> FastAPI:
+    from axelrod_wm.api.auth import extra_logins
+    from axelrod_wm.repo.snapshots import FilesBackend
+
     if storage is None:
         # DECISION: the demo server keeps its state under var/axelrod/demo, so it never overwrites the
         # session that `axelrod init` and `axelrod update` keep under var/axelrod.
-        from axelrod_wm.repo.snapshots import FilesBackend
-
         storage = FilesBackend(path=Path("var/axelrod/demo"))
     state = AppState(scenario, config_path, storage=storage, trace_dir=trace_dir, play_delay=play_delay,
                      cache_dir=cache_dir)
+    # DECISION (Oct 11): a login from WORLD_MODEL_LOGINS gets an engine of its own, on its own scenario, storage, and
+    # trace stream (api/auth.py), so Emily's login opens her demo while the main login keeps the shared demo. Each
+    # engine is still one shared session for everyone who signs in with that login.
+    by_login: dict[str, AppState] = {}
+    for login in extra_logins():
+        by_login[login.username] = AppState(
+            login.scenario, config_path, storage=FilesBackend(path=Path(f"var/axelrod/demo-{login.username}")),
+            trace_dir=Path(trace_dir) / login.username if trace_dir is not None else None, play_delay=play_delay,
+            cache_dir=cache_dir)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         if load_on_startup:
             await anyio.to_thread.run_sync(state.ensure_loaded)
+            for other in by_login.values():
+                await anyio.to_thread.run_sync(other.ensure_loaded)
             if start_example and hasattr(state.runner, "run_example"):
                 # a demo opened at an example: the examples before it are played, and it waits for review
                 await state.call(state.runner.run_example, start_example)
@@ -212,17 +229,19 @@ def create_app(config_path: str | None = None, scenario: str = "oil_shock_demo",
             if cfg is not None and cfg.update.auto_daily:
                 state.schedule_task = asyncio.create_task(_daily_schedule(state))
         yield
-        for task in (state.play_task, state.update_task, state.schedule_task):
-            if task is not None and not task.done():
-                task.cancel()
-        if state.runner is not None:
-            state.runner.pause()
+        for st in (state, *by_login.values()):
+            for task in (st.play_task, st.update_task, st.schedule_task):
+                if task is not None and not task.done():
+                    task.cancel()
+            if st.runner is not None:
+                st.runner.pause()
 
     app = FastAPI(title="Axelrod World Model", version="0.1.0", lifespan=lifespan)
     from axelrod_wm.api.auth import BasicAuthMiddleware
 
     app.add_middleware(BasicAuthMiddleware)
     app.state.axelrod = state
+    app.state.axelrod_by_login = by_login
 
     @app.exception_handler(UnboundThesis)
     async def _unbound(request: Request, exc: UnboundThesis) -> JSONResponse:

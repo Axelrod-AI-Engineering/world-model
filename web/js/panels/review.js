@@ -1,10 +1,11 @@
 // Review (Oct 8 restructure): the human in the loop sits at the end of learning. The server runs a proposal's
 // whole learning on a copy of the model (control/stage.py) and this pane shows everything that copy would
 // commit, grouped by stage in the stages' colors: intake (the article), working memory (each new or retired item,
-// selectable one by one; recall; the ripple at first, second, and third order with the path each takes; what the
-// fold learns), and long-term memory (its lessons), then your decision. While a proposal is open here the canvas shows the
-// staged graph: new items in a dashed outline, retired ones in red, moved values tinted by order. Approving
-// commits only the selected items.
+// selectable one by one; the ripple at first, second, and third order with the path each takes; what the fold
+// settles), and long-term memory (what recall drew on, and its lessons by store), then your decision. Each memory
+// opens with what it is. While a proposal is open here the canvas shows the staged graph, with its transmission path
+// in a lane above the rest of the model (renderer.setLane): new items in a dashed outline, retired ones in red, moved
+// values tinted by order. Approving commits only the selected items.
 import { api } from "../api.js";
 import { scatter } from "../charts/fan.js";
 import { clearStaged, emit, on, refreshGraph, showStaged, store } from "../store.js";
@@ -37,6 +38,47 @@ function hedgeBars(cands, { before = false } = {}) {
 const EVIDENCE_WORD = { narrowed: "is the value the article names:", mention: "names", move: "moved as the interaction predicts:", against: "moved against the interaction:",
                         rejected: "a reviewer rejected", intake: "first read" };
 const STAGE_STATE = { done: "✓", waiting: "●", next: "○", skipped: "–" };
+
+// what the fold settles, in words: a value from before to after in its unit, a belief as a probability, an effect per sd
+function foldRow(x) {
+  const chg = x.before ? ` <span class="muted">(${signed(100 * (x.after - x.before) / Math.abs(x.before), 1)}%)</span>` : "";
+  if (x.kind === "existence") {
+    return `Belief that <b>${esc(x.name)}</b> exists: ${x.before == null ? "new" : `${(100 * x.before).toFixed(1)}%`} → <b>${(100 * x.after).toFixed(1)}%</b>`;
+  }
+  if (x.kind === "effect") {
+    return `Effect of <b>${esc(x.name)}</b>: ${x.before == null ? "new" : fmt(x.before)} → <b>${fmt(x.after)}</b> sd per sd`;
+  }
+  return `<b>${esc(x.name)}</b>: ${x.before == null ? "new" : fmt(x.before)} → <b>${fmt(x.after)}</b> ${esc(x.unit ?? "")}${chg}`;
+}
+
+// a lesson, under the long-term store it lands in, said plainly (control/stage.py writes them)
+const STORES = [
+  { re: /^A new kind|^Kind “|^Statistics update along/, name: "Object and interaction generalizations", what: "the kinds of things it has seen" },
+  { re: /^Superentity/, name: "Superentities", what: "patterns of entities that recur together" },
+  { re: /entity memory/, name: "Entity memories", what: "each actor's decisions, by the context they were made in" },
+  { re: /co-movement|correlation frontier/, name: "Correlation frontier", what: "co-movements with no interaction to explain them yet" },
+  { re: /prior states/, name: "Prior states", what: "past days that recall can return to" },
+];
+function lessonText(x) {
+  const m = /^Statistics update along (.*)$/.exec(x);
+  if (m) {
+    return `Refines how often, and how far, these kinds move: ${m[1].split(", ").map((k) => `<span class="rv-kind">${esc(k)}</span>`).join(" ")}`;
+  }
+  if (/^The explanation of what was learned is stored with the prior states$/.test(x)) {
+    return "Keeps today as a prior state, with an explanation of what changed and why, so recall can bring it back when a similar article arrives";
+  }
+  return esc(x);
+}
+function keepsList(lessons) {
+  const by = new Map();
+  for (const x of lessons) {
+    const st = STORES.find((s) => s.re.test(x)) ?? { name: "Long-term memory", what: "" };
+    if (!by.has(st.name)) by.set(st.name, { st, xs: [] });
+    by.get(st.name).xs.push(x);
+  }
+  return `<dl class="rv-keeps">${[...by.values()].map(({ st, xs }) => `<dt>${esc(st.name)}${st.what ? ` <span class="muted">· ${esc(st.what)}</span>` : ""}</dt>
+    ${xs.map((x) => `<dd>${lessonText(x)}</dd>`).join("")}`).join("")}</dl>`;
+}
 
 export function initReview({ openModal, toast, onFocusGraph }) {
   const body = document.getElementById("review-body");
@@ -138,9 +180,8 @@ export function initReview({ openModal, toast, onFocusGraph }) {
     const scroll = card.querySelector(".rv-scroll")?.scrollTop ?? 0;
     card.innerHTML = `
       <header class="rv-head">
-        <div class="meta"><span class="badge out" title="${esc(KIND_HELP[p.kind] ?? "")}">${esc(KIND_LABEL[p.kind] ?? p.kind)}</span>
-          ${p.status === "deferred" ? `<span class="badge">deferred</span>` : ""}<span class="spacer"></span>
-          <span class="mono faint">${esc(p.id)}${p.market_event_id ? ` · ${esc(p.market_event_id)}` : ""}</span></div>
+        <div class="meta" title="${esc(p.id)}${p.market_event_id ? ` · ${esc(p.market_event_id)}` : ""}"><span class="badge out" title="${esc(KIND_HELP[p.kind] ?? "")}">${esc(KIND_LABEL[p.kind] ?? p.kind)}</span>
+          ${p.status === "deferred" ? `<span class="badge">deferred</span>` : ""}</div>
         <div class="rv-title">${esc(r?.headline ?? p.reason ?? p.event.id)}</div>
         ${r?.source ? `<div class="small muted">${esc(r.source)} · synthetic</div>` : ""}
       </header>
@@ -159,10 +200,6 @@ export function initReview({ openModal, toast, onFocusGraph }) {
       </footer>`;
     card.querySelector(".rv-scroll").scrollTop = scroll;
     card.querySelector('[data-act="approve"]').addEventListener("click", () => approve(p.id));
-    card.querySelector("[data-grid]")?.addEventListener("click", () => {
-      const c = confOf(p.id);
-      emit("paths-open", { kind: "proposal", id: p.id, keep: [...keepOf(p.id)].sort((a, b) => a - b), conf: c.all, ripple: c.ripple });
-    });
     card.querySelector('[data-act="reject"]').addEventListener("click", () => reject(p.id));
     card.querySelector('[data-act="defer"]').addEventListener("click", () => act(() => api.defer(p.id, "backend user"), `Deferred ${p.id}.`, p.id));
     card.querySelector('[data-act="edit"]').addEventListener("click", () => edit(p.id));
@@ -243,12 +280,13 @@ export function initReview({ openModal, toast, onFocusGraph }) {
   }
 
   // a group of the review: one stage, in its color, with its input and output
-  function group(r, phase, body, empty, said) {
+  function group(r, phase, body, empty, said, lede = "") {
     const s = (r.stages ?? []).find((x) => x.phase === phase);
     if (!s) return body;
     return `<section class="rv-group st-${esc(phase)}" id="rvg-${esc(phase)}">
       <header class="rv-gh"><span class="rv-gt">${esc(s.title.replace("Learning · ", ""))}</span>
         <span class="rv-gio" title="${esc(`In: ${s.input}. Out: ${s.output}`)}">${esc(said ?? s.output)}</span></header>
+      ${lede ? `<p class="rv-lede">${lede}</p>` : ""}
       ${body.trim() ? body : `<p class="small muted rv-none">${esc(empty)}</p>`}</section>`;
   }
 
@@ -349,15 +387,14 @@ export function initReview({ openModal, toast, onFocusGraph }) {
         <p class="small muted">Their reason is kept as the evidence on what this adds, as an article's words would be.</p></section>`);
     }
     intake.push(articleSection(r.article));
-    intake.push(`<div class="rv-conf" title="How far this article's changes should move the model: an interaction's existence and evidence, a report's weight, a move's expected size. 100% takes the article as stated.">
+    intake.push(`<div class="rv-conf" title="How far this article's changes should move the model: an interaction's existence and evidence, a report's weight, a move's expected size. 100% takes the article as stated; it applies to every change below unless you set one.">
       <label for="rv-conf-all"><b>Your confidence in this ${r.manual ? "addition" : "article"}</b></label>
       <input id="rv-conf-all" type="range" min="0" max="100" step="5" value="${Math.round(100 * artConf)}" data-conf-all aria-valuetext="${pct(artConf)}">
-      <span class="mono rv-conf-v">${pct(artConf)}</span>
-      <span class="small muted">applies to every change below unless you set one</span></div>`);
+      <span class="mono rv-conf-v">${pct(artConf)}</span></div>`);
     // the items: one checkbox each; an item that needs another sits under it
     const depth = (it) => (it.requires.length ? 1 + Math.max(...it.requires.map((j) => depth(items[j]))) : 0);
     if (items.length || (r.pending ?? []).length) {
-      working.push(`<section class="rv-sec"><h4>Proposed changes <span class="small muted">select what to commit</span>
+      working.push(`<section class="rv-sec"><h4>What the article asks to change <span class="small muted">select what to commit</span>
           ${items.length > 1 ? `<span class="rv-bulk"><button class="linkish" data-all>all</button> · <button class="linkish" data-none>none</button></span>` : ""}</h4>
         <ul class="rv-items">${items.map((it) => `<li class="rv-item ${esc(it.action)}${keep.has(it.index) ? "" : " off"}" data-index="${it.index}" style="--depth:${Math.min(3, depth(it))}"
             data-refs="${esc(it.refs.join(" "))}">
@@ -383,13 +420,6 @@ export function initReview({ openModal, toast, onFocusGraph }) {
           ${checkMeter(h, bound, needed)}
           <ul class="rv-plain small">${(h.evidence ?? []).map((e) => `<li>${esc(e.candidate ?? "")}: ${esc(EVIDENCE_WORD[e.kind] ?? e.kind)} ${e.kind === "mention" ? "in this article" : ""}
             <span class="muted">(+${fmt(e.weight)}${e.confidence < 1 ? ` at your ${pct(e.confidence)}` : ""})</span></li>`).join("")}</ul></div>`).join("")}</section>`);
-    }
-    if (r.recalled?.length || r.adjusted?.length) {
-      working.push(`<section class="rv-sec"><h4>What recall brought back <span class="small muted">from long-term memory</span></h4><ul class="rv-plain">
-        ${(r.recalled ?? []).slice(0, 4).map((x) => `<li>${x.kind === "day" ? (x.label.startsWith("a past day") ? `${esc(x.label.replace("a past day", "A past day"))} (${esc(x.day)})` : `The day of “${esc(x.label)}” (${esc(x.day)})`) : `Superentity “${esc(x.label)}”`}
-          <span class="small muted">attention ${fmt(x.attention)}</span></li>`).join("")}
-        ${(r.adjusted ?? []).slice(0, 6).map((a) => `<li>Adjusted from what followed: ${esc(a.name)} ${signed(a.before)} → <b>${signed(a.after)}</b></li>`).join("")}
-        ${(r.adjusted ?? []).length > 6 ? `<li class="muted">… and ${r.adjusted.length - 6} smaller adjustments</li>` : ""}</ul></section>`);
     }
     // the event's moves and the ripple, by order
     const byOrder = new Map();
@@ -429,23 +459,34 @@ export function initReview({ openModal, toast, onFocusGraph }) {
           ${w < 1 ? `<button class="linkish small" data-rip-reset="${sid}">as the analysis expects</button>` : `<span class="small muted">the probability it arrives</span>`}</div>` : ""}</li>`;
     };
     if (byOrder.size) {
-      working.push(`<section class="rv-sec"><h4>The ripple <span class="small muted">does each order make sense? deselect or weigh a value's ripple</span>
-          <button class="ghost small rv-grid" data-grid type="button" title="Input, each order, and output as a grid, moving day by day (G)">As a grid</button></h4>
+      working.push(`<section class="rv-sec"><h4>What follows from it: the ripple <span class="small muted">the transmission path on the canvas, left to right</span></h4>
+        <p class="small muted rv-sub">It is not in the article: it follows from the interactions. Does each order make sense? Deselect a
+          value's ripple, or weigh how likely it is to arrive; a value downstream scales with it.</p>
         ${[...byOrder.entries()].sort((a, b) => a[0] - b[0]).map(([k, xs]) => `<div class="rv-order o${k}">
           <div class="rv-oh"><span class="sw o${k}" aria-hidden="true"></span>${esc(ORDER[k] ?? `Order ${k}`)}</div>
           <ul>${xs.map(ripRow).join("")}</ul></div>`).join("")}
-        ${(r.ripple ?? []).length ? `<p class="small muted">The ripple is not in the article: it follows from the interactions. Approved, a value's weight
-          scales its expected ripple in working memory's daily prediction, and a value downstream follows it.</p>` : ""}
       </section>`);
     }
     if (r.learned?.length) {
-      working.push(`<section class="rv-sec"><h4>What the fold learns</h4><ul class="rv-plain">${r.learned.map((x) => `<li data-refs="${esc(x.ref)}">
-        ${esc(x.kind === "effect" ? `Effect of ${x.name}` : x.kind === "existence" ? `Belief that ${x.name} exists` : x.name)}: ${x.before == null ? "new" : fmt(x.before)} → <b>${fmt(x.after)}</b> ${esc(x.unit ?? "")}</li>`).join("")}</ul></section>`);
+      working.push(`<section class="rv-sec"><h4>What the fold settles <span class="small muted">each value and belief, before and after this article</span></h4>
+        <ul class="rv-fold">${r.learned.map((x) => `<li data-refs="${esc(x.ref)}">${foldRow(x)}</li>`).join("")}</ul></section>`);
+    }
+    if (r.recalled?.length || r.adjusted?.length) {
+      const top = Math.max(...(r.recalled ?? []).map((x) => x.attention), 1e-9);
+      longTerm.push(`<section class="rv-sec"><h4>What it recalled to read this article <span class="small muted">the patterns and past days most like it</span></h4>
+        <ul class="rv-recall">${(r.recalled ?? []).slice(0, 4).map((x) => `<li><span class="rc-name">${x.kind === "day"
+          ? (x.label.startsWith("a past day") ? `${esc(x.label.replace("a past day", "A past day"))} (${esc(x.day)})` : `The day of “${esc(x.label)}” (${esc(x.day)})`)
+          : `Superentity “${esc(x.label)}”`}</span>
+          <span class="rc-bar" title="attention ${fmt(x.attention)}"><i style="width:${(100 * x.attention / top).toFixed(0)}%"></i></span></li>`).join("")}</ul>
+        ${(r.adjusted ?? []).length ? `<p class="small muted rv-sub">What followed those past days adjusts the expected moves:</p><ul class="rv-plain">
+          ${r.adjusted.slice(0, 6).map((a) => `<li>${esc(a.name)} ${signed(a.before)} → <b>${signed(a.after)}</b></li>`).join("")}
+          ${r.adjusted.length > 6 ? `<li class="muted">… and ${r.adjusted.length - 6} smaller adjustments</li>` : ""}</ul>` : ""}</section>`);
     }
     if (r.kind === "frontier_promotion") longTerm.push(`<div class="series"></div>`);
     if (r.lessons?.length || r.raises?.length) {
-      longTerm.push(`<ul class="rv-plain">${(r.lessons ?? []).map((x) => `<li>${esc(x)}</li>`).join("")}
-        ${(r.raises ?? []).map((x) => `<li>Raises a proposal for its own review later: ${esc(KIND_LABEL[x.kind] ?? x.kind)}${x.reason ? ` (${esc(x.reason)})` : ""}</li>`).join("")}</ul>`);
+      longTerm.push(`<section class="rv-sec"><h4>What it keeps <span class="small muted">by the store it lands in</span></h4>
+        ${keepsList(r.lessons ?? [])}
+        ${(r.raises ?? []).length ? `<ul class="rv-plain">${r.raises.map((x) => `<li>Raises a proposal for its own review later: ${esc(KIND_LABEL[x.kind] ?? x.kind)}${x.reason ? ` (${esc(x.reason)})` : ""}</li>`).join("")}</ul>` : ""}</section>`);
     }
     const decision = `<section class="rv-group st-review rv-decide" id="rvg-review">
       <header class="rv-gh"><span class="rv-gt">Your review</span><span class="rv-gio">does every change above make sense?</span></header>
@@ -453,10 +494,16 @@ export function initReview({ openModal, toast, onFocusGraph }) {
         : `Approving commits the ${keep.size === items.length ? "whole event" : `${keep.size} selected change(s)`} to working memory and its lessons to long-term memory. Nothing has changed yet.`}</p>
       <p class="small faint rv-foot">Staged on a copy of version ${r.version}. ${r.world_event
         ? "Approved, it commits on its day: once to working memory, once to long-term memory." : "Approved, it commits once."}</p></section>`;
+    const nRip = (r.ripple ?? []).length;
+    const wmSaid = [items.length ? `${items.length} change${items.length === 1 ? "" : "s"} asked for` : "",
+      nRip ? `a ripple to ${nRip} value${nRip === 1 ? "" : "s"}` : "",
+      r.learned?.length ? `${r.learned.length} value${r.learned.length === 1 ? "" : "s"} and belief${r.learned.length === 1 ? "" : "s"} settle` : ""].filter(Boolean).join(" · ");
     return [group(r, "intake", intake.join(""), "A backend user's edit: no article."),
-      group(r, "working", working.join(""), "Nothing changes in working memory."),
+      group(r, "working", working.join(""), "Nothing changes in working memory.", wmSaid || null,
+        "The model as it stands today: each entity's values, and the interactions between them with how strongly each is believed. This is what the article would change in it."),
       group(r, "long_term", longTerm.join(""), "Nothing new for long-term memory.",
-        r.lessons?.length ? `${r.lessons.length} lesson(s)${r.raises?.length ? `; raises ${r.raises.length} proposal(s)` : ""}` : ""),
+        r.lessons?.length ? `${r.lessons.length} lesson${r.lessons.length === 1 ? "" : "s"}${r.raises?.length ? `; raises ${r.raises.length} proposal(s)` : ""}` : "",
+        "What the model keeps across articles: the kinds of entities and interactions it has seen, the superentities they form, each actor's record of decisions, co-movements it cannot explain yet, and past days it can recall. It shaped how this article was read, and it learns from it."),
       decision].join("");
   }
 
