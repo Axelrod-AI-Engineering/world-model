@@ -116,7 +116,15 @@ class PlayBody(BaseModel):
 async def health(request: Request) -> dict:
     st = S(request)
     version = st.runner.controller.engine.version if st.runner is not None and st.runner.loaded else 0
-    return {"ok": True, "version": version}
+    return {"ok": True, "version": version, "build": _build()}
+
+
+def _build() -> str | None:
+    """The commit a hosted release was built from: Railway sets RAILWAY_GIT_COMMIT_SHA for a GitHub deploy."""
+    import os
+
+    sha = os.environ.get("RAILWAY_GIT_COMMIT_SHA", "").strip()
+    return sha[:12] or None
 
 
 def _config(st: AppState) -> dict:
