@@ -2237,7 +2237,8 @@ export class SvgRenderer extends GraphRenderer {
     setTimeout(go, this.opts.reducedMotion ? 30 : 200);
   }
 
-  bounds() {
+  // `settled`: where boxes are heading, not where they are mid-glide (outlines are then allowed for with a margin)
+  bounds(settled = false) {
     const ns = [...this.nodes.values()];
     if (!ns.length) return null;
     let x0 = Infinity;
@@ -2245,10 +2246,11 @@ export class SvgRenderer extends GraphRenderer {
     let x1 = -Infinity;
     let y1 = -Infinity;
     for (const n of ns) {
-      const r = rectOf(n);
+      const r = rectOf(settled && n.hx != null ? { ...n, x: n.hx, y: n.hy, w: n.wGoal ?? n.w, h: n.hGoal ?? n.h } : n);
       x0 = Math.min(x0, r.x0); y0 = Math.min(y0, r.y0); x1 = Math.max(x1, r.x1); y1 = Math.max(y1, r.y1);
     }
-    for (const [key, c] of this.contours) {
+    if (settled) { x0 -= 48; y0 -= 64; x1 += 48; y1 += 48; }
+    for (const [key, c] of settled ? [] : this.contours) {
       // only outlines drawn now (an isolated view, or a fold, leaves old ones behind)
       if (!c || this.model?.state?.get(key) !== "open") continue;
       x0 = Math.min(x0, c.bbox.x0); y0 = Math.min(y0, c.bbox.y0 - 12); x1 = Math.max(x1, c.bbox.x1); y1 = Math.max(y1, c.bbox.y1);
@@ -2258,20 +2260,24 @@ export class SvgRenderer extends GraphRenderer {
       x0 = Math.min(x0, b.x0); y0 = Math.min(y0, b.y0 - 28); x1 = Math.max(x1, b.x1); y1 = Math.max(y1, b.y1);
     }
     // tabs can sit past an outline's end
-    for (const t of this.tabRects ?? []) {
+    for (const t of settled ? [] : this.tabRects ?? []) {
       x0 = Math.min(x0, t.x0); y0 = Math.min(y0, t.y0); x1 = Math.max(x1, t.x1); y1 = Math.max(y1, t.y1);
     }
     return [[x0 - 16, y0 - 16], [x1 + 16, y1 + 16]];
   }
 
+  // DECISION (Oct 11): a fit frames where the boxes are heading, and it is the last word: the layout settling no longer
+  // re-frames a second time (two camera moves for one click read as the canvas refreshing)
   fit(duration = 320) {
-    this.zoom.fit(this.bounds(), duration, { pad: this.freePad() });
+    this.autoFrame = false;
+    this.zoom.fit(this.bounds(true), duration, { pad: this.freePad() });
   }
 
   // DECISION: the first view fits everything unless that would shrink names below about 9 px; on a
   // small screen it then shows the middle of the graph at a readable size, and F still fits everything.
   fitReadable(duration = 320) {
-    this.zoom.fit(this.bounds(), duration, { minK: 0.68, pad: this.freePad({ top: 132, right: 24, bottom: 64, left: 24 }) });
+    this.autoFrame = false;
+    this.zoom.fit(this.bounds(true), duration, { minK: 0.68, pad: this.freePad({ top: 132, right: 24, bottom: 64, left: 24 }) });
   }
 
   // Frame the boxes that hold these entities, subentities, or superentity instances in the part of the
