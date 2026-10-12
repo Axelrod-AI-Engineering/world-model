@@ -30,6 +30,8 @@ export default defineRailway((ctx) => {
     },
     variables: {
       PORT: "8080",
+      // the scenario the hosted demo opens on (scripts/start-railway.sh reads it)
+      WORLD_MODEL_SCENARIO: "emily_demo",
       WORLD_MODEL_REQUIRE_BASIC_AUTH: "1",
       WORLD_MODEL_BASIC_AUTH_USERNAME: preserve(),
       WORLD_MODEL_BASIC_AUTH_PASSWORD: preserve(),
