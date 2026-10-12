@@ -101,8 +101,9 @@ def _flow(fid: str, title: str, summary: str, phases: list[dict], nodes: list[di
 
 WORLD_MODEL = _flow(
     "world-model", "Learning",
-    "Everything that can happen to a market event. The usual path runs straight down; edge cases branch to the right "
-    "and rejoin it. Learning stages the event in two parts, working memory and then long-term memory; a person "
+    "Everything that can happen to a market event. The main line runs straight down through concrete steps and yes/no "
+    "checks; a step that runs only sometimes sits to the right of its check and rejoins the line. Learning stages the "
+    "event in two parts, working memory and then long-term memory; a person "
     "then checks every change to both, including the second- and third-order ripple, and only what they approve "
     "is committed. Inference reads committed versions and never writes.",
     [
@@ -143,38 +144,40 @@ WORLD_MODEL = _flow(
                     "vetted it, and any version can be reopened read-only or compared with another."),
     ],
     [
-        # DECISION (Oct 11): the happy path, a news item that moves a value, runs straight down the middle; edge cases
-        # (a fuzzy end, a new item, hedged ends, an actor's decision, a partial or rejected review) branch off to the
-        # right and rejoin it. Optional steps on the main line are dashed, and their "if" says when they run.
+        # DECISION (Oct 11, revised): the main line holds only concrete steps and the checks between them. Every step
+        # that runs only sometimes sits on the side, behind a check (a decision) that asks whether it applies: "yes"
+        # goes out to the step, which rejoins the main line; "no" carries straight on.
         # intake
         dict(id="event", label="A market event: news, a data release, a filing, an imported item, or a backend user's "
                                 "edit", kind="start", phase="intake", trace=["market_event.received"]),
         dict(id="translate", label="Translate it into operations: one graph update event", phase="intake",
              component="translator", trace=["translate.result"]),
-        dict(id="refine", label="Refine a fuzzy end: kind → entity → subentity, or hedge across the candidates",
-             phase="intake", mandatory=False, when="an end names a kind, not a value", component="refiner", side=True,
-             trace=["refine.step", "refine.pending"]),
+        dict(id="q_fuzzy", label="Does an end name a kind, not a value?", kind="decision", phase="intake"),
+        dict(id="refine", label="Refine the fuzzy end: kind → entity → subentity, or hedge across the candidates",
+             phase="intake", component="refiner", side=True, trace=["refine.step", "refine.pending"]),
         # working memory
         dict(id="parse", label="Apply the operations: add or retire items; collect the event's moves", phase="working",
              component="parser", writes="working", trace=["parse.created", "parse.retired"]),
+        dict(id="q_new", label="Does it add items?", kind="decision", phase="working"),
         dict(id="classify", label="Classify each new item into a kind; it inherits the kind's priors", phase="working",
-             mandatory=False, when="the event adds items", component="classifier", writes="working", side=True,
-             trace=["classify.path"]),
+             component="classifier", writes="working", side=True, trace=["classify.path"]),
         dict(id="recall", label="Recall similar superentities and past days", phase="working", component="recaller",
              trace=["recall.result"]),
+        dict(id="q_move", label="Does it move a value?", kind="decision", phase="working"),
         dict(id="ripple", label="Simulate the ripple: first-, second-, and third-order moves", phase="working",
-             mandatory=False, when="the event moves a value", component="analyzer", trace=["analyze.done"]),
+             component="analyzer", side=True, trace=["analyze.done"]),
+        dict(id="q_report", label="Does it report a value?", kind="decision", phase="working"),
         dict(id="fold", label="Fold: update observed values and the interactions that feed them", phase="working",
-             mandatory=False, when="the event reports a value", component="folder", writes="working",
-             trace=["fold.posterior", "fold.edge"]),
-        dict(id="hedges", label="Weigh hedged fuzzy ends; propose a resolution once one passes the bound",
-             phase="working", mandatory=False, when="fuzzy ends are hedged", component="refiner", writes="working",
-             side=True, trace=["refine.weighed", "refine.resolution_proposed"]),
+             component="folder", writes="working", side=True, trace=["fold.posterior", "fold.edge"]),
+        dict(id="q_hedged", label="Are fuzzy ends hedged?", kind="decision", phase="working"),
+        dict(id="hedges", label="Weigh the hedges; propose a resolution once one passes the bound", phase="working",
+             component="refiner", writes="working", side=True, trace=["refine.weighed", "refine.resolution_proposed"]),
         # long-term memory
         dict(id="kinds", label="Kinds learn their new members and statistics", phase="long_term",
              component="generalization_updater", writes="long_term", trace=["generalize.updated", "generalize.split"]),
-        dict(id="memory", label="Entity memory records an actor's decision", phase="long_term", mandatory=False,
-             when="the event shows an actor deciding", component="consolidator", writes="long_term", side=True),
+        dict(id="q_actor", label="Does an actor decide?", kind="decision", phase="long_term"),
+        dict(id="memory", label="Entity memory records the actor's decision", phase="long_term",
+             component="consolidator", writes="long_term", side=True),
         dict(id="frontier", label="Correlation frontier: pair unexplained moves; propose an interaction once a pair "
                                   "holds", phase="long_term", component="frontier", writes="long_term",
              trace=["frontier.logged", "frontier.promotion_proposed"]),
@@ -197,19 +200,21 @@ WORLD_MODEL = _flow(
         dict(id="version", label="A new version in the log; inference reads committed versions only", kind="end",
              phase="commit"),
     ],
-    [  # the happy path, straight down
-     ("event", "translate"), ("translate", "parse"), ("parse", "recall"), ("recall", "ripple"), ("ripple", "fold"),
-     ("fold", "kinds"), ("kinds", "frontier"), ("frontier", "support"), ("support", "explain"), ("explain", "check"),
-     ("check", "decide"), ("decide", "commit_wm", "yes"), ("commit_wm", "commit_ltm"), ("commit_ltm", "version"),
-     # edge cases: branches that rejoin it
-     ("translate", "refine", "an end is fuzzy"), ("refine", "parse"),
-     ("parse", "classify", "new items"), ("classify", "recall"),
-     ("fold", "hedges", "hedged ends"), ("hedges", "kinds"),
-     ("kinds", "memory", "an actor decided"), ("memory", "frontier"),
+    [  # the main line, straight down
+     ("event", "translate"), ("translate", "q_fuzzy"), ("q_fuzzy", "parse", "no"), ("parse", "q_new"),
+     ("q_new", "recall", "no"), ("recall", "q_move"), ("q_move", "q_report", "no"), ("q_report", "q_hedged", "no"),
+     ("q_hedged", "kinds", "no"), ("kinds", "q_actor"), ("q_actor", "frontier", "no"), ("frontier", "support"),
+     ("support", "explain"), ("explain", "check"), ("check", "decide"), ("decide", "commit_wm", "yes"),
+     ("commit_wm", "commit_ltm"), ("commit_ltm", "version"),
+     # each check's "yes": the step on the side, which rejoins the main line
+     ("q_fuzzy", "refine", "yes"), ("refine", "parse"),
+     ("q_new", "classify", "yes"), ("classify", "recall"),
+     ("q_move", "ripple", "yes"), ("ripple", "q_report"),
+     ("q_report", "fold", "yes"), ("fold", "q_hedged"),
+     ("q_hedged", "hedges", "yes"), ("hedges", "kinds"),
+     ("q_actor", "memory", "yes"), ("memory", "frontier"),
      ("decide", "restage", "some"), ("restage", "check", "check again"),
-     ("decide", "rejected", "no"),
-     # ways around the optional steps on the main line (their "if" says it; not drawn)
-     ("recall", "fold", "no move", False), ("ripple", "kinds", "nothing observed", False)],
+     ("decide", "rejected", "no")],
     [
         ("Market event", "Something that happened and was published: news, a data release, a filing, or an imported "
                          "item. Its publication time decides the day it is folded in."),

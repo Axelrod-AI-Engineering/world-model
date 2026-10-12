@@ -845,6 +845,7 @@ def _stages(p: Proposal, kept: list[int], items: list[StagedItem], result: Any, 
             changesets: list[ChangeSet], kinds: set[str], me: Any, error: str | None) -> list[StageIO]:
     f = WORLD_MODEL
     ran = set(flow_path(f, kinds)) | {"event", "translate"} | ({"refine"} if p.refinement_steps else set())
+    ran |= {n.id for n in f.nodes if n.kind == "decision" and n.id.startswith("q_")}   # every check runs; its answer varies
     adds = [it for it in items if it.selected and it.action == "add"]
     rets = [it for it in items if it.selected and it.action == "retire"]
     sel = [it for it in items if it.selected]
