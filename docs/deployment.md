@@ -7,7 +7,7 @@ The full demo is hosted on Railway's `dev` environment at **https://world-model-
 | Piece | Where | What it does |
 |---|---|---|
 | Image | `Dockerfile` | Python 3.12 slim. Installs the frozen dependencies with uv (`uv sync --frozen --no-dev`) and copies `configs/`, `data/`, `web/`, and the start script. |
-| Start | `scripts/start-railway.sh` | Runs `axelrod demo --host 0.0.0.0 --port $PORT`: the full oil-shock demo ([demos.md](demos.md)) |
+| Start | `scripts/start-railway.sh` | Runs `axelrod demo --scenario $WORLD_MODEL_SCENARIO --host 0.0.0.0 --port $PORT`: on dev, the production demo for the main login, and Emily's demo for hers ([demos.md](demos.md), [A login per scenario](#a-login-per-scenario)) |
 | Infrastructure | `.railway/railway.ts` | The service, its volume, and its settings, as code |
 | Release checks | `scripts/persist-railway-fields.sh`, `scripts/verify-railway-drift.py` | Set the two fields Railway's IaC does not store, then reject any drift except known leftovers |
 | Auth | `src/axelrod_wm/api/auth.py` | Basic Auth on every request except the health check |
@@ -70,7 +70,7 @@ Every page, static file, API call, the API docs, and the WebSocket stream requir
 
 ### A login per scenario
 
-`WORLD_MODEL_LOGINS` adds logins that each open their own scenario, as comma-separated `username:password:scenario` entries (no `:` or `,` inside a field). On dev it holds Emily's login, which opens `emily_demo`; the main login keeps opening `WORLD_MODEL_SCENARIO` (default `oil_shock_demo`). Each login gets an engine of its own, with its own storage (`var/axelrod/demo-<username>`) and trace stream, so reviews under one login never show under another. Everyone who signs in with the same login still shares that login's session. The variable lives in Railway only, like the main credentials.
+`WORLD_MODEL_LOGINS` adds logins that each open their own scenario, as comma-separated `username:password:scenario` entries (no `:` or `,` inside a field). On dev it holds Emily's login, which opens `emily_demo`; the main login opens `WORLD_MODEL_SCENARIO` (`prod_demo` on dev; `oil_shock_demo` when unset). Each login gets an engine of its own, with its own storage (`var/axelrod/demo-<username>`) and trace stream, so reviews under one login never show under another. Everyone who signs in with the same login still shares that login's session. The variable lives in Railway only, like the main credentials.
 
 The browser keeps a Basic Auth login until it is closed: to switch logins, use a private window, or sign in through `https://<username>@world-model-dev.up.railway.app`.
 

@@ -30,11 +30,13 @@ export default defineRailway((ctx) => {
     },
     variables: {
       PORT: "8080",
-      // the scenario the hosted demo opens on (scripts/start-railway.sh reads it)
-      WORLD_MODEL_SCENARIO: "emily_demo",
+      // the scenario the main login opens on (scripts/start-railway.sh reads it); Emily's login opens hers (below)
+      WORLD_MODEL_SCENARIO: "prod_demo",
       WORLD_MODEL_REQUIRE_BASIC_AUTH: "1",
       WORLD_MODEL_BASIC_AUTH_USERNAME: preserve(),
       WORLD_MODEL_BASIC_AUTH_PASSWORD: preserve(),
+      // logins that open their own scenario, username:password:scenario (api/auth.py); set in Railway only
+      WORLD_MODEL_LOGINS: preserve(),
     },
     networking: {
       serviceDomains: { "world-model-dev.up.railway.app": { port: 8080 } },
