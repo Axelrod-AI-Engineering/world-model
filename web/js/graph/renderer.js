@@ -216,6 +216,15 @@ export class SvgRenderer extends GraphRenderer {
     this.homes.clear();
   }
 
+  // another world: none of the last one's placements apply (its homes, regions, and blocks)
+  resetHomes() {
+    this.gravHomes.clear();
+    this.homeRegion = null;
+    this.regionHomes = null;
+    this.savedHomes = null;
+    this.userMoved = false;
+  }
+
   setOptions(opts) {
     Object.assign(this.opts, opts);
     if ("colorBy" in opts) this.paintNodes();

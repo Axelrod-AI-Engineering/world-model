@@ -724,6 +724,23 @@ async function boot() {
   }
   if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) setReducedMotion(true);
 
+  // DECISION (Oct 8): the example demos float in the gravity layout (entities arrive one article at a time, so a fixed
+  // figure cannot place them well); so does any world with no hand-placed Figure 1. Admin › View switches back.
+  // (Oct 11) Applied on every load, not only the first page: a world loaded in place gets its own layout and mode.
+  function applyWorldLayout(layout, st) {
+    if (store.layout !== undefined && st?.scenario_id !== store.worldId) renderer.resetHomes();
+    store.worldId = st?.scenario_id;
+    store.layout = layout;
+    renderer.setLayout(layout);
+    // what this person looks at, and at what zoom, is learned per world (graph/attention.js)
+    renderer.useAttention(st?.scenario_id ?? "default");
+    const mode = st?.examples || !Object.keys(layout?.entities ?? {}).length ? "gravity" : "figure1";
+    store.settings.layout = mode;
+    renderer.quiet = true;                 // the default, not a view change to undo
+    renderer.setLayoutMode(mode);
+    renderer.quiet = false;
+  }
+
   async function loadScenario(id) {
     clearStaged();
     // another world: what was open about this one (a forecast, its grid, the side panels) does not carry over
@@ -736,6 +753,7 @@ async function boot() {
     await guarded(async () => {
       const st = await api.load(id, true);
       setStatus(st);
+      applyWorldLayout(await api.layout().catch(() => null), st);
       backToLive();
       await refreshGraph();
       renderer.fit();
@@ -1347,19 +1365,8 @@ async function boot() {
   const [layout, scenarios, cfg] = await Promise.all([
     api.layout().catch(() => null), api.scenarios().catch(() => []), api.config().catch(() => null)]);
   installGeneralizations(renderer);
-  store.layout = layout;
-  renderer.setLayout(layout);
-  // DECISION (Oct 8): the example demos float in the gravity layout (entities arrive one article at a time, so a fixed
-  // figure cannot place them well); so does any world with no hand-placed Figure 1. Admin › View switches back.
   const status0 = store.status ?? await api.status().catch(() => null);
-  // what this person looks at, and at what zoom, is learned per world (graph/attention.js)
-  renderer.useAttention(status0?.scenario_id ?? "default");
-  if (status0?.examples || !Object.keys(layout?.entities ?? {}).length) {
-    store.settings.layout = "gravity";
-    renderer.quiet = true;                 // the default, not a view change to undo
-    renderer.setLayoutMode("gravity");
-    renderer.quiet = false;
-  }
+  applyWorldLayout(layout, status0);
   store.scenarios = scenarios;
   store.config = cfg;
 
