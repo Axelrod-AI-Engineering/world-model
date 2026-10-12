@@ -79,3 +79,15 @@ def test_ready_made_question_forecasts_the_book(client):
 
 def test_local_bundles_listed_only_where_the_folder_exists(client):
     assert isinstance(client.get("/api/import/local").json(), list)
+
+
+def test_auto_accept_approves_what_waits_and_what_comes(client):
+    out = client.post("/api/import", json={"bundle": SAMPLE, "ids": ["T-003"]}).json()
+    assert out["waiting_on"]
+    cfg = client.patch("/api/config/review", json={"policy": "auto_approve_all", "approve_pending": True}).json()
+    assert cfg["review_policy"] == "auto_approve_all"
+    settle(client)
+    assert client.get("/api/proposals?status=pending").json() == []
+    assert client.post("/api/import/preview", json={"bundle": SAMPLE}).json()["items"][-1]["status"] == "imported"
+    assert client.patch("/api/config/review", json={"policy": "review_all"}).json()["review_policy"] == "review_all"
+    assert client.patch("/api/config/review", json={"policy": "nonsense"}).status_code == 422

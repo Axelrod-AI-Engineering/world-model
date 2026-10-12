@@ -371,6 +371,32 @@ export function hullContour(members, obstacles, pad = PAD) {
   return { d, anchor: corners[0], corners, ring: best.ring, topEdge, bbox: { x0: bx0, y0: by0, x1: bx1, y1: by1 } };
 }
 
+// A block (Oct 11): a rounded rectangle around a superentity's home members, for the hierarchy's layout, where every
+// superentity has a block of its own. It returns what hullContour returns, so tabs and lenses work the same.
+const BLOCK_R = 14;
+export function blockHull(members, pad = PAD) {
+  if (!members.length) return null;
+  let x0 = Infinity; let y0 = Infinity; let x1 = -Infinity; let y1 = -Infinity;
+  for (const r of members) { x0 = Math.min(x0, r.x0); y0 = Math.min(y0, r.y0); x1 = Math.max(x1, r.x1); y1 = Math.max(y1, r.y1); }
+  x0 -= pad; y0 -= pad; x1 += pad; y1 += pad;
+  const rr = Math.min(BLOCK_R + pad / 3, (x1 - x0) / 2, (y1 - y0) / 2);
+  const d = `M${x0 + rr},${y0}H${x1 - rr}A${rr},${rr} 0 0 1 ${x1},${y0 + rr}V${y1 - rr}A${rr},${rr} 0 0 1 ${x1 - rr},${y1}`
+    + `H${x0 + rr}A${rr},${rr} 0 0 1 ${x0},${y1 - rr}V${y0 + rr}A${rr},${rr} 0 0 1 ${x0 + rr},${y0}Z`;
+  // the outline as points, clockwise from the top-left, for tabs (top edge) and lenses
+  const ring = [];
+  const step = 6;
+  for (let x = x0; x <= x1; x += step) ring.push([x, y0]);
+  for (let y = y0; y <= y1; y += step) ring.push([x1, y]);
+  for (let x = x1; x >= x0; x -= step) ring.push([x, y1]);
+  for (let y = y1; y >= y0; y -= step) ring.push([x0, y]);
+  const corners = [
+    { x: x0 + 6, y: y0 + 1, align: "left" }, { x: x0 + 6, y: y1 - 1, align: "left" },
+    { x: x1 - 6, y: y0 + 1, align: "right" }, { x: x1 - 6, y: y1 - 1, align: "right" },
+  ];
+  const topEdge = ring.filter(([, y], i) => y === y0 && i % 2 === 0);
+  return { d, anchor: corners[0], corners, ring, topEdge, bbox: { x0, y0, x1, y1 } };
+}
+
 // A convex blob around some boxes (for the generalization end of a fuzzy ribbon).
 export function hullPolygon(rects, pad = PAD) {
   const pts = [];

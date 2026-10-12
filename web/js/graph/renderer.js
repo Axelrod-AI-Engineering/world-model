@@ -4,7 +4,7 @@
 import { densityCurve } from "../charts/density.js";
 import { createSimulation, resolveCollisions, staticLayout } from "./forces.js";
 import { drawRibbons, prettyNode } from "./fuzzy.js";
-import { ancestors, buildGroups, hullContour, hullContourCached, hullPolygon, hullStyle, NEST_PAD, PAD, paletteOf } from "./hulls.js";
+import { ancestors, blockHull, buildGroups, hullContour, hullContourCached, hullPolygon, hullStyle, NEST_PAD, PAD, paletteOf } from "./hulls.js";
 import { figurePosition, slotPosition } from "./layouts.js";
 import { CHIP, computeModel, GEOM, kinKey, rowCenterY, rowLabels, textWidth, truncate } from "./model.js";
 import { openNode } from "./open-node.js";
@@ -117,6 +117,7 @@ export class SvgRenderer extends GraphRenderer {
     this.peeked = null;           // what the walkthrough opened temporarily
     this.sim = createSimulation({
       getMode: () => this.mode,
+      getBlocks: () => this.blocks(),
       getGroups: () => this.groupsInfo.groups.filter((g) => !g.transient),
       groupByCategory: () => this.opts.groupByCategory,
       onTick: () => this.ticked(),
@@ -137,6 +138,7 @@ export class SvgRenderer extends GraphRenderer {
       this.lastMove = performance.now();
       if (byUser) {
         this.autoFrame = false;
+        this.userMoved = true;
         // buffered (Oct 11): a layout still floating holds still while a person zooms or pans, so the moving view is
         // one composited layer that nothing redraws underneath; it floats on from where it was once the view rests
         this.holdLayout();
@@ -309,7 +311,12 @@ export class SvgRenderer extends GraphRenderer {
       .map((e) => ({ source: e.a.box, target: e.b.box, significance: e.sig })));
     // a change of detail (lod) keeps every box's home: an opened entity grows in place and its neighbors step aside
     const unplaced = nodes.some((n) => n.kind === "entity" && this.byGravity(n.id) && !this.gravHomes.has(n.id) && !this.hasFixedHome(n.id));
-    if (unplaced || reason === "first" || (structural && reason !== "lod")) this.relayout();
+    // DECISION (Oct 11, supersedes "a change of detail keeps every home"): with superentities drawn as blocks, any change
+    // of structure or size (a box that opens or closes, a card that folds, a new entity) re-packs the hierarchy, so blocks
+    // stay separate and in order at every zoom. The order is the same every time, so blocks only make room; the entity
+    // nearest the middle of the view stays put.
+    if (reason !== "first" && (structural || unplaced) && this.blocks()) this.repack();
+    else if (unplaced || reason === "first" || (structural && reason !== "lod")) this.relayout();
     this.draw();
     if (reason === "first") {
       resolveCollisions(nodes, 6);
@@ -358,6 +365,33 @@ export class SvgRenderer extends GraphRenderer {
     return structural;
   }
 
+  repack() {
+    // before a person has moved the view, the first view keeps framing the whole graph as it folds
+    if (!this.userMoved) this.autoFrame = true;
+    const t = this.zoom.transform();
+    const { width, height } = this.zoom.rect();
+    const cx = (width / 2 - t.x) / t.k;
+    const cy = (height / 2 - t.y) / t.k;
+    let anchor = null;
+    let best = Infinity;
+    for (const [id, h] of this.gravHomes) {
+      const d = Math.hypot(h.x - cx, h.y - cy);
+      if (d < best) { best = d; anchor = id; }
+    }
+    const was = anchor ? { ...this.gravHomes.get(anchor) } : null;
+    this.relayout(true);
+    const now = anchor ? this.gravHomes.get(anchor) : null;
+    if (!was || !now) return;
+    const dx = was.x - now.x;
+    const dy = was.y - now.y;
+    for (const [id, h] of this.gravHomes) this.gravHomes.set(id, { x: h.x + dx, y: h.y + dy });
+    for (const [k, h] of this.regionHomes ?? []) this.regionHomes.set(k, { x: h.x + dx, y: h.y + dy });
+    for (const n of this.nodes.values()) {
+      const h = this.homeOf(n.box);
+      n.hx = h.x; n.hy = h.y;
+    }
+  }
+
   // Gravity, solved off-screen (Oct 9): every box gravity places gets a home, and keeps it until the structure
   // changes. Boxes already placed are anchored near their homes, so a change moves what it must and little else;
   // `fresh` lays everything out anew (switching to the Gravity layout, grouping by category).
@@ -373,7 +407,7 @@ export class SvgRenderer extends GraphRenderer {
       const was = fresh ? null : prev(n);
       const fixed = !movable(n);
       const start = fixed ? this.homeOf(n.box) : was ?? { x: n.x, y: n.y };
-      return { id: n.id, kind: n.kind, w: n.w, h: n.h, oy: n.oy, tags: n.tags, groupKeys: n.groupKeys,
+      return { id: n.id, kind: n.kind, w: n.wGoal ?? n.w, h: n.hGoal ?? n.h, oy: n.oy, tags: n.tags, groupKeys: n.groupKeys,
                x: start.x, y: start.y, fixed, anchor: was };
     });
     const links = this.sim.force("link").links().map((l) => ({
@@ -388,6 +422,7 @@ export class SvgRenderer extends GraphRenderer {
       ? hierarchicalLayout(copies, links, groups)
       : staticLayout(copies, links, { groups, groupByCategory: this.opts.groupByCategory });
     if (placed.regions) this.regionHomes = placed.regions;
+    if (placed.primary) this.homeRegion = placed.primary;
     for (const n of nodes) {
       const p = placed.get(n.id);
       if (!p || !movable(n)) continue;
@@ -633,7 +668,8 @@ export class SvgRenderer extends GraphRenderer {
   // isolate (Oct 11): show only `keep` (a set of entity ids), laid out fresh; null brings the full graph back where it was
   setIsolation(iso) {
     if (!this.fullView) return;
-    if (iso && !this.isolated) this.savedHomes = { grav: new Map(this.gravHomes), regions: this.regionHomes, mode: this.mode };
+    if (iso && !this.isolated) this.savedHomes = { grav: new Map(this.gravHomes), regions: this.regionHomes, mode: this.mode,
+      homeRegion: this.homeRegion };
     // an isolated graph is always laid out by the hierarchy, even over the hand-placed Figure 1
     if (iso) this.mode = "gravity";
     else if (this.savedHomes) this.mode = this.savedHomes.mode;
@@ -652,6 +688,7 @@ export class SvgRenderer extends GraphRenderer {
     } else if (this.savedHomes) {
       this.gravHomes = this.savedHomes.grav;
       this.regionHomes = this.savedHomes.regions;
+      this.homeRegion = this.savedHomes.homeRegion;
       this.ui.expanded.clear();
     }
     this.recompute(iso ? "first" : "structure");
@@ -1811,6 +1848,29 @@ export class SvgRenderer extends GraphRenderer {
     });
   }
 
+  // DECISION (Oct 11): in the hierarchy's layout a superentity's outline goes around its own block, the members whose
+  // home it is (or the home of one of its parts), so regions stay separate and orderly; a member that lives in another
+  // block still shows its membership by its owner stripe. A member with no home yet (added since the layout) counts
+  // everywhere it belongs, and so does every member of a superentity that has no home members at all.
+  // superentities are drawn as blocks when the hierarchy placed them (each has its own region) and they form a tree:
+  // no superentity is a part of two others. A world where parts are shared (the oil demo's composites) cannot be
+  // drawn as nested blocks without overlap, so it keeps traced outlines.
+  blocks() {
+    if (this.mode !== "gravity" || !this.homeRegion?.size || this.opts.groupByCategory) return false;
+    const live = new Set(this.groupsInfo.groups.filter((g) => !g.transient).map((g) => g.key));
+    return this.groupsInfo.groups.every((g) => g.transient || g.parents.filter((k) => live.has(k)).length <= 1);
+  }
+
+  outlineMembers(g) {
+    const homes = this.blocks() ? this.homeRegion : null;
+    if (!homes || !homes.size) return g.members;
+    const within = new Set([g.key]);
+    const walk = (k) => { for (const c of this.groupsInfo.byKey.get(k)?.children ?? []) if (!within.has(c)) { within.add(c); walk(c); } };
+    walk(g.key);
+    const own = [...g.members].filter((m) => !homes.has(m) || within.has(homes.get(m)));
+    return own.length ? new Set(own) : g.members;
+  }
+
   // the world-space box the view shows, grown by `margin` of its size on each side
   viewWorld(margin = 0) {
     const t = this.zoom.transform();
@@ -1834,7 +1894,7 @@ export class SvgRenderer extends GraphRenderer {
     this.contourStale = false;
     for (const g of this.openGroups ?? []) {
       const ids = new Set();
-      for (const m of g.members) {
+      for (const m of this.outlineMembers(g)) {
         const b = this.model.boxOfEntity(m);
         if (b) ids.add(b);
       }
@@ -1844,8 +1904,10 @@ export class SvgRenderer extends GraphRenderer {
         for (const r of members) { x0 = Math.min(x0, r.x0); y0 = Math.min(y0, r.y0); x1 = Math.max(x1, r.x1); y1 = Math.max(y1, r.y1); }
         if (x1 < v.x0 || x0 > v.x1 || y1 < v.y0 || y0 > v.y1) { this.contourStale = true; continue; }
       }
-      const obstacles = nodes.filter((n) => !ids.has(n.id)).map((n) => rects.get(n.id));
-      const c = hullContourCached(g.key, members, obstacles, PAD + NEST_PAD * g.level);
+      const pad = PAD + NEST_PAD * g.level;
+      // the hierarchy's layout gives every superentity a block of its own: draw it as one (Oct 11)
+      const c = this.blocks() ? blockHull(members, pad)
+        : hullContourCached(g.key, members, nodes.filter((n) => !ids.has(n.id)).map((n) => rects.get(n.id)), pad);
       this.contours.set(g.key, c);
     }
     this.hullSel?.each((g, i, els) => {

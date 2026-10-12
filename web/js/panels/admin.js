@@ -261,8 +261,10 @@ export function initAdmin({ renderer, actions }) {
       <div class="seg" role="group">${[0.5, 1, 2, 4].map((x) => `<button data-speed="${x}" aria-pressed="${store.settings.speed === x}">${x}×</button>`).join("")}</div>
       <div class="toggles"><label class="tog"><input type="checkbox" data-tog="reduced" ${store.settings.reducedMotion ? "checked" : ""}> Reduced motion</label></div>
       <h4>Review</h4>
-      <div class="seg" role="group"><button data-policy="default" aria-pressed="${pol === "default"}">Structural changes wait</button>
-        <button data-policy="auto_approve_all" aria-pressed="${pol === "auto_approve_all"}">Approve all</button></div>
+      <p class="small muted">What waits for a person before it changes the model.</p>
+      <div class="seg" role="group"><button data-policy="review_all" aria-pressed="${pol === "review_all"}" title="Every change, data included, waits for review">Everything waits</button>
+        <button data-policy="default" aria-pressed="${pol === "default"}" title="New structure, text translations, and large or low-confidence changes wait; the rest applies">Structural changes wait</button>
+        <button data-policy="auto_approve_all" aria-pressed="${pol === "auto_approve_all"}" title="Every change applies as it arrives; still logged and reversible by version">Auto-accept</button></div>
       <h4>Scenario</h4>
       <div class="row">${(store.scenarios ?? []).map((s) => `<button class="small" data-load="${esc(s.id)}">Load ${esc(s.title)}</button>`).join("")}</div>
       <h4>Panels</h4>

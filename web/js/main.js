@@ -698,9 +698,15 @@ async function boot() {
   async function guarded(fn) {
     try { return await fn(); } catch (err) { toast(errorText(err), "err"); return null; }
   }
+  // the review policy (Admin › Settings › Review): every change waits, only structural changes wait, or auto-accept
   const setPolicy = (p) => guarded(async () => {
-    store.config = { ...(store.config ?? {}), ...(await api.setReviewPolicy(p)) };
-    toast(p === "default" ? "Structural changes now wait for your review." : "Everything is approved automatically.");
+    const waiting = (store.proposals ?? []).filter((pv) => pv.proposal.status === "pending").length;
+    const also = p === "auto_approve_all" && waiting > 0
+      && window.confirm(`Auto-accept from now on. Also approve the ${waiting} change${waiting === 1 ? "" : "s"} waiting now?`);
+    store.config = { ...(store.config ?? {}), ...(await api.setReviewPolicy(p, also)) };
+    if (also) await refreshGraph();
+    toast({ review_all: "Every change now waits for your review.", default: "Structural changes now wait for your review; the rest applies at once.",
+            auto_approve_all: also ? `Auto-accept is on, and the ${waiting} waiting were approved.` : "Auto-accept is on: changes apply as they arrive." }[p]);
   });
   const setLayout = (mode) => {
     store.settings.layout = mode;

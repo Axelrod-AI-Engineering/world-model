@@ -30,7 +30,7 @@ const q = (s) => encodeURIComponent(s);
 export const api = {
   health: () => get("/health"),
   config: () => get("/config"),
-  setReviewPolicy: (policy) => patch("/config/review", { policy }),
+  setReviewPolicy: (policy, approvePending = false) => patch("/config/review", { policy, approve_pending: approvePending }),
   state: (version) => get(version == null ? "/state" : `/state?version=${version}`),
   versions: () => get("/versions"),
   entity: (id) => get(`/entities/${q(id)}`),

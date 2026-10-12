@@ -11,7 +11,7 @@
 // entity in several superentities is placed in one of them (the most specific, with the most interactions inside);
 // the others' outlines reach to it.
 
-const GAP = { entity: [22, 14], region: [40, 32] };   // [x, y] gaps between items
+const GAP = { entity: [22, 14], region: [72, 56] };   // [x, y] gaps between items; regions stand well apart (Oct 11)
 const PAD = 30;                                          // room around a region's contents for its outline and tab
 
 export function hierarchicalLayout(nodes, links, groups, { center = { x: 600, y: 440 } } = {}) {
@@ -34,6 +34,17 @@ export function hierarchicalLayout(nodes, links, groups, { center = { x: 600, y:
     const leafmost = holders.filter((g) => !holders.some((h) => h !== g && g.children.includes(h.key)));
     leafmost.sort((a, b) => linksIn(b, n.id) - linksIn(a, n.id) || a.members.size - b.members.size || (a.key < b.key ? -1 : 1));
     if (leafmost.length) primary.set(n.id, leafmost[0].key);
+  }
+  // DECISION (Oct 11): every superentity keeps a home. One whose members all live elsewhere would vanish as a region
+  // (its outline is drawn around its home members only), so it takes the member most joined to it from a region that
+  // can spare one; the order is fixed, so the result is the same every time.
+  const homes = () => { const c = new Map(); for (const k of primary.values()) c.set(k, (c.get(k) ?? 0) + 1); return c; };
+  for (const g of [...live].sort((a, b) => a.members.size - b.members.size || (a.key < b.key ? -1 : 1))) {
+    if (hidden(g) || g.children.some((c) => gByKey.has(c)) || homes().get(g.key)) continue;
+    const count = homes();
+    const spare = [...g.members].filter((m) => primary.has(m) && (count.get(primary.get(m)) ?? 0) > 1)
+      .sort((a, b) => linksIn(g, b) - linksIn(g, a) || (a < b ? -1 : 1));
+    if (spare.length) primary.set(spare[0], g.key);
   }
   // the region tree: each region's items are its open parts that hold something, its own entities, and the cards of
   // its closed parts
@@ -138,6 +149,7 @@ export function hierarchicalLayout(nodes, links, groups, { center = { x: 600, y:
   layoutRegion("");
   place("", center.x, center.y);
   result.regions = regionCenters;
+  result.primary = primary;             // entity -> its home region (outlines are drawn around their homes)
   return result;
 }
 
