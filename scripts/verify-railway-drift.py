@@ -1,4 +1,4 @@
-"""Reject drift outside Core's three documented Railway persistence gaps."""
+"""Reject drift outside the two documented Railway persistence gaps (the service source is declared in IaC)."""
 
 import json
 import sys
@@ -9,7 +9,6 @@ def verify(plan):
     if not plan.get("ok") or target.get("projectId") != "ee19a1df-2ce5-4193-932a-6139f034bbce" or target.get("environmentName") != "dev":
         raise ValueError("Expected a successful Axelrod dev plan")
     allowed = {
-        'source.type ("github" → "empty")',
         'deploy.restartPolicyType (null → "ON_FAILURE")',
         'deploy.sleepApplication (null → false)',
     }

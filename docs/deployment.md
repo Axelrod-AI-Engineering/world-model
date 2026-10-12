@@ -30,29 +30,33 @@ Railway requires every IaC repository that targets an environment with named par
 
 ## Releasing
 
-The toolchain is pinned. The IaC SDK `railway@3.13.1` is in `package-lock.json`. The Railway CLI `5.64.2` and Node 22 are pinned in the commands below, because named partials and native TypeScript evaluation need newer tooling than Core's CLI 5.33.0 and Node 20.
+**A merge to `main` is a release.** The `world-model` service is linked to this repository's `main` branch (`.railway/railway.ts`, `source: github(...)`), so Railway builds the `Dockerfile` and deploys every push to `main` on its own. There is no upload step. Work on a branch, open a pull request, and merge it when it is ready to go live. The **Tests** workflow (`.github/workflows/tests.yml`) runs the unit tests on every pull request. It does not hold back a deploy; Railway's check suites are off.
+
+**Changing the infrastructure** (`.railway/railway.ts`: the service's settings, variables, volume, domain, or source) needs a Railway Admin on the Axelrod project. Apply it by hand, after review:
 
 ```bash
 npm ci
 npx --yes -p node@22 -p @railway/cli@5.64.2 railway link \
   --project ee19a1df-2ce5-4193-932a-6139f034bbce --environment dev --service world-model
 npx --yes -p node@22 -p @railway/cli@5.64.2 railway config plan
-# Review the plan: only resources owned by world-model may change, and nothing may be destroyed.
+# Review the plan: only world-model may change, nothing may be destroyed, and source.repo must stay linked.
 npx --yes -p node@22 -p @railway/cli@5.64.2 railway config apply --yes
-npx --yes -p node@22 -p @railway/cli@5.64.2 railway up \
-  --project ee19a1df-2ce5-4193-932a-6139f034bbce --environment dev --service world-model --detach
 bash scripts/persist-railway-fields.sh
 npx --yes -p node@22 -p @railway/cli@5.64.2 railway config plan --json > /tmp/world-model-drift.json
 python3 scripts/verify-railway-drift.py /tmp/world-model-drift.json
 ```
 
-**Known leftovers.** Like Core, Railway currently leaves `source.type` in the plan after a CLI upload, and does not store `restartPolicyType` or `sleepApplication` in the environment config. `persist-railway-fields.sh` sets the last two directly. The drift verifier admits only these exact leftovers. Do not apply the post-upload `source.type` change.
+The toolchain is pinned: the IaC SDK `railway@3.13.1` in `package-lock.json`, the Railway CLI `5.64.2`, and Node 22. Named partials and native TypeScript evaluation need newer tooling than Core's CLI 5.33.0 and Node 20.
+
+**Known leftovers.** Railway does not store `restartPolicyType` or `sleepApplication` in the environment config, so every plan shows them. `persist-railway-fields.sh` sets them directly, and the drift verifier admits only these two. The source is declared, so a plan that would unlink the repository (`source.repo → null`) is drift, and the verifier rejects it.
+
+**Roles.** A Railway **Deployer** cannot deploy from the CLI, change settings, or read logs. A **Member** can deploy, and an **Admin** can also plan and apply infrastructure. Deploys from `main` need no role at all: Railway runs them on its own.
 
 ## Verifying a release
 
 An upload or a successful build alone is not a healthy deployment. Check all of these:
 
-1. The deployment's status is `SUCCESS`.
+1. The deployment's status is `SUCCESS`, and `GET /api/health` reports the commit you merged as `build` (from Railway's `RAILWAY_GIT_COMMIT_SHA`).
 2. Its metadata confirms restarts `ON_FAILURE` with a retry limit of 2, App Sleep off, the health check at `/api/health`, and the volume at `/app/var`.
 3. Over Railway SSH, `http://127.0.0.1:8080/api/health`, `/`, and `/api/state` all answer.
 
