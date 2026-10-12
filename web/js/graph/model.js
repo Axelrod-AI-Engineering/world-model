@@ -105,6 +105,8 @@ export function computeModel(view, groupsInfo, ui) {
   const visible = new Set();
   const host = new Map();
   for (const e of entities) {
+    // a staged review's transmission lane keeps its entities on view, whatever is folded
+    if (ui.lane?.has(e.id)) { visible.add(e.id); continue; }
     const gs = (ofEntity.get(e.id) ?? []).filter((k) => !byKey.get(k).transient);
     // Oct 11: an open superentity keeps an entity on view only if it holds it directly, not through one of its parts;
     // so folding a part hides that part's members even while the superentity around it stays open

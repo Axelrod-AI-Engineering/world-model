@@ -1100,6 +1100,24 @@ g.edge.staged-new path.line { stroke: var(--real-line); stroke-width: 2.8 !impor
   filter: drop-shadow(0 0 3px rgba(124, 100, 196, 0.6)); }
 g.edge.staged-retired path.line { stroke: var(--down); stroke-width: 2.4 !important; stroke-dasharray: 3 4; opacity: 0.9; }
 g.edge.staged-path path.line { stroke-width: 3.4 !important; }
+
+/* the transmission lane (Oct 11): a staged review's path, lined up by order above the rest of the world model, which
+   stays in frame but steps back */
+g.lane rect.lane-band { fill: rgba(255, 253, 248, 0.92); stroke: var(--real-line); stroke-width: 1.4; stroke-dasharray: 7 5; }
+g.lane text.lane-title { font: 700 17px var(--font-head); fill: var(--real-ink); }
+g.lane text.lane-col { font: 600 12px var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; fill: var(--ink-2); }
+g.lane text.lane-col.o0 { fill: var(--o0-line); }
+g.lane text.lane-col.o1 { fill: #C0835C; }
+g.lane text.lane-col.o2 { fill: #A88E3C; }
+g.lane text.lane-col.o3 { fill: #B57A8D; }
+g.lane text.lane-arrow { font: 600 16px var(--font-mono); fill: var(--ink-3); }
+body.laned g.pill:not(.in-lane), body.laned g.card-super { opacity: 0.6; transition: opacity 0.2s; }
+body.laned g.edge:not(.staged-path):not(.staged-new):not(.staged-retired) path.line { opacity: 0.3; }
+body.laned g.edge.staged-path path.line { stroke: var(--real-line); }
+/* while the lane is up, the canvas carries only the review: the lane's colored headings replace the staged key, and
+   detail, color, and drawing wait until it is decided */
+body.laned #staged-banner, body.laned #canvas-controls .seg[aria-label="Detail"], body.laned #canvas-controls .ck-wrap,
+body.laned #btn-draw { display: none !important; }
 g.card-super.staged-new rect { stroke: var(--real-line); stroke-width: 2.6; stroke-dasharray: 8 4;
   filter: drop-shadow(0 0 5px rgba(124, 100, 196, 0.5)); }
 g.card-super.staged-retired rect { stroke: var(--down); stroke-width: 2.4; stroke-dasharray: 4 3; }
@@ -1183,6 +1201,21 @@ g.pill.staged-new rect.body, g.edge.staged-new path.line, g.card-super.staged-ne
 .rv-plain li { padding-left: 12px; text-indent: -12px; }
 .rv-plain li::before { content: "· "; color: var(--ink-3); }
 .rv-path { margin-top: 1px; }
+/* each memory says what it is (Oct 11) */
+.rv-lede { margin: 0 0 6px; font-size: 12px; line-height: 1.45; color: var(--ink-2); }
+.rv-sub { margin: -2px 0 6px; }
+.rv-fold, .rv-recall { list-style: none; margin: 0; padding: 0; }
+.rv-fold li { font-size: 12.5px; line-height: 1.4; padding: 3px 0 3px 10px; border-left: 2px solid color-mix(in srgb, var(--sl) 70%, transparent); margin: 2px 0; }
+.rv-recall li { display: flex; align-items: center; gap: 8px; font-size: 12.5px; padding: 2px 0; }
+.rv-recall .rc-name { flex: 1 1 auto; min-width: 0; }
+.rv-recall .rc-bar { flex: none; width: 64px; height: 6px; border-radius: 3px; background: var(--rule-soft); overflow: hidden; }
+.rv-recall .rc-bar i { display: block; height: 100%; background: var(--sl, var(--ltm-line)); }
+.rv-keeps { margin: 0; }
+.rv-keeps dt { font: 600 11.5px var(--font-ui); color: var(--si, var(--ink)); margin: 8px 0 2px; }
+.rv-keeps dt:first-child { margin-top: 0; }
+.rv-keeps dt .muted { font-weight: 400; }
+.rv-keeps dd { margin: 0 0 2px 0; padding-left: 10px; font-size: 12.5px; line-height: 1.45; border-left: 2px solid color-mix(in srgb, var(--sl) 70%, transparent); }
+.rv-kind { display: inline-block; margin: 2px 2px 0 0; padding: 0 7px; border-radius: 999px; font-size: 11px; background: var(--sheet); border: 1px solid var(--rule); }
 .rv-foot { margin: 14px 0 8px; }
 .rv-actions { position: sticky; bottom: 0; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 10px 0 12px;
   background: var(--sheet); border-top: 1px solid var(--rule-soft); margin-top: 6px; }

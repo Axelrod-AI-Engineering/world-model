@@ -87,7 +87,7 @@ export class SvgRenderer extends GraphRenderer {
     const grid = installGrid(this.svg, this.defs);
     this.root = this.svg.append("g").attr("class", "root");
     this.layers = {};
-    for (const name of ["hulls", "lenses", "netlines", "edges", "tethers", "frontier", "ghosts", "fuzzy", "nodes", "tabs", "overlays"]) {
+    for (const name of ["lane", "hulls", "lenses", "netlines", "edges", "tethers", "frontier", "ghosts", "fuzzy", "nodes", "tabs", "overlays"]) {
       this.layers[name] = this.root.append("g").attr("class", `layer-${name}`);
     }
     this.layout = null;
@@ -100,6 +100,8 @@ export class SvgRenderer extends GraphRenderer {
     this.homes = new Map();
     this.gravHomes = new Map();       // homes the static gravity layout found (Oct 9); Figure 1's stay in `homes`
     this.pinnedHomes = new Map();
+    this.lane = null;             // a staged review's transmission lane (setLane): {cols, ids}
+    this.laneHomes = null;        // where the lane puts its entities
     this.groupsInfo = { groups: [], byKey: new Map(), ofEntity: new Map(), ofInstance: new Map() };
     this.model = null;
     this.subIndex = new Map();
@@ -285,7 +287,7 @@ export class SvgRenderer extends GraphRenderer {
   }
 
   // a home nothing moves: placed by hand (pinnedHomes, part of undo), or by the transmission grid's isolation (isoHomes)
-  fixedHome(id) { return this.pinnedHomes.get(id) ?? (this.isolated ? this.isoHomes?.get(id) : undefined); }
+  fixedHome(id) { return this.pinnedHomes.get(id) ?? this.laneHomes?.get(id) ?? (this.isolated ? this.isoHomes?.get(id) : undefined); }
   hasFixedHome(id) { return this.fixedHome(id) != null; }
 
   entityHome(id) {
@@ -395,6 +397,12 @@ export class SvgRenderer extends GraphRenderer {
     const dy = was.y - now.y;
     for (const [id, h] of this.gravHomes) this.gravHomes.set(id, { x: h.x + dx, y: h.y + dy });
     for (const [k, h] of this.regionHomes ?? []) this.regionHomes.set(k, { x: h.x + dx, y: h.y + dy });
+    for (const [k, h] of this.laneHomes ?? []) this.laneHomes.set(k, { x: h.x + dx, y: h.y + dy });
+    if (this.laneBox) {
+      const lb = this.laneBox;
+      this.laneBox = { ...lb, x0: lb.x0 + dx, x1: lb.x1 + dx, y0: lb.y0 + dy, y1: lb.y1 + dy, cols: lb.cols.map((c) => ({ ...c, x: c.x + dx })) };
+      this.drawLane();
+    }
     for (const n of this.nodes.values()) {
       const h = this.homeOf(n.box);
       n.hx = h.x; n.hy = h.y;
@@ -412,16 +420,19 @@ export class SvgRenderer extends GraphRenderer {
     const prev = (n) => (n.kind === "entity" ? this.gravHomes.get(n.id)
       : (() => { const pts = [...n.box.group.members].map((m) => this.gravHomes.get(m)).filter(Boolean);
         return pts.length ? { x: pts.reduce((t, q) => t + q.x, 0) / pts.length, y: pts.reduce((t, q) => t + q.y, 0) / pts.length } : null; })());
-    const copies = nodes.map((n) => {
+    // a transmission lane's entities sit in the lane, not in their blocks: the layout places everything else
+    const inLane = (n) => n.kind === "entity" && !!this.lane?.ids.has(n.id);
+    const copies = nodes.filter((n) => !inLane(n)).map((n) => {
       const was = fresh ? null : prev(n);
       const fixed = !movable(n);
       const start = fixed ? this.homeOf(n.box) : was ?? { x: n.x, y: n.y };
       return { id: n.id, kind: n.kind, w: n.wGoal ?? n.w, h: n.hGoal ?? n.h, oy: n.oy, tags: n.tags, groupKeys: n.groupKeys,
                x: start.x, y: start.y, fixed, anchor: was };
     });
+    const laneIds = new Set(nodes.filter(inLane).map((n) => n.id));
     const links = this.sim.force("link").links().map((l) => ({
       source: typeof l.source === "object" ? l.source.id : l.source, target: typeof l.target === "object" ? l.target.id : l.target,
-      significance: l.significance }));
+      significance: l.significance })).filter((l) => !laneIds.has(l.source) && !laneIds.has(l.target));
     // DECISION (Oct 11): a fresh placement follows the hierarchy (graph/layout-hier.js): regions inside regions, causes
     // left of effects, nothing overlapping. Later changes keep boxes near their homes with the gravity physics, so a
     // new entity finds its place without reshuffling the rest.
@@ -450,11 +461,104 @@ export class SvgRenderer extends GraphRenderer {
         }
       }
     }
+    this.placeLane(nodes);
     for (const n of nodes) {
       if (n.kind === "entity" && n.flow) continue;
       const h = this.homeOf(n.box);
       n.hx = h.x; n.hy = h.y;
     }
+  }
+
+  // -- the transmission lane (Oct 11) ------------------------------------------------------------------
+  // A staged review's path, on the canvas itself: the entities it moves leave their blocks and line up in a lane above
+  // the rest of the world model, one column per order (what drives it, the event's own move, then the first, second,
+  // and third order), so the ripple reads left to right while everything else stays in frame below. `lane` is
+  // {cols: [{key, label, ids}]} or null; the entities it holds are opened, and given back when it clears.
+  setLane(lane) {
+    const ids = new Set((lane?.cols ?? []).flatMap((c) => c.ids));
+    const key = lane ? lane.cols.map((c) => `${c.key}:${c.ids.join(",")}`).join("|") : "";
+    if (key === (this.lane?.key ?? "")) return;
+    if (!ids.size) lane = null;
+    if (lane && !this.lane) this.laneSaved = { expanded: new Set(this.ui.expanded), collapsed: new Set(this.ui.collapsed) };
+    this.lane = lane ? { ...lane, ids, key } : null;
+    this.laneHomes = null;
+    if (lane) {
+      for (const id of ids) this.ui.expanded.add(id);
+    } else if (this.laneSaved) {
+      this.ui.expanded = this.laneSaved.expanded;
+      this.laneSaved = null;
+    }
+    this.ui.lane = this.lane ? ids : null;
+    this.recompute("lane");
+    if (this.mode === "gravity") this.relayout(true);
+    this.draw();
+    this.sim.alpha(Math.max(this.sim.alpha(), 0.6)).restart();
+    // frame the whole world model, lane and all, once the boxes have glided to their places
+    clearTimeout(this.laneFit);
+    this.laneFit = setTimeout(() => this.fit(this.opts.reducedMotion ? 0 : 420), this.opts.reducedMotion ? 30 : 520);
+  }
+
+  placeLane(nodes) {
+    this.laneHomes = null;
+    this.laneBox = null;
+    const lane = this.lane;
+    if (!lane) return;
+    const byId = new Map(nodes.map((n) => [n.id, n]));
+    // the rest of the world model, where the layout put it
+    let x0 = Infinity; let y0 = Infinity; let x1 = -Infinity;
+    for (const n of nodes) {
+      if (n.kind === "entity" && lane.ids.has(n.id)) continue;
+      const h = this.homeOf(n.box);
+      const w = n.wGoal ?? n.w;
+      x0 = Math.min(x0, h.x - w / 2); x1 = Math.max(x1, h.x + w / 2); y0 = Math.min(y0, h.y + n.oy);
+    }
+    if (!Number.isFinite(x0)) { x0 = 400; x1 = 800; y0 = 440; }
+    const GAP_X = 132;
+    const GAP_Y = 18;
+    const cols = lane.cols.map((c) => {
+      const ns = c.ids.map((id) => byId.get(id)).filter(Boolean);
+      return { ...c, ns, w: Math.max(150, ...ns.map((n) => n.wGoal ?? n.w)),
+               h: ns.reduce((t, n) => t + (n.hGoal ?? n.h), 0) + GAP_Y * Math.max(0, ns.length - 1) };
+    }).filter((c) => c.ns.length);
+    if (!cols.length) return;
+    const W = cols.reduce((t, c) => t + c.w, 0) + GAP_X * (cols.length - 1);
+    const H = Math.max(...cols.map((c) => c.h));
+    const top = y0 - 150 - H;
+    let x = (x0 + x1) / 2 - W / 2;
+    this.laneHomes = new Map();
+    for (const c of cols) {
+      let y = top + (H - c.h) / 2;
+      for (const n of c.ns) {
+        this.laneHomes.set(n.id, { x: x + c.w / 2, y: y - n.oy });
+        y += (n.hGoal ?? n.h) + GAP_Y;
+      }
+      c.x = x;
+      x += c.w + GAP_X;
+    }
+    this.laneBox = { x0: (x0 + x1) / 2 - W / 2 - 36, x1: (x0 + x1) / 2 + W / 2 + 36, y0: top - 64, y1: top + H + 30,
+                     cols: cols.map((c) => ({ key: c.key, label: c.label, x: c.x + c.w / 2, cls: c.cls })) };
+  }
+
+  drawLane() {
+    const b = this.lane ? this.laneBox : null;
+    const sel = this.layers.lane.selectAll("g.lane").data(b ? [b] : [], () => "lane");
+    sel.exit().transition().duration(this.opts.reducedMotion ? 0 : 160).style("opacity", 0).remove();
+    const enter = sel.enter().append("g").attr("class", "lane").style("opacity", 0);
+    enter.append("rect").attr("class", "lane-band").attr("rx", 18);
+    enter.append("text").attr("class", "lane-title").text("Transmission path");
+    enter.transition().duration(this.opts.reducedMotion ? 0 : 220).style("opacity", 1);
+    const all = enter.merge(sel);
+    all.select("rect.lane-band").attr("x", (d) => d.x0).attr("y", (d) => d.y0).attr("width", (d) => d.x1 - d.x0).attr("height", (d) => d.y1 - d.y0);
+    all.select("text.lane-title").attr("x", (d) => d.x0 + 18).attr("y", (d) => d.y0 - 12);
+    const heads = all.selectAll("text.lane-col").data((d) => d.cols.map((c) => ({ ...c, y: d.y0 + 30 })), (c) => c.key);
+    heads.exit().remove();
+    heads.enter().append("text").merge(heads).attr("class", (c) => `lane-col ${c.cls ?? ""}`)
+      .attr("x", (c) => c.x).attr("y", (c) => c.y).attr("text-anchor", "middle").text((c) => c.label);
+    // arrows between the columns' headings: the ripple runs left to right
+    const arrows = all.selectAll("text.lane-arrow").data((d) => d.cols.slice(1).map((c, i) => ({ key: c.key, x: (d.cols[i].x + c.x) / 2, y: d.y0 + 30 })), (c) => c.key);
+    arrows.exit().remove();
+    arrows.enter().append("text").merge(arrows).attr("class", "lane-arrow").attr("x", (c) => c.x).attr("y", (c) => c.y)
+      .attr("text-anchor", "middle").text("→");
   }
 
   // DECISION: in the Figure 1 layout, opening entities reflows Figure 1's grid like a table. Each row
@@ -888,6 +992,7 @@ export class SvgRenderer extends GraphRenderer {
 
   // -- drawing --------------------------------------------------------------------------------------
   draw() {
+    this.drawLane();
     this.drawHulls();
     this.drawEdges();
     this.drawFrontier();
@@ -912,6 +1017,8 @@ export class SvgRenderer extends GraphRenderer {
     const any = (d, set) => !!st && (d.ids ?? [d.id]).some((i) => set.has(i));
     const touched = (eid) => !!st && this.view.subentities.some((s) => s.entity_id === eid && st.orders.has(s.id));
     document.body.classList.toggle("staging", !!st);
+    document.body.classList.toggle("laned", !!st && !!this.laneHomes);
+    this.pillSel?.classed("in-lane", (d) => !!this.laneHomes?.has(d.id));
     this.pillSel?.classed("staged-new", (d) => !!st && st.new.has(d.id))
       .classed("staged-retired", (d) => !!st && st.retired.has(d.id))
       .classed("staged-touched", (d) => !!st && !st.new.has(d.id) && touched(d.id));
@@ -1878,13 +1985,15 @@ export class SvgRenderer extends GraphRenderer {
   }
 
   outlineMembers(g) {
+    // a transmission lane's entities are drawn in the lane, away from their superentities
+    const laned = (m) => !!this.laneHomes?.has(m);
     const homes = this.blocks() ? this.homeRegion : null;
-    if (!homes || !homes.size) return g.members;
+    if (!homes || !homes.size) return this.laneHomes ? new Set([...g.members].filter((m) => !laned(m))) : g.members;
     const within = new Set([g.key]);
     const walk = (k) => { for (const c of this.groupsInfo.byKey.get(k)?.children ?? []) if (!within.has(c)) { within.add(c); walk(c); } };
     walk(g.key);
-    const own = [...g.members].filter((m) => !homes.has(m) || within.has(homes.get(m)));
-    return own.length ? new Set(own) : g.members;
+    const own = [...g.members].filter((m) => !laned(m) && (!homes.has(m) || within.has(homes.get(m))));
+    return own.length ? new Set(own) : new Set([...g.members].filter((m) => !laned(m)));
   }
 
   // the world-space box the view shows, grown by `margin` of its size on each side
@@ -2143,6 +2252,10 @@ export class SvgRenderer extends GraphRenderer {
       // only outlines drawn now (an isolated view, or a fold, leaves old ones behind)
       if (!c || this.model?.state?.get(key) !== "open") continue;
       x0 = Math.min(x0, c.bbox.x0); y0 = Math.min(y0, c.bbox.y0 - 12); x1 = Math.max(x1, c.bbox.x1); y1 = Math.max(y1, c.bbox.y1);
+    }
+    if (this.lane && this.laneBox) {
+      const b = this.laneBox;
+      x0 = Math.min(x0, b.x0); y0 = Math.min(y0, b.y0 - 28); x1 = Math.max(x1, b.x1); y1 = Math.max(y1, b.y1);
     }
     // tabs can sit past an outline's end
     for (const t of this.tabRects ?? []) {
