@@ -26,6 +26,7 @@ from starlette.responses import HTMLResponse, PlainTextResponse, RedirectRespons
 
 COOKIE = "axelrod_session"
 SESSION_DAYS = 14
+KDF_ROUNDS = 200_000              # PBKDF2 rounds for the session signing key
 LOGIN_PAGE = Path(__file__).with_name("login.html")
 
 
@@ -64,9 +65,10 @@ class BasicAuthMiddleware:
             raise RuntimeError("WORLD_MODEL_LOGINS needs the main Basic Auth login as well")
         self.logins = [(self.username, self.password), *((x.username, x.password) for x in self.extra)]
         # DECISION: the signing key is WORLD_MODEL_SESSION_SECRET when set, else derived from every login's password,
-        # so sessions survive a restart and changing any password signs everyone out
+        # so sessions survive a restart and changing any password signs everyone out. It is derived with PBKDF2 (a
+        # slow key-derivation function, as anything made from passwords should be), once, when the server starts.
         secret = os.environ.get("WORLD_MODEL_SESSION_SECRET") or "|".join(f"{u}:{p}" for u, p in self.logins)
-        self.key = hashlib.sha256(("axelrod-session|" + secret).encode()).digest()
+        self.key = hashlib.pbkdf2_hmac("sha256", secret.encode(), b"axelrod-world-model-session", KDF_ROUNDS)
 
     # -- credentials ------------------------------------------------------------------------------------------------
     def check(self, username: bytes, password: bytes) -> str | None:
