@@ -11,7 +11,7 @@ import yaml
 from fastapi import APIRouter, Body, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict
 
-from axelrod_wm.api.app import AppState
+from axelrod_wm.api.app import AppState, state_for
 from axelrod_wm.api.views import (
     entity_view,
     forecast_view,
@@ -38,7 +38,7 @@ router = APIRouter(prefix="/api")
 
 
 def S(request: Request) -> AppState:
-    return request.app.state.axelrod
+    return state_for(request.app, request.scope)
 
 
 def _json(model: Any) -> Any:

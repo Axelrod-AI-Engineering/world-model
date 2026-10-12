@@ -88,3 +88,51 @@ def test_local_demo_without_credentials_remains_available(monkeypatch):
         monkeypatch.delenv(name, raising=False)
     middleware = BasicAuthMiddleware(None)
     assert not middleware.username
+
+
+# -- logins that open their own scenario (WORLD_MODEL_LOGINS) -------------------------------------------------------
+@pytest.fixture
+def logins_client(monkeypatch):
+    monkeypatch.setenv("WORLD_MODEL_REQUIRE_BASIC_AUTH", "1")
+    monkeypatch.setenv("WORLD_MODEL_BASIC_AUTH_USERNAME", "manav")
+    monkeypatch.setenv("WORLD_MODEL_BASIC_AUTH_PASSWORD", "test-password")
+    monkeypatch.setenv("WORLD_MODEL_LOGINS", "emily:other-password:emily_demo")
+
+    async def page(request):
+        return PlainTextResponse(str(request.scope.get("axelrod_login")))
+
+    app = Starlette(routes=[Route("/{path:path}", page)])
+    app.add_middleware(BasicAuthMiddleware)
+    with TestClient(app) as c:
+        yield c
+
+
+def test_each_login_is_named_in_the_scope(logins_client):
+    assert logins_client.get("/", headers=header()).text == "manav"
+    assert logins_client.get("/", headers=header("emily", "other-password")).text == "emily"
+    # one login's password does not open another
+    assert logins_client.get("/", headers=header("emily", "test-password")).status_code == 401
+    assert logins_client.get("/", headers=header("manav", "other-password")).status_code == 401
+
+
+@pytest.mark.parametrize("raw", ["emily:pw", "emily::emily_demo", ":pw:emily_demo"])
+def test_malformed_logins_fail_closed(monkeypatch, raw):
+    monkeypatch.setenv("WORLD_MODEL_BASIC_AUTH_USERNAME", "manav")
+    monkeypatch.setenv("WORLD_MODEL_BASIC_AUTH_PASSWORD", "test-password")
+    monkeypatch.setenv("WORLD_MODEL_LOGINS", raw)
+    with pytest.raises(RuntimeError):
+        BasicAuthMiddleware(lambda *a: None)
+
+
+def test_each_login_serves_its_own_scenario(monkeypatch, tmp_path):
+    from axelrod_wm.api.app import create_app
+    from axelrod_wm.repo.snapshots import MemoryBackend
+
+    monkeypatch.chdir(tmp_path)          # the extra login's storage goes under var/
+    monkeypatch.setenv("WORLD_MODEL_BASIC_AUTH_USERNAME", "manav")
+    monkeypatch.setenv("WORLD_MODEL_BASIC_AUTH_PASSWORD", "test-password")
+    monkeypatch.setenv("WORLD_MODEL_LOGINS", "emily:other-password:emily_demo")
+    app = create_app(scenario="small_demo", storage=MemoryBackend(), trace_dir=None)
+    with TestClient(app) as c:
+        assert c.get("/api/sim/status", headers=header()).json()["scenario_id"] == "small_demo"
+        assert c.get("/api/sim/status", headers=header("emily", "other-password")).json()["scenario_id"] == "emily_demo"
