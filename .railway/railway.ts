@@ -1,4 +1,4 @@
-import { defineRailway, preserve, project, service, volume } from "railway/iac";
+import { defineRailway, github, preserve, project, service, volume } from "railway/iac";
 
 // This repository owns only its own service in the shared Axelrod project.
 export const partial = "world-model";
@@ -14,6 +14,9 @@ export default defineRailway((ctx) => {
   });
   const app = service("world-model", {
     root: ".",
+    // Railway builds and deploys every push to main from this repository (Oct 11). Declared here so an apply keeps
+    // the link instead of removing it.
+    source: github("Axelrod-AI-Engineering/world-model", { branch: "main", rootDirectory: ".", checkSuites: false }),
     build: { builder: "DOCKERFILE", dockerfilePath: "Dockerfile" },
     deploy: {
       healthcheckPath: "/api/health",

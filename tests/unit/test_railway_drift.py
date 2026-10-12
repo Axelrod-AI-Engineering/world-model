@@ -37,6 +37,9 @@ def test_clean_and_known_persistence_gaps():
     {"kind": "resource.delete", "severity": "destructive", "summary": "Delete world-model"},
     {"kind": "resource.update", "severity": "safe", "summary": "Update web source.type",
      "details": ['source.type ("github" → "empty")']},
+    # unlinking this service from its repository is never a leftover: the source is declared in IaC
+    {"kind": "resource.update", "severity": "safe", "summary": "Update world-model source.repo, source.type",
+     "details": ['source.repo ("Axelrod-AI-Engineering/world-model" → null)', 'source.type ("github" → "empty")']},
     {"kind": "resource.update", "severity": "safe", "summary": "Update world-model volume",
      "details": ["volume.mountPath"]},
 ])
