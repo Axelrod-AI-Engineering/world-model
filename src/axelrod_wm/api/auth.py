@@ -5,8 +5,10 @@ logins that each open their own, as comma-separated `username:password:scenario`
 her demo). The credentials live in the environment (Railway), never in the repository; there is no user database.
 
 A browser signs in on /login (a form, Oct 12; it replaced the browser's Basic Auth prompt) and gets a session cookie:
-the username and an expiry, signed with HMAC-SHA256. /logout clears it. Scripts and tests may still send a Basic
-Authorization header. A request's login is put in its scope (`axelrod_login`), and the app serves that login's engine
+the username and an expiry, signed with HMAC-SHA256. /logout clears it. The session is the only credential: a script
+signs in by posting to /login and keeping the cookie. (Oct 12: a Basic Authorization header is no longer accepted. A
+browser that once answered the old Basic prompt keeps sending that header on its own, so Sign out could not sign it
+out.) A request's login is put in its scope (`axelrod_login`), and the app serves that login's engine
 (api/app.py). Pages without a session are sent to /login; the API and the WebSocket answer 401 and close instead.
 """
 
@@ -82,16 +84,6 @@ class BasicAuthMiddleware:
                 found = user
         return found
 
-    def basic(self, headers: dict) -> str | None:
-        try:
-            scheme, token = headers.get(b"authorization", b"").split(b" ", 1)
-            if scheme.lower() != b"basic":
-                return None
-            username, password = base64.b64decode(token, validate=True).split(b":", 1)
-        except (ValueError, binascii.Error):
-            return None
-        return self.check(username, password)
-
     # -- the session cookie -----------------------------------------------------------------------------------------
     def sign(self, username: str) -> str:
         body = f"{username}|{int(time.time()) + SESSION_DAYS * 86400}"
@@ -115,9 +107,8 @@ class BasicAuthMiddleware:
         return None
 
     def authorized(self, scope) -> str | None:
-        """The username a request is signed in as (session cookie or Basic header), or None."""
-        headers = dict(scope.get("headers", []))
-        return self.session(headers) or self.basic(headers)
+        """The username a request is signed in as (its session cookie), or None."""
+        return self.session(dict(scope.get("headers", [])))
 
     @staticmethod
     def secure(scope) -> bool:

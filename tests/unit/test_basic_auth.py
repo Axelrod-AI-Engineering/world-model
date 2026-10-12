@@ -42,7 +42,8 @@ def test_all_content_requires_auth(client, path):
     assert response.status_code == 401
     # no Basic challenge: a browser never shows its own login prompt, it gets the sign-in page instead
     assert "WWW-Authenticate" not in response.headers
-    assert client.get(path, headers=header()).status_code == 200
+    sign_in(client)
+    assert client.get(path).status_code == 200
 
 
 @pytest.mark.parametrize("authorization", ["Basic bad", "Bearer token", "Basic ////", "Basic Og=="])
@@ -51,8 +52,9 @@ def test_malformed_credentials_fail_closed(client, authorization):
 
 
 def test_wrong_credentials_and_mutations(client):
-    assert client.get("/", headers=header(password="wrong")).status_code == 401
-    assert client.get("/", headers=header(username="wrong")).status_code == 401
+    assert sign_in(client, password="wrong").status_code == 401
+    assert sign_in(client, username="wrong").status_code == 401
+    assert client.get("/").status_code == 401
     assert client.post("/api/sim/play").status_code == 401
     assert client.post("/api/health").status_code == 401
     assert client.get("/api/health").status_code == 200
@@ -62,8 +64,19 @@ def test_websocket_requires_same_credentials(client):
     with pytest.raises(WebSocketDisconnect) as error, client.websocket_connect("/ws"):
         pass
     assert error.value.code == 1008
-    with client.websocket_connect("/ws", headers=header()) as ws:
+    sign_in(client)
+    with client.websocket_connect("/ws") as ws:
         assert ws.receive_text() == "protected"
+
+
+def test_a_basic_header_is_not_a_credential(client):
+    # Oct 12: a browser that once answered the old Basic prompt keeps sending this header by itself; it must neither
+    # sign anyone in nor keep them signed in after Sign out
+    assert client.get("/api/state", headers=header()).status_code == 401
+    sign_in(client)
+    assert client.get("/api/state", headers=header()).status_code == 200
+    client.get("/logout", follow_redirects=False)
+    assert client.get("/api/state", headers=header()).status_code == 401
 
 
 def test_required_auth_rejects_missing_credentials(monkeypatch):
@@ -109,11 +122,15 @@ def logins_client(monkeypatch):
 
 
 def test_each_login_is_named_in_the_scope(logins_client):
-    assert logins_client.get("/", headers=header()).text == "manav"
-    assert logins_client.get("/", headers=header("emily", "other-password")).text == "emily"
+    sign_in(logins_client)
+    assert logins_client.get("/").text == "manav"
+    logins_client.get("/logout")
+    sign_in(logins_client, "emily", "other-password")
+    assert logins_client.get("/").text == "emily"
+    logins_client.cookies.clear()
     # one login's password does not open another
-    assert logins_client.get("/", headers=header("emily", "test-password")).status_code == 401
-    assert logins_client.get("/", headers=header("manav", "other-password")).status_code == 401
+    assert sign_in(logins_client, "emily", "test-password").status_code == 401
+    assert sign_in(logins_client, "manav", "other-password").status_code == 401
 
 
 @pytest.mark.parametrize("raw", ["emily:pw", "emily::emily_demo", ":pw:emily_demo"])
@@ -135,8 +152,11 @@ def test_each_login_serves_its_own_scenario(monkeypatch, tmp_path):
     monkeypatch.setenv("WORLD_MODEL_LOGINS", "emily:other-password:emily_demo")
     app = create_app(scenario="small_demo", storage=MemoryBackend(), trace_dir=None)
     with TestClient(app) as c:
-        assert c.get("/api/sim/status", headers=header()).json()["scenario_id"] == "small_demo"
-        assert c.get("/api/sim/status", headers=header("emily", "other-password")).json()["scenario_id"] == "emily_demo"
+        sign_in(c)
+        assert c.get("/api/sim/status").json()["scenario_id"] == "small_demo"
+        c.cookies.clear()
+        sign_in(c, "emily", "other-password")
+        assert c.get("/api/sim/status").json()["scenario_id"] == "emily_demo"
 
 
 # -- the sign-in page and its session cookie (Oct 12) --------------------------------------------------------------
