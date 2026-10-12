@@ -52,4 +52,4 @@ The full demo runs on Railway's `dev` environment at **https://world-model-dev.u
 
 Inside the demo, **How it works** (`H`) explains the model itself: the five stages of learning and the six of inference, each with its flowchart; the literature review; and the implementation.
 
-Videos: a two-minute devlog ([docs/media/axelrod-devlog-2min.mp4](docs/media/axelrod-devlog-2min.mp4)) and a one-minute wordless tour of learning ([docs/media/axelrod-learning-60s.mp4](docs/media/axelrod-learning-60s.mp4)).
+Videos (a two-minute devlog, a one-minute tour of learning, and the external trailer of Emily's demo) are kept out of the repository: ask the team for them. Locally they go in `docs/media/`, which is gitignored, and [scripts/video](scripts/video/README.md) records and cuts them.
