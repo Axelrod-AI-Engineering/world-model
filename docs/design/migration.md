@@ -4,30 +4,7 @@ The code is close to the design: the slots, contracts, flowcharts, one writer, a
 
 ## Where the code is today
 
-About 28.7k lines of Python in `src/axelrod_wm` and 13.8k lines of JavaScript in `web/js`.
-
-| Package today | Becomes | Change |
-|---|---|---|
-| `model/` | M02 model | Gains `events/`, `Forecast`; loses `ids`, `serialization` (→ core) and `PosteriorUpdater` (→ dynamics) |
-| `events/` | M02 model | Merged |
-| `trace.py`, `engine/registry.py`, `engine/rng.py`, `model/ids.py`, `model/serialization.py` | M01 foundation (`core/`) | Moved |
-| `engine/interfaces.py`, `engine/contracts.py`, and scattered ABCs | M01 foundation (`ports/`) | Gathered |
-| `memory/` | M03 memory | Loses `SuperInteractionBuilder` (→ M09), the frontier ABCs (→ ports), `open_world.py` (→ views); `ChannelState` stays, its import of `dynamics.kernels` goes |
-| `repo/` | M04 repo | Gains `Branch`, PROV fields, and `RecordStore`; loses `Proposal` and `ReviewPolicy` (→ services and ports) |
-| `intake/`, `sim/imports.py` | M05 intake | `ImportRunner` comes in; the imports of `sim/` go |
-| `shared/`, `inference/transmission.py`, `inference/paths.py`, `abduction.bind` | M06 shared read | Transmission and binding come in |
-| `dynamics/` | M07 dynamics | Gains `PosteriorUpdater`; stops importing `memory.working` at module scope |
-| `learning/working_memory.py`, `fold.py`, `kernel_learning.py`, `inference/voi.py` | M08 learning · WM | Regrouped |
-| `learning/long_term.py`, `generalize.py`, `frontier_test.py`, `consolidate.py`, `abduction.count`, `structural.py` | M09 learning · LTM | Regrouped |
-| `inference/` (rest) | M10 inference | Loses voi, decisions, transmission, paths |
-| `evaluation/`, `inference/decisions.py` | M11 evaluation | Decisions come in |
-| `engine/engine.py`, `config.py`, `context.py`, `defaults.py`, `initialize.py`, `learning/task.py`, `inference/task.py` (run), the day loop | M12 runtime | Composition root and orchestrators |
-| `control/` | M13 services | Split into five services |
-| `api/views.py`, `brief.py`, `find.py`, `checks.py`, `control/stage.py` (views) | M14 views, API, CLI (`views/`) | Gathered |
-| — | M15 context layer | New |
-| `api/`, `cli.py` | M14 views, API, CLI | Thinned |
-| `web/` | M16 web | Split by feature |
-| `sim/` (rest) | M17 demo | Renamed; product paths leave |
+About 28.7k lines of Python and 13.8k of JavaScript. Each module spec's header lists the files it holds today and what moves in or out.
 
 ## Current cycles
 
@@ -44,22 +21,33 @@ Package-level cycles at module scope:
 With lazy imports counted, there are also api ↔ control, engine ↔ learning, inference, and shared; inference ↔ learning; and intake ↔ sim. Python tolerates these only because `engine/__init__.py` imports nothing eagerly.
 
 ```mermaid
+%% style: begin (scripts/docs/style_mermaid.py)
+%%{init: {"theme": "base", "themeVariables": {"fontSize": "14px", "primaryColor": "#FFFDF8", "primaryBorderColor": "#C9BFAF", "primaryTextColor": "#2F2A25", "lineColor": "#857C70", "textColor": "#2F2A25", "secondaryColor": "#F7F2EA", "tertiaryColor": "#FBF8F2", "edgeLabelBackground": "#F7F2EA", "clusterBkg": "#F7F2EA", "clusterBorder": "#E4DACB", "titleColor": "#665E54"}}}%%
+%% style: end
 flowchart LR
-  engine <--> dynamics
-  engine <--> memory
-  engine <--> repo
-  engine <--> intake
-  engine <--> evaluation
+  engine["engine"]:::check <--> dynamics["dynamics"]:::step
+  engine <--> memory["memory"]:::store
+  engine <--> repo["repo"]:::store
+  engine <--> intake["intake"]:::step
+  engine <--> evaluation["evaluation"]:::step
   dynamics <--> memory
-  memory <--> inference
+  memory <--> inference["inference"]:::both
   repo <--> intake
-  inference <--> shared
+  inference <--> shared["shared"]:::step
   shared <--> memory
   intake <--> shared
-  control -. lazy .-> api
-  api --> sim
-  intake -. lazy .-> sim
-  shared -. lazy .-> inference
+  control["control"]:::check -.->|lazy| api["api"]:::step
+  api --> sim["sim"]:::ext
+  intake -.->|lazy| sim
+  shared -.->|lazy| inference
+  %% style: classes and happy path
+  classDef step fill:#FFFDF8,stroke:#C9BFAF,stroke-width:1.3px,color:#2F2A25
+  classDef check fill:#F5EAC6,stroke:#D2BB72,stroke-width:1.3px,color:#2F2A25,font-weight:600
+  classDef store fill:#F7E1D3,stroke:#E0B092,stroke-width:1.3px,color:#2F2A25
+  classDef both fill:#F5E4E9,stroke:#D9A9B8,stroke-width:1.3px,color:#93465F
+  classDef ext fill:#FBF8F2,stroke:#7C64C4,stroke-width:1.3px,stroke-dasharray:2 3,color:#2F2A25
+  linkStyle 0,1,2,3,4,5,6,7,8,9,10 stroke:#C0605A,stroke-width:1.8px
+  %% style: end
 ```
 
 The back edges that cause them, and the task that cuts each one:

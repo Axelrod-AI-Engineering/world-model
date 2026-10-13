@@ -54,6 +54,9 @@ ForecastUnifier.combine(thesis, scenarios, coupled, baseline, local, networks, c
 The six stages are in [architecture.md §4](../architecture.md#4-inference-six-stages). As a sequence:
 
 ```mermaid
+%% style: begin (scripts/docs/style_mermaid.py)
+%%{init: {"theme": "base", "themeVariables": {"fontSize": "14px", "primaryColor": "#FFFDF8", "primaryBorderColor": "#C9BFAF", "primaryTextColor": "#2F2A25", "lineColor": "#857C70", "textColor": "#2F2A25", "actorBkg": "#DAD0F4", "actorBorder": "#7C64C4", "actorLineColor": "#C9BFAF", "signalColor": "#857C70", "labelBoxBkgColor": "#F5EAC6", "labelBoxBorderColor": "#D2BB72", "noteBkgColor": "#F5EAC6", "noteBorderColor": "#D2BB72", "activationBkgColor": "#E1ECDF", "sequenceNumberColor": "#FFFDF8"}}}%%
+%% style: end
 sequenceDiagram
   autonumber
   actor A as Asker (Predict)

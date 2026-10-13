@@ -56,9 +56,18 @@ isolate_grid(source, method, outputs) -> GridView   # relevant (each further ord
 ## Diagram
 
 ```mermaid
+%% style: begin (scripts/docs/style_mermaid.py)
+%%{init: {"theme": "base", "themeVariables": {"fontSize": "14px", "primaryColor": "#FFFDF8", "primaryBorderColor": "#C9BFAF", "primaryTextColor": "#2F2A25", "lineColor": "#857C70", "textColor": "#2F2A25", "secondaryColor": "#F7F2EA", "tertiaryColor": "#FBF8F2", "edgeLabelBackground": "#F7F2EA", "clusterBkg": "#F7F2EA", "clusterBorder": "#E4DACB", "titleColor": "#665E54"}}}%%
+%% style: end
 flowchart LR
-  E[/"Graph update event"/] --> P["parse"] --> C["classify<br/>(kind, priors)"] --> R["recall<br/>(superentities, episodes)"] --> B["bind"] --> F["prefill"] --> A["analyze<br/>(± shock, same draws)"] --> T["transmission<br/>(order, path, peak)"]
-  T --> O[/"SharedResult"/]
+  E["Graph update event"]:::start ==> P["parse"]:::step ==> C["classify<br/>kind, priors"]:::step ==> R["recall<br/>superentities, episodes"]:::step
+  R ==> B["bind"]:::step ==> F["prefill"]:::step ==> A["analyze<br/>± shock, same draws"]:::step ==> T["transmission<br/>order, path, peak"]:::step ==> O["SharedResult"]:::done
+  %% style: classes and happy path
+  classDef start fill:#DAD0F4,stroke:#7C64C4,stroke-width:1.5px,color:#2F2A25
+  classDef step fill:#FFFDF8,stroke:#C9BFAF,stroke-width:1.3px,color:#2F2A25
+  classDef done fill:#FBF8F2,stroke:#93897C,stroke-width:1.6px,color:#2F2A25
+  linkStyle 0,1,2,3,4,5,6,7 stroke:#7C64C4,stroke-width:2.6px,color:#5B4A99
+  %% style: end
 ```
 
 ## Invariants

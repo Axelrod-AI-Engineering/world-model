@@ -5,7 +5,7 @@ Read as deep as you need. Start with the design's front page; each level links t
 | Level | Page | For |
 |---|---|---|
 | 1 | [design/README.md](design/README.md) | The system on one page: the pipeline, 17 modules, invariants, decisions, and where to read next |
-| 2 | [design/architecture.md](design/architecture.md) | Eight overview diagrams |
+| 2 | [design/architecture.md](design/architecture.md) | Seven overview diagrams, colored like the app's flowcharts, with the happy path in purple |
 | 2 | [design/cognition.md](design/cognition.md) | The cognitive framings behind memory and recall, and why they beat standard search |
 | 2 | [design/frameworks.md](design/frameworks.md) | Cognee and Semantica: what we borrow, and why the core is ours |
 | 3 | [design/modules/](design/modules/README.md) | One spec per module, with its own detail diagrams; each ready to hand to an engineer or a coding agent |

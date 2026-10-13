@@ -24,23 +24,36 @@ Why the world model organizes memory the way a cognitive architecture does, inst
 ## The difference in one picture
 
 ```mermaid
+%% style: begin (scripts/docs/style_mermaid.py)
+%%{init: {"theme": "base", "themeVariables": {"fontSize": "14px", "primaryColor": "#FFFDF8", "primaryBorderColor": "#C9BFAF", "primaryTextColor": "#2F2A25", "lineColor": "#857C70", "textColor": "#2F2A25", "secondaryColor": "#F7F2EA", "tertiaryColor": "#FBF8F2", "edgeLabelBackground": "#F7F2EA", "clusterBkg": "#F7F2EA", "clusterBorder": "#E4DACB", "titleColor": "#665E54"}}}%%
+%% style: end
 flowchart LR
   subgraph STD["Standard retrieval stack"]
     direction TB
-    D1[/"Documents"/] --> C1["Chunk"] --> E1["Embed text"] --> V1[("One vector index")]
-    Q1[/"Query"/] --> K1["Top-k cosine"]
-    V1 --> K1 --> L1["LLM reads the chunks"]
+    D1["Documents"]:::ext --> C1["Chunk"]:::step --> E1["Embed text"]:::step --> V1[("One vector index")]:::store
+    Q1["Query"]:::ext --> K1["Top-k cosine"]:::step
+    V1 --> K1 --> L1["An LLM reads the chunks"]:::done
   end
   subgraph OURS["The world model's memory"]
     direction TB
-    D2[/"Event"/] --> S2["Sort each part into its own tree<br/>(subentity · entity · interaction · episode)"]
-    S2 --> P2["Inherit the kind's priors"]
-    S2 --> R2["Recall: filter, then align structure"]
-    P2 & R2 --> W2["Working memory<br/>exact state now"]
-    W2 -- "daily distillation" --> L2["Long-term memory<br/>kinds · schemas · Entity memories · frontier"]
-    L2 -- "priors · analogs · schemas" --> W2
-    W2 --> H2["Hypothesis frontier<br/>what is worth learning next"]
+    D2["Event"]:::start ==> S2["Sort each part into its own tree<br/>subentity · entity · interaction · episode"]:::ltm
+    S2 ==> P2["Inherit the kind's priors"]:::ltm
+    S2 ==> R2["Recall: filter, then align structure"]:::ltm
+    P2 & R2 ==> W2["Working memory<br/>the exact state now"]:::wm
+    W2 ==>|daily distillation| L2["Long-term memory<br/>kinds · schemas · Entity memories · frontier"]:::ltm
+    L2 -->|priors · analogs · schemas| W2
+    W2 ==> H2["Hypothesis frontier<br/>what is worth learning next"]:::done
   end
+  %% style: classes and happy path
+  classDef start fill:#DAD0F4,stroke:#7C64C4,stroke-width:1.5px,color:#2F2A25
+  classDef step fill:#FFFDF8,stroke:#C9BFAF,stroke-width:1.3px,color:#2F2A25
+  classDef store fill:#F7E1D3,stroke:#E0B092,stroke-width:1.3px,color:#2F2A25
+  classDef done fill:#FBF8F2,stroke:#93897C,stroke-width:1.6px,color:#2F2A25
+  classDef wm fill:#E1ECDF,stroke:#A9C6A9,stroke-width:1.3px,color:#3E6A46
+  classDef ltm fill:#DCE6F0,stroke:#A9BFD6,stroke-width:1.3px,color:#3B5B7C
+  classDef ext fill:#FBF8F2,stroke:#7C64C4,stroke-width:1.3px,stroke-dasharray:2 3,color:#2F2A25
+  linkStyle 6,7,8,9,10,11,13 stroke:#7C64C4,stroke-width:2.6px,color:#5B4A99
+  %% style: end
 ```
 
 The standard stack answers "which text is like this text". The world model answers "what kind of thing is this, what does that kind usually do, what past case had the same shape, and what don't we know yet". It is the second question set that a forecast needs.

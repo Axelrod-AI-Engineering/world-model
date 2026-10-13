@@ -56,32 +56,42 @@ read_bundle(src) -> ImportBundle; market_event_of(item) -> MarketEvent
 From an article to a graph update event:
 
 ```mermaid
+%% style: begin (scripts/docs/style_mermaid.py)
+%%{init: {"theme": "base", "themeVariables": {"fontSize": "14px", "primaryColor": "#FFFDF8", "primaryBorderColor": "#C9BFAF", "primaryTextColor": "#2F2A25", "lineColor": "#857C70", "textColor": "#2F2A25", "secondaryColor": "#F7F2EA", "tertiaryColor": "#FBF8F2", "edgeLabelBackground": "#F7F2EA", "clusterBkg": "#F7F2EA", "clusterBorder": "#E4DACB", "titleColor": "#665E54"}}}%%
+%% style: end
 flowchart TD
-  A[/"Article, data release, filing, or imported item"/] --> D{"Seen before?<br/>same address, or same site and title"}
-  D -- yes --> DROP[/"Drop the duplicate (logged)"/]
-  D -- no --> T{"A reviewed translation exists?"}
-  T -- yes --> F["Use the reviewed fixture<br/>(translator: hand_drawn)"]
-  T -- no --> TR["Translate<br/>template · data_feed · structured · llm<br/>(slot: translator)"]
-  F & TR --> OPS{"Any operations?"}
-  OPS -- no --> UN[/"Nothing to learn (logged as untranslated)"/]
-  OPS -- yes --> NEXT["Take the next operation"]
-  NEXT --> K{"Does an end name a kind<br/>(an airline) rather than a value?"}
-  K -- no --> MORE
-  K -- yes --> N["Narrow one level: kind → entity → subentity<br/>names, aliases, taxonomy (slot: refiner, entity_resolver)"]
-  N --> NAMED{"Does the article name<br/>one candidate outright?"}
-  NAMED -- yes --> BIND["Bind the end"]
-  NAMED -- no --> HEDGE["Hedge: a probability per candidate<br/>+ an open share; soft interactions as strong as they are probable"]
-  BIND --> VAL{"Is the end a value now?"}
-  VAL -- no --> N
-  VAL -- yes --> MORE{"More operations?"}
-  HEDGE --> MORE
-  MORE -- yes --> NEXT
-  MORE -- no --> OUT[/"Graph update event<br/>operations whose ends are values, plus hedged ends"/]
+  A["Article, data release, filing, or imported item"]:::start ==> D{"Seen before?<br/>same address, or same site and title"}:::check
+  D ==>|no| T{"A reviewed translation exists?"}:::check
+  T ==>|no| TR["Translate<br/>template · data_feed · structured · llm"]:::step
+  TR ==> OPS{"Any operations?"}:::check
+  OPS ==>|yes| K{"Does an end name a kind<br/>(an airline) rather than a value?"}:::check
+  K ==>|no| OUT["Graph update event<br/>ends are values, plus any hedged ends"]:::done
+  D -->|yes| DROP["Drop the duplicate (logged)"]:::done
+  T -->|yes| F["Use the reviewed fixture"]:::opt
+  F --> OPS
+  OPS -->|no| UN["Nothing to learn (logged)"]:::done
+  K -->|yes| N["Narrow one level: kind → entity → subentity<br/>refiner · entity_resolver"]:::opt
+  N --> NAMED{"Does the article name<br/>one candidate outright?"}:::check
+  NAMED -->|yes| BIND["Bind the end"]:::opt
+  NAMED -->|no| HEDGE["Hedge: a probability per candidate + an open share,<br/>drawn as soft interactions"]:::opt
+  BIND --> OUT
+  HEDGE --> OUT
+  %% style: classes and happy path
+  classDef start fill:#DAD0F4,stroke:#7C64C4,stroke-width:1.5px,color:#2F2A25
+  classDef step fill:#FFFDF8,stroke:#C9BFAF,stroke-width:1.3px,color:#2F2A25
+  classDef opt fill:#FFFDF8,stroke:#C9BFAF,stroke-width:1.3px,stroke-dasharray:5 4,color:#2F2A25
+  classDef check fill:#F5EAC6,stroke:#D2BB72,stroke-width:1.3px,color:#2F2A25,font-weight:600
+  classDef done fill:#FBF8F2,stroke:#93897C,stroke-width:1.6px,color:#2F2A25
+  linkStyle 0,1,2,3,4,5 stroke:#7C64C4,stroke-width:2.6px,color:#5B4A99
+  %% style: end
 ```
 
 A fuzzy end's lifecycle ([cognition.md F11](../cognition.md#f11--an-open-world)):
 
 ```mermaid
+%% style: begin (scripts/docs/style_mermaid.py)
+%%{init: {"theme": "base", "themeVariables": {"fontSize": "14px", "primaryColor": "#FFFDF8", "primaryBorderColor": "#C9BFAF", "primaryTextColor": "#2F2A25", "lineColor": "#857C70", "textColor": "#2F2A25", "secondaryColor": "#F7F2EA", "tertiaryColor": "#FBF8F2", "transitionColor": "#857C70", "transitionLabelColor": "#665E54", "compositeBackground": "#F7F2EA"}}}%%
+%% style: end
 stateDiagram-v2
   [*] --> abstract: an end names a kind
   abstract --> entity: narrowed one level

@@ -12,6 +12,25 @@ The full demo is hosted on Railway's `dev` environment at **https://world-model-
 | Release checks | `scripts/persist-railway-fields.sh`, `scripts/verify-railway-drift.py` | Set the two fields Railway's IaC does not store, then reject any drift except known leftovers |
 | Auth | `src/axelrod_wm/api/auth.py` | Basic Auth on every request except the health check |
 
+```mermaid
+%% style: begin (scripts/docs/style_mermaid.py)
+%%{init: {"theme": "base", "themeVariables": {"fontSize": "14px", "primaryColor": "#FFFDF8", "primaryBorderColor": "#C9BFAF", "primaryTextColor": "#2F2A25", "lineColor": "#857C70", "textColor": "#2F2A25", "secondaryColor": "#F7F2EA", "tertiaryColor": "#FBF8F2", "edgeLabelBackground": "#F7F2EA", "clusterBkg": "#F7F2EA", "clusterBorder": "#E4DACB", "titleColor": "#665E54"}}}%%
+%% style: end
+flowchart LR
+  GH["Push to main"]:::start ==>|build the Dockerfile| APP["world-model service · one replica<br/>FastAPI: /api · /ws · /login · web/"]:::step
+  B["Browser"]:::ext ==>|HTTPS · session cookie| APP
+  APP ==> ENG["One engine per login<br/>var/axelrod/demo-‹user›"]:::step
+  ENG ==> VOL[("Volume /app/var<br/>ledger · versions · snapshots · traces · init cache")]:::store
+  RW["Railway readiness probe"]:::ext -.->|GET /api/health| APP
+  %% style: classes and happy path
+  classDef start fill:#DAD0F4,stroke:#7C64C4,stroke-width:1.5px,color:#2F2A25
+  classDef step fill:#FFFDF8,stroke:#C9BFAF,stroke-width:1.3px,color:#2F2A25
+  classDef store fill:#F7E1D3,stroke:#E0B092,stroke-width:1.3px,color:#2F2A25
+  classDef ext fill:#FBF8F2,stroke:#7C64C4,stroke-width:1.3px,stroke-dasharray:2 3,color:#2F2A25
+  linkStyle 0,1,2,3 stroke:#7C64C4,stroke-width:2.6px,color:#5B4A99
+  %% style: end
+```
+
 The service's settings, from `.railway/railway.ts`:
 
 - **One replica** in `us-west2`, built from the `Dockerfile`.

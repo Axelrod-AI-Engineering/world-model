@@ -35,34 +35,46 @@ A thin `WorldModelController` facade keeps today's callers working.
 Human review and commit:
 
 ```mermaid
+%% style: begin (scripts/docs/style_mermaid.py)
+%%{init: {"theme": "base", "themeVariables": {"fontSize": "14px", "primaryColor": "#FFFDF8", "primaryBorderColor": "#C9BFAF", "primaryTextColor": "#2F2A25", "lineColor": "#857C70", "textColor": "#2F2A25", "secondaryColor": "#F7F2EA", "tertiaryColor": "#FBF8F2", "edgeLabelBackground": "#F7F2EA", "clusterBkg": "#F7F2EA", "clusterBorder": "#E4DACB", "titleColor": "#665E54"}}}%%
+%% style: end
 flowchart TD
-  ST[/"Every staged change: items, moves, ripple by order, lessons"/] --> SH["Show each change with the phrase that asked for it"]
-  SH --> CONF["Set confidence: the article's and any change's own<br/>(re-stages; goes into the data written)"]
-  CONF --> CHK["Check the event's own move, then each further order:<br/>sign follows from the path? size and timing plausible?"]
-  CHK --> OK{"Does every change make sense?"}
-  OK -- "no: deselect" --> RS["Re-stage without them<br/>on a fresh copy"] --> SH
-  OK -- "not yet" --> DEF[/"Defer: approved later, it folds in late"/]
-  OK -- "none" --> REJ[/"Reject with a note: nothing changes (logged)"/]
-  OK -- "yes" --> AP["Approve the selection<br/>(deselected operations are edited out)"]
-  AP --> EFF{"Does approval store anything?<br/>(pending ends, soft support, ripple judgments)"}
-  EFF -- yes --> C0["▣ commit: review"]
-  EFF -- no --> SE
-  C0 --> SE{"A structural edit?"}
-  SE -- yes --> C1["▣ commit: structural"]
-  SE -- no --> C2["▣ commit: learn.working"]
-  C2 --> C3["▣ commit: learn.long_term"]
-  C1 & C3 --> LAST{"Day's last event?"}
-  LAST -- yes --> C4["▣ day.record → ▣ day.distill → ▣ day.close"]
-  LAST -- no --> PR
-  C4 --> PR{"Proposals raised?<br/>(promoted pair, collapse, resolved end)"}
-  PR -- yes --> QUEUE[/"Join the review queue; same review"/]
-  PR -- no --> VER[/"New version in the log"/]
+  ST["Every staged change: items, moves, ripple by order, lessons"]:::start ==> SH["Show each change with the phrase that asked for it"]:::step
+  SH ==> CONF["Set confidence: the article's, and any change's own"]:::step
+  CONF ==> CHK["Check the event's own move, then each further order"]:::step
+  CHK ==> OK{"Does every change make sense?"}:::check
+  OK ==>|yes| AP["Approve the selection"]:::step
+  AP ==> C1[("commit · review effects<br/>pending ends, soft support, ripple judgments")]:::store
+  C1 ==> C2[("commit · learn.working")]:::store
+  C2 ==> C3[("commit · learn.long_term")]:::store
+  C3 ==> LAST{"The day's last event?"}:::check
+  LAST ==>|no| PR{"Proposals raised?"}:::check
+  PR ==>|no| VER["A new version in the log"]:::done
+  OK -->|deselect some| RS["Re-stage without them, on a fresh copy"]:::opt
+  RS --> SH
+  OK -.->|not yet| DEF["Defer: approved later, it folds in late"]:::opt
+  OK -->|none| REJ["Reject with a note; nothing changes"]:::done
+  LAST -->|yes| C4[("day.record → day.distill → day.close")]:::store
+  C4 --> PR
+  PR -->|yes| QUEUE["They join the review queue"]:::opt
   QUEUE --> VER
+  %% style: classes and happy path
+  classDef start fill:#DAD0F4,stroke:#7C64C4,stroke-width:1.5px,color:#2F2A25
+  classDef step fill:#FFFDF8,stroke:#C9BFAF,stroke-width:1.3px,color:#2F2A25
+  classDef opt fill:#FFFDF8,stroke:#C9BFAF,stroke-width:1.3px,stroke-dasharray:5 4,color:#2F2A25
+  classDef check fill:#F5EAC6,stroke:#D2BB72,stroke-width:1.3px,color:#2F2A25,font-weight:600
+  classDef store fill:#F7E1D3,stroke:#E0B092,stroke-width:1.3px,color:#2F2A25
+  classDef done fill:#FBF8F2,stroke:#93897C,stroke-width:1.6px,color:#2F2A25
+  linkStyle 0,1,2,3,4,5,6,7,8,9,10 stroke:#7C64C4,stroke-width:2.6px,color:#5B4A99
+  %% style: end
 ```
 
 A staged review, as a sequence:
 
 ```mermaid
+%% style: begin (scripts/docs/style_mermaid.py)
+%%{init: {"theme": "base", "themeVariables": {"fontSize": "14px", "primaryColor": "#FFFDF8", "primaryBorderColor": "#C9BFAF", "primaryTextColor": "#2F2A25", "lineColor": "#857C70", "textColor": "#2F2A25", "actorBkg": "#DAD0F4", "actorBorder": "#7C64C4", "actorLineColor": "#C9BFAF", "signalColor": "#857C70", "labelBoxBkgColor": "#F5EAC6", "labelBoxBorderColor": "#D2BB72", "noteBkgColor": "#F5EAC6", "noteBorderColor": "#D2BB72", "activationBkgColor": "#E1ECDF", "sequenceNumberColor": "#FFFDF8"}}}%%
+%% style: end
 sequenceDiagram
   autonumber
   actor P as Reviewer
@@ -95,6 +107,9 @@ sequenceDiagram
 A proposal's lifecycle. Its kinds are graph_update, refinement, frontier_promotion, superentity_admission, superentity_dissolution, and missing_relation.
 
 ```mermaid
+%% style: begin (scripts/docs/style_mermaid.py)
+%%{init: {"theme": "base", "themeVariables": {"fontSize": "14px", "primaryColor": "#FFFDF8", "primaryBorderColor": "#C9BFAF", "primaryTextColor": "#2F2A25", "lineColor": "#857C70", "textColor": "#2F2A25", "secondaryColor": "#F7F2EA", "tertiaryColor": "#FBF8F2", "transitionColor": "#857C70", "transitionLabelColor": "#665E54", "compositeBackground": "#F7F2EA"}}}%%
+%% style: end
 stateDiagram-v2
   [*] --> pending: propose() and the policy wants review
   [*] --> auto_applied: the policy auto-approves

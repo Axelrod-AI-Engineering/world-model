@@ -1,51 +1,57 @@
 # Architecture: diagrams
 
-The overview diagrams, in Mermaid, so they render on GitHub and a coding agent can read them as text. Each box reads `Stage (package) · module`. Parallelograms are data; rectangles are processing. The detail diagrams, such as each stage's own flowchart, the sequences, and object lifecycles, live in the module spec they describe ([index below](#detail-diagrams)).
+Seven overview diagrams. The detail diagrams (each stage's own flowchart, the sequences, and the object lifecycles) live in the module spec they describe; [the index](#detail-diagrams) at the bottom lists them.
+
+**Key:**
+- **Thick purple arrows** are the happy path.
+- 🟪 **Purple:** where a flow starts.
+- 🟨 **Yellow:** a yes/no check.
+- 🟧 **Peach:** a commit or stored data.
+- 🟩 **Green:** working memory.
+- 🟦 **Blue:** long-term memory.
+- **Dashed:** runs only sometimes.
+
+The colors match the app's own flowcharts ([../flowchart.svg](../flowchart.svg)). `scripts/docs/style_mermaid.py` applies them.
 
 ## 1. System map
 
 Learning writes; inference only reads committed versions.
 
 ```mermaid
+%% style: begin (scripts/docs/style_mermaid.py)
+%%{init: {"theme": "base", "themeVariables": {"fontSize": "14px", "primaryColor": "#FFFDF8", "primaryBorderColor": "#C9BFAF", "primaryTextColor": "#2F2A25", "lineColor": "#857C70", "textColor": "#2F2A25", "secondaryColor": "#F7F2EA", "tertiaryColor": "#FBF8F2", "edgeLabelBackground": "#F7F2EA", "clusterBkg": "#F7F2EA", "clusterBorder": "#E4DACB", "titleColor": "#665E54"}}}%%
+%% style: end
 flowchart TD
-  subgraph SRC["Sources (intake.sources) · M05"]
-    direction LR
-    S1["News · scraper"]
-    S2["Data releases · data feed"]
-    S3["Import bundle<br/>axelrod.import/v1"]
-    S4["Backend user<br/>draw · own knowledge · structure edits"]
-  end
-  RA["Research agent (optional)<br/>Cognee-backed research memory"] -.-> S3
-  S1 & S2 & S3 & S4 --> ME[/"Market events"/]
-
-  ME --> INT["Intake (intake) · M05<br/>Translator · EntityResolver · Refiner"]
-  INT --> GUE[/"Graph update event<br/>operations with concrete or hedged ends"/]
-
-  GUE --> SR["Shared read (shared) · M06<br/>parse · classify · recall · bind · prefill · analyze"]
-  SR --> LWM["Learning · working memory · M08<br/>Folder · hedges · ripple judgments"]
-  SR --> LLTM["Learning · long-term memory · M09<br/>kinds · Entity memories · correlation frontier · inducer"]
-  DYN["Dynamics (dynamics) · M07<br/>Propagator · DailyPropagator · kernels"] -.-> SR & LWM
-
-  LWM & LLTM --> STG[/"Staged change<br/>structure · moves · ripple by order · lessons"/]
-  STG --> REV{"Human review · M13<br/>approve all, some, or none"}
-  REV -- "approved selection" --> REPO["Commit (repo) · M04<br/>GraphMutator · ChangeSet · Ledger · Snapshots"]
-  REV -- "rejected" --> LOG[/"Logged, nothing changes"/]
-  REPO --> MEM[/"Committed version<br/>working memory + long-term memory (memory · M03)"/]
-
-  MEM --> BR["Branch of a committed version<br/>never merged"]
-  TH[/"Thesis (Pose a thesis)"/] --> BR
-  BR --> INF["Inference (inference) · M10<br/>isolate · predict · couple · weigh · unify"]
-  SR -.-> INF
-  INF --> FC[/"Forecast<br/>values by order and transmission path · brief"/]
-  FC --> EVAL["Evaluation (evaluation) · M11<br/>Scorer · track records · decisions"]
-  EVAL -- "track records only" --> MEM
-
-  MEM & FC & STG --> VIEWS["Views (views) · M14"]
-  VIEWS --> API["API and CLI · M14<br/>REST · /ws · CLI"]
-  VIEWS --> CTX["Context layer (context) · M15<br/>MCP: recall · ask · trace · propose · feedback"]
-  API --> WEB["Web · M16<br/>Learn · Predict"]
-  CTX --> AG["Agents and analysts"]
-  CTX -. "propose: staged like an article" .-> S4
+  S1["News"]:::start & S2["Data releases"]:::start & S3["Import bundle<br/>axelrod.import/v1"]:::start & S4["Backend user<br/>draw · own knowledge"]:::start ==> INT["Intake · M05<br/>translate → refine"]:::step
+  INT ==> SR["Shared read · M06<br/>parse · classify · recall · bind · prefill · analyze"]:::step
+  SR ==> LWM["Learning · working memory · M08<br/>fold · hedges · ripple"]:::wm
+  LWM ==> LLTM["Learning · long-term memory · M09<br/>kinds · Entity memories · frontier · superentities"]:::ltm
+  LLTM ==> REV{"Human review · M13<br/>approve all, some, or none?"}:::check
+  REV ==>|approved| REPO[("Commit · M04<br/>ledger · snapshots · versions")]:::store
+  REPO ==> BR["Branch of a committed version<br/>never merged"]:::step
+  BR ==> INF["Inference · M10<br/>isolate · predict · couple · weigh · unify"]:::both
+  INF ==> FC["Forecast by order and path + brief"]:::done
+  RA["Research agent (optional)"]:::ext -.-> S3
+  DYN["Dynamics · M07<br/>kernels · propagation · daily filter"]:::step -.-> SR
+  REV -->|rejected| LOG["Logged; nothing changes"]:::done
+  TH["Pose a thesis"]:::start --> BR
+  FC -.->|outcome at horizon| EVAL["Evaluation · M11<br/>track records"]:::opt
+  REPO --> API["Views · API · CLI · M14"]:::step
+  API --> WEB["Web · M16"]:::step
+  API --> CTX["Context layer · M15"]:::step
+  %% style: classes and happy path
+  classDef start fill:#DAD0F4,stroke:#7C64C4,stroke-width:1.5px,color:#2F2A25
+  classDef step fill:#FFFDF8,stroke:#C9BFAF,stroke-width:1.3px,color:#2F2A25
+  classDef opt fill:#FFFDF8,stroke:#C9BFAF,stroke-width:1.3px,stroke-dasharray:5 4,color:#2F2A25
+  classDef check fill:#F5EAC6,stroke:#D2BB72,stroke-width:1.3px,color:#2F2A25,font-weight:600
+  classDef store fill:#F7E1D3,stroke:#E0B092,stroke-width:1.3px,color:#2F2A25
+  classDef done fill:#FBF8F2,stroke:#93897C,stroke-width:1.6px,color:#2F2A25
+  classDef wm fill:#E1ECDF,stroke:#A9C6A9,stroke-width:1.3px,color:#3E6A46
+  classDef ltm fill:#DCE6F0,stroke:#A9BFD6,stroke-width:1.3px,color:#3B5B7C
+  classDef both fill:#F5E4E9,stroke:#D9A9B8,stroke-width:1.3px,color:#93465F
+  classDef ext fill:#FBF8F2,stroke:#7C64C4,stroke-width:1.3px,stroke-dasharray:2 3,color:#2F2A25
+  linkStyle 0,1,2,3,4,5,6,7,8,9,10,11 stroke:#7C64C4,stroke-width:2.6px,color:#5B4A99
+  %% style: end
 ```
 
 ## 2. Module layers
@@ -53,106 +59,137 @@ flowchart TD
 Arrows point from a module to what it imports. Nothing points upward, so there are no cycles (the code today has several: [migration.md](migration.md#current-cycles)).
 
 ```mermaid
+%% style: begin (scripts/docs/style_mermaid.py)
+%%{init: {"theme": "base", "themeVariables": {"fontSize": "14px", "primaryColor": "#FFFDF8", "primaryBorderColor": "#C9BFAF", "primaryTextColor": "#2F2A25", "lineColor": "#857C70", "textColor": "#2F2A25", "secondaryColor": "#F7F2EA", "tertiaryColor": "#FBF8F2", "edgeLabelBackground": "#F7F2EA", "clusterBkg": "#F7F2EA", "clusterBorder": "#E4DACB", "titleColor": "#665E54"}}}%%
+%% style: end
 flowchart BT
   subgraph L0["Layer 0 · Foundation"]
-    F["M01 foundation<br/>core: ids · serialization · rng · trace bus · registry<br/>ports: slot ABCs · records · contracts"]
+    F["M01 foundation · core, ports"]:::start
   end
   subgraph L1["Layer 1 · Domain"]
-    MODEL["M02 model<br/>entities · interactions · superentities · events · thesis"]
+    MODEL["M02 model"]:::step
   end
   subgraph L2["Layer 2 · State"]
-    MEMORY["M03 memory<br/>WorkingMemory · LongTermMemory"]
-    REPO["M04 repo<br/>mutator · ledger · snapshots · branches"]
+    MEMORY["M03 memory"]:::store
+    REPO["M04 repo"]:::store
   end
-  subgraph L3["Layer 3 · Engines (slot implementations)"]
-    INTAKE["M05 intake"]
-    SHARED["M06 shared read"]
-    DYN["M07 dynamics"]
-    LWM["M08 learning · WM"]
-    LLTM["M09 learning · LTM"]
-    INF["M10 inference"]
-    EVAL["M11 evaluation"]
+  subgraph L3["Layer 3 · Engines"]
+    INTAKE["M05 intake"]:::step
+    EVAL["M11 evaluation"]:::step
+    LWM["M08 learning · WM"]:::wm
+    LLTM["M09 learning · LTM"]:::ltm
+    INF["M10 inference"]:::both
+    SHARED["M06 shared read"]:::step
+    DYN["M07 dynamics"]:::step
   end
   subgraph L4["Layer 4 · Runtime"]
-    RT["M12 runtime<br/>composition root · orchestrators · day loop · sandbox"]
-    SVC["M13 services<br/>review · update · thesis · structure · sources"]
+    SVC["M13 services"]:::check
+    RT["M12 runtime"]:::check
   end
   subgraph L5["Layer 5 · Interfaces"]
-    API["M14 views · API · CLI"]
-    CTX["M15 context layer"]
-    WEB["M16 web"]
+    WEB["M16 web"]:::step
+    CTX["M15 context layer"]:::step
+    API["M14 views · API · CLI"]:::step
   end
-  DEMO["M17 demo (side)<br/>synthetic world · scenarios · examples"]
-
-  MODEL --> F
-  MEMORY --> MODEL
+  L1 ==> L0
+  L2 ==> L1
+  L3 ==> L2
+  L4 ==> L3
+  L5 ==> L4
   REPO --> MEMORY
-  INTAKE & SHARED & DYN & LWM & LLTM & INF & EVAL --> MEMORY
-  SHARED --> DYN
   LWM & LLTM & INF --> SHARED
-  RT --> INTAKE & LWM & LLTM & INF & EVAL & REPO
+  SHARED --> DYN
   SVC --> RT
-  API --> SVC
-  CTX --> SVC & API
-  WEB -. "HTTP · /ws" .-> API
-  DEMO --> SVC
+  CTX --> API
+  WEB -.->|HTTP · /ws| API
+  DEMO["M17 demo (side)"]:::ext -.-> L4
+  %% style: classes and happy path
+  classDef start fill:#DAD0F4,stroke:#7C64C4,stroke-width:1.5px,color:#2F2A25
+  classDef step fill:#FFFDF8,stroke:#C9BFAF,stroke-width:1.3px,color:#2F2A25
+  classDef check fill:#F5EAC6,stroke:#D2BB72,stroke-width:1.3px,color:#2F2A25,font-weight:600
+  classDef store fill:#F7E1D3,stroke:#E0B092,stroke-width:1.3px,color:#2F2A25
+  classDef wm fill:#E1ECDF,stroke:#A9C6A9,stroke-width:1.3px,color:#3E6A46
+  classDef ltm fill:#DCE6F0,stroke:#A9BFD6,stroke-width:1.3px,color:#3B5B7C
+  classDef both fill:#F5E4E9,stroke:#D9A9B8,stroke-width:1.3px,color:#93465F
+  classDef ext fill:#FBF8F2,stroke:#7C64C4,stroke-width:1.3px,stroke-dasharray:2 3,color:#2F2A25
+  linkStyle 0,1,2,3,4 stroke:#7C64C4,stroke-width:2.6px,color:#5B4A99
+  %% style: end
 ```
 
-- **Algorithms never take the engine.** A slot gets its inputs, a `ProcessContext`, and a `MutationTxn` (or `None` for a read). It never looks up `engine.components[...]`.
+Rules:
+- **Algorithms never take the engine.** A slot gets its inputs, a context, and a transaction (or `None` for a read).
 - **Algorithms return proposals; services create them.**
 - **State never imports algorithms.**
 - **Nothing below layer 5 imports views, the API, or the demo.**
 
 ## 3. Learning: five stages
 
-Generated from `flows/` ([../flowchart.svg](../flowchart.svg) is the same picture). Each stage's own flowchart is in its module.
+Each stage's own flowchart is in its module: [M05](modules/M05-intake.md), [M08](modules/M08-learning-working.md), [M09](modules/M09-learning-long-term.md), [M13](modules/M13-services.md).
 
 ```mermaid
+%% style: begin (scripts/docs/style_mermaid.py)
+%%{init: {"theme": "base", "themeVariables": {"fontSize": "14px", "primaryColor": "#FFFDF8", "primaryBorderColor": "#C9BFAF", "primaryTextColor": "#2F2A25", "lineColor": "#857C70", "textColor": "#2F2A25", "secondaryColor": "#F7F2EA", "tertiaryColor": "#FBF8F2", "edgeLabelBackground": "#F7F2EA", "clusterBkg": "#F7F2EA", "clusterBorder": "#E4DACB", "titleColor": "#665E54"}}}%%
+%% style: end
 flowchart TD
-  A[/"Market event or backend user's edit"/] --> I["1 · Intake · M05<br/>translate → refine"]
-  I --> G[/"Graph update event"/]
-  G --> W["2 · Learning · working memory · M08<br/>apply → classify → recall → bind → prefill → ripple → fold → hedges"]
-  W --> L["3 · Learning · long-term memory · M09<br/>kinds → Entity memories → frontier → superentity support → explain"]
-  L --> S[/"Staged change: structure, moves, ripple by order, lessons"/]
-  S --> R{"4 · Human review · M13<br/>does every change make sense?"}
-  R -- "deselect some" --> W
-  R -- "defer" --> Q[/"Waits; folds in late once approved"/]
-  R -- "reject" --> X[/"Nothing changes (logged)"/]
-  R -- "approve selection" --> C["5 · Commit · M04<br/>WM commit · LTM commit"]
-  C --> V[/"New version · inference reads committed versions only"/]
+  A["Market event, or a backend user's edit"]:::start ==> I["1 · Intake<br/>translate → refine"]:::step
+  I ==> W["2 · Learning · working memory<br/>apply → classify → recall → ripple → fold → hedges"]:::wm
+  W ==> L["3 · Learning · long-term memory<br/>kinds → Entity memories → frontier → superentities"]:::ltm
+  L ==> R{"4 · Human review<br/>does every change make sense?"}:::check
+  R ==>|approve selection| C[("5 · Commit<br/>learn.working · learn.long_term")]:::store
+  C ==> V["New version<br/>inference reads committed versions only"]:::done
+  R -->|deselect some: re-stage| W
+  R -.->|defer| Q["Folds in late, once approved"]:::opt
+  R -->|reject| X["Nothing changes (logged)"]:::done
+  %% style: classes and happy path
+  classDef start fill:#DAD0F4,stroke:#7C64C4,stroke-width:1.5px,color:#2F2A25
+  classDef step fill:#FFFDF8,stroke:#C9BFAF,stroke-width:1.3px,color:#2F2A25
+  classDef opt fill:#FFFDF8,stroke:#C9BFAF,stroke-width:1.3px,stroke-dasharray:5 4,color:#2F2A25
+  classDef check fill:#F5EAC6,stroke:#D2BB72,stroke-width:1.3px,color:#2F2A25,font-weight:600
+  classDef store fill:#F7E1D3,stroke:#E0B092,stroke-width:1.3px,color:#2F2A25
+  classDef done fill:#FBF8F2,stroke:#93897C,stroke-width:1.6px,color:#2F2A25
+  classDef wm fill:#E1ECDF,stroke:#A9C6A9,stroke-width:1.3px,color:#3E6A46
+  classDef ltm fill:#DCE6F0,stroke:#A9BFD6,stroke-width:1.3px,color:#3B5B7C
+  linkStyle 0,1,2,3,4,5 stroke:#7C64C4,stroke-width:2.6px,color:#5B4A99
+  %% style: end
 ```
 
 ## 4. Inference: six stages
 
-Nothing here writes to either memory.
+Nothing here writes to either memory. The sequence is in [M10](modules/M10-inference.md).
 
 ```mermaid
+%% style: begin (scripts/docs/style_mermaid.py)
+%%{init: {"theme": "base", "themeVariables": {"fontSize": "14px", "primaryColor": "#FFFDF8", "primaryBorderColor": "#C9BFAF", "primaryTextColor": "#2F2A25", "lineColor": "#857C70", "textColor": "#2F2A25", "secondaryColor": "#F7F2EA", "tertiaryColor": "#FBF8F2", "edgeLabelBackground": "#F7F2EA", "clusterBkg": "#F7F2EA", "clusterBorder": "#E4DACB", "titleColor": "#665E54"}}}%%
+%% style: end
 flowchart TD
-  Q[/"A what-if question, in Predict (Pose a thesis)"/] --> RD["1 · Pose a thesis<br/>read into a hypothetical event: a shock, or a decision held (do())"]
-  RD --> ONE{"Does every end name one value?"}
-  ONE -- no --> ASK[/"Ask the asker to pick (nothing runs)"/]
-  ONE -- yes --> BR["Branch a committed version; apply the event<br/>(the branch is never merged)"]
-  BR --> ISO["2 · Isolate the networks<br/>superentities the shock reaches; residual network;<br/>context network for watched names; rivals marked<br/>(slot: isolator, rival_detector)"]
-  ISO --> ALONE["3 · Simulate and couple<br/>each network alone (slot: network_predictor)"]
-  ALONE --> SCN["Scenarios: one per choice among rivals ×<br/>each valuable, undecided hypothesis (slot: hypothesis_scorer)"]
-  SCN --> CPL["Couple per scenario, with and without the shock,<br/>on the same draws (slot: coupler)"]
-  CPL --> W["4 · Weigh and unify<br/>support × fit × track record × p(hypothesis)<br/>(slot: scenario_weighter)"]
-  W --> MIX["Mix scenarios by weight into one forecast (slot: unifier)"]
-  MIX --> RO["5 · Read out and explain<br/>each value: order, path, arrival, peak;<br/>groups draw by draw; binding constraints;<br/>ablate key interactions; brief (slot: explainer)"]
-  RO --> FC[/"Forecast + brief (nothing learned)"/]
-  FC --> ACT{"Does someone act on it?"}
-  ACT -- no --> END[/"Stays in the forecast layer"/]
-  ACT -- yes --> REC["6 · Score against outcomes<br/>record the decision with the version it read"]
-  REC --> HZ{"Horizon passed?"}
-  HZ -- no --> WAIT["Wait; learning goes on"] --> HZ
-  HZ -- yes --> SC["Score (CRPS); superentities used gain track record<br/>(slot: scorer)"]
+  Q["A what-if question<br/>Pose a thesis"]:::start ==> ONE{"1 · Does every end name one value?"}:::check
+  ONE -->|no| ASK["Ask the asker to pick; nothing runs"]:::done
+  ONE ==>|yes| BR["Branch a committed version; apply the event"]:::step
+  BR ==> ISO["2 · Isolate the networks<br/>superentities reached · residual · watched names · rivals"]:::both
+  ISO ==> SIM["3 · Simulate each network alone,<br/>then couple per scenario, ± shock on the same draws"]:::both
+  SIM ==> MIX["4 · Weigh and unify<br/>mix scenarios by support × fit × track record"]:::both
+  MIX ==> RO["5 · Read out and explain<br/>order · path · arrival · peak · groups · brief"]:::step
+  RO ==> FC["Forecast + brief"]:::done
+  FC -.->|someone acts on it| SC["6 · Score against outcomes<br/>CRPS; track records update"]:::opt
+  %% style: classes and happy path
+  classDef start fill:#DAD0F4,stroke:#7C64C4,stroke-width:1.5px,color:#2F2A25
+  classDef step fill:#FFFDF8,stroke:#C9BFAF,stroke-width:1.3px,color:#2F2A25
+  classDef opt fill:#FFFDF8,stroke:#C9BFAF,stroke-width:1.3px,stroke-dasharray:5 4,color:#2F2A25
+  classDef check fill:#F5EAC6,stroke:#D2BB72,stroke-width:1.3px,color:#2F2A25,font-weight:600
+  classDef done fill:#FBF8F2,stroke:#93897C,stroke-width:1.6px,color:#2F2A25
+  classDef both fill:#F5E4E9,stroke:#D9A9B8,stroke-width:1.3px,color:#93465F
+  linkStyle 0,2,3,4,5,6,7 stroke:#7C64C4,stroke-width:2.6px,color:#5B4A99
+  %% style: end
 ```
 
 ## 5. The day loop
 
-The system's step: one update run, paused on a day while a proposal waits.
+The system's step: one update run, which pauses on a day while a proposal waits.
 
 ```mermaid
+%% style: begin (scripts/docs/style_mermaid.py)
+%%{init: {"theme": "base", "themeVariables": {"fontSize": "14px", "primaryColor": "#FFFDF8", "primaryBorderColor": "#C9BFAF", "primaryTextColor": "#2F2A25", "lineColor": "#857C70", "textColor": "#2F2A25", "actorBkg": "#DAD0F4", "actorBorder": "#7C64C4", "actorLineColor": "#C9BFAF", "signalColor": "#857C70", "labelBoxBkgColor": "#F5EAC6", "labelBoxBorderColor": "#D2BB72", "noteBkgColor": "#F5EAC6", "noteBorderColor": "#D2BB72", "activationBkgColor": "#E1ECDF", "sequenceNumberColor": "#FFFDF8"}}}%%
+%% style: end
 sequenceDiagram
   autonumber
   participant U as Backend user / scheduler
@@ -177,7 +214,7 @@ sequenceDiagram
         RS->>LT: run(event)  [learn.working, learn.long_term]
       else needs review
         RS-->>US: AWAITING_REVIEW (run pauses)
-        Note over U,RS: the user stages and approves (see §10)
+        Note over U,RS: the user stages and approves (see M13)
         RS->>US: resume(run)
         US->>LT: run(approved selection)
       end
@@ -191,40 +228,39 @@ sequenceDiagram
 
 ## 6. The ledger lifecycle
 
-Modeled on Semantica's decision lifecycle. Every write takes this path.
+Every write takes this path. It is modeled on Semantica's decision lifecycle.
 
 ```mermaid
+%% style: begin (scripts/docs/style_mermaid.py)
+%%{init: {"theme": "base", "themeVariables": {"fontSize": "14px", "primaryColor": "#FFFDF8", "primaryBorderColor": "#C9BFAF", "primaryTextColor": "#2F2A25", "lineColor": "#857C70", "textColor": "#2F2A25", "secondaryColor": "#F7F2EA", "tertiaryColor": "#FBF8F2", "edgeLabelBackground": "#F7F2EA", "clusterBkg": "#F7F2EA", "clusterBorder": "#E4DACB", "titleColor": "#665E54"}}}%%
+%% style: end
 flowchart LR
-  subgraph S1["1 · Record"]
-    ME["Market event<br/>MARKET_EVENT"]
-    PR["Proposal<br/>PROPOSAL"]
-  end
-  subgraph S2["2 · Stage"]
-    SB["Sandbox branch<br/>throwaway ledger"]
-  end
-  subgraph S3["3 · Govern"]
-    RV["Review decision<br/>REVIEW_DECISION<br/>who · confidence · selection"]
-  end
-  subgraph S4["4 · Commit"]
-    CS["ChangeSet<br/>CHANGESET<br/>process · memory · proposal · vetted_by"]
-    SV["StateVersion<br/>hash · seq"]
-  end
-  subgraph S5["5 · Audit and restore"]
-    LOG["log · show · diff"]
-    RST["restore = snapshot + change sets<br/>(hash verified)"]
-    ASOF["as_of(t)"]
-    PROV["PROV export<br/>entity · activity · agent"]
-  end
-  ME -- "proposal_id" --> PR --> SB -- "staged change sets" --> RV
-  RV -- "approved selection" --> CS --> SV
-  SV --> LOG & RST & ASOF & PROV
+  ME["Market event<br/>MARKET_EVENT"]:::start ==> PR["Proposal<br/>PROPOSAL"]:::step
+  PR ==> SB["Staged on a branch<br/>throwaway ledger"]:::opt
+  SB ==> RV{"Review decision<br/>REVIEW_DECISION"}:::check
+  RV ==>|approved selection| CS[("ChangeSet<br/>process · memory · proposal · vetted_by")]:::store
+  CS ==> SV[("StateVersion<br/>hash · seq")]:::store
+  SV --> AUD["log · show · diff · restore · as_of · PROV export"]:::done
+  %% style: classes and happy path
+  classDef start fill:#DAD0F4,stroke:#7C64C4,stroke-width:1.5px,color:#2F2A25
+  classDef step fill:#FFFDF8,stroke:#C9BFAF,stroke-width:1.3px,color:#2F2A25
+  classDef opt fill:#FFFDF8,stroke:#C9BFAF,stroke-width:1.3px,stroke-dasharray:5 4,color:#2F2A25
+  classDef check fill:#F5EAC6,stroke:#D2BB72,stroke-width:1.3px,color:#2F2A25,font-weight:600
+  classDef store fill:#F7E1D3,stroke:#E0B092,stroke-width:1.3px,color:#2F2A25
+  classDef done fill:#FBF8F2,stroke:#93897C,stroke-width:1.6px,color:#2F2A25
+  linkStyle 0,1,2,3,4 stroke:#7C64C4,stroke-width:2.6px,color:#5B4A99
+  %% style: end
 ```
 
-Ledger kinds: construction, update, market_event, proposal, review_decision, changeset, thesis, forecast, evaluation, decision, outcome, consolidation. Commit processes: construction, history, intake, day.predict, learn.working, learn.long_term, day.record, day.distill, day.close, structural, review, hypothesis, forecast (no version bump), evaluation, other.
+- **Ledger kinds:** construction, update, market_event, proposal, review_decision, changeset, thesis, forecast, evaluation, decision, outcome, consolidation.
+- **Commit processes:** construction, history, intake, day.predict, learn.working, learn.long_term, day.record, day.distill, day.close, structural, review, hypothesis, forecast (no version bump), evaluation, other.
 
 ## 7. Data model
 
 ```mermaid
+%% style: begin (scripts/docs/style_mermaid.py)
+%%{init: {"theme": "base", "themeVariables": {"fontSize": "14px", "primaryColor": "#FFFDF8", "primaryBorderColor": "#C9BFAF", "primaryTextColor": "#2F2A25", "lineColor": "#857C70", "textColor": "#2F2A25", "secondaryColor": "#F7F2EA", "tertiaryColor": "#FBF8F2"}}}%%
+%% style: end
 classDiagram
   direction LR
   class Entity {
@@ -325,57 +361,20 @@ classDiagram
   Hypothesis --> Interaction : about
 ```
 
-Memory, as state:
-
-```mermaid
-flowchart LR
-  subgraph WM["WorkingMemory (M03) — what the world is like now"]
-    G["graph: CausalGraph"]
-    DV["deviations (z per value per day)"]
-    CH["channels (kernel recursion states)"]
-    HY["hypotheses — the hypothesis frontier"]
-    PRF["pending refinements (hedges)"]
-    RJ["ripple judgments"]
-    FL["forecast layer (outside the hash)"]
-    AUX["activity log · episode buffer · late queue · source cursors · clock"]
-  end
-  subgraph LTM["LongTermMemory (M03) — what generalizes"]
-    OG["Object generalizations<br/>kinds + superentity patterns"]
-    IG["Interaction generalizations"]
-    EMM["Entity memories<br/>decisions by context"]
-    CF["Correlation frontier<br/>co-movements with no interaction"]
-    PS["Prior states<br/>episodes · explanations"]
-  end
-  WM -- "day.distill" --> LTM
-  LTM -- "priors · analogs · patterns" --> WM
-```
-
-## 8. Deployment
-
-```mermaid
-flowchart LR
-  B["Browser"] -- "HTTPS · cookie session" --> RW
-  AGT["Agent (MCP)"] -. "planned" .-> RW
-  subgraph RW["Railway dev · service world-model (one replica)"]
-    APP["FastAPI app<br/>/api · /ws · /login · static web/"]
-    ENG["One engine per login<br/>(var/axelrod/demo-‹user›)"]
-    APP --> ENG
-  end
-  ENG --> VOL[("Volume /app/var<br/>ledger.jsonl · versions.jsonl<br/>snapshots/*.json.gz · traces · init cache")]
-  GH["GitHub main"] -- "push = release" --> RW
-```
+How the two memories feed each other is drawn in [M03](modules/M03-memory.md).
 
 ## Detail diagrams
 
 | Diagram | In |
 |---|---|
-| Intake, from an article to a graph update event; a fuzzy end's lifecycle | [M05 intake](modules/M05-intake.md) |
+| Intake, step by step; a fuzzy end's lifecycle | [M05 intake](modules/M05-intake.md) |
+| The shared read | [M06 shared read](modules/M06-shared-read.md) |
 | Learning · working memory, step by step; a hypothesis's lifecycle | [M08 learning · WM](modules/M08-learning-working.md) |
 | Learning · long-term memory, per event and per day; a superentity's lifecycle | [M09 learning · LTM](modules/M09-learning-long-term.md) |
 | Pose a thesis, as a sequence | [M10 inference](modules/M10-inference.md) |
-| Human review and commit; staged review as a sequence; a proposal's lifecycle | [M13 services](modules/M13-services.md) |
+| Review and commit; a staged review as a sequence; a proposal's lifecycle | [M13 services](modules/M13-services.md) |
 | An agent through the context layer | [M15 context layer](modules/M15-context-layer.md) |
 | The two memories and their commits | [M03 memory](modules/M03-memory.md) |
-| The shared read | [M06 shared read](modules/M06-shared-read.md) |
-| Cognee and Semantica around the model | [frameworks.md](frameworks.md#recommendation) |
 | The standard retrieval stack vs the model's memory | [cognition.md](cognition.md#the-difference-in-one-picture) |
+| Cognee and Semantica around the model | [frameworks.md](frameworks.md#recommendation) |
+| The hosted deployment | [../deployment.md](../deployment.md) |

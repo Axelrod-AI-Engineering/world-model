@@ -42,6 +42,7 @@ var/              runtime data: init caches, sessions, snapshots, ledger, traces
 - **Decisions.** Where [archive/plan.md](archive/plan.md) was silent, the simplest option was chosen and marked `# DECISION:`. `grep -rn DECISION src configs data web` lists them.
 - **§ references** in the code point to sections of [archive/plan.md](archive/plan.md), the original specification. The code has moved past it in places; where they differ, the code and these docs are current.
 - **The flowchart picture is checked.** After changing `flows/`, run `uv run axelrod flows --svg docs/flowchart.svg`; a test fails while it is stale.
+- **Diagrams.** Mermaid in `docs/` is styled like the app's flowcharts by `scripts/docs/style_mermaid.py`: mark nodes with classes (`:::start`, `:::check`, `:::store`, `:::wm`, `:::ltm`, `:::opt`) and the happy path with `==>`, declared first, then run the script. `--check` fails while any diagram is stale.
 - **Data stays synthetic.** Real names make the graph concrete, but no headline reports a real event and nothing is a claim about any company.
 
 ## Demo videos

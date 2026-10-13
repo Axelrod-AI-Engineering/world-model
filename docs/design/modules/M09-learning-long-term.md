@@ -52,45 +52,53 @@ Consolidator.run(day, ctx) -> ConsolidationReport
 Per event and per day:
 
 ```mermaid
+%% style: begin (scripts/docs/style_mermaid.py)
+%%{init: {"theme": "base", "themeVariables": {"fontSize": "14px", "primaryColor": "#FFFDF8", "primaryBorderColor": "#C9BFAF", "primaryTextColor": "#2F2A25", "lineColor": "#857C70", "textColor": "#2F2A25", "secondaryColor": "#F7F2EA", "tertiaryColor": "#FBF8F2", "edgeLabelBackground": "#F7F2EA", "clusterBkg": "#F7F2EA", "clusterBorder": "#E4DACB", "titleColor": "#665E54"}}}%%
+%% style: end
 flowchart TD
-  subgraph PE["Per event"]
-    I[/"What working memory learned"/] --> RT{"Retired anything?"}
-    RT -- yes --> FG["Retired items leave their kinds; frontier entries decay"]
-    RT -- no --> GU
-    FG --> GU["New items join their kinds; statistics update along the path<br/>(slot: generalization_updater)"]
-    GU --> CR{"Is a kind crowded?"}
-    CR -- yes --> SP["Split: a new child kind (slot: taxonomy_grower)"]
-    CR -- no --> DC
-    SP --> DC{"Did an actor decide?"}
-    DC -- yes --> EM["Record it in the actor's Entity memory, by context"]
-    DC -- no --> UX
-    EM --> UX{"A move the graph did not explain?"}
-    UX -- yes --> FR["Pair it with earlier unexplained moves,<br/>after removing known drivers (slot: frontier)"]
-    UX -- no --> EX
-    FR --> HOLD{"Has a pair held at enough spaced checks?<br/>(slot: promotion_test)"}
-    HOLD -- yes --> PP["Propose the pair as an interaction (waits for review)"]
-    HOLD -- no --> EX
-    PP --> EX["Explain what was learned; keep it in Prior states (slot: explainer)"]
+  subgraph PE["Per event · learn.long_term"]
+    I["What working memory learned"]:::start ==> RT{"Retired anything?"}:::check
+    RT ==>|no| GU["New items join their kinds;<br/>statistics update along the path"]:::ltm
+    GU ==> CR{"Is a kind crowded?"}:::check
+    CR ==>|no| DC{"Did an actor decide?"}:::check
+    DC ==>|no| UX{"A move the graph did not explain?"}:::check
+    UX ==>|no| EX["Explain what was learned; keep it in Prior states"]:::ltm
+    RT -->|yes| FG["Retired items leave their kinds;<br/>frontier entries decay"]:::opt
+    FG --> GU
+    CR -->|yes| SP["Split: a new child kind"]:::opt
+    SP --> DC
+    DC -->|yes| EM["Record it in the actor's Entity memory"]:::opt
+    EM --> UX
+    UX -->|yes| FR["Pair it with earlier unexplained moves;<br/>propose an interaction once a pair holds"]:::opt
+    FR --> EX
   end
-  subgraph PD["Per day (distillation)"]
-    EP["Summarize the day as an episode (slot: consolidator)"] --> CT["Count which interactions were active together (slot: inducer)"]
-    CT --> KN{"Matches a known superentity?"}
-    KN -- yes --> SUP["It gains support"]
-    KN -- no --> CAND["Record a candidate"]
-    SUP & CAND --> ADM{"Candidate above the admission threshold?"}
-    ADM -- yes --> COL["Propose a collapse into a superentity"]
-    ADM -- no --> FADE
-    COL --> FADE{"Admitted superentity below its floor?"}
-    FADE -- yes --> EXP["Propose an expansion back into its members"]
-    FADE -- no --> DONE
-    EXP --> DONE[/"Staged lessons and the proposals they raise"/]
+  subgraph PD["Per day · day.distill"]
+    EP["Summarize the day as an episode"]:::ltm ==> CT["Count which interactions fired together"]:::ltm
+    CT ==> ADM{"A group's support above the admission threshold?"}:::check
+    ADM ==>|no| FADE{"An admitted superentity below its floor?"}:::check
+    FADE ==>|no| DONE["Staged lessons, and the proposals they raise"]:::done
+    ADM -->|yes| COL["Propose a collapse into a superentity"]:::opt
+    COL --> FADE
+    FADE -->|yes| EXP["Propose an expansion back into its members"]:::opt
+    EXP --> DONE
   end
-  EX --> EP
+  EX ==> EP
+  %% style: classes and happy path
+  classDef start fill:#DAD0F4,stroke:#7C64C4,stroke-width:1.5px,color:#2F2A25
+  classDef opt fill:#FFFDF8,stroke:#C9BFAF,stroke-width:1.3px,stroke-dasharray:5 4,color:#2F2A25
+  classDef check fill:#F5EAC6,stroke:#D2BB72,stroke-width:1.3px,color:#2F2A25,font-weight:600
+  classDef done fill:#FBF8F2,stroke:#93897C,stroke-width:1.6px,color:#2F2A25
+  classDef ltm fill:#DCE6F0,stroke:#A9BFD6,stroke-width:1.3px,color:#3B5B7C
+  linkStyle 0,1,2,3,4,5,14,15,16,17,22 stroke:#7C64C4,stroke-width:2.6px,color:#5B4A99
+  %% style: end
 ```
 
 A superentity's lifecycle:
 
 ```mermaid
+%% style: begin (scripts/docs/style_mermaid.py)
+%%{init: {"theme": "base", "themeVariables": {"fontSize": "14px", "primaryColor": "#FFFDF8", "primaryBorderColor": "#C9BFAF", "primaryTextColor": "#2F2A25", "lineColor": "#857C70", "textColor": "#2F2A25", "secondaryColor": "#F7F2EA", "tertiaryColor": "#FBF8F2", "transitionColor": "#857C70", "transitionLabelColor": "#665E54", "compositeBackground": "#F7F2EA"}}}%%
+%% style: end
 stateDiagram-v2
   [*] --> candidate: a group of interactions fires together
   candidate --> candidate: support grows (+1 per spaced day) or decays

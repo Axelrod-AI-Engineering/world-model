@@ -7,7 +7,7 @@ The design of record. It is written in levels, so read only as deep as you need:
 | You want | Read |
 |---|---|
 | What the system is, in five minutes | This page |
-| How it flows | [architecture.md](architecture.md): eight overview diagrams |
+| How it flows | [architecture.md](architecture.md): seven overview diagrams |
 | To build or change one part | That part's spec in [modules/](modules/README.md), plus the layer rules ([architecture.md §2](architecture.md#2-module-layers)) |
 | Why memory works like a mind and not like a search index | [cognition.md](cognition.md) |
 | Why not just use Cognee or Semantica | [frameworks.md](frameworks.md) |
