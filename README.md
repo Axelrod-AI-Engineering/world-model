@@ -40,15 +40,15 @@ The full demo runs on Railway's `dev` environment at **https://world-model-dev.u
 
 | Read | For |
 |---|---|
-| [docs/demos.md](docs/demos.md) | The three demos, the 24 examples, and how the review works |
+| [docs/design/README.md](docs/design/README.md) | **The design**: the architecture, 17 modules with specs, diagrams, the cognitive framings, Cognee vs Semantica, decisions, and the migration plan |
+| [docs/demos.md](docs/demos.md) | The four demos, the 24 examples, and how the review works |
 | [docs/interface.md](docs/interface.md) | A tour of the interface: the top bar, the canvas, the panels, and every shortcut |
 | [docs/cli.md](docs/cli.md) | The command line and configuration |
-| [docs/architecture.md](docs/architecture.md) | A map from the code to its processes, and the invariants |
 | [docs/ml-stack.md](docs/ml-stack.md) | The ML stack as built, stated formally, with its adversarial review |
 | [docs/ml-roadmap.md](docs/ml-roadmap.md) | The plan to replace each heuristic with a method we can defend |
-| [docs/deployment.md](docs/deployment.md) | The Railway dev deployment, Basic Auth, and running the container locally |
+| [docs/deployment.md](docs/deployment.md) | The Railway dev deployment, sign-in, and running the container locally |
 | [docs/development.md](docs/development.md) | Tests, the repository layout, conventions, and the demo videos |
-| [docs/plan.md](docs/plan.md) | The original specification, which the code's § references point to |
+| [docs/archive/plan.md](docs/archive/plan.md) | The original specification (historical), which the code's § references point to |
 
 Inside the demo, **How it works** (`H`) explains the model itself: the five stages of learning and the six of inference, each with its flowchart; the literature review; and the implementation.
 

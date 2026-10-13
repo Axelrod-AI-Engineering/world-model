@@ -1,6 +1,6 @@
 # Axelrod World Model: Implementation Plan (v0, revision 2)
 
-> **Historical.** This is the specification the repository was first built from; the code's § references point here. The code has moved on since, for example to two demos with examples, a staged review at the end of learning, and a hosted deployment with auth (which §1.3 lists as non-goals). Where they differ, the code and the other pages in `docs/` are current: start at [README.md](README.md).
+> **Historical.** This is the specification the repository was first built from; the code's § references point here. The code has moved on since, for example to two demos with examples, a staged review at the end of learning, and a hosted deployment with auth (which §1.3 lists as non-goals). Where they differ, the code and the other pages in `docs/` are current: start at [../README.md](../README.md); the design of record is [../design/README.md](../design/README.md).
 
 **For:** a coding agent (Claude Code) that will build the repository from scratch, and Manav and Karthik reviewing it.
 **Sources:** the "World Model" architecture page (Figures 1–6 and its definitions), the Oct 4, 2026 Manav/Karthik notes, the Axelrod vision, and the design answers recorded in §2.
