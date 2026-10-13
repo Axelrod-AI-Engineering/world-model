@@ -1,5 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 894 2240" width="894" height="2240" role="img" aria-labelledby="fl-world-model-t fl-world-model-d" class="fl-flow" data-flow="world-model">
-<title id="fl-world-model-t">Learning</title><desc id="fl-world-model-d">Everything that can happen to a market event. The main line runs straight down through concrete steps and yes/no checks; a step that runs only sometimes sits to the right of its check and rejoins the line. Learning stages the event in two parts, working memory and then long-term memory; a person then checks every change to both, including the second- and third-order ripple, and only what they approve is committed. Inference reads committed versions and never writes.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1240 1230" width="1240" height="1230" role="img" aria-labelledby="fl-overview-t fl-overview-d" class="fl-flow" data-flow="overview">
+<title id="fl-overview-t">Axelrod World Model: learning, inference, and the architecture</title><desc id="fl-overview-d">One causal world model of the economy, built like version control. Backend users teach it: each event&#x27;s learning is staged, a person checks every change down to the third-order ripple, and only what they approve is committed. Everyone else asks it: a thesis runs on a branch that is never merged.</desc>
 <style>
 .fl-title { font: 700 18px var(--font-head, 'Bricolage Grotesque', 'Avenir Next', 'Segoe UI', sans-serif); fill: var(--ink, #2F2A25); }
 .fl-sum { font: 400 12.5px var(--font-ui, 'Instrument Sans', 'Helvetica Neue', sans-serif); fill: var(--ink-2, #665E54); }
@@ -35,107 +35,176 @@
 .fl-node.fl-miss { opacity: .38; }
 .fl-edge.fl-hit { stroke: var(--real-line, #7C64C4); stroke-width: 2.2; }
 .fl-edge.fl-miss { opacity: .3; }
+
+.ov-stage { font: 600 13.5px var(--font-ui, 'Instrument Sans', 'Helvetica Neue', sans-serif); fill: var(--ink, #2F2A25); }
+.ov-chip { font: 500 12.5px var(--font-ui, 'Instrument Sans', 'Helvetica Neue', sans-serif); fill: var(--ink, #2F2A25); }
+.ov-num { font: 600 10.5px var(--font-mono, 'IBM Plex Mono', ui-monospace, monospace); fill: var(--ink-3, #93897C); }
+.fl-node.wm .fl-box { fill: var(--wm-fill, #E1ECDF); stroke: var(--wm-line, #A9C6A9); }
+.fl-node.ltm .fl-box { fill: var(--ltm-fill, #DCE6F0); stroke: var(--ltm-line, #A9BFD6); }
+.fl-node.inf .fl-box { fill: var(--front-fill, #F5E4E9); stroke: var(--front-line, #D9A9B8); }
+.fl-node.ext .fl-box { fill: var(--paper, #FBF8F2); stroke: var(--real-line, #7C64C4); stroke-dasharray: 2 3; }
+.fl-edge.happy { stroke: var(--real-line, #7C64C4); stroke-width: 2.6; }
+.fl-arrow.happy { fill: var(--real-line, #7C64C4); }
+.fl-edge.dashed { stroke-dasharray: 4 4; }
 </style>
-<rect width="894" height="2240" fill="var(--sheet, #FFFDF8)"/>
-<text class="fl-title" x="16" y="30">Learning</text>
-<text class="fl-sum" x="16" y="52">Everything that can happen to a market event. The main line runs straight down through concrete steps and yes/no checks;</text>
-<text class="fl-sum" x="16" y="70">a step that runs only sometimes sits to the right of its check and rejoins the line. Learning stages the event in two</text>
-<text class="fl-sum" x="16" y="88">parts, working memory and then long-term memory; a person then checks every change to both, including the second- and</text>
-<text class="fl-sum" x="16" y="106">third-order ripple, and only what they approve is committed. Inference reads committed versions and never writes.</text>
-<rect class="fl-phase-band" x="8" y="476.0" width="878" height="275.0" rx="6" data-phase="intake"/>
-<text class="fl-phase" x="20" y="496.0">Intake</text>
-<rect class="fl-phase-band alt" x="8" y="751.0" width="878" height="570.0" rx="6" data-phase="working"/>
-<text class="fl-phase" x="20" y="771.0">Learning ·</text>
-<text class="fl-phase" x="20" y="785.0">working memory</text>
-<rect class="fl-phase-band" x="8" y="1321.0" width="878" height="442.0" rx="6" data-phase="long_term"/>
-<text class="fl-phase" x="20" y="1341.0">Learning ·</text>
-<text class="fl-phase" x="20" y="1355.0">long-term memory</text>
-<rect class="fl-phase-band alt" x="8" y="1763.0" width="878" height="260.0" rx="6" data-phase="review"/>
-<text class="fl-phase" x="20" y="1783.0">Human review</text>
-<rect class="fl-phase-band" x="8" y="2023.0" width="878" height="211.0" rx="6" data-phase="commit"/>
-<text class="fl-phase" x="20" y="2043.0">Commit</text>
-<g class="fl-edge-g" data-src="event" data-dst="translate"><path class="fl-edge" data-src="event" data-dst="translate" d="M331.0,554.0 V581.0"/><polygon class="fl-arrow" points="326.875,575.5 335.125,575.5 331.0,581.0"/></g>
-<g class="fl-edge-g" data-src="translate" data-dst="q_fuzzy"><path class="fl-edge" data-src="translate" data-dst="q_fuzzy" d="M331.0,632.0 V659.0"/><polygon class="fl-arrow" points="326.875,653.5 335.125,653.5 331.0,659.0"/></g>
-<g class="fl-edge-g" data-src="q_fuzzy" data-dst="parse"><path class="fl-edge" data-src="q_fuzzy" data-dst="parse" d="M331.0,700.0 V775.0"/><polygon class="fl-arrow" points="326.875,769.5 335.125,769.5 331.0,775.0"/><text class="fl-elabel" x="340.0" y="742.0">no</text></g>
-<g class="fl-edge-g" data-src="parse" data-dst="q_new"><path class="fl-edge" data-src="parse" data-dst="q_new" d="M331.0,826.0 V853.0"/><polygon class="fl-arrow" points="326.875,847.5 335.125,847.5 331.0,853.0"/></g>
-<g class="fl-edge-g" data-src="q_new" data-dst="recall"><path class="fl-edge" data-src="q_new" data-dst="recall" d="M331.0,894.0 V963.0"/><polygon class="fl-arrow" points="326.875,957.5 335.125,957.5 331.0,963.0"/><text class="fl-elabel" x="340.0" y="933.0">no</text></g>
-<g class="fl-edge-g" data-src="recall" data-dst="q_move"><path class="fl-edge" data-src="recall" data-dst="q_move" d="M331.0,998.0 V1025.0"/><polygon class="fl-arrow" points="326.875,1019.5 335.125,1019.5 331.0,1025.0"/></g>
-<g class="fl-edge-g" data-src="q_move" data-dst="q_report"><path class="fl-edge" data-src="q_move" data-dst="q_report" d="M331.0,1066.0 V1103.0"/><polygon class="fl-arrow" points="326.875,1097.5 335.125,1097.5 331.0,1103.0"/><text class="fl-elabel" x="340.0" y="1089.0">no</text></g>
-<g class="fl-edge-g" data-src="q_report" data-dst="q_hedged"><path class="fl-edge" data-src="q_report" data-dst="q_hedged" d="M331.0,1144.0 V1213.0"/><polygon class="fl-arrow" points="326.875,1207.5 335.125,1207.5 331.0,1213.0"/><text class="fl-elabel" x="340.0" y="1183.0">no</text></g>
-<g class="fl-edge-g" data-src="q_hedged" data-dst="kinds"><path class="fl-edge" data-src="q_hedged" data-dst="kinds" d="M331.0,1254.0 V1345.0"/><polygon class="fl-arrow" points="326.875,1339.5 335.125,1339.5 331.0,1345.0"/><text class="fl-elabel" x="340.0" y="1304.0">no</text></g>
-<g class="fl-edge-g" data-src="kinds" data-dst="q_actor"><path class="fl-edge" data-src="kinds" data-dst="q_actor" d="M331.0,1396.0 V1423.0"/><polygon class="fl-arrow" points="326.875,1417.5 335.125,1417.5 331.0,1423.0"/></g>
-<g class="fl-edge-g" data-src="q_actor" data-dst="frontier"><path class="fl-edge" data-src="q_actor" data-dst="frontier" d="M331.0,1464.0 V1501.0"/><polygon class="fl-arrow" points="326.875,1495.5 335.125,1495.5 331.0,1501.0"/><text class="fl-elabel" x="340.0" y="1487.0">no</text></g>
-<g class="fl-edge-g" data-src="frontier" data-dst="support"><path class="fl-edge" data-src="frontier" data-dst="support" d="M331.0,1568.0 V1595.0"/><polygon class="fl-arrow" points="326.875,1589.5 335.125,1589.5 331.0,1595.0"/></g>
-<g class="fl-edge-g" data-src="support" data-dst="explain"><path class="fl-edge" data-src="support" data-dst="explain" d="M331.0,1676.0 V1703.0"/><polygon class="fl-arrow" points="326.875,1697.5 335.125,1697.5 331.0,1703.0"/></g>
-<g class="fl-edge-g" data-src="explain" data-dst="check"><path class="fl-edge" data-src="explain" data-dst="check" d="M331.0,1738.0 V1787.0"/><polygon class="fl-arrow" points="326.875,1781.5 335.125,1781.5 331.0,1787.0"/></g>
-<g class="fl-edge-g" data-src="check" data-dst="decide"><path class="fl-edge" data-src="check" data-dst="decide" d="M331.0,1854.0 V1881.0"/><polygon class="fl-arrow" points="326.875,1875.5 335.125,1875.5 331.0,1881.0"/></g>
-<g class="fl-edge-g" data-src="decide" data-dst="commit_wm"><path class="fl-edge" data-src="decide" data-dst="commit_wm" d="M331.0,1922.0 V2047.0"/><polygon class="fl-arrow" points="326.875,2041.5 335.125,2041.5 331.0,2047.0"/><text class="fl-elabel" x="340.0" y="1989.0">yes</text></g>
-<g class="fl-edge-g" data-src="commit_wm" data-dst="commit_ltm"><path class="fl-edge" data-src="commit_wm" data-dst="commit_ltm" d="M331.0,2082.0 V2109.0"/><polygon class="fl-arrow" points="326.875,2103.5 335.125,2103.5 331.0,2109.0"/></g>
-<g class="fl-edge-g" data-src="commit_ltm" data-dst="version"><path class="fl-edge" data-src="commit_ltm" data-dst="version" d="M331.0,2144.0 V2171.0"/><polygon class="fl-arrow" points="326.875,2165.5 335.125,2165.5 331.0,2171.0"/></g>
-<g class="fl-edge-g" data-src="q_fuzzy" data-dst="refine"><path class="fl-edge side" data-src="q_fuzzy" data-dst="refine" d="M501,680.0 H531 V693.0 H574"/><polygon class="fl-arrow" points="568.5,688.875 568.5,697.125 574,693.0"/><text class="fl-elabel" x="565" y="686.0" text-anchor="end">yes</text></g>
-<g class="fl-edge-g" data-src="refine" data-dst="parse"><path class="fl-edge side" data-src="refine" data-dst="parse" d="M693.0,726.0 V764.0 H461 V775.0"/><polygon class="fl-arrow" points="456.875,769.5 465.125,769.5 461,775.0"/></g>
-<g class="fl-edge-g" data-src="q_new" data-dst="classify"><path class="fl-edge side" data-src="q_new" data-dst="classify" d="M501,874.0 H531 V895.0 H574"/><polygon class="fl-arrow" points="568.5,890.875 568.5,899.125 574,895.0"/><text class="fl-elabel" x="565" y="888.0" text-anchor="end">yes</text></g>
-<g class="fl-edge-g" data-src="classify" data-dst="recall"><path class="fl-edge side" data-src="classify" data-dst="recall" d="M693.0,936.0 V952.0 H461 V963.0"/><polygon class="fl-arrow" points="456.875,957.5 465.125,957.5 461,963.0"/></g>
-<g class="fl-edge-g" data-src="q_move" data-dst="ripple"><path class="fl-edge side" data-src="q_move" data-dst="ripple" d="M501,1046.0 H531 V1051.0 H574"/><polygon class="fl-arrow" points="568.5,1046.875 568.5,1055.125 574,1051.0"/><text class="fl-elabel" x="565" y="1044.0" text-anchor="end">yes</text></g>
-<g class="fl-edge-g" data-src="ripple" data-dst="q_report"><path class="fl-edge side" data-src="ripple" data-dst="q_report" d="M693.0,1076.0 V1092.0 H461 V1103.0"/><polygon class="fl-arrow" points="456.875,1097.5 465.125,1097.5 461,1103.0"/></g>
-<g class="fl-edge-g" data-src="q_report" data-dst="fold"><path class="fl-edge side" data-src="q_report" data-dst="fold" d="M501,1124.0 H531 V1145.0 H574"/><polygon class="fl-arrow" points="568.5,1140.875 568.5,1149.125 574,1145.0"/><text class="fl-elabel" x="565" y="1138.0" text-anchor="end">yes</text></g>
-<g class="fl-edge-g" data-src="fold" data-dst="q_hedged"><path class="fl-edge side" data-src="fold" data-dst="q_hedged" d="M693.0,1186.0 V1202.0 H461 V1213.0"/><polygon class="fl-arrow" points="456.875,1207.5 465.125,1207.5 461,1213.0"/></g>
-<g class="fl-edge-g" data-src="q_hedged" data-dst="hedges"><path class="fl-edge side" data-src="q_hedged" data-dst="hedges" d="M501,1234.0 H531 V1255.0 H574"/><polygon class="fl-arrow" points="568.5,1250.875 568.5,1259.125 574,1255.0"/><text class="fl-elabel" x="565" y="1248.0" text-anchor="end">yes</text></g>
-<g class="fl-edge-g" data-src="hedges" data-dst="kinds"><path class="fl-edge side" data-src="hedges" data-dst="kinds" d="M693.0,1296.0 V1334.0 H461 V1345.0"/><polygon class="fl-arrow" points="456.875,1339.5 465.125,1339.5 461,1345.0"/></g>
-<g class="fl-edge-g" data-src="q_actor" data-dst="memory"><path class="fl-edge side" data-src="q_actor" data-dst="memory" d="M501,1444.0 H531 V1449.0 H574"/><polygon class="fl-arrow" points="568.5,1444.875 568.5,1453.125 574,1449.0"/><text class="fl-elabel" x="565" y="1442.0" text-anchor="end">yes</text></g>
-<g class="fl-edge-g" data-src="memory" data-dst="frontier"><path class="fl-edge side" data-src="memory" data-dst="frontier" d="M693.0,1474.0 V1490.0 H461 V1501.0"/><polygon class="fl-arrow" points="456.875,1495.5 465.125,1495.5 461,1501.0"/></g>
-<g class="fl-edge-g" data-src="decide" data-dst="restage"><path class="fl-edge side" data-src="decide" data-dst="restage" d="M501,1902.0 H531 V1907.0 H574"/><polygon class="fl-arrow" points="568.5,1902.875 568.5,1911.125 574,1907.0"/><text class="fl-elabel" x="565" y="1900.0" text-anchor="end">some</text></g>
-<g class="fl-edge-g" data-src="restage" data-dst="check"><path class="fl-edge side" data-src="restage" data-dst="check" d="M811,1907.0 H829 V1821.0 H502"/><polygon class="fl-arrow" points="507.5,1816.875 507.5,1825.125 502,1821.0"/><text class="fl-elabel" x="513" y="1815.0">check again</text></g>
-<g class="fl-edge-g" data-src="decide" data-dst="rejected"><path class="fl-edge side" data-src="decide" data-dst="rejected" d="M501,1902.0 H531 V1973.0 H574"/><polygon class="fl-arrow" points="568.5,1968.875 568.5,1977.125 574,1973.0"/><text class="fl-elabel" x="565" y="1966.0" text-anchor="end">no</text></g>
-<g class="fl-node start mandatory" data-node="event" data-kind="start" data-phase="intake" data-trace="market_event.received" data-component="" data-writes="" data-mandatory="true"><title>A market event: news, a data release, a filing, an imported item, or a backend user&#x27;s edit</title><rect class="fl-box" x="161" y="488.0" width="340" height="66" rx="18"/><text class="fl-label" x="331.0" y="509.5" text-anchor="middle">A market event: news, a data release, a</text><text class="fl-label" x="331.0" y="525.5" text-anchor="middle">filing, an imported item, or a backend</text><text class="fl-label" x="331.0" y="541.5" text-anchor="middle">user&#x27;s edit</text></g>
-<g class="fl-node step mandatory" data-node="translate" data-kind="step" data-phase="intake" data-trace="translate.result" data-component="translator" data-writes="" data-mandatory="true"><title>Translate it into operations: one graph update event</title><rect class="fl-box" x="161" y="582.0" width="340" height="50" rx="8"/><text class="fl-label" x="331.0" y="603.5" text-anchor="middle">Translate it into operations: one graph</text><text class="fl-label" x="331.0" y="619.5" text-anchor="middle">update event</text></g>
-<g class="fl-node decision mandatory" data-node="q_fuzzy" data-kind="decision" data-phase="intake" data-trace="" data-component="" data-writes="" data-mandatory="true"><title>Does an end name a kind, not a value?</title><polygon class="fl-box" points="177,660.0 485,660.0 501,680.0 485,700.0 177,700.0 161,680.0"/><text class="fl-label" x="331.0" y="684.5" text-anchor="middle">Does an end name a kind, not a value?</text></g>
-<g class="fl-node step mandatory" data-node="refine" data-kind="step" data-phase="intake" data-trace="refine.step refine.pending" data-component="refiner" data-writes="" data-mandatory="true"><title>Refine the fuzzy end: kind → entity → subentity, or hedge across the candidates</title><rect class="fl-box" x="575" y="660.0" width="236" height="66" rx="8"/><text class="fl-label" x="693.0" y="681.5" text-anchor="middle">Refine the fuzzy end: kind →</text><text class="fl-label" x="693.0" y="697.5" text-anchor="middle">entity → subentity, or hedge</text><text class="fl-label" x="693.0" y="713.5" text-anchor="middle">across the candidates</text></g>
-<g class="fl-node step mandatory" data-node="parse" data-kind="step" data-phase="working" data-trace="parse.created parse.retired" data-component="parser" data-writes="working" data-mandatory="true"><title>Apply the operations: add or retire items; collect the event&#x27;s moves</title><rect class="fl-box" x="161" y="776.0" width="340" height="50" rx="8"/><text class="fl-label" x="331.0" y="797.5" text-anchor="middle">Apply the operations: add or retire</text><text class="fl-label" x="331.0" y="813.5" text-anchor="middle">items; collect the event&#x27;s moves</text><g class="fl-badge working"><title>Writes working memory</title><rect x="471.6" y="793.0" width="21.4" height="16" rx="8"/><text x="482.3" y="804.5" text-anchor="middle">WM</text></g></g>
-<g class="fl-node decision mandatory" data-node="q_new" data-kind="decision" data-phase="working" data-trace="" data-component="" data-writes="" data-mandatory="true"><title>Does it add items?</title><polygon class="fl-box" points="177,854.0 485,854.0 501,874.0 485,894.0 177,894.0 161,874.0"/><text class="fl-label" x="331.0" y="878.5" text-anchor="middle">Does it add items?</text></g>
-<g class="fl-node step mandatory" data-node="classify" data-kind="step" data-phase="working" data-trace="classify.path" data-component="classifier" data-writes="working" data-mandatory="true"><title>Classify each new item into a kind; it inherits the kind&#x27;s priors</title><rect class="fl-box" x="575" y="854.0" width="236" height="82" rx="8"/><text class="fl-label" x="693.0" y="875.5" text-anchor="middle">Classify each new item</text><text class="fl-label" x="693.0" y="891.5" text-anchor="middle">into a kind; it</text><text class="fl-label" x="693.0" y="907.5" text-anchor="middle">inherits the kind&#x27;s</text><text class="fl-label" x="693.0" y="923.5" text-anchor="middle">priors</text><g class="fl-badge working"><title>Writes working memory</title><rect x="781.6" y="887.0" width="21.4" height="16" rx="8"/><text x="792.3000000000001" y="898.5" text-anchor="middle">WM</text></g></g>
-<g class="fl-node step mandatory" data-node="recall" data-kind="step" data-phase="working" data-trace="recall.result" data-component="recaller" data-writes="" data-mandatory="true"><title>Recall similar superentities and past days</title><rect class="fl-box" x="161" y="964.0" width="340" height="34" rx="8"/><text class="fl-label" x="331.0" y="985.5" text-anchor="middle">Recall similar superentities and past days</text></g>
-<g class="fl-node decision mandatory" data-node="q_move" data-kind="decision" data-phase="working" data-trace="" data-component="" data-writes="" data-mandatory="true"><title>Does it move a value?</title><polygon class="fl-box" points="177,1026.0 485,1026.0 501,1046.0 485,1066.0 177,1066.0 161,1046.0"/><text class="fl-label" x="331.0" y="1050.5" text-anchor="middle">Does it move a value?</text></g>
-<g class="fl-node step mandatory" data-node="ripple" data-kind="step" data-phase="working" data-trace="analyze.done" data-component="analyzer" data-writes="" data-mandatory="true"><title>Simulate the ripple: first-, second-, and third-order moves</title><rect class="fl-box" x="575" y="1026.0" width="236" height="50" rx="8"/><text class="fl-label" x="693.0" y="1047.5" text-anchor="middle">Simulate the ripple: first-,</text><text class="fl-label" x="693.0" y="1063.5" text-anchor="middle">second-, and third-order moves</text></g>
-<g class="fl-node decision mandatory" data-node="q_report" data-kind="decision" data-phase="working" data-trace="" data-component="" data-writes="" data-mandatory="true"><title>Does it report a value?</title><polygon class="fl-box" points="177,1104.0 485,1104.0 501,1124.0 485,1144.0 177,1144.0 161,1124.0"/><text class="fl-label" x="331.0" y="1128.5" text-anchor="middle">Does it report a value?</text></g>
-<g class="fl-node step mandatory" data-node="fold" data-kind="step" data-phase="working" data-trace="fold.posterior fold.edge" data-component="folder" data-writes="working" data-mandatory="true"><title>Fold: update observed values and the interactions that feed them</title><rect class="fl-box" x="575" y="1104.0" width="236" height="82" rx="8"/><text class="fl-label" x="693.0" y="1125.5" text-anchor="middle">Fold: update observed</text><text class="fl-label" x="693.0" y="1141.5" text-anchor="middle">values and the</text><text class="fl-label" x="693.0" y="1157.5" text-anchor="middle">interactions that feed</text><text class="fl-label" x="693.0" y="1173.5" text-anchor="middle">them</text><g class="fl-badge working"><title>Writes working memory</title><rect x="781.6" y="1137.0" width="21.4" height="16" rx="8"/><text x="792.3000000000001" y="1148.5" text-anchor="middle">WM</text></g></g>
-<g class="fl-node decision mandatory" data-node="q_hedged" data-kind="decision" data-phase="working" data-trace="" data-component="" data-writes="" data-mandatory="true"><title>Are fuzzy ends hedged?</title><polygon class="fl-box" points="177,1214.0 485,1214.0 501,1234.0 485,1254.0 177,1254.0 161,1234.0"/><text class="fl-label" x="331.0" y="1238.5" text-anchor="middle">Are fuzzy ends hedged?</text></g>
-<g class="fl-node step mandatory" data-node="hedges" data-kind="step" data-phase="working" data-trace="refine.weighed refine.resolution_proposed" data-component="refiner" data-writes="working" data-mandatory="true"><title>Weigh the hedges; propose a resolution once one passes the bound</title><rect class="fl-box" x="575" y="1214.0" width="236" height="82" rx="8"/><text class="fl-label" x="693.0" y="1235.5" text-anchor="middle">Weigh the hedges;</text><text class="fl-label" x="693.0" y="1251.5" text-anchor="middle">propose a resolution</text><text class="fl-label" x="693.0" y="1267.5" text-anchor="middle">once one passes the</text><text class="fl-label" x="693.0" y="1283.5" text-anchor="middle">bound</text><g class="fl-badge working"><title>Writes working memory</title><rect x="781.6" y="1247.0" width="21.4" height="16" rx="8"/><text x="792.3000000000001" y="1258.5" text-anchor="middle">WM</text></g></g>
-<g class="fl-node step mandatory" data-node="kinds" data-kind="step" data-phase="long_term" data-trace="generalize.updated generalize.split" data-component="generalization_updater" data-writes="long_term" data-mandatory="true"><title>Kinds learn their new members and statistics</title><rect class="fl-box" x="161" y="1346.0" width="340" height="50" rx="8"/><text class="fl-label" x="331.0" y="1367.5" text-anchor="middle">Kinds learn their new members and</text><text class="fl-label" x="331.0" y="1383.5" text-anchor="middle">statistics</text><g class="fl-badge long_term"><title>Writes long-term memory</title><rect x="465.4" y="1363.0" width="27.6" height="16" rx="8"/><text x="479.2" y="1374.5" text-anchor="middle">LTM</text></g></g>
-<g class="fl-node decision mandatory" data-node="q_actor" data-kind="decision" data-phase="long_term" data-trace="" data-component="" data-writes="" data-mandatory="true"><title>Does an actor decide?</title><polygon class="fl-box" points="177,1424.0 485,1424.0 501,1444.0 485,1464.0 177,1464.0 161,1444.0"/><text class="fl-label" x="331.0" y="1448.5" text-anchor="middle">Does an actor decide?</text></g>
-<g class="fl-node step mandatory" data-node="memory" data-kind="step" data-phase="long_term" data-trace="" data-component="consolidator" data-writes="long_term" data-mandatory="true"><title>Entity memory records the actor&#x27;s decision</title><rect class="fl-box" x="575" y="1424.0" width="236" height="50" rx="8"/><text class="fl-label" x="693.0" y="1445.5" text-anchor="middle">Entity memory records</text><text class="fl-label" x="693.0" y="1461.5" text-anchor="middle">the actor&#x27;s decision</text><g class="fl-badge long_term"><title>Writes long-term memory</title><rect x="775.4" y="1441.0" width="27.6" height="16" rx="8"/><text x="789.1999999999999" y="1452.5" text-anchor="middle">LTM</text></g></g>
-<g class="fl-node step mandatory" data-node="frontier" data-kind="step" data-phase="long_term" data-trace="frontier.logged frontier.promotion_proposed" data-component="frontier" data-writes="long_term" data-mandatory="true"><title>Correlation frontier: pair unexplained moves; propose an interaction once a pair holds</title><rect class="fl-box" x="161" y="1502.0" width="340" height="66" rx="8"/><text class="fl-label" x="331.0" y="1523.5" text-anchor="middle">Correlation frontier: pair</text><text class="fl-label" x="331.0" y="1539.5" text-anchor="middle">unexplained moves; propose an</text><text class="fl-label" x="331.0" y="1555.5" text-anchor="middle">interaction once a pair holds</text><g class="fl-badge long_term"><title>Writes long-term memory</title><rect x="465.4" y="1527.0" width="27.6" height="16" rx="8"/><text x="479.2" y="1538.5" text-anchor="middle">LTM</text></g></g>
-<g class="fl-node step mandatory" data-node="support" data-kind="step" data-phase="long_term" data-trace="abduce.admission_proposed abduce.dissolution_proposed" data-component="inducer" data-writes="long_term" data-mandatory="true"><title>Superentity support: propose a collapse when a group recurs, an expansion when one fades</title><rect class="fl-box" x="161" y="1596.0" width="340" height="80" rx="8"/><text class="fl-label" x="331.0" y="1617.5" text-anchor="middle">Superentity support: propose a</text><text class="fl-label" x="331.0" y="1633.5" text-anchor="middle">collapse when a group recurs, an</text><text class="fl-label" x="331.0" y="1649.5" text-anchor="middle">expansion when one fades</text><text class="fl-cap" x="331.0" y="1664.5" text-anchor="middle">per day</text><g class="fl-badge long_term"><title>Writes long-term memory</title><rect x="465.4" y="1628.0" width="27.6" height="16" rx="8"/><text x="479.2" y="1639.5" text-anchor="middle">LTM</text></g></g>
-<g class="fl-node step mandatory" data-node="explain" data-kind="step" data-phase="long_term" data-trace="explain.stored" data-component="explainer" data-writes="long_term" data-mandatory="true"><title>Explain what was learned</title><rect class="fl-box" x="161" y="1704.0" width="340" height="34" rx="8"/><text class="fl-label" x="331.0" y="1725.5" text-anchor="middle">Explain what was learned</text><g class="fl-badge long_term"><title>Writes long-term memory</title><rect x="465.4" y="1713.0" width="27.6" height="16" rx="8"/><text x="479.2" y="1724.5" text-anchor="middle">LTM</text></g></g>
-<g class="fl-node step mandatory" data-node="check" data-kind="step" data-phase="review" data-trace="review.queued" data-component="" data-writes="" data-mandatory="true"><title>The staged changes form a proposal: a person checks each one, through the third-order ripple, at the confidence they set</title><rect class="fl-box" x="161" y="1788.0" width="340" height="66" rx="8"/><text class="fl-label" x="331.0" y="1809.5" text-anchor="middle">The staged changes form a proposal: a person</text><text class="fl-label" x="331.0" y="1825.5" text-anchor="middle">checks each one, through the third-order</text><text class="fl-label" x="331.0" y="1841.5" text-anchor="middle">ripple, at the confidence they set</text></g>
-<g class="fl-node decision mandatory" data-node="decide" data-kind="decision" data-phase="review" data-trace="review.decided" data-component="" data-writes="" data-mandatory="true"><title>Approve?</title><polygon class="fl-box" points="177,1882.0 485,1882.0 501,1902.0 485,1922.0 177,1922.0 161,1902.0"/><text class="fl-label" x="331.0" y="1906.5" text-anchor="middle">Approve?</text></g>
-<g class="fl-node step mandatory" data-node="restage" data-kind="step" data-phase="review" data-trace="" data-component="" data-writes="" data-mandatory="true"><title>Re-stage without what was deselected</title><rect class="fl-box" x="575" y="1882.0" width="236" height="50" rx="8"/><text class="fl-label" x="693.0" y="1903.5" text-anchor="middle">Re-stage without what was</text><text class="fl-label" x="693.0" y="1919.5" text-anchor="middle">deselected</text></g>
-<g class="fl-node end mandatory" data-node="rejected" data-kind="end" data-phase="review" data-trace="" data-component="" data-writes="" data-mandatory="true"><title>Rejected: nothing changes (logged)</title><rect class="fl-box" x="575" y="1948.0" width="236" height="50" rx="18"/><text class="fl-label" x="693.0" y="1969.5" text-anchor="middle">Rejected: nothing changes</text><text class="fl-label" x="693.0" y="1985.5" text-anchor="middle">(logged)</text></g>
-<g class="fl-node store mandatory" data-node="commit_wm" data-kind="store" data-phase="commit" data-trace="state.version" data-component="" data-writes="working" data-mandatory="true"><title>Commit to working memory</title><rect class="fl-box" x="161" y="2048.0" width="340" height="34" rx="5"/><line class="fl-box" x1="161" y1="2053.0" x2="501" y2="2053.0"/><text class="fl-label" x="331.0" y="2069.5" text-anchor="middle">Commit to working memory</text><g class="fl-badge working"><title>Writes working memory</title><rect x="471.6" y="2057.0" width="21.4" height="16" rx="8"/><text x="482.3" y="2068.5" text-anchor="middle">WM</text></g></g>
-<g class="fl-node store mandatory" data-node="commit_ltm" data-kind="store" data-phase="commit" data-trace="state.version" data-component="" data-writes="long_term" data-mandatory="true"><title>Commit to long-term memory</title><rect class="fl-box" x="161" y="2110.0" width="340" height="34" rx="5"/><line class="fl-box" x1="161" y1="2115.0" x2="501" y2="2115.0"/><text class="fl-label" x="331.0" y="2131.5" text-anchor="middle">Commit to long-term memory</text><g class="fl-badge long_term"><title>Writes long-term memory</title><rect x="465.4" y="2119.0" width="27.6" height="16" rx="8"/><text x="479.2" y="2130.5" text-anchor="middle">LTM</text></g></g>
-<g class="fl-node end mandatory" data-node="version" data-kind="end" data-phase="commit" data-trace="" data-component="" data-writes="" data-mandatory="true"><title>A new version in the log; inference reads committed versions only</title><rect class="fl-box" x="161" y="2172.0" width="340" height="50" rx="18"/><text class="fl-label" x="331.0" y="2193.5" text-anchor="middle">A new version in the log; inference reads</text><text class="fl-label" x="331.0" y="2209.5" text-anchor="middle">committed versions only</text></g>
-<g class="fl-legend-g" transform="translate(20,134.0)"><rect x="0" y="-11" width="26" height="15" rx="4" class="fl-box"/><text class="fl-legend" x="32" y="0">step</text><polygon points="78,-3.5 84,-11 98,-11 104,-3.5 98,4 84,4" class="fl-box" style="fill: var(--butter-fill, #F5EAC6); stroke: var(--butter-line, #D2BB72)"/><text class="fl-legend" x="110" y="0">check (yes / no)</text><rect x="218" y="-11" width="26" height="15" rx="3" class="fl-box" style="fill: var(--out-fill, #F7E1D3); stroke: var(--out-line, #E0B092)"/><text class="fl-legend" x="250" y="0">commit</text><text class="fl-legend" x="310" y="0">WM / LTM: writes working / long-term memory</text></g>
-<text class="fl-phase" x="20" y="166.0">Terms</text>
-<text class="fl-term" x="20" y="184.0">Market event</text>
-<text class="fl-legend" x="170" y="184.0">Something that happened and was published: news, a data release, a filing, or an imported item. Its</text>
-<text class="fl-legend" x="170" y="200.0">publication time decides the day it is folded in.</text>
-<text class="fl-term" x="20" y="224.0">Imported item</text>
-<text class="fl-legend" x="170" y="224.0">One dated piece of research in an import bundle, already read and categorized by a research agent. Importing</text>
-<text class="fl-legend" x="170" y="240.0">makes it a market event.</text>
-<text class="fl-term" x="20" y="264.0">Operation</text>
-<text class="fl-legend" x="170" y="264.0">One change: add or retire an item, change or observe a value, group or dissolve a superentity.</text>
-<text class="fl-term" x="20" y="288.0">Graph update event</text>
-<text class="fl-legend" x="170" y="288.0">The operations one market event stands for, with the evidence behind them.</text>
-<text class="fl-term" x="20" y="312.0">Item</text>
-<text class="fl-legend" x="170" y="312.0">Anything in the graph: an entity (an actor or an idea), a subentity (one of its values), an interaction (a</text>
-<text class="fl-legend" x="170" y="328.0">causal link), or a superentity (a recurring group).</text>
-<text class="fl-term" x="20" y="352.0">Kind</text>
-<text class="fl-legend" x="170" y="352.0">A node of the taxonomy. Every item is classified into one and inherits its priors; kinds learn from their</text>
-<text class="fl-legend" x="170" y="368.0">members.</text>
-<text class="fl-term" x="20" y="392.0">Ripple</text>
-<text class="fl-legend" x="170" y="392.0">The moves a change sets off downstream, order by order.</text>
-<text class="fl-term" x="20" y="416.0">Proposal</text>
-<text class="fl-legend" x="170" y="416.0">The staged changes from one event, waiting for a person&#x27;s review.</text>
-<text class="fl-term" x="20" y="440.0">Version</text>
-<text class="fl-legend" x="170" y="440.0">One commit. Any version can be reopened read-only or compared with another.</text>
+<rect width="1240" height="1230" fill="var(--sheet, #FFFDF8)"/>
+<text class="fl-title" x="24" y="38">Axelrod World Model</text>
+<text class="fl-sum" x="24" y="62">One causal world model of the economy, built like version control. Backend users teach it: each event&#x27;s learning is staged, a person checks every change down to the third-order</text>
+<text class="fl-sum" x="24" y="80">ripple, and only what they approve is committed. Everyone else asks it: a thesis runs on a branch that is never merged.</text>
+<g class="fl-node start start"><rect class="fl-box" x="24" y="106" width="22" height="14" rx="4"/></g><text class="fl-legend" x="52" y="117">start</text>
+<g class="fl-node decision decision"><rect class="fl-box" x="105.0" y="106" width="22" height="14" rx="4"/></g><text class="fl-legend" x="133.0" y="117">a check</text>
+<g class="fl-node store store"><rect class="fl-box" x="198.4" y="106" width="22" height="14" rx="4"/></g><text class="fl-legend" x="226.4" y="117">a commit</text>
+<g class="fl-node step wm"><rect class="fl-box" x="298.0" y="106" width="22" height="14" rx="4"/></g><text class="fl-legend" x="326.0" y="117">working memory</text>
+<g class="fl-node step ltm"><rect class="fl-box" x="434.8" y="106" width="22" height="14" rx="4"/></g><text class="fl-legend" x="462.8" y="117">long-term memory</text>
+<g class="fl-node step inf"><rect class="fl-box" x="584.0" y="106" width="22" height="14" rx="4"/></g><text class="fl-legend" x="612.0" y="117">inference</text>
+<g class="fl-node step optional"><rect class="fl-box" x="689.8" y="106" width="22" height="14" rx="4" style="stroke-dasharray: 5 4"/></g><text class="fl-legend" x="717.8" y="117">only sometimes</text>
+<path class="fl-edge happy" d="M826.5999999999999,113 L852.5999999999999,113"/><text class="fl-legend" x="860.5999999999999" y="117">the happy path</text>
+<rect class="fl-phase-band" x="24" y="140" width="556" height="714" rx="8"/>
+<text class="fl-phase" x="40" y="162">Learning · backend users teach it</text>
+<rect class="fl-phase-band" x="660" y="140" width="556" height="714" rx="8"/>
+<text class="fl-phase" x="676" y="162">Inference · everyone else asks it</text>
+<g class="fl-node start start"><title>A market event, or a backend user&#x27;s edit</title>
+<rect class="fl-box" x="88" y="180" width="292" height="50" rx="18"/>
+<text class="ov-stage" x="234.0" y="201.5" text-anchor="middle">A market event, or a backend user&#x27;s</text>
+<text class="ov-stage" x="234.0" y="217.5" text-anchor="middle">edit</text>
+</g>
+<path class="fl-edge happy" d="M234.0,230 L234.0,259"/><polygon class="fl-arrow happy" points="229.875,254.5 238.125,254.5 234.0,260"/>
+<g class="fl-node step step"><title>Intake: A graph update event: operations with concrete ends</title>
+<rect class="fl-box" x="48" y="260" width="372" height="48" rx="8"/>
+<text class="ov-stage" x="234.0" y="281.5" text-anchor="middle">Intake</text>
+<text class="fl-cap" x="234.0" y="296.5" text-anchor="middle">A graph update event: operations with concrete ends</text>
+</g>
+<path class="fl-edge happy" d="M234.0,308 L234.0,337"/><polygon class="fl-arrow happy" points="229.875,332.5 238.125,332.5 234.0,338"/>
+<g class="fl-node step wm"><title>Learning · working memory: The staged current state: new or retired structure, the event&#x27;s moves, the ripple by order, and updated values and effects</title>
+<rect class="fl-box" x="48" y="338" width="372" height="76" rx="8"/>
+<text class="ov-stage" x="234.0" y="359.5" text-anchor="middle">Learning · working memory</text>
+<text class="fl-cap" x="234.0" y="374.5" text-anchor="middle">The staged current state: new or retired structure,</text>
+<text class="fl-cap" x="234.0" y="388.5" text-anchor="middle">the event&#x27;s moves, the ripple by order, and updated</text>
+<text class="fl-cap" x="234.0" y="402.5" text-anchor="middle">values and effects</text>
+</g>
+<path class="fl-edge happy" d="M234.0,414 L234.0,443"/><polygon class="fl-arrow happy" points="229.875,438.5 238.125,438.5 234.0,444"/>
+<g class="fl-node step ltm"><title>Learning · long-term memory: Staged lessons: kinds and their statistics, entity memories, the frontier, superentity support, and any proposals they raise</title>
+<rect class="fl-box" x="48" y="444" width="372" height="76" rx="8"/>
+<text class="ov-stage" x="234.0" y="465.5" text-anchor="middle">Learning · long-term memory</text>
+<text class="fl-cap" x="234.0" y="480.5" text-anchor="middle">Staged lessons: kinds and their statistics, entity</text>
+<text class="fl-cap" x="234.0" y="494.5" text-anchor="middle">memories, the frontier, superentity support, and</text>
+<text class="fl-cap" x="234.0" y="508.5" text-anchor="middle">any proposals they raise</text>
+</g>
+<path class="fl-edge happy" d="M234.0,520 L234.0,549"/><polygon class="fl-arrow happy" points="229.875,544.5 238.125,544.5 234.0,550"/>
+<g class="fl-node decision decision"><title>Human review: An approved selection of the changes, or a rejection</title>
+<polygon class="fl-box" points="64,550 404,550 420,584.0 404,618 64,618 48,584.0"/>
+<text class="ov-stage" x="234.0" y="574.5" text-anchor="middle">Human review</text>
+<text class="fl-cap" x="234.0" y="589.5" text-anchor="middle">An approved selection of the changes, or a</text>
+<text class="fl-cap" x="234.0" y="603.5" text-anchor="middle">rejection</text>
+</g>
+<path class="fl-edge happy" d="M234.0,618 L234.0,647"/><polygon class="fl-arrow happy" points="229.875,642.5 238.125,642.5 234.0,648"/>
+<g class="fl-node store store"><title>Commit: A new version: one commit to working memory, one to long-term memory</title>
+<rect class="fl-box" x="48" y="648" width="372" height="62" rx="5"/>
+<text class="ov-stage" x="234.0" y="669.5" text-anchor="middle">Commit</text>
+<text class="fl-cap" x="234.0" y="684.5" text-anchor="middle">A new version: one commit to working memory, one to</text>
+<text class="fl-cap" x="234.0" y="698.5" text-anchor="middle">long-term memory</text>
+</g>
+<path class="fl-edge happy" d="M234.0,710 L234.0,739"/><polygon class="fl-arrow happy" points="229.875,734.5 238.125,734.5 234.0,740"/>
+<g class="fl-node end end"><title>A new version</title>
+<rect class="fl-box" x="88" y="740" width="292" height="34" rx="17.0"/>
+<text class="ov-stage" x="234.0" y="761.5" text-anchor="middle">A new version</text>
+</g>
+<g class="fl-node start start"><title>A what-if question, asked in Predict</title>
+<rect class="fl-box" x="724" y="180" width="292" height="34" rx="17.0"/>
+<text class="ov-stage" x="870.0" y="201.5" text-anchor="middle">A what-if question, asked in Predict</text>
+</g>
+<path class="fl-edge happy" d="M870.0,214 L870.0,243"/><polygon class="fl-arrow happy" points="865.875,238.5 874.125,238.5 870.0,244"/>
+<g class="fl-node step step"><title>Pose a thesis: A hypothetical event with concrete ends, and the values to watch</title>
+<rect class="fl-box" x="684" y="244" width="372" height="62" rx="8"/>
+<text class="ov-stage" x="870.0" y="265.5" text-anchor="middle">Pose a thesis</text>
+<text class="fl-cap" x="870.0" y="280.5" text-anchor="middle">A hypothetical event with concrete ends, and the</text>
+<text class="fl-cap" x="870.0" y="294.5" text-anchor="middle">values to watch</text>
+</g>
+<path class="fl-edge happy" d="M870.0,306 L870.0,335"/><polygon class="fl-arrow happy" points="865.875,330.5 874.125,330.5 870.0,336"/>
+<g class="fl-node step inf"><title>Isolate the networks: The networks the shock reaches: superentities and paths to the targets, rivals marked</title>
+<rect class="fl-box" x="684" y="336" width="372" height="62" rx="8"/>
+<text class="ov-stage" x="870.0" y="357.5" text-anchor="middle">Isolate the networks</text>
+<text class="fl-cap" x="870.0" y="372.5" text-anchor="middle">The networks the shock reaches: superentities and</text>
+<text class="fl-cap" x="870.0" y="386.5" text-anchor="middle">paths to the targets, rivals marked</text>
+</g>
+<path class="fl-edge happy" d="M870.0,398 L870.0,427"/><polygon class="fl-arrow happy" points="865.875,422.5 874.125,422.5 870.0,428"/>
+<g class="fl-node step inf"><title>Simulate and couple: For each scenario: simulated paths with and without the shock, on the same random draws</title>
+<rect class="fl-box" x="684" y="428" width="372" height="62" rx="8"/>
+<text class="ov-stage" x="870.0" y="449.5" text-anchor="middle">Simulate and couple</text>
+<text class="fl-cap" x="870.0" y="464.5" text-anchor="middle">For each scenario: simulated paths with and without</text>
+<text class="fl-cap" x="870.0" y="478.5" text-anchor="middle">the shock, on the same random draws</text>
+</g>
+<path class="fl-edge happy" d="M870.0,490 L870.0,519"/><polygon class="fl-arrow happy" points="865.875,514.5 874.125,514.5 870.0,520"/>
+<g class="fl-node step inf"><title>Weigh and unify: One forecast: the scenarios mixed by weight, every value as a distribution</title>
+<rect class="fl-box" x="684" y="520" width="372" height="62" rx="8"/>
+<text class="ov-stage" x="870.0" y="541.5" text-anchor="middle">Weigh and unify</text>
+<text class="fl-cap" x="870.0" y="556.5" text-anchor="middle">One forecast: the scenarios mixed by weight, every</text>
+<text class="fl-cap" x="870.0" y="570.5" text-anchor="middle">value as a distribution</text>
+</g>
+<path class="fl-edge happy" d="M870.0,582 L870.0,611"/><polygon class="fl-arrow happy" points="865.875,606.5 874.125,606.5 870.0,612"/>
+<g class="fl-node step inf"><title>Read out and explain: Every value by order and transmission path, groups, binding constraints, and a brief</title>
+<rect class="fl-box" x="684" y="612" width="372" height="62" rx="8"/>
+<text class="ov-stage" x="870.0" y="633.5" text-anchor="middle">Read out and explain</text>
+<text class="fl-cap" x="870.0" y="648.5" text-anchor="middle">Every value by order and transmission path, groups,</text>
+<text class="fl-cap" x="870.0" y="662.5" text-anchor="middle">binding constraints, and a brief</text>
+</g>
+<path class="fl-edge happy" d="M870.0,674 L870.0,703"/><polygon class="fl-arrow happy" points="865.875,698.5 874.125,698.5 870.0,704"/>
+<g class="fl-node end end"><title>A forecast and its brief</title>
+<rect class="fl-box" x="724" y="704" width="292" height="34" rx="17.0"/>
+<text class="ov-stage" x="870.0" y="725.5" text-anchor="middle">A forecast and its brief</text>
+</g>
+<path class="fl-edge " d="M870.0,738 L870.0,767"/><polygon class="fl-arrow " points="865.875,762.5 874.125,762.5 870.0,768"/>
+<text class="fl-elabel" x="878.0" y="757.0">if someone acts on it</text>
+<g class="fl-node step step optional"><title>Score against outcomes: A score for the forecast, and the track records of the superentities it used</title>
+<rect class="fl-box" x="684" y="768" width="372" height="62" rx="8"/>
+<text class="ov-stage" x="870.0" y="789.5" text-anchor="middle">Score against outcomes</text>
+<text class="fl-cap" x="870.0" y="804.5" text-anchor="middle">A score for the forecast, and the track records of</text>
+<text class="fl-cap" x="870.0" y="818.5" text-anchor="middle">the superentities it used</text>
+</g>
+<path class="fl-edge" d="M420,584.0 L468,584.0 L468,376.0 L421,376.0"/><polygon class="fl-arrow" points="425.5,371.875 425.5,380.125 420,376.0"/>
+<text class="fl-elabel" x="476" y="480.0">deselect some:</text><text class="fl-elabel" x="476" y="494.0">re-stage</text>
+<g class="fl-node end end"><title>Rejected: nothing changes</title>
+<rect class="fl-box" x="446" y="659.0" width="128" height="66" rx="18"/>
+<text class="ov-chip" x="510.0" y="680.5" text-anchor="middle">Rejected:</text>
+<text class="ov-chip" x="510.0" y="696.5" text-anchor="middle">nothing</text>
+<text class="ov-chip" x="510.0" y="712.5" text-anchor="middle">changes</text>
+</g>
+<path class="fl-edge" d="M468,584.0 L468,658.0"/><polygon class="fl-arrow" points="463.875,653.5 472.125,653.5 468,659.0"/>
+<text class="fl-elabel" x="476" y="625.5">reject</text>
+<path class="fl-edge happy" d="M380,757.0 L620.0,757.0 L620.0,367.0 L683,367.0"/><polygon class="fl-arrow happy" points="678.5,362.875 678.5,371.125 684,367.0"/>
+<text class="fl-elabel" x="392" y="777.0">inference reads a branch of</text>
+<text class="fl-elabel" x="392" y="791.0">a committed version; never merged</text>
+<rect class="fl-phase-band" x="24" y="878" width="1192" height="332" rx="8"/>
+<text class="fl-phase" x="40" y="900">Architecture · 17 modules in six layers (docs/design)</text>
+<rect class="fl-phase-band" x="32" y="918" width="1176" height="40" rx="6"/>
+<text class="fl-phase" x="46" y="943">5 · Interfaces</text>
+<g class="fl-node step step"><title>M14 Views · API · CLI</title><rect class="fl-box" x="170" y="924" width="160.2" height="28" rx="7"/><text class="ov-num" x="180" y="942">M14</text><text class="ov-chip" x="208" y="942.5">Views · API · CLI</text></g>
+<g class="fl-node step step"><title>M15 Context layer (MCP)</title><rect class="fl-box" x="342.2" y="924" width="173.39999999999998" height="28" rx="7"/><text class="ov-num" x="352.2" y="942">M15</text><text class="ov-chip" x="380.2" y="942.5">Context layer (MCP)</text></g>
+<g class="fl-node step step"><title>M16 Web: Learn · Predict</title><rect class="fl-box" x="527.5999999999999" y="924" width="180.0" height="28" rx="7"/><text class="ov-num" x="537.5999999999999" y="942">M16</text><text class="ov-chip" x="565.5999999999999" y="942.5">Web: Learn · Predict</text></g>
+<rect class="fl-phase-band alt" x="32" y="964" width="1176" height="40" rx="6"/>
+<text class="fl-phase" x="46" y="989">4 · Runtime</text>
+<g class="fl-node decision decision"><title>M12 Runtime · the day loop</title><rect class="fl-box" x="170" y="970" width="193.2" height="28" rx="7"/><text class="ov-num" x="180" y="988">M12</text><text class="ov-chip" x="208" y="988.5">Runtime · the day loop</text></g>
+<g class="fl-node decision decision"><title>M13 Services: review · update · thesis</title><rect class="fl-box" x="375.2" y="970" width="272.4" height="28" rx="7"/><text class="ov-num" x="385.2" y="988">M13</text><text class="ov-chip" x="413.2" y="988.5">Services: review · update · thesis</text></g>
+<g class="fl-node step ext"><title>M17 Demo (side)</title><rect class="fl-box" x="1023.4000000000001" y="970" width="120.6" height="28" rx="7"/><text class="ov-num" x="1033.4" y="988">M17</text><text class="ov-chip" x="1061.4" y="988.5">Demo (side)</text></g>
+<rect class="fl-phase-band" x="32" y="1010" width="1176" height="40" rx="6"/>
+<text class="fl-phase" x="46" y="1035">3 · Engines</text>
+<g class="fl-node step step"><title>M05 Intake</title><rect class="fl-box" x="170" y="1016" width="96" height="28" rx="7"/><text class="ov-num" x="180" y="1034">M05</text><text class="ov-chip" x="208" y="1034.5">Intake</text></g>
+<g class="fl-node step step"><title>M06 Shared read</title><rect class="fl-box" x="278" y="1016" width="120.6" height="28" rx="7"/><text class="ov-num" x="288" y="1034">M06</text><text class="ov-chip" x="316" y="1034.5">Shared read</text></g>
+<g class="fl-node step step"><title>M07 Dynamics</title><rect class="fl-box" x="410.6" y="1016" width="100.8" height="28" rx="7"/><text class="ov-num" x="420.6" y="1034">M07</text><text class="ov-chip" x="448.6" y="1034.5">Dynamics</text></g>
+<g class="fl-node step wm"><title>M08 Learning · WM</title><rect class="fl-box" x="523.4" y="1016" width="133.8" height="28" rx="7"/><text class="ov-num" x="533.4" y="1034">M08</text><text class="ov-chip" x="561.4" y="1034.5">Learning · WM</text></g>
+<g class="fl-node step ltm"><title>M09 Learning · LTM</title><rect class="fl-box" x="669.2" y="1016" width="140.39999999999998" height="28" rx="7"/><text class="ov-num" x="679.2" y="1034">M09</text><text class="ov-chip" x="707.2" y="1034.5">Learning · LTM</text></g>
+<g class="fl-node step inf"><title>M10 Inference</title><rect class="fl-box" x="821.6" y="1016" width="107.4" height="28" rx="7"/><text class="ov-num" x="831.6" y="1034">M10</text><text class="ov-chip" x="859.6" y="1034.5">Inference</text></g>
+<g class="fl-node step step"><title>M11 Evaluation</title><rect class="fl-box" x="941.0" y="1016" width="114.0" height="28" rx="7"/><text class="ov-num" x="951.0" y="1034">M11</text><text class="ov-chip" x="979.0" y="1034.5">Evaluation</text></g>
+<rect class="fl-phase-band alt" x="32" y="1056" width="1176" height="40" rx="6"/>
+<text class="fl-phase" x="46" y="1081">2 · State</text>
+<g class="fl-node store store"><title>M03 Memory: working · long-term</title><rect class="fl-box" x="170" y="1062" width="226.2" height="28" rx="7"/><text class="ov-num" x="180" y="1080">M03</text><text class="ov-chip" x="208" y="1080.5">Memory: working · long-term</text></g>
+<g class="fl-node store store"><title>M04 Repo: ledger · snapshots · branches</title><rect class="fl-box" x="408.2" y="1062" width="279.0" height="28" rx="7"/><text class="ov-num" x="418.2" y="1080">M04</text><text class="ov-chip" x="446.2" y="1080.5">Repo: ledger · snapshots · branches</text></g>
+<rect class="fl-phase-band" x="32" y="1102" width="1176" height="40" rx="6"/>
+<text class="fl-phase" x="46" y="1127">1 · Domain</text>
+<g class="fl-node step step"><title>M02 Model: entities · interactions · superentities</title><rect class="fl-box" x="170" y="1108" width="351.59999999999997" height="28" rx="7"/><text class="ov-num" x="180" y="1126">M02</text><text class="ov-chip" x="208" y="1126.5">Model: entities · interactions · superentities</text></g>
+<rect class="fl-phase-band alt" x="32" y="1148" width="1176" height="40" rx="6"/>
+<text class="fl-phase" x="46" y="1173">0 · Foundation</text>
+<g class="fl-node start start"><title>M01 Core · ports: every slot&#x27;s contract</title><rect class="fl-box" x="170" y="1154" width="279.0" height="28" rx="7"/><text class="ov-num" x="180" y="1172">M01</text><text class="ov-chip" x="208" y="1172.5">Core · ports: every slot&#x27;s contract</text></g>
+<path class="fl-edge happy" d="M1182,928 L1182,1176"/><polygon class="fl-arrow happy" points="1177.875,1172.5 1186.125,1172.5 1182,1178"/>
+<text class="fl-elabel" x="1174" y="912" text-anchor="end">imports point down only</text>
 </svg>

@@ -5,7 +5,7 @@ The **Axelrod World Model**, v0. It is one causal world model of the economy, bu
 - **Backend users** teach it (the Learn view). Each event's learning runs on a staged copy, first working memory and then long-term memory. A person checks everything it would commit, down to the second- and third-order ripple. They keep what makes sense, and only that is committed.
 - **Everyone else** only asks it (the Predict view). A thesis runs on a branch of a committed version that is never merged.
 
-![The flowchart: learning and prediction](docs/flowchart.svg)
+![Overview: learning, inference, and the architecture](docs/flowchart.svg)
 
 The repository has two parts:
 

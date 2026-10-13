@@ -9,6 +9,7 @@ import pytest
 
 from axelrod_wm.engine.contracts import CONTRACTS
 from axelrod_wm.flows import FLOWS, INFERENCE, WORLD_MODEL
+from axelrod_wm.flows.overview import render_overview_svg
 from axelrod_wm.flows.render import flow_markdown, render_svg
 from axelrod_wm.sim.examples.small import SMALL
 
@@ -107,4 +108,11 @@ def test_render_marks_every_node_and_the_text_lists_every_stage():
 def test_docs_flowchart_is_current():
     path = SRC.parents[1] / "docs" / "flowchart.svg"
     assert path.exists(), "run `axelrod flows --svg docs/flowchart.svg`"
-    assert path.read_text() == render_svg(WORLD_MODEL), "docs/flowchart.svg is stale: run `axelrod flows --svg docs/flowchart.svg`"
+    assert path.read_text() == render_overview_svg(), "docs/flowchart.svg is stale: run `axelrod flows --svg docs/flowchart.svg`"
+
+
+def test_overview_follows_the_flows():
+    """The README picture draws every stage of learning and of inference, by its title."""
+    svg = render_overview_svg()
+    for p in (*WORLD_MODEL.phases, *INFERENCE.phases):
+        assert p.title.replace("&", "&amp;") in svg

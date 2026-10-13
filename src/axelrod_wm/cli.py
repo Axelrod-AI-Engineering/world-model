@@ -229,17 +229,18 @@ def evaluate(scenario: str = typer.Argument("oil_shock_demo"),
 
 # -- the flowchart, contracts, the two demos, and the log ----------------------------
 @app.command()
-def flows(svg: Optional[str] = typer.Option(None, "--svg", help="Also write the flowchart as an SVG here.")) -> None:
+def flows(svg: Optional[str] = typer.Option(None, "--svg", help="Also write the overview (learning, inference, architecture) as an SVG here.")) -> None:
     """Print the flowcharts of learning and of inference (each stage's input and output), then each stage's own
     flowchart, step by step."""
     from axelrod_wm.flows import INFERENCE, INFERENCE_FLOWS, STAGE_FLOWS, WORLD_MODEL
-    from axelrod_wm.flows.render import flow_markdown, render_svg
+    from axelrod_wm.flows.overview import render_overview_svg
+    from axelrod_wm.flows.render import flow_markdown
 
     for f in (WORLD_MODEL, *STAGE_FLOWS, INFERENCE, *INFERENCE_FLOWS):
         typer.echo(flow_markdown(f))
     if svg:
         Path(svg).parent.mkdir(parents=True, exist_ok=True)
-        Path(svg).write_text(render_svg(WORLD_MODEL))
+        Path(svg).write_text(render_overview_svg())
         typer.echo(f"wrote {svg}")
 
 

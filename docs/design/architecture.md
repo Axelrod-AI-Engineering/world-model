@@ -11,7 +11,7 @@ Seven overview diagrams. The detail diagrams (each stage's own flowchart, the se
 - 🟦 **Blue:** long-term memory.
 - **Dashed:** runs only sometimes.
 
-The colors match the app's own flowcharts ([../flowchart.svg](../flowchart.svg)). `scripts/docs/style_mermaid.py` applies them.
+The colors match the app's own flowcharts and the README's overview ([../flowchart.svg](../flowchart.svg)). `scripts/docs/style_mermaid.py` applies them.
 
 ## 1. System map
 

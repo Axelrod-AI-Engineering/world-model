@@ -21,7 +21,7 @@ Read as deep as you need. Start with the design's front page; each level links t
 | [cli.md](cli.md) | The command line, configuration, and environment variables |
 | [development.md](development.md) | Tests, the repository layout, and conventions |
 | [deployment.md](deployment.md) | The Railway dev deployment, sign-in, and the container |
-| [flowchart.svg](flowchart.svg) | Learning's overview as a picture (`axelrod flows --svg`) |
+| [flowchart.svg](flowchart.svg) | The README's overview: learning, inference, and the architecture (`axelrod flows --svg`) |
 | [media/](media/) | The video plans |
 | [archive/plan.md](archive/plan.md) | The original specification (historical); the code's § references point here |
 
