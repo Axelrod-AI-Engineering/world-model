@@ -8,26 +8,26 @@ About 28.7k lines of Python in `src/axelrod_wm` and 13.8k lines of JavaScript in
 
 | Package today | Becomes | Change |
 |---|---|---|
-| `model/` | M03 model | Gains `events/`, `Forecast`; loses `ids`, `serialization` (→ core) and `PosteriorUpdater` (→ dynamics) |
-| `events/` | M03 model | Merged |
-| `trace.py`, `engine/registry.py`, `engine/rng.py` | M01 core | Moved |
-| `engine/interfaces.py`, `engine/contracts.py`, and scattered ABCs | M02 ports | Gathered |
-| `memory/` | M04 memory | Loses `SuperInteractionBuilder` (→ M10), the frontier ABCs (→ ports), `open_world.py` (→ views); `ChannelState` stays, its import of `dynamics.kernels` goes |
-| `repo/` | M05 repo | Gains `Branch`, PROV fields, and `RecordStore`; loses `Proposal` and `ReviewPolicy` (→ services and ports) |
-| `intake/`, `sim/imports.py` | M06 intake | `ImportRunner` comes in; the imports of `sim/` go |
-| `shared/`, `inference/transmission.py`, `inference/paths.py`, `abduction.bind` | M07 shared read | Transmission and binding come in |
-| `dynamics/` | M08 dynamics | Gains `PosteriorUpdater`; stops importing `memory.working` at module scope |
-| `learning/working_memory.py`, `fold.py`, `kernel_learning.py`, `inference/voi.py` | M09 learning · WM | Regrouped |
-| `learning/long_term.py`, `generalize.py`, `frontier_test.py`, `consolidate.py`, `abduction.count`, `structural.py` | M10 learning · LTM | Regrouped |
-| `inference/` (rest) | M11 inference | Loses voi, decisions, transmission, paths |
-| `evaluation/`, `inference/decisions.py` | M12 evaluation | Decisions come in |
-| `engine/engine.py`, `config.py`, `context.py`, `defaults.py`, `initialize.py`, `learning/task.py`, `inference/task.py` (run), the day loop | M13 runtime | Composition root and orchestrators |
-| `control/` | M14 services | Split into five services |
-| `api/views.py`, `brief.py`, `find.py`, `checks.py`, `control/stage.py` (views) | M15 views | Gathered |
-| — | M16 context layer | New |
-| `api/`, `cli.py` | M17 | Thinned |
-| `web/` | M18 | Split by feature |
-| `sim/` (rest) | M19 demo | Renamed; product paths leave |
+| `model/` | M02 model | Gains `events/`, `Forecast`; loses `ids`, `serialization` (→ core) and `PosteriorUpdater` (→ dynamics) |
+| `events/` | M02 model | Merged |
+| `trace.py`, `engine/registry.py`, `engine/rng.py`, `model/ids.py`, `model/serialization.py` | M01 foundation (`core/`) | Moved |
+| `engine/interfaces.py`, `engine/contracts.py`, and scattered ABCs | M01 foundation (`ports/`) | Gathered |
+| `memory/` | M03 memory | Loses `SuperInteractionBuilder` (→ M09), the frontier ABCs (→ ports), `open_world.py` (→ views); `ChannelState` stays, its import of `dynamics.kernels` goes |
+| `repo/` | M04 repo | Gains `Branch`, PROV fields, and `RecordStore`; loses `Proposal` and `ReviewPolicy` (→ services and ports) |
+| `intake/`, `sim/imports.py` | M05 intake | `ImportRunner` comes in; the imports of `sim/` go |
+| `shared/`, `inference/transmission.py`, `inference/paths.py`, `abduction.bind` | M06 shared read | Transmission and binding come in |
+| `dynamics/` | M07 dynamics | Gains `PosteriorUpdater`; stops importing `memory.working` at module scope |
+| `learning/working_memory.py`, `fold.py`, `kernel_learning.py`, `inference/voi.py` | M08 learning · WM | Regrouped |
+| `learning/long_term.py`, `generalize.py`, `frontier_test.py`, `consolidate.py`, `abduction.count`, `structural.py` | M09 learning · LTM | Regrouped |
+| `inference/` (rest) | M10 inference | Loses voi, decisions, transmission, paths |
+| `evaluation/`, `inference/decisions.py` | M11 evaluation | Decisions come in |
+| `engine/engine.py`, `config.py`, `context.py`, `defaults.py`, `initialize.py`, `learning/task.py`, `inference/task.py` (run), the day loop | M12 runtime | Composition root and orchestrators |
+| `control/` | M13 services | Split into five services |
+| `api/views.py`, `brief.py`, `find.py`, `checks.py`, `control/stage.py` (views) | M14 views, API, CLI (`views/`) | Gathered |
+| — | M15 context layer | New |
+| `api/`, `cli.py` | M14 views, API, CLI | Thinned |
+| `web/` | M16 web | Split by feature |
+| `sim/` (rest) | M17 demo | Renamed; product paths leave |
 
 ## Current cycles
 
@@ -146,15 +146,15 @@ Each task lists: **Do**, the change; **Keep**, what must not change; **Test**, h
 
 ### Phase C · What the design adds
 
-**T-13 · Bitemporal and PROV fields** ([M03](modules/M03-model.md#additions-this-design-makes), [M05](modules/M05-repo.md)).
+**T-13 · Bitemporal and PROV fields** ([M02](modules/M02-model.md#additions-this-design-makes), [M04](modules/M04-repo.md)).
 - **Do:** add `valid_from`, `valid_to`, `recorded_at`, `superseded_by`, and `evidence_type`, `trust_tier`, `source_credibility`, `identity`. Add the PROV fields on `ChangeSet`, `as_of(valid, recorded)`, and `export_prov`.
 - **Test:** old snapshots load; a PROV export validates.
 
-**T-14 · `conflict_detector` slot** ([M06](modules/M06-intake.md)).
+**T-14 · `conflict_detector` slot** ([M05](modules/M05-intake.md)).
 - **Do:** implement rules first. The review shows conflicts with their severity.
 - **Test:** three rule cases are flagged, and ingestion never fails because of the detector.
 
-**T-15 · Context layer v1** ([M16](modules/M16-context-layer.md)).
+**T-15 · Context layer v1** ([M15](modules/M15-context-layer.md)).
 - **Do:** implement `recall`, `ask`, `trace`, `propose`, `feedback`, and `status` over the services and views, with REST routes. Add `axelrod mcp` to serve them as MCP tools.
 - **Test:** verb contract tests, and an MCP smoke test.
 
@@ -162,9 +162,14 @@ Each task lists: **Do**, the change; **Keep**, what must not change; **Test**, h
 - **Do:** with everything else in place, rename `learning/` into `learning/working/` and `learning/long_term/`, `engine/` into `runtime/`, and `sim/` into `demo/`, then remove the shims.
 - **Test:** the layer test has no exceptions left.
 
-**T-17 · Front end by feature** ([M18](modules/M18-web.md)).
+**T-17 · Front end by feature** ([M16](modules/M16-web.md)).
 - **Do:** split `renderer.js` and `main.js`, and move each panel into `features/<name>/` with its own api, store, and trace slice.
 - **Test:** the Playwright smoke test passes.
+
+**T-18 · Align the older documents.**
+- **Do:** apply the fixes listed in [decisions.md](decisions.md#where-older-documents-disagree) to `web/literature.md` and `web/implementation.html`. Mark the planned methods "planned", and match the stage counts to `flows/`.
+- **Keep:** the academic terms and the references.
+- **Test:** the How it works tab renders, and no claim in it contradicts ml-stack.md.
 
 ### Methods (parallel track)
 

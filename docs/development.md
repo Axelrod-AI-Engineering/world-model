@@ -9,7 +9,14 @@ uv run ruff check src tests
 uv run --with playwright pytest tests/ui --runslow   # the smoke test alone (run `playwright install chromium` once)
 ```
 
-[architecture.md](architecture.md#tests) says what each test directory covers.
+| Directory | Covers |
+|---|---|
+| `tests/unit/model`, `repo`, `intake`, `shared`, `dynamics`, `learning`, `inference`, `control` | Each package's units. This includes the two-process commit order, retirement, and review. |
+| `tests/unit/flows`, `tests/unit/engine` | The flowchart is well formed and current in `docs/flowchart.svg`; its trace kinds exist; every registry slot has a contract |
+| `tests/integration/` | The API and `/ws`, including update runs, staged review and selective approval, the examples and the library, the log, and structure edits; every slot alternative (slow) |
+| `tests/scenario/` | Initialization, determinism, restore; the full oil-demo checklist (slow); the small demo, example by example, with rewind; the production demo (slow) |
+| `tests/ui/` | A Playwright smoke test (slow; skipped without Playwright) |
+| `tests/unit/test_basic_auth.py`, `test_railway_drift.py` | The auth middleware; the Railway drift verifier rejects unrelated and destructive changes |
 
 ## Layout
 
@@ -27,7 +34,7 @@ Dockerfile        the image Railway builds
 var/              runtime data: init caches, sessions, snapshots, ledger, traces (gitignored)
 ```
 
-[architecture.md](architecture.md) maps each package and front-end file to what it does.
+[design/README.md](design/README.md) maps each module to its package; each [module spec](design/modules/README.md) lists the files it holds today.
 
 ## Conventions
 
