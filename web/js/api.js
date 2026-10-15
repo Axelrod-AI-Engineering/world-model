@@ -100,6 +100,8 @@ export const api = {
   scenarios: () => get("/scenarios"),
   layout: () => get("/layouts/figure1"),
   load: (scenario, interactive = true) => post("/sim/load", { scenario, interactive }),
+  // every demo under this login back to its original state (Oct 15)
+  resetAll: () => post("/sim/reset-all"),
   // the top bar's demo menu: the demos, and a switch to one (built in the background on first use)
   demos: () => get("/demos"),
   switchDemo: (id) => post(`/demos/${q(id)}`),

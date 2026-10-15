@@ -143,7 +143,7 @@ def _score_events(ctl: Any, fc: Any, ex: Any, thesis: Any, graph: Any, sub: Any)
         stance = 0
         for _v, ref, z in parts[:3]:
             if ref in graph.interactions:
-                reasons.append(f"reweighs a link on a main path ({graph.interactions[ref].label})")
+                reasons.append(f"revised the weight on a principal channel ({graph.interactions[ref].label})")
                 continue
             moved = f" {'▲' if z > 0 else '▼'} {abs(z):.1f} sd" if z is not None and abs(z) >= 0.05 else ""
             reasons.append(f"moved {sub(ref)}{moved}: {why.get(ref, 'part of the forecast')}")
@@ -215,13 +215,14 @@ def brief_view(ctl: Any, forecast_id: str) -> dict:
     # how much of the forecast rests on its leading scenario (the rest of the scenarios sit in the bar under it)
     moved = [e for e in effects if abs(e["q50"]) >= 0.05][:2]
     if moved:
-        parts = [f"{e['name']} {'rises' if e['q50'] > 0 else 'falls'} about {abs(e['q50']):.2f} sd "
-                 f"(90%: {e['q05']:+.2f} to {e['q95']:+.2f})" for e in moved]
+        parts = [f"{e['name']} is expected to {'rise' if e['q50'] > 0 else 'fall'} by {abs(e['q50']):.2f} sd "
+                 f"(90% interval {e['q05']:+.2f} to {e['q95']:+.2f})" for e in moved]
         bottom = f"By {horizon}, " + "; ".join(parts) + "."
     else:
-        bottom = f"By {horizon}, no target moves by more than 0.05 sd: the shock does not reach them through the graph."
+        bottom = (f"By {horizon}, no target is expected to move by more than 0.05 sd: the shock has no material "
+                  "transmission to them.")
     if lead is not None and len(scen) > 1:
-        bottom += f" It leans on {lead.name.split(' · ')[0]} ({lead.weight:.0%} of {len(scen)} scenarios)."
+        bottom += f" The base case is {lead.name.split(' · ')[0]}, with {lead.weight:.0%} of the weight across {len(scen)} scenarios."
 
     groups = list(fc.groups or [])
     affected = [{"id": gr.id, "kind": gr.kind, "name": gr.name, "effect": round(gr.effect_summary[-1].q50, 3) if gr.effect_summary else 0.0,
@@ -258,7 +259,7 @@ def brief_view(ctl: Any, forecast_id: str) -> dict:
             fx = fc.effect_summary[first.target_id][-1].q50
         watch.append({"id": first.target_id, "name": sub(first.target_id), "entity": ent(ent_of(first.target_id)),
                       "direction": None if fx is None else ("up" if fx > 0 else "down"),
-                      "why": f"first in line after {sub(p.shock_id)} on a main path ({link(first.id)})"})
+                      "why": f"leading indicator: the first value {sub(p.shock_id)} moves on a principal channel ({link(first.id)})"})
         if len(watch) >= 4:
             break
 
@@ -276,7 +277,7 @@ def brief_view(ctl: Any, forecast_id: str) -> dict:
         hyps.append({"id": h.id, "statement": h.statement, "probability": round(h.probability, 3),
                      "voi": round(h.current_value(ctl.now), 4)})
     hyps.sort(key=lambda x: -x["voi"])
-    change = [{"kind": "scenario", "text": f"If {s.name} is right instead ({s.weight:.0%} now)", "weight": round(s.weight, 3)}
+    change = [{"kind": "scenario", "text": f"Alternative scenario: {s.name} ({s.weight:.0%} weight)", "weight": round(s.weight, 3)}
               for s in scen[1:3]]
     change += [{"kind": "hypothesis", "text": h["statement"], "probability": h["probability"], "voi": h["voi"], "id": h["id"]}
                for h in hyps[:3]]
@@ -300,8 +301,16 @@ def brief_view(ctl: Any, forecast_id: str) -> dict:
         caveats.append(f"Changing {', '.join(sub(s) for s in policy)} assumes the other interactions stay as they are "
                        "when this policy changes. If the change alters other actors' behavior, they would not "
                        "(the Lucas critique).")
-    caveats.append("All news and data in this demo are synthetic; real company names make the graph concrete, not "
-                   "claims about those companies.")
+    # what the evidence is: client research (reviewed before use), synthetic demo news, or none yet
+    seen = list(ctl.market_events.values())
+    imported = [e for e in seen if str(e.id).startswith("IM-")]
+    if any(not getattr(e, "synthetic", False) for e in imported):
+        caveats.append("Research items are client-provided; each change the model took from them was reviewed before use.")
+    elif seen:
+        caveats.append("All news and data in this demo are synthetic; real company names make the graph concrete, not "
+                       "claims about those companies.")
+    else:
+        caveats.append("No research has been incorporated yet; the view rests on the model as seeded.")
     # the transmission paths, order by order (Oct 14): the grid's relevant view, so the brief and the grid agree
     from axelrod_wm.api.views import transmission_view
 

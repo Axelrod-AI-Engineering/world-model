@@ -38,18 +38,20 @@ export function isolationSet(view, ids, way = "both", hops = 3) {
 }
 
 // the view, cut down to a set of entities
-export function filterView(view, keep) {
+// `opts` narrows further (Oct 15, a brief's transmission path on the canvas): `subs` keeps only those values, `links`
+// only those interactions, and `hulls: false` drops the superentities
+export function filterView(view, keep, opts = {}) {
   if (!view || !keep) return view;
-  const subs = (view.subentities ?? []).filter((s) => keep.has(s.entity_id));
+  const subs = (view.subentities ?? []).filter((s) => keep.has(s.entity_id) && (!opts.subs || opts.subs.has(s.id)));
   const subIds = new Set(subs.map((s) => s.id));
   return {
     ...view,
     entities: (view.entities ?? []).filter((e) => keep.has(e.id)),
     subentities: subs,
-    links: (view.links ?? []).filter((l) => subIds.has(l.source) && subIds.has(l.target)),
+    links: (view.links ?? []).filter((l) => subIds.has(l.source) && subIds.has(l.target) && (!opts.links || opts.links.has(l.id))),
     entity_links: (view.entity_links ?? []).filter((l) => keep.has(l.source) && keep.has(l.target)),
     // a superentity stays if at least two of its members do (one alone is just that entity)
-    hulls: (view.hulls ?? []).map((h) => ({ ...h, members: (h.members ?? []).filter((m) => keep.has(m)) }))
+    hulls: opts.hulls === false ? [] : (view.hulls ?? []).map((h) => ({ ...h, members: (h.members ?? []).filter((m) => keep.has(m)) }))
       .filter((h) => h.members.length >= 2),
     super_links: [],
     frontier: (view.frontier ?? []).filter((f) => subIds.has(f.earlier) && subIds.has(f.later)),

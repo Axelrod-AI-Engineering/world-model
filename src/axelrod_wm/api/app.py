@@ -135,6 +135,24 @@ class AppState:
             self._announce_switch(old, target)
             return status
 
+    def reset_all(self) -> Any:
+        """Every demo this login has opened back to its original state (Oct 15): the runners kept in memory are dropped
+        (each demo is built fresh, from its initial snapshot, the next time it opens), and the login's first demo is
+        rebuilt and served. Every page on this engine reloads."""
+        with self.lock:
+            if self.switch_task is not None and not self.switch_task.done():
+                raise ControllerError("a demo is still opening: wait for it, then reset")
+            old = self.scenario
+            self.switching = None
+            self.runners.clear()
+            self.build(self.first_scenario, True)
+            status = self.runner.load()
+            self.runner.controller.auto_resume = False
+            self.runner.progress = {"phase": "ready"}
+            for tracer in self.tracers.values():
+                tracer.broadcast({"type": "switched", "scenario": self.first_scenario, "reset": True, "from": old})
+            return status
+
     # -- the demo menu: switch to another demo, building it on first use -----------------------------
     def demos(self) -> dict:
         """The demos this engine can serve: which is current, which are open in memory, which need their history

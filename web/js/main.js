@@ -26,7 +26,7 @@ import { initExamples } from "./panels/examples.js";
 import { initImport } from "./panels/import.js";
 import { initChecks } from "./panels/checks.js";
 import { initContext } from "./panels/context.js";
-import { initPaths } from "./panels/paths.js";
+import { colOf, initPaths } from "./panels/paths.js";
 import { initFind } from "./panels/find.js";
 import { initLevels } from "./panels/levels.js";
 import { entityLens, groupLens, linkLens } from "./graph/lens.js";
@@ -1025,7 +1025,7 @@ async function boot() {
   // -- views (restructure): Learn for backend users, who update the one world model; Predict for everyone
   // else, who pose theses against committed versions and never change it --------------------------------
   // Predict's canvas state (see predictCanvas below); set up before setMode first runs
-  const predict = { keep: new Set(), all: false, question: "", effects: new Map() };
+  const predict = { keep: new Set(), all: false, question: "", effects: new Map(), path: null };
   const predictHint = document.createElement("div");
   predictHint.id = "predict-hint";
   predictHint.className = "floating hidden";
@@ -1076,6 +1076,15 @@ async function boot() {
   on("load-scenario", (id) => { consolePane.close(); examples.close(); loadScenario(id); });
   on("open-version", (v) => { openVersion(v).catch((err) => toast(errorText(err), "err")); });
   $("#btn-admin").addEventListener("click", () => admin.toggle());
+  // Reset to the original demo (Oct 15): every demo under this login goes back to its initial state; every page on
+  // this login reloads (the server's "switched" message), this one included
+  $("#btn-reset-all").addEventListener("click", async () => {
+    $("#menu-panel").hidden = true;
+    if (!window.confirm("Reset every demo under this login to its original state? Imports, reviews, forecasts, briefs, "
+      + "and notes are cleared for everyone signed in with this login. This cannot be undone.")) return;
+    toast("Resetting to the original demo…");
+    try { await api.resetAll(); setTimeout(() => window.location.reload(), 300); } catch (err) { toast(errorText(err), "err"); }
+  });
   // the menu: everything that is not the moment's primary action; it closes once something is chosen
   const menuPanel = $("#menu-panel");
   const setMenu = (open) => { menuPanel.hidden = !open; $("#btn-menu").setAttribute("aria-expanded", String(open)); };
@@ -1179,19 +1188,14 @@ async function boot() {
   // the right. The brief no longer opens by itself: one small prompt offers it, and goes away on its own.
   on("asked", (fv) => {
     showForecastOnCanvas(fv);
-    autoGrid("forecast", fv.forecast?.id, (fv.transmission?.values ?? []).length > 0);
+    // Oct 15: the transmission path is laid out on the canvas itself; the grid stays one click away (G, As a grid)
+    if ((fv.transmission?.values ?? []).length) { setGridTarget({ kind: "forecast", id: fv.forecast?.id }); pathOnCanvas(fv.forecast?.id); }
     if (progress.run && progress.run.scope == null) { progress.run = null; emit("forecasting", null); }
     if (fv.forecast?.id) setTimeout(() => showBriefNudge(fv.forecast.id), 1400);
   });
   on("walkthrough", (w) => { if (w) hideBriefNudge(); });
-  // rewinding the brief's transmission path: the canvas lights the path as far as the step shown
-  on("brief-path", ({ entities, links }) => {
-    const hot = new Set(links);
-    store.forecastDismissed = false;
-    store.highlight = { entities: new Set(entities), links: new Set(links), hulls: new Set(), hot };
-    renderer.setHighlight(store.highlight);
-    emit("highlight", store.highlight);
-  });
+  // opening a brief lays its forecast's transmission path out on the canvas
+  on("brief-canvas", (id) => { setGridTarget({ kind: "forecast", id }); pathOnCanvas(id); });
   // the brief carries the same transmission path (rewindable), so opening it gives the grid's room back when the two
   // would not both fit; "As a grid" in the brief brings the grid back
   on("tab-left", (name) => {
@@ -1267,7 +1271,7 @@ async function boot() {
   function unisolate() {
     if (!renderer.isolated) return false;
     // in Predict, leaving the forecast's view means asking to see the whole model
-    if (renderer.isolated.way === "predict") { predict.all = true; predictCanvas(); return true; }
+    if (renderer.isolated.way === "predict" || renderer.isolated.way === "path") { predict.all = true; predictCanvas(); return true; }
     const wasGrid = renderer.isolated.way === "grid";
     renderer.setIsolation(null);
     isoBanner.classList.add("hidden");
@@ -1291,6 +1295,7 @@ async function boot() {
   function predictCanvas() {
     const on = store.settings.mode === "predict" && !store.walkthrough && !!store.view?.entities?.length;
     if (!on) {
+      if (renderer.isolated?.way === "path") clearPath();
       renderer.setRowOverride(null);
       document.body.classList.remove("predict-blank");
       if (renderer.isolated?.way === "predict") renderer.setIsolation(null);
@@ -1301,6 +1306,8 @@ async function boot() {
     renderer.setRowOverride(!predict.all && predict.keep.size ? predict.effects : null);
     if (renderer.isolated?.way === "grid") { predictHint.classList.add("hidden"); return; }   // the grid shows it
     const total = store.view.entities.length;
+    if (!predict.all && predict.path) { applyPath(); return; }
+    if (renderer.isolated?.way === "path") clearPath();
     if (predict.all) {
       renderer.setRowOverride(null);
       if (renderer.isolated?.way === "predict") { renderer.setIsolation(null); setTimeout(() => renderer.frameAll(420), 60); }
@@ -1333,7 +1340,8 @@ async function boot() {
     if (b.dataset.ask != null) $("#btn-ask").click();
     else if (b.dataset.all != null) { predict.all = true; predictCanvas(); }
     else if (b.dataset.back != null) { predict.all = false; predictCanvas(); }
-    else if (b.dataset.blank != null) { predict.all = false; predict.keep = new Set(); predictCanvas(); }
+    else if (b.dataset.blank != null) { predict.all = false; predict.keep = new Set(); predict.path = null; predictCanvas(); }
+    else if (b.dataset.pathGrid != null && predict.path) emit("paths-open", { kind: "forecast", id: predict.path.id });
   });
   function showForecastOnCanvas(fv) {
     const keep = forecastEntities(fv);
@@ -1344,12 +1352,118 @@ async function boot() {
     predict.question = fv?.forecast?.question ?? fv?.thesis?.question ?? "";
     predictCanvas();
   }
+  // -- the transmission path on the canvas (Oct 15) ------------------------------------------------------------------
+  // A forecast's (or an opened brief's) transmission path, drawn in the world model's own style, laid out as the grid
+  // lays it out: the shock on the left, one column per order, the outputs on the right. Only the path's entities are
+  // on the canvas, each opened to the values the path runs through (with their peak effects), joined by the path's
+  // interactions. An output that drives another output is drawn as a chain: the one it feeds moves to a column of
+  // its own (downstream outputs), and the interaction between them is marked.
+  const pathGrids = new Map();          // forecast id -> its grid (the "relevant" view), fetched once
+  async function pathOnCanvas(fid) {
+    if (!fid) return;
+    let g = pathGrids.get(fid);
+    if (!g) {
+      try { g = await api.pathsForecast(fid, "relevant"); } catch (err) { console.warn(err); return; }
+      pathGrids.set(fid, g);
+    }
+    if (!Object.keys(g.values ?? {}).length) return;
+    let question = predict.question;
+    try { question = (await api.forecast(fid)).forecast?.question ?? question; } catch { /* keep the last question */ }
+    predict.path = { id: fid, grid: g, question };
+    predict.all = false;
+    if (store.settings.mode !== "predict") setMode("predict", false);
+    else predictCanvas();
+  }
+  function pathLayout(g) {
+    const known = new Set((store.view?.entities ?? []).map((e) => e.id));
+    const vals = g.values;
+    const cols = g.columns ?? ["input", "1", "2", "3", "output"];
+    const ix = (c) => cols.indexOf(c);
+    const first = new Map();
+    for (const v of Object.values(vals)) {
+      if (!known.has(v.entity_id)) continue;
+      const k = ix(v.column);
+      if (!first.has(v.entity_id) || k < first.get(v.entity_id)) first.set(v.entity_id, k);
+    }
+    const outs = new Set(g.outputs ?? []);
+    const key = (e) => String(e.key).split(":")[0];
+    const chain = new Set();
+    const fedBy = new Map();
+    const ents = new Map();             // entity -> the entities that feed it on the path
+    for (const e of g.edges ?? []) {
+      const a = vals[e.source]?.entity_id;
+      const b = vals[e.target]?.entity_id;
+      if (!a || !b || a === b) continue;
+      if (!ents.has(b)) ents.set(b, new Set());
+      ents.get(b).add(a);
+      if (outs.has(e.source) && outs.has(e.target)) {
+        if (!fedBy.has(b)) fedBy.set(b, new Set());
+        fedBy.get(b).add(a);
+      }
+    }
+    // an output fed by another output in the Output column moves one column on; the link between them is the chain
+    const outIx = ix("output");
+    const downstream = new Set([...first].filter(([e, k]) => k === outIx && [...(fedBy.get(e) ?? [])].some((a) => first.get(a) === outIx))
+      .map(([e]) => e));
+    for (const e of g.edges ?? []) {
+      const a = vals[e.source]?.entity_id;
+      const b = vals[e.target]?.entity_id;
+      if (outs.has(e.source) && outs.has(e.target) && downstream.has(b) && first.get(a) === outIx) chain.add(key(e));
+    }
+    const colKey = (e) => (downstream.has(e) ? "downstream" : cols[first.get(e)]);
+    // within a column, each entity sits near the entities that feed it (the barycenter of their places)
+    const order = [];
+    const keys = [...cols, "downstream"];
+    const pos = new Map();
+    for (const c of keys) {
+      const ids = [...first.keys()].filter((e) => colKey(e) === c);
+      const peak = (e) => Math.max(0, ...Object.values(vals).filter((v) => v.entity_id === e).map((v) => Math.abs(v.peak)));
+      ids.sort((a, b) => {
+        const bary = (e) => { const ps = [...(ents.get(e) ?? [])].filter((x) => pos.has(x)).map((x) => pos.get(x)); return ps.length ? ps.reduce((t, x) => t + x, 0) / ps.length : 1e3; };
+        return bary(a) - bary(b) || peak(b) - peak(a);
+      });
+      ids.forEach((e, i) => pos.set(e, i));
+      if (ids.length) {
+        const meta = c === "downstream" ? { word: "Downstream outputs", cls: "out" } : colOf(c);
+        order.push({ key: c, label: meta.word, cls: meta.cls, ids });
+      }
+    }
+    return { cols: order, keep: new Set(first.keys()), chain, links: new Set((g.edges ?? []).map(key)) };
+  }
+  function applyPath() {
+    const { grid: g, id, question } = predict.path;
+    const lay = pathLayout(g);
+    if (!lay.keep.size) return;
+    const same = renderer.isolated?.way === "path" && renderer.isolated.fid === id;
+    if (!same) {
+      renderer.setIsolation({ ids: [...lay.keep], keep: lay.keep, way: "path", fid: id, hops: 0, hulls: false, expand: lay.keep,
+                              subs: new Set(Object.keys(g.values)), links: lay.links });
+      renderer.setLane({ title: "Transmission path", cols: lay.cols });
+    }
+    renderer.setRowOverride(new Map(Object.entries(g.values).map(([sid, v]) => [sid, v.peak])));
+    store.isolatedHighlight = { entities: lay.keep, links: lay.links, hulls: new Set(), hot: lay.links, chain: lay.chain };
+    renderer.setHighlight(store.isolatedHighlight);
+    document.body.classList.remove("predict-blank");
+    isoBanner.classList.add("hidden");
+    const q = question && question.length > 64 ? `${question.slice(0, 62).trimEnd()}…` : question;
+    predictHint.className = "floating predict-bar";
+    predictHint.innerHTML = `<span><b>Transmission path</b> <span class="muted">· ${lay.keep.size} entities, shock to outputs${q ? ` · <span title="${esc(question)}">${esc(q)}</span>` : ""}</span></span>
+      ${lay.chain.size ? `<span class="small chain-key" title="An output that drives another output">— output to output</span>` : ""}
+      <button class="small ghost" data-path-grid>As a grid</button><button class="small" data-all>Show the whole model</button>`;
+  }
+  function clearPath() {
+    renderer.setLane(null);
+    renderer.setIsolation(null);
+    store.isolatedHighlight = null;
+    renderer.setHighlight(store.highlight);
+  }
   const GRID_DX = 330;      // world units between the grid's columns on the canvas
   const GRID_DY = 84;       // and between its rows
   function isolateGrid(g, lay) {
     const known = new Set((store.view?.entities ?? []).map((e) => e.id));
     const keep = new Set(Object.values(g.values ?? {}).map((v) => v.entity_id).filter((e) => known.has(e)));
     if (!keep.size) return;
+    if (renderer.isolated?.way === "path") renderer.setLane(null);      // the grid replaces the canvas path while open
     const same = renderer.isolated?.way === "grid" && renderer.isolated.keep.size === keep.size
       && [...keep].every((e) => renderer.isolated.keep.has(e));
     // the grid itself says what is isolated and switches it off, so no banner over the canvas

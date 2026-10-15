@@ -138,7 +138,7 @@ The standard stack answers "which text is like this text". The world model answe
 
 ## Where standard tools still fit
 
-- **Text in, text out.** Text embeddings and language models are right for text: a vague mention's wording, an article's spans, and search over headlines. A language model translates an article into operations, held to the operation schema. It never computes an effect or a forecast.
+- **Text in, text out.** Text embeddings and language models are right for text: a vague mention's wording, an article's spans, and search over headlines. A language model translates an article into operations, held to the operation schema. It never computes an effect or a forecast. Each such step uses the smallest model that does the job, with a large LLM as the logged fallback ([ml-stack.md, Small models first](../ml-stack.md#small-models-first)).
 - **Find.** The `find` view is a semantic filter for people navigating the canvas. It is a navigation aid, not the model's memory.
 - **An upstream research memory.** Cognee, or a plain vector store, can hold the documents a research agent reads ([frameworks.md](frameworks.md#recommendation)). What reaches the world model is a reviewed import, sorted into the trees above.
 

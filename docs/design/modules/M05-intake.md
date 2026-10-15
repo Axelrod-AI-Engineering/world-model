@@ -60,6 +60,9 @@ read_bundle(src) -> ImportBundle; market_event_of(item) -> MarketEvent
 | `refiner` | taxonomy | R18: likelihood-based responsibilities |
 | `conflict_detector` (new) | rules: opposite sign on an existing interaction, a value outside a soft bound, a retired item reused | llm_pairwise. It **only flags**; the reviewer decides (Semantica's conflict types). |
 
+Which model each slot should use, from rules up to a logged large-LLM fallback, and how the `translator` chain and `entity_resolver` take finetuned small models: [ml-stack.md, Small models first](../../ml-stack.md#small-models-first) and [§14](../../ml-stack.md#14-fine-tuning-to-own-the-structure) (R20).
+Most of what intake asks of text is a choice among options the graph supplies (which candidate, which signal, supports or contradicts); a decision model answers those as typed questions with calibrated probabilities, which become the hedge weights and operation confidences: [ml-stack.md, Decision models](../../ml-stack.md#decision-models-jev-type).
+
 ## Depends on
 
 [M01](M01-foundation.md)–[M03](M03-memory.md); `node_signature` from [M02](M02-model.md). Not `sim/`.
