@@ -28,6 +28,10 @@ export function createLOD(r, attention) {
   const handOpen = new Set();      // opened by hand: stays open while zoomed in
   const handClosed = new Set();    // closed by hand: stays closed while zoomed in
   const pinned = new Set();        // kept open whatever the zoom (an isolated graph's entities)
+  // Oct 14: the zoom at which detail was last chosen. Zooming in only ever opens things and zooming out only ever folds
+  // them, so a zoom never folds what a person is zooming toward (a superentity just under its fold line used to fold on
+  // the first step in, then open again a moment later)
+  let kAt = null;
 
   function viewBox(t, margin = 0) {
     const rect = r.zoom.rect();
@@ -78,6 +82,7 @@ export function createLOD(r, attention) {
     const v = viewBox(t);
     const near = viewBox(t, 0.1);
     const out = [];
+    const dir = kAt == null ? 0 : t.k > kAt * 1.001 ? 1 : t.k < kAt / 1.001 ? -1 : 0;
     const dist = (x, y) => Math.hypot(x - v.cx, y - v.cy);
     // superentities, outermost first: an inner one only matters once its parent is open
     const groups = r.groupsInfo.groups.filter((g) => !g.transient);
@@ -95,8 +100,8 @@ export function createLOD(r, attention) {
       const h = height(g);
       const nudge = Math.max(0.85, Math.min(1.2, (CARD_OPEN * (1 + h)) / Math.max(1, sw / Math.max(t.k, 0.05) * READABLE_K)));
       const kFold = READABLE_K * LEVEL_STEP ** h * nudge;
-      if (!closed && g.members.size > 1 && t.k < kFold) out.push({ kind: "close-group", key: g.key, d: -sw });
-      else if (closed && t.k >= kFold * 1.12) out.push({ kind: "open-group", key: g.key, d: dist(sp.cx, sp.cy) });
+      if (!closed && g.members.size > 1 && t.k < kFold && dir <= 0) out.push({ kind: "close-group", key: g.key, d: -sw });
+      else if (closed && t.k >= kFold * 1.12 && dir >= 0) out.push({ kind: "open-group", key: g.key, d: dist(sp.cx, sp.cy) });
     }
     // entities' values
     const kOpen = attention.kOpen;
@@ -113,8 +118,9 @@ export function createLOD(r, attention) {
       const open = r.ui.expanded.has(n.id);
       if (handOpen.has(n.id) || pinned.has(n.id)) continue;
       const stay = open && t.k >= kOpen * OPEN_HYST && inView(n);
-      if (!open && keep.has(n.id)) out.push({ kind: "open", id: n.id, d: dist(n.x, n.y) });
-      else if (open && !keep.has(n.id) && !stay) out.push({ kind: "close", id: n.id, d: -dist(n.x, n.y) });
+      // a pan (dir 0) may open and close values as entities enter and leave the middle; a zoom only moves one way
+      if (!open && keep.has(n.id) && dir >= 0) out.push({ kind: "open", id: n.id, d: dist(n.x, n.y) });
+      else if (open && !keep.has(n.id) && !stay && (dir <= 0 || !inView(n))) out.push({ kind: "close", id: n.id, d: -dist(n.x, n.y) });
     }
     return out.sort((a, b) => a.d - b.d);
   }
@@ -126,6 +132,7 @@ export function createLOD(r, attention) {
     // neighbors and retraces outlines, which made a zoomed-in view lag. They start as soon as the view rests.
     if (document.body.classList.contains("zooming")) { schedule(REST_MS); return; }
     const todo = wanted();
+    kAt = r.zoom.transform().k;
     if (!todo.length) return;
     for (const c of todo) {
       if (c.kind === "close-group") r.ui.collapsed.add(c.key);
@@ -149,8 +156,9 @@ export function createLOD(r, attention) {
   }
 
   return {
-    // called on every zoom or pan, and when detail-follows-zoom is switched on
-    update() { schedule(STEP_MS); },
+    // called on every zoom or pan, and when detail-follows-zoom is switched on. Debounced (Oct 14): detail is chosen once
+    // the view has stopped for STEP_MS, never partway through an animated zoom (the zoom buttons and the slider glide)
+    update() { clearTimeout(timer); timer = null; schedule(STEP_MS); },
     now() { clearTimeout(timer); timer = null; step(); },
     // a person opened or closed an entity by hand
     hand(id, opened) {
@@ -160,7 +168,9 @@ export function createLOD(r, attention) {
       attention.learnOpen(k, opened);
       attention.touch(id, k, 3);
     },
-    reset() { handOpen.clear(); handClosed.clear(); pinned.clear(); },
+    reset() { handOpen.clear(); handClosed.clear(); pinned.clear(); kAt = null; },
+    // the view was framed by the app (not by a person): its zoom is where the next zoom's direction is measured from
+    mark() { kAt = r.zoom.transform().k; },
     // keep these entities open whatever the zoom (an isolated graph's), without teaching the threshold
     pin(ids) { for (const id of ids) { pinned.add(id); handClosed.delete(id); } },
     viewBox,

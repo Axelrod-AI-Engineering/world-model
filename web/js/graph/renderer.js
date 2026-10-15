@@ -2384,6 +2384,7 @@ export class SvgRenderer extends GraphRenderer {
   fitReadable(duration = 320) {
     this.autoFrame = false;
     this.zoom.fit(this.bounds(true), duration, { minK: 0.68, pad: this.freePad({ top: 132, right: 24, bottom: 64, left: 24 }) });
+    setTimeout(() => this.lod.mark(), duration + 40);
   }
 
   // Frame the boxes that hold these entities, subentities, or superentity instances in the part of the
