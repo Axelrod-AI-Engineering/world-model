@@ -99,6 +99,9 @@ export const api = {
   scenarios: () => get("/scenarios"),
   layout: () => get("/layouts/figure1"),
   load: (scenario, interactive = true) => post("/sim/load", { scenario, interactive }),
+  // the top bar's demo menu: the demos, and a switch to one (built in the background on first use)
+  demos: () => get("/demos"),
+  switchDemo: (id) => post(`/demos/${q(id)}`),
   step: () => post("/sim/step"),
   script: () => get("/sim/script"),
   brief: (id) => get(`/forecasts/${q(id)}/brief`),
@@ -138,8 +141,9 @@ export const api = {
 
 // The /ws stream (§12.3): {"type": "hello", "since_seq": n}, then trace and status messages.
 export class Stream {
-  constructor({ onTrace, onStatus, onOpen, onClose, sinceSeq }) {
+  constructor({ onTrace, onStatus, onOpen, onClose, onSwitched, sinceSeq }) {
     this.onTrace = onTrace;
+    this.onSwitched = onSwitched;      // this engine now serves another demo: the page reloads into it
     this.onStatus = onStatus;
     this.onOpen = onOpen;
     this.onClose = onClose;
@@ -163,6 +167,7 @@ export class Stream {
       try { msg = JSON.parse(m.data); } catch { return; }
       if (msg.type === "trace") this.onTrace(msg.event);
       else if (msg.type === "status") this.onStatus(msg.status);
+      else if (msg.type === "switched") this.onSwitched?.(msg.scenario);
     };
     ws.onclose = () => {
       this.onClose?.();

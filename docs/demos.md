@@ -11,6 +11,17 @@ There are four demos. All four serve the same interface ([interface.md](interfac
 
 The small and production demos serve http://127.0.0.1:8765. The full demo serves http://127.0.0.1:8000 unless you pass `--port`.
 
+## Switching demos
+
+You don't need to restart the server to change demos. The **demo menu** beside the name in the top bar lists all four. Choosing one switches the running server to it, and the page reloads into the new demo.
+
+- **A demo opened before comes back as you left it**, with its reviews, examples, and versions. Each demo keeps its own storage (next to the first one's, for example `var/axelrod/demo-prod_demo`) and its own trace stream. To start a demo over, use **Reset**, or Admin › Scenario.
+- **A demo opened for the first time is built in the background.** The demo you're on keeps working, and a card under the menu shows the progress. The production and full demos replay three years of synthetic history the first time they open on a machine, which takes about two and a half minutes. The card counts the days as they're replayed, and the menu marks those demos *First open replays its history: a few minutes*. After that the history is cached in `var/oil_shock_demo/` (the two demos share it), and opening either one takes seconds.
+- **On the hosted demo, each login switches only its own engine.** Switching under Emily's login never changes what the main login sees, and the other way round. `WORLD_MODEL_SCENARIO` and `WORLD_MODEL_LOGINS` still choose the demo each login opens on ([deployment.md](deployment.md)).
+- **In Emily's demo, Tutorial** switches to the small demo and opens its examples. **Back to your model** switches back, and her model is as she left it.
+
+The API behind the menu: `GET /api/demos` returns the demos, the current one, and the switch under way (its phase and, during the history replay, the days done). `POST /api/demos/{id}` switches. Every page on the same engine receives a `switched` message on `/ws` and reloads. `POST /api/sim/load` still reloads a demo from its start.
+
 ## Emily's demo
 
 What an ordinary week with the product looks like for a cross-asset PM. The model starts with her view of the chain (oil → inflation and growth → the Fed and the BoJ → the US–Japan rate gap → USD/JPY → her names: Tokio Marine, Zurich, Toyota, Komatsu, SoftBank Corp, JPMorgan, Citi, Morgan Stanley, UniCredit), in six superentities. It has no synthetic history.

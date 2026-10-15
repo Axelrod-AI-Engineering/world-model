@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import threading
+import time
 from collections.abc import Callable
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
@@ -31,44 +32,209 @@ T = TypeVar("T")
 WEB_DIR = REPO_ROOT / "web"
 
 
+# The demos the top bar's menu switches between (docs/demos.md), in menu order: (scenario id, label, note).
+DEMOS: list[tuple[str, str, str]] = [
+    ("small_demo", "Small demo", "A blank canvas, built one example at a time"),
+    ("prod_demo", "Production demo", "The same examples after three years of synthetic history"),
+    ("oil_shock_demo", "Full demo", "The oil-shock scenario: 53 actors and ideas, 18 scripted steps"),
+    ("emily_demo", "Emily's demo", "A PM's model brought up to date by importing research"),
+]
+DEMO_IDS = {d[0] for d in DEMOS}
+
+
 class AppState:
-    """One process, one engine. Every engine call holds `lock` (§12.4)."""
+    """One process, one engine per login. Every engine call holds `lock` (§12.4).
+
+    DECISION (demo menu): the engine keeps one runner per demo it has opened. Switching builds the new demo's runner
+    in a worker thread, outside the lock, while the current one keeps serving; it then swaps in under the lock. A demo
+    opened before is kept as it was left, with its own storage and trace stream."""
 
     def __init__(self, scenario: str, config_path: str | None, *, storage: StorageBackend | None = None,
                  trace_dir: str | Path | None = None, play_delay: float = 0.4,
                  cache_dir: str | Path | None = None) -> None:
         self.scenario = scenario
+        self.first_scenario = scenario
         self.config_path = config_path
         self.storage = storage
         self.cache_dir = cache_dir
+        self.trace_dir = trace_dir
         self.lock = threading.RLock()
-        self.tracer = BroadcastTracer(run_id=f"run-{datetime.now(UTC).strftime('%Y%m%d-%H%M%S')}",
-                                      directory=trace_dir)
+        self.stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+        self.tracers: dict[str, BroadcastTracer] = {}
+        self.storages: dict[str, StorageBackend | None] = {scenario: storage}
+        self.runners: dict[str, ScenarioRunner] = {}
         self.runner: ScenarioRunner | None = None
         self.interactive = True
         self.play_task: asyncio.Task | None = None
         self.update_task: asyncio.Task | None = None
         self.schedule_task: asyncio.Task | None = None
+        self.switch_task: asyncio.Task | None = None
+        self.switching: dict[str, Any] | None = None     # the switch under way, or the last one that failed
         self.play_requested = False             # /sim/play was pressed and not paused since
         # DECISION: play mode waits this long between steps so the canvas can animate each one
         self.play_delay = play_delay
 
+    # -- each demo's trace stream and storage ------------------------------------------------------
+    def tracer_for(self, scenario: str) -> BroadcastTracer:
+        if scenario not in self.tracers:
+            suffix = "" if scenario == self.first_scenario else f"-{scenario}"
+            self.tracers[scenario] = BroadcastTracer(run_id=f"run-{self.stamp}{suffix}", directory=self.trace_dir)
+        return self.tracers[scenario]
+
+    @property
+    def tracer(self) -> BroadcastTracer:
+        return self.tracer_for(self.scenario)
+
+    def storage_for(self, scenario: str) -> StorageBackend | None:
+        """The first demo uses the storage it was given; another demo gets a sibling of it (files) or a fresh one of
+        the same kind (memory), so no two demos write the same ledger."""
+        if scenario not in self.storages:
+            from axelrod_wm.repo.snapshots import FilesBackend
+
+            base = self.storage
+            if base is None:
+                self.storages[scenario] = None
+            elif isinstance(base, FilesBackend):
+                self.storages[scenario] = FilesBackend(path=base.path.parent / f"{base.path.name}-{scenario}")
+            else:
+                self.storages[scenario] = type(base)()
+        return self.storages[scenario]
+
+    def new_runner(self, scenario: str, interactive: bool = True) -> ScenarioRunner:
+        return build_runner(scenario, interactive=interactive, config_path=self.config_path,
+                            storage=self.storage_for(scenario), tracer=self.tracer_for(scenario),
+                            record_checklist=False, cache_dir=self.cache_dir)
+
     def build(self, scenario: str | None = None, interactive: bool = True) -> ScenarioRunner:
         self.scenario = scenario or self.scenario
         self.interactive = interactive
-        self.runner = build_runner(self.scenario, interactive=interactive, config_path=self.config_path,
-                                   storage=self.storage, tracer=self.tracer, record_checklist=False,
-                                   cache_dir=self.cache_dir)
+        self.runner = self.new_runner(self.scenario, interactive)
+        self.runners[self.scenario] = self.runner
         return self.runner
 
+    def _announce_switch(self, old: str, new: str) -> None:
+        """Tell every page still streaming the old demo that this engine now serves another (they reload)."""
+        if old != new and old in self.tracers:
+            self.tracers[old].broadcast({"type": "switched", "scenario": new})
+
     def load(self, scenario: str | None = None, interactive: bool = True) -> Any:
+        """Load (or reload, from its start) a demo, and make it the one served."""
         with self.lock:
-            if self.runner is None or (scenario and scenario != self.scenario) or interactive != self.interactive:
-                self.build(scenario, interactive)
+            old = self.scenario
+            target = scenario or self.scenario
+            kept = self.runners.get(target)
+            if kept is None or kept.interactive != interactive:
+                self.build(target, interactive)
+            else:
+                self.scenario, self.runner, self.interactive = target, kept, interactive
             status = self.runner.load()
             # the API drives update runs itself, one day per lock acquisition (§12.4)
             self.runner.controller.auto_resume = False
+            self.runner.progress = {"phase": "ready"}
+            self._announce_switch(old, target)
             return status
+
+    # -- the demo menu: switch to another demo, building it on first use -----------------------------
+    def demos(self) -> dict:
+        """The demos this engine can serve: which is current, which are open in memory, which need their history
+        replayed first (minutes), and the switch under way."""
+        from axelrod_wm.sim.scenario import ScenarioScript
+
+        out = []
+        for sid, label, note in DEMOS:
+            ready = sid in self.runners and self.runners[sid].loaded
+            cold = False
+            if not ready:
+                try:
+                    script = ScenarioScript.load(sid)
+                    base = ScenarioScript.load(script.base) if script.base else script
+                    if base.initialization.history is not None:
+                        cache = Path(self.cache_dir) if self.cache_dir is not None else REPO_ROOT / "var" / base.id
+                        cold = not (cache / "init_snapshot.json.gz").exists()
+                except Exception:          # a demo whose files are missing is still listed; switching says why
+                    pass
+            out.append({"id": sid, "label": label, "note": note, "current": sid == self.scenario,
+                        "ready": ready, "cold": cold})
+        return {"current": self.scenario, "demos": out, "switching": self.switch_progress()}
+
+    def switch_progress(self) -> dict | None:
+        sw = self.switching
+        if sw is None:
+            return None
+        out = {k: v for k, v in sw.items() if k not in ("runner", "t0")}
+        if out.get("phase") not in ("done", "error"):
+            prog = dict(getattr(sw.get("runner"), "progress", None) or {})
+            out["phase"] = prog.get("phase") or out.get("phase", "starting")
+            if out["phase"] == "replay" and prog.get("engine") is not None and prog.get("days"):
+                day = int(getattr(prog["engine"].wm, "last_processed_day", -1)) + 1
+                out["days"] = [day, int(prog["days"])]
+                out["fraction"] = round(max(0.0, min(1.0, day / int(prog["days"]))), 3)
+        out["elapsed_s"] = round(time.monotonic() - sw["t0"], 1)
+        return out
+
+    def prepare(self, scenario: str) -> ScenarioRunner:
+        """Build and load a demo's runner (worker thread, outside the lock: the current demo keeps serving)."""
+        kept = self.runners.get(scenario)
+        if kept is not None and kept.loaded:
+            return kept
+        runner = self.new_runner(scenario, True)
+        if self.switching is not None:
+            self.switching["runner"] = runner
+        runner.load()
+        runner.controller.auto_resume = False
+        runner.progress = {"phase": "ready"}
+        with self.lock:
+            self.runners[scenario] = runner
+        return runner
+
+    def activate(self, scenario: str) -> Any:
+        """Serve a demo whose runner is prepared."""
+        with self.lock:
+            old = self.scenario
+            self.scenario, self.runner, self.interactive = scenario, self.runners[scenario], True
+            self._announce_switch(old, scenario)
+            return self.runner.status()
+
+    async def switch(self, scenario: str) -> dict:
+        """Switch to a demo. One already open swaps in at once; another is built in the background, with its progress
+        in `switching` (GET /api/demos), and swaps in when it is ready."""
+        if scenario not in DEMO_IDS:
+            raise KeyError(scenario)
+        if scenario == self.scenario and self.runner is not None and self.runner.loaded:
+            return self.demos()
+        if self.switch_task is not None and not self.switch_task.done():
+            if self.switching and self.switching.get("demo") == scenario:
+                return self.demos()
+            raise ControllerError(f"already opening {self.switching.get('demo') if self.switching else 'a demo'}")
+        self.switching = {"demo": scenario, "phase": "starting", "t0": time.monotonic()}
+
+        async def go() -> None:
+            from axelrod_wm.api.routes import _stop_play
+
+            try:
+                await anyio.to_thread.run_sync(lambda: self.prepare(scenario))
+                # what runs on the current demo stops first: play pauses, and an update run rests (it pauses at its
+                # next review, or finishes)
+                self.play_requested = False
+                await _stop_play(self)
+                if self.update_task is not None and not self.update_task.done():
+                    try:
+                        await asyncio.wait_for(asyncio.shield(self.update_task), timeout=120)
+                    except TimeoutError:
+                        pass
+                await anyio.to_thread.run_sync(lambda: self.activate(scenario))
+                self.switching = None
+            except Exception as exc:               # reported by GET /api/demos; the current demo keeps serving
+                sw = {k: v for k, v in (self.switching or {}).items() if k != "runner"}
+                self.switching = {**sw, "phase": "error", "error": f"{type(exc).__name__}: {exc}"}
+
+        ready = self.runners.get(scenario) is not None and self.runners[scenario].loaded
+        self.switch_task = asyncio.create_task(go())
+        if ready:
+            await self.switch_task                 # already open: the swap is immediate
+        else:
+            await asyncio.sleep(0)
+        return self.demos()
 
     def ensure_loaded(self) -> ScenarioRunner:
         with self.lock:

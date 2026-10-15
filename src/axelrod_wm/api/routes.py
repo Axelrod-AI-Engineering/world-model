@@ -852,6 +852,21 @@ async def get_scenarios() -> list:
     return list_scenarios()
 
 
+@router.get("/demos")
+async def get_demos(request: Request) -> dict:
+    """The demos the top bar's menu offers: which one this login's engine serves, which are open, which must replay
+    their history first, and the switch under way with its progress."""
+    return S(request).demos()
+
+
+@router.post("/demos/{demo_id}")
+async def switch_demo(request: Request, demo_id: str) -> dict:
+    """Switch this login's engine to another demo. A demo opened before comes back as it was left; a new one is built
+    in the background (GET /api/demos follows it) while the current one keeps serving. Every page on this engine is
+    told to reload once it swaps in."""
+    return await S(request).switch(demo_id)
+
+
 @router.get("/layouts/figure1")
 async def get_layout(request: Request) -> dict:
     st = S(request)
