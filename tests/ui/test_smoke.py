@@ -134,13 +134,17 @@ def test_the_demo_loads_opens_nodes_and_steps(server):
         page.keyboard.press("q")
         page.wait_for_selector("#tab-thesis .pick.actor")
         assert page.locator("#tab-thesis .pick.sector").count() >= 1
-        # asking: the Forecast tab shows progress at once, the guide (first time) narrates, and a brief
-        # opens in the left sidebar when the forecast is in
+        # asking: the Forecast tab shows progress at once, and the guide (first time, in Learn) narrates. When the
+        # forecast is in, the brief does not open by itself (Oct 14): one small prompt offers it
         page.click("#th-ask")
         page.wait_for_selector("#tab-forecast .progress-card", timeout=20000)
         page.wait_for_selector("#guide:not(.hidden) .bubble", timeout=20000)
-        page.wait_for_selector("#left-panel:not([hidden]) .brief h3", timeout=180000)
-        assert "bottom line" in page.locator(".brief").inner_text().lower()
+        page.wait_for_selector(".brief-nudge:not(.hidden)", timeout=180000)
+        assert page.locator("#left-panel").is_hidden() or page.locator("#left-panel").get_attribute("data-tab") != "briefs"
+        page.click(".brief-nudge [data-bn-open]")
+        page.wait_for_selector("#left-panel:not([hidden]) .brief h3", timeout=60000)
+        text = page.locator(".brief").inner_text().lower()
+        assert "bottom line" in text and "transmission path" in text and "timeline" in text
         # selecting text in the brief offers a chat, which is a labeled mock-up
         box = page.locator(".brief .lede").first.bounding_box()
         page.mouse.move(box["x"] + 3, box["y"] + 6)

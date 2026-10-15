@@ -99,10 +99,17 @@ export function splitSvg(split, { width = 220, row = 14, labels = true } = {}) {
     svg.append("line").attr("class", `split-shift ${dir}`).attr("x1", x(0)).attr("x2", x(s)).attr("y1", yS).attr("y2", yS);
     svg.append("path").attr("class", `split-head ${dir}`).attr("d", `M${x(s)},${yS} l${s > 0 ? -4 : 4},-3 l0,6 z`);
   }
-  const right = x(s) > (gut + width) / 2;
+  // the number sits past the arrowhead when there is room, else on the other side of the baseline's median
+  const W = 6 * said.length;
+  let [lx, anchor] = s >= 0
+    ? (width - padR - (x(s) + 6) >= W ? [x(s) + 6, "start"] : [x(0) - 5, "end"])
+    : (x(s) - 6 - gut >= W ? [x(s) - 6, "end"] : [x(0) + 5, "start"]);
+  // no room on either side (a large shift on a small card): the number takes the row label's place
+  const cramped = (anchor === "start" && lx + W > width - padR) || (anchor === "end" && lx - W < gut);
+  if (cramped && labels) [lx, anchor] = [0, "start"];
+  else if (cramped) [lx, anchor] = [width - padR, "end"];
   svg.append("text").attr("class", `split-txt ${Math.abs(s) < 0.005 ? "" : dir}`)
-    .attr("x", right ? Math.min(x(0), x(s)) - 4 : Math.max(x(0), x(s)) + 5).attr("y", yS + 3.5)
-    .attr("text-anchor", right ? "end" : "start").text(said);
-  if (labels) svg.append("text").attr("class", "split-lab").attr("x", 0).attr("y", yS + 3.5).text("shift");
+    .attr("x", lx).attr("y", yS + 3.5).attr("text-anchor", anchor).text(cramped && labels ? said.replace(" sd", "").replace(" ", "") : said);
+  if (labels && !cramped) svg.append("text").attr("class", "split-lab").attr("x", 0).attr("y", yS + 3.5).text("shift");
   return svg.node();
 }
