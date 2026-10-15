@@ -1,0 +1,173 @@
+# Sally's world: interactions. m01-m33 come from Emily's world (m24, Zurich, is out of scope); s01- are Sally's. Effects are in target standard units per source standard unit; kernels are mean days
+# (duration_days: null is permanent). Effects default to sigma 0.15 and existence to Beta(9, 1). The chain follows
+# the client's yen-rates simulator: oil -> inflation/growth (3, 6, 12 months) -> Fed and BoJ separately -> the
+# two-year gap -> USD/JPY -> earnings; and the Tokio Marine driver layer: FX translation and reinvestment.
+interactions:
+  # oil -> inflation and growth
+  - {id: m01, source: oil.brent, target: us_economy.headline_cpi, label: raises, effect: {mu: 0.45},
+     kernel: {delay_days: 20, lag_days: 75, duration_days: 300}}
+  - {id: m02, source: oil.brent, target: japan_economy.core_cpi, label: raises, effect: {mu: 0.3},
+     kernel: {delay_days: 30, lag_days: 90, duration_days: 300}}
+  - {id: m03, source: oil.brent, target: euro_economy.headline_cpi, label: raises, effect: {mu: 0.4},
+     kernel: {delay_days: 20, lag_days: 75, duration_days: 300}}
+  - {id: m04, source: oil.brent, target: us_economy.gdp_growth, label: weighs on, effect: {mu: -0.25},
+     kernel: {delay_days: 60, lag_days: 180, duration_days: 360}}
+  - {id: m05, source: us_economy.headline_cpi, target: us_economy.core_cpi, label: spreads to, effect: {mu: 0.35},
+     kernel: {delay_days: 45, lag_days: 120, duration_days: null}}
+  # inflation and growth -> policy, separately
+  - {id: m06, source: us_economy.core_cpi, target: federal_reserve.policy_rate, label: keeps the Fed tight, effect: {mu: 0.5},
+     kernel: {delay_days: 30, lag_days: 60, duration_days: null}}
+  - {id: m07, source: us_economy.gdp_growth, target: federal_reserve.policy_rate, label: lets the Fed hold, effect: {mu: 0.35},
+     kernel: {delay_days: 30, lag_days: 90, duration_days: null}}
+  - {id: m08, source: japan_economy.core_cpi, target: boj.policy_rate, label: pushes the BoJ to hike, effect: {mu: 0.4},
+     kernel: {delay_days: 45, lag_days: 90, duration_days: null}}
+  - {id: m09, source: japan_economy.wage_growth, target: boj.policy_rate, label: pushes the BoJ to hike, effect: {mu: 0.45},
+     kernel: {delay_days: 60, lag_days: 120, duration_days: null}}
+  - {id: m10, source: euro_economy.headline_cpi, target: ecb.policy_rate, label: keeps the ECB tight, effect: {mu: 0.45},
+     kernel: {delay_days: 30, lag_days: 75, duration_days: null}}
+  # policy -> curves
+  - {id: m11, source: federal_reserve.policy_rate, target: us_treasuries.yield_2y, label: anchors, effect: {mu: 0.85},
+     kernel: {delay_days: 1, lag_days: 10, duration_days: null}}
+  - {id: m12, source: us_treasuries.yield_2y, target: us_treasuries.yield_10y, label: lifts, effect: {mu: 0.5},
+     kernel: {delay_days: 1, lag_days: 14, duration_days: null}}
+  - {id: m13, source: boj.policy_rate, target: jgbs.yield_10y, label: lifts, effect: {mu: 0.6},
+     kernel: {delay_days: 1, lag_days: 14, duration_days: null}}
+  - {id: m14, source: jgbs.yield_10y, target: jgbs.yield_30y, label: lifts, effect: {mu: 0.6},
+     kernel: {delay_days: 1, lag_days: 21, duration_days: null}}
+  # the rate gap -> the yen
+  - {id: m15, source: us_treasuries.yield_2y, target: dollar_yen.usd_jpy, label: "widens the gap, weakening the yen", effect: {mu: 0.2},
+     kernel: {delay_days: 1, lag_days: 20, duration_days: 240}}
+  - {id: m16, source: boj.policy_rate, target: dollar_yen.usd_jpy, label: "narrows the gap, strengthening the yen", effect: {mu: -0.2},
+     kernel: {delay_days: 1, lag_days: 20, duration_days: 240}}
+  - {id: m17, source: boj.policy_rate, target: dollar_yen.carry_positioning, label: raises carry funding costs, effect: {mu: -0.5},
+     kernel: {delay_days: 3, lag_days: 20, duration_days: 180}}
+  - {id: m18, source: dollar_yen.carry_positioning, target: dollar_yen.usd_jpy, label: holds the yen down, effect: {mu: 0.35},
+     kernel: {delay_days: 1, lag_days: 10, duration_days: 120}}
+  # the yen and yields -> the names
+  - {id: m19, source: dollar_yen.usd_jpy, target: tokio_marine.international_profit, label: translates overseas profit, effect: {mu: 0.45},
+     kernel: {delay_days: 30, lag_days: 90, duration_days: null}}
+  - {id: m20, source: us_treasuries.yield_10y, target: tokio_marine.international_profit, label: lifts reinvestment income, effect: {mu: 0.25},
+     kernel: {delay_days: 60, lag_days: 180, duration_days: null}}
+  - {id: m21, source: jgbs.yield_30y, target: tokio_marine.japan_pc_profit, label: lifts reinvestment income, effect: {mu: 0.2},
+     kernel: {delay_days: 60, lag_days: 180, duration_days: null}}
+  - {id: m22, source: tokio_marine.international_profit, target: tokio_marine.operating_profit, label: adds to, effect: {mu: 0.55},
+     kernel: {delay_days: 1, lag_days: 30, duration_days: null}}
+  - {id: m23, source: tokio_marine.japan_pc_profit, target: tokio_marine.operating_profit, label: adds to, effect: {mu: 0.25},
+     kernel: {delay_days: 1, lag_days: 30, duration_days: null}}
+  - {id: m25, source: federal_reserve.policy_rate, target: jpmorgan.net_interest_income, label: widens margins, effect: {mu: 0.1},
+     kernel: {delay_days: 30, lag_days: 90, duration_days: null}}
+  - {id: m26, source: federal_reserve.policy_rate, target: citigroup.net_interest_income, label: widens margins, effect: {mu: 0.1},
+     kernel: {delay_days: 30, lag_days: 90, duration_days: null}}
+  - {id: m27, source: us_treasuries.yield_2y, target: morgan_stanley.trading_revenue, label: rate volatility lifts, effect: {mu: 0.2},
+     kernel: {delay_days: 7, lag_days: 45, duration_days: 180}}
+  - {id: m28, source: ecb.policy_rate, target: unicredit.net_interest_income, label: sets margins, effect: {mu: 0.5},
+     kernel: {delay_days: 30, lag_days: 90, duration_days: null}}
+  - {id: m29, source: dollar_yen.usd_jpy, target: toyota.operating_profit, label: a weaker yen lifts, effect: {mu: 0.7},
+     kernel: {delay_days: 30, lag_days: 90, duration_days: null}}
+  - {id: m30, source: dollar_yen.usd_jpy, target: komatsu.operating_profit, label: a weaker yen lifts, effect: {mu: 0.3},
+     kernel: {delay_days: 30, lag_days: 90, duration_days: null}}
+  - {id: m31, source: oil.brent, target: komatsu.mining_demand, label: funds mining capex, effect: {mu: 0.3},
+     kernel: {delay_days: 90, lag_days: 180, duration_days: null}}
+  - {id: m32, source: komatsu.mining_demand, target: komatsu.operating_profit, label: drives, effect: {mu: 0.4},
+     kernel: {delay_days: 30, lag_days: 120, duration_days: null}}
+  - {id: m33, source: jgbs.yield_10y, target: softbank_corp.operating_profit, label: raises the AI build's funding cost, effect: {mu: -0.2},
+     kernel: {delay_days: 60, lag_days: 180, duration_days: null}}
+  # --- Sally's additions -----------------------------------------------------------------------------------------
+  - {id: s01, source: japan_economy.gdp_growth, target: boj.policy_rate, label: lets the BoJ keep hiking, effect: {mu: 0.3},
+     kernel: {delay_days: 45, lag_days: 120, duration_days: null}}
+  - {id: s02, source: china_economy.gdp_growth, target: pboc.loan_prime_rate, label: weak growth prompts cuts, effect: {mu: 0.35},
+     kernel: {delay_days: 30, lag_days: 90, duration_days: null}}
+  - {id: s03, source: pboc.loan_prime_rate, target: china_economy.credit_growth, label: cuts lift credit, effect: {mu: -0.4},
+     kernel: {delay_days: 30, lag_days: 120, duration_days: null}}
+  - {id: s04, source: pboc.loan_prime_rate, target: china_economy.property_sales, label: cuts support home buying, effect: {mu: -0.35},
+     kernel: {delay_days: 45, lag_days: 150, duration_days: null}}
+  - {id: s05, source: ecb.policy_rate, target: bunds.yield_10y, label: anchors, effect: {mu: 0.55},
+     kernel: {delay_days: 1, lag_days: 14, duration_days: null}}
+  - {id: s06, source: us_treasuries.yield_10y, target: bunds.yield_10y, label: spills over, effect: {mu: 0.35},
+     kernel: {delay_days: 1, lag_days: 10, duration_days: null}}
+  - {id: s07, source: us_treasuries.yield_10y, target: jgbs.yield_10y, label: spills over, effect: {mu: 0.2},
+     kernel: {delay_days: 1, lag_days: 10, duration_days: null}}
+  - {id: s08, source: federal_reserve.policy_rate, target: us_capital_markets.deal_activity, label: tight money slows dealmaking, effect: {mu: -0.3},
+     kernel: {delay_days: 30, lag_days: 120, duration_days: null}}
+  - {id: s09, source: us_economy.gdp_growth, target: us_capital_markets.deal_activity, label: growth lifts dealmaking, effect: {mu: 0.35},
+     kernel: {delay_days: 30, lag_days: 120, duration_days: null}}
+  - {id: s10, source: dollar_yen.carry_positioning, target: us_capital_markets.market_volatility, label: an unwinding carry spikes volatility, effect: {mu: -0.45},
+     kernel: {delay_days: 1, lag_days: 7, duration_days: 90}}
+  - {id: s11, source: us_treasuries.yield_2y, target: us_capital_markets.market_volatility, label: rate repricing raises volatility, effect: {mu: 0.2},
+     kernel: {delay_days: 1, lag_days: 14, duration_days: 120}}
+  - {id: s12, source: us_capital_markets.deal_activity, target: jpmorgan.ib_fees, label: drives, effect: {mu: 0.6},
+     kernel: {delay_days: 14, lag_days: 60, duration_days: null}}
+  - {id: s13, source: us_capital_markets.deal_activity, target: morgan_stanley.ib_fees, label: drives, effect: {mu: 0.7},
+     kernel: {delay_days: 14, lag_days: 60, duration_days: null}}
+  - {id: s14, source: us_capital_markets.market_volatility, target: jpmorgan.markets_revenue, label: lifts trading, effect: {mu: 0.35},
+     kernel: {delay_days: 1, lag_days: 30, duration_days: 120}}
+  - {id: s15, source: us_capital_markets.market_volatility, target: morgan_stanley.trading_revenue, label: lifts trading, effect: {mu: 0.4},
+     kernel: {delay_days: 1, lag_days: 30, duration_days: 120}}
+  - {id: s16, source: us_capital_markets.market_volatility, target: citigroup.markets_revenue, label: lifts trading, effect: {mu: 0.3},
+     kernel: {delay_days: 1, lag_days: 30, duration_days: 120}}
+  - {id: s17, source: us_capital_markets.market_volatility, target: morgan_stanley.wealth_revenue, label: sours client assets, effect: {mu: -0.2},
+     kernel: {delay_days: 7, lag_days: 60, duration_days: 180}}
+  - {id: s18, source: us_treasuries.yield_10y, target: jpmorgan.cet1_ratio, label: marks down bond holdings, effect: {mu: -0.25},
+     kernel: {delay_days: 1, lag_days: 30, duration_days: null}}
+  - {id: s19, source: us_economy.gdp_growth, target: citigroup.services_revenue, label: cross-border flows lift, effect: {mu: 0.3},
+     kernel: {delay_days: 30, lag_days: 90, duration_days: null}}
+  - {id: s20, source: jpmorgan.ib_fees, target: jpmorgan.share_price, label: drives, effect: {mu: 0.25},
+     kernel: {delay_days: 1, lag_days: 21, duration_days: null}}
+  - {id: s21, source: jpmorgan.markets_revenue, target: jpmorgan.share_price, label: drives, effect: {mu: 0.25},
+     kernel: {delay_days: 1, lag_days: 21, duration_days: null}}
+  - {id: s22, source: jpmorgan.cet1_ratio, target: jpmorgan.share_price, label: buyback capacity supports, effect: {mu: 0.2},
+     kernel: {delay_days: 1, lag_days: 30, duration_days: null}}
+  - {id: s23, source: morgan_stanley.ib_fees, target: morgan_stanley.share_price, label: drives, effect: {mu: 0.3},
+     kernel: {delay_days: 1, lag_days: 21, duration_days: null}}
+  - {id: s24, source: morgan_stanley.wealth_revenue, target: morgan_stanley.share_price, label: drives, effect: {mu: 0.35},
+     kernel: {delay_days: 1, lag_days: 21, duration_days: null}}
+  - {id: s25, source: citigroup.services_revenue, target: citigroup.share_price, label: drives, effect: {mu: 0.3},
+     kernel: {delay_days: 1, lag_days: 21, duration_days: null}}
+  - {id: s26, source: citigroup.markets_revenue, target: citigroup.share_price, label: drives, effect: {mu: 0.2},
+     kernel: {delay_days: 1, lag_days: 21, duration_days: null}}
+  - {id: s27, source: pboc.loan_prime_rate, target: china_construction_bank.net_interest_margin, label: sets loan yields, effect: {mu: 0.6},
+     kernel: {delay_days: 30, lag_days: 120, duration_days: null}}
+  - {id: s28, source: china_economy.property_sales, target: china_construction_bank.npl_ratio, label: a weak property market sours mortgages, effect: {mu: -0.4},
+     kernel: {delay_days: 60, lag_days: 240, duration_days: null}}
+  - {id: s29, source: china_construction_bank.net_interest_margin, target: china_construction_bank.operating_profit, label: drives, effect: {mu: 0.55},
+     kernel: {delay_days: 14, lag_days: 90, duration_days: null}}
+  - {id: s30, source: china_construction_bank.npl_ratio, target: china_construction_bank.operating_profit, label: provisions weigh on, effect: {mu: -0.3},
+     kernel: {delay_days: 14, lag_days: 90, duration_days: null}}
+  - {id: s31, source: china_economy.credit_growth, target: china_construction_bank.operating_profit, label: loan growth lifts, effect: {mu: 0.2},
+     kernel: {delay_days: 30, lag_days: 120, duration_days: null}}
+  - {id: s32, source: ecb.policy_rate, target: aib_group.net_interest_income, label: passes straight into, effect: {mu: 0.65},
+     kernel: {delay_days: 30, lag_days: 90, duration_days: null}}
+  - {id: s33, source: bunds.yield_10y, target: unicredit.cet1_ratio, label: marks bond holdings, effect: {mu: -0.15},
+     kernel: {delay_days: 1, lag_days: 30, duration_days: null}}
+  - {id: s34, source: unicredit.cet1_ratio, target: unicredit.share_price, label: buyback capacity supports, effect: {mu: 0.2},
+     kernel: {delay_days: 1, lag_days: 30, duration_days: null}}
+  - {id: s35, source: dollar_yen.usd_jpy, target: msad.international_profit, label: translates overseas profit, effect: {mu: 0.4},
+     kernel: {delay_days: 30, lag_days: 90, duration_days: null}}
+  - {id: s36, source: us_treasuries.yield_10y, target: msad.international_profit, label: lifts reinvestment income, effect: {mu: 0.2},
+     kernel: {delay_days: 60, lag_days: 180, duration_days: null}}
+  - {id: s37, source: bunds.yield_10y, target: msad.international_profit, label: lifts European reinvestment income, effect: {mu: 0.15},
+     kernel: {delay_days: 60, lag_days: 180, duration_days: null}}
+  - {id: s38, source: jgbs.yield_30y, target: msad.domestic_profit, label: lifts reinvestment income, effect: {mu: 0.2},
+     kernel: {delay_days: 60, lag_days: 180, duration_days: null}}
+  - {id: s39, source: msad.international_profit, target: msad.operating_profit, label: adds to, effect: {mu: 0.45},
+     kernel: {delay_days: 1, lag_days: 30, duration_days: null}}
+  - {id: s40, source: msad.domestic_profit, target: msad.operating_profit, label: adds to, effect: {mu: 0.4},
+     kernel: {delay_days: 1, lag_days: 30, duration_days: null}}
+  - {id: s41, source: bunds.yield_10y, target: tokio_marine.international_profit, label: lifts European reinvestment income, effect: {mu: 0.1},
+     kernel: {delay_days: 60, lag_days: 180, duration_days: null}}
+  - {id: s42, source: us_economy.gdp_growth, target: toyota.vehicle_sales, label: US demand lifts, effect: {mu: 0.3},
+     kernel: {delay_days: 30, lag_days: 120, duration_days: null}}
+  - {id: s43, source: china_economy.gdp_growth, target: toyota.vehicle_sales, label: Chinese demand lifts, effect: {mu: 0.2},
+     kernel: {delay_days: 30, lag_days: 120, duration_days: null}}
+  - {id: s44, source: toyota.vehicle_sales, target: toyota.operating_profit, label: drives, effect: {mu: 0.4},
+     kernel: {delay_days: 14, lag_days: 60, duration_days: null}}
+  - {id: s45, source: china_economy.property_sales, target: komatsu.construction_demand, label: construction starts drive, effect: {mu: 0.4},
+     kernel: {delay_days: 60, lag_days: 180, duration_days: null}}
+  - {id: s46, source: komatsu.construction_demand, target: komatsu.operating_profit, label: drives, effect: {mu: 0.3},
+     kernel: {delay_days: 30, lag_days: 120, duration_days: null}}
+  - {id: s47, source: japan_economy.gdp_growth, target: softbank_corp.operating_profit, label: domestic demand lifts, effect: {mu: 0.15},
+     kernel: {delay_days: 30, lag_days: 120, duration_days: null}}
+  - {id: s48, source: softbank_corp.ai_capex, target: softbank_corp.operating_profit, label: depreciation weighs on near-term profit, effect: {mu: -0.2},
+     kernel: {delay_days: 90, lag_days: 240, duration_days: null}}
+  - {id: s49, source: jgbs.yield_10y, target: softbank_corp.ai_capex, label: higher funding costs slow the build, effect: {mu: -0.2},
+     kernel: {delay_days: 60, lag_days: 180, duration_days: null}}

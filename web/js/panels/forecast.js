@@ -8,6 +8,7 @@ import { api } from "../api.js";
 import { splitSvg } from "../charts/density.js";
 import { fanChart } from "../charts/fan.js";
 import { names, qualifiedHtml } from "../names.js";
+import { scenarioTableHtml } from "./context.js";
 import { emit, on, store } from "../store.js";
 import { esc, fmt, signed } from "../util.js";
 /* global d3 */
@@ -185,6 +186,7 @@ export function initForecast({ renderer, activateTab, onWalk }) {
         <button class="small" id="fc-brief" title="A one-page reading of this forecast (B)">Brief</button>
         <button class="small" id="fc-edit" title="Reopen Ask with this thesis filled in: question, shocks, targets, horizon">Edit</button>
         <button class="small" id="fc-rerun" title="Pose the same thesis again at the latest committed version; this forecast stays">Re-run</button>
+        <button class="small" id="fc-context" title="This forecast and the world model as context for the agents, in their own format">Agent context</button>
         ${runs.length > 1 ? `<span class="fc-runs small faint" title="Every forecast of this thesis">runs ${runs.map((x, i) => x.id === fc.id
           ? `<b>#${i + 1}</b>` : `<a href="#" data-run="${esc(x.id)}" title="${esc(x.id)} at v${x.version}">#${i + 1}</a>`).join(" ")}</span>` : ""}
       </div>
@@ -197,6 +199,8 @@ export function initForecast({ renderer, activateTab, onWalk }) {
       </div>
       ${scen.length > 1 ? `<div class="section"><h4>Scenarios</h4>
         <div class="weightbar" role="img" aria-label="Scenario weights">${scen.map((s, i) => `<div style="width:${(s.weight * 100).toFixed(2)}%;background:${SCEN_COLORS[i % SCEN_COLORS.length]}" title="${esc(s.name)}: ${fmt(s.weight * 100, 1)}%">${s.weight > 0.12 ? `${esc(s.weight > 0.4 ? s.name : s.name.split(" · ")[0])} ${fmt(s.weight * 100, 0)}%` : ""}</div>`).join("")}</div></div>` : ""}
+      ${fc.scenario_table?.rows?.length ? `<div class="section"><h4 title="${esc(fc.scenario_table.method)}">Scenarios for the book</h4>
+        ${scenarioTableHtml(fc.scenario_table, { compact: true })}</div>` : ""}
       ${(fv.groups ?? []).length ? `<div class="section"><h4>Actors, sectors, and ideas</h4><div class="fc-grid groups" id="fc-groups"></div></div>` : ""}
       <div class="section"><h4>Values</h4><div class="fc-grid" id="fc-targets"></div></div>
       <div id="fc-tx"></div>
@@ -209,6 +213,7 @@ export function initForecast({ renderer, activateTab, onWalk }) {
         <div id="fc-expl"></div></details>`;
     el.querySelector("#fc-walk").addEventListener("click", () => onWalk?.(fc.thesis_id));
     el.querySelector("#fc-brief").addEventListener("click", () => emit("open-brief", fc.id));
+    el.querySelector("#fc-context").addEventListener("click", () => emit("open-context", fc.id));
     el.querySelector("#fc-edit").addEventListener("click", () => emit("edit-thesis", { thesis_id: fc.thesis_id, forecast_id: fc.id }));
     el.querySelector("#fc-rerun").addEventListener("click", (ev) => { ev.currentTarget.disabled = true; ev.currentTarget.textContent = "Re-running…"; emit("rerun-forecast", fc.id); });
     for (const a of el.querySelectorAll("[data-run]")) a.addEventListener("click", (ev) => { ev.preventDefault(); openById(a.dataset.run); });

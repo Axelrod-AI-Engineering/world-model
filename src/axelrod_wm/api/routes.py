@@ -625,6 +625,29 @@ async def get_forecast_brief(request: Request, forecast_id: str) -> dict:
     return await st.call(lambda: brief_view(st.controller, forecast_id))
 
 
+@router.get("/context/v4")
+async def get_context_v4(request: Request, forecast: str | None = None) -> dict:
+    """The world model as context for a client's agents, in their v4.1.4 world-model format (Oct 15): a domain
+    pack, the current baseline, and (with ?forecast=) the forecast's decision context, with a manifest of load order."""
+    from axelrod_wm.context.v4 import context_pack
+
+    st = S(request)
+
+    def run() -> dict:
+        ctl = st.controller
+        fc = ctl.forecast(forecast) if forecast else None
+        if forecast and fc is None:
+            raise KeyError(forecast)
+        script = st.runner.script
+        watch = ctl.watchlist() or {}
+        eng = ctl.engine
+        return context_pack(eng.wm, eng.ltm, scenario_id=script.id, title=script.title.split(":")[0],
+                            book=list(watch.get("entities", [])), version=eng.version, state_hash=eng.state_hash,
+                            forecast=fc, explanation=ctl.explanation(fc.explanation_id) if fc else None)
+
+    return await st.call(run)
+
+
 class AnnotationBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

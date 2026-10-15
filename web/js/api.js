@@ -106,6 +106,8 @@ export const api = {
   step: () => post("/sim/step"),
   script: () => get("/sim/script"),
   brief: (id) => get(`/forecasts/${q(id)}/brief`),
+  // the world model as context for a client's agents, in their v4.1.4 format (Oct 15)
+  contextV4: (forecastId) => get(`/context/v4${forecastId ? `?forecast=${q(forecastId)}` : ""}`),
   // readers' notes on a brief (Oct 14): logged, never learned; and posing a forecast's thesis again
   annotations: (id) => get(`/forecasts/${q(id)}/annotations`),
   annotate: (id, anchor, text) => post(`/forecasts/${q(id)}/annotations`, { anchor, text }),

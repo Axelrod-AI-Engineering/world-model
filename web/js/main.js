@@ -25,6 +25,7 @@ import { installListMotion } from "./motion.js";
 import { initExamples } from "./panels/examples.js";
 import { initImport } from "./panels/import.js";
 import { initChecks } from "./panels/checks.js";
+import { initContext } from "./panels/context.js";
 import { initPaths } from "./panels/paths.js";
 import { initFind } from "./panels/find.js";
 import { initLevels } from "./panels/levels.js";
@@ -309,6 +310,7 @@ async function boot() {
     try { sessionStorage.setItem(RETURN, store.status.scenario_id); } catch { /* the tutorial still opens */ }
     await demos.choose("small_demo", { after: "examples" });
   }
+  const agentContext = initContext();
   const importer = initImport({
     toast,
     onProposal: async (pid) => { await refreshGraph(); openLeft("review"); review.focus(pid); },
@@ -765,6 +767,7 @@ async function boot() {
     // another world: what was open about this one (a forecast, its grid, the side panels) does not carry over
     if (paths.isOpen()) paths.close();
     if (importer.isOpen()) importer.close();
+    if (agentContext.isOpen()) agentContext.close();
     clearForecastCanvas();
     closeRight();
     predict.keep = new Set();
@@ -1393,6 +1396,7 @@ async function boot() {
       if (colorKey.isOpen()) { colorKey.close(); return; }
       if (examples.isOpen()) { examples.close(); return; }
       if (importer.isOpen()) { importer.close(); return; }
+      if (agentContext.isOpen()) { agentContext.close(); return; }
       if (methods.isOpen()) { methods.close(); return; }
       if (chat.isOpen()) { chat.close(); return; }
       if (guide.run) { guide.stop(); return; }

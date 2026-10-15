@@ -189,7 +189,7 @@ class DataFeedTranslator(MarketEventTranslator):
 class TemplateRules(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    subjects: list[dict[str, str]] = []
+    subjects: list[dict[str, Any]] = []             # {pattern, subentity, invert?}: invert for a value quoted the other way
     verbs: list[dict[str, Any]] = []
     timeframes: list[dict[str, Any]] = []
 
@@ -237,6 +237,10 @@ class TemplateTranslator(MarketEventTranslator):
                             delta, mode = sign * x, "absolute"
                     if delta is None:
                         continue
+                    if subj.get("invert"):
+                        # the subject is the value's reciprocal ("the yen" for USD/JPY): a 5% rise in the yen is a
+                        # 4.8% fall in dollar-yen; an absolute or standardized move just changes sign
+                        delta = 1.0 / (1.0 + float(delta)) - 1.0 if mode == "relative" else -float(delta)
                     at = now + timedelta(days=days)
                     ops.append({"op": "change_value", "target": {"kind": "concrete", "subentity_id": subj["subentity"]},
                                 "delta": float(delta), "mode": mode, "persistence": "step", "at": at.isoformat()})

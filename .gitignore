@@ -11,6 +11,7 @@ node_modules/
 .DS_Store
 # Emily demo source material (broker research, expert calls, client models): never committed or uploaded
 data/emily_data/
+data/sally_data/
 # videos and voiceovers: large, and the trailer carries client material; shared outside the repository
 docs/media/
 *.mp4

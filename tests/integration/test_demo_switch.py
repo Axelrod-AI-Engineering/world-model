@@ -30,10 +30,10 @@ def client():
         yield c
 
 
-def test_the_menu_lists_four_demos(client):
+def test_the_menu_lists_five_demos(client):
     out = client.get("/api/demos").json()
-    assert [d["id"] for d in out["demos"]] == ["small_demo", "prod_demo", "oil_shock_demo", "emily_demo"]
-    assert [d["label"] for d in out["demos"]] == ["Small demo", "Production demo", "Full demo", "Emily's demo"]
+    assert [d["id"] for d in out["demos"]] == ["small_demo", "prod_demo", "oil_shock_demo", "emily_demo", "sally_demo"]
+    assert [d["label"] for d in out["demos"]] == ["Small demo", "Production demo", "Full demo", "Emily's demo", "Sally's demo"]
     assert out["current"] == "small_demo" and out["switching"] is None
     cur = {d["id"]: d for d in out["demos"]}
     assert cur["small_demo"]["current"] and cur["small_demo"]["ready"]

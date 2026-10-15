@@ -1721,6 +1721,36 @@ body.isolated #caption { display: none; }
 
 /* -- Import (Oct 11): research a collection agent read and categorized, as a dated timeline ------------------ */
 .examples.import { width: min(620px, calc(100% - 20px)); }
+/* Agent context (Oct 15): the card an agent fills beside the context it reads */
+.examples.context { width: min(980px, calc(100% - 20px)); }
+.context .ctx-cols { display: flex; flex-wrap: wrap; gap: 14px; padding: 4px 16px 16px; }
+.context .ctx-card { flex: 1 1 420px; min-width: 0; }
+.context .ctx-pack { flex: 1 1 320px; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.context .ctx-q { font: 600 15px/1.35 var(--font-head); margin: 4px 0 8px; }
+table.scen td.nowrap { white-space: nowrap; }
+}
+.context .ctx-feeds, .context .ctx-load { margin: 4px 0 0; padding-left: 18px; line-height: 1.5; }
+.context .ctx-json pre { white-space: pre-wrap; word-break: break-word; max-height: 46vh; overflow: auto; background: var(--paper);
+  border: 1px solid var(--rule-soft); border-radius: 6px; padding: 8px; margin: 6px 0 0; }
+.scen-table { display: flex; flex-direction: column; gap: 6px; }
+.scen-table .scen-verdict { font-size: 13px; line-height: 1.45; }
+table.scen { width: 100%; border-collapse: collapse; table-layout: auto; }
+table.scen th { text-align: left; font-weight: 600; color: var(--ink-2); border-bottom: 1px solid var(--rule); padding: 3px 6px 3px 0; }
+table.scen td { vertical-align: top; padding: 4px 6px 4px 0; border-bottom: 1px solid var(--rule-soft); line-height: 1.4; overflow-wrap: anywhere; }
+table.scen tr.band-bull td:first-child { box-shadow: inset 3px 0 0 #6E9E72; padding-left: 6px; }
+table.scen tr.band-bear td:first-child { box-shadow: inset 3px 0 0 #B86A84; padding-left: 6px; }
+table.scen tr.band-base td:first-child { box-shadow: inset 3px 0 0 var(--rule); padding-left: 6px; }
+/* on a phone each band is a card: its name, then each column as a labelled line */
+@media (max-width: 560px) {
+  table.scen thead { display: none; }
+  table.scen, table.scen tbody, table.scen tr, table.scen td { display: block; width: 100%; }
+  table.scen tr { border-bottom: 1px solid var(--rule); padding: 6px 0 6px 8px; }
+  table.scen td { border: 0; padding: 1px 0; }
+  table.scen td[data-label]::before { content: attr(data-label) " "; color: var(--ink-3); font-family: var(--font-ui); }
+  table.scen tr[class] td:first-child { box-shadow: none; padding-left: 0; }
+  table.scen tr.band-bull { box-shadow: inset 3px 0 0 #6E9E72; }
+  table.scen tr.band-bear { box-shadow: inset 3px 0 0 #B86A84; }
+  table.scen tr.band-base { box-shadow: inset 3px 0 0 var(--rule); }
 .imp-src { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 4px 16px 8px; }
 .imp-file { display: inline-flex; align-items: center; cursor: pointer; border: 1px solid var(--real-line); border-radius: var(--radius);
   padding: 4px 10px; background: var(--real-line); color: #fff; font-weight: 600; }
