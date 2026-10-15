@@ -423,6 +423,8 @@ body.zooming #canvas svg > g { pointer-events: none; }
 .edge.focus text.label, body.labels .edge text.label { display: block; }
 .edge text.badge-l { font: 700 9.5px var(--font-mono); fill: var(--real-ink); }
 .edge.hl path.line { stroke: var(--out-ink); }
+/* an output that drives another output (Oct 15): a thicker, dashed line, so the chain between outputs reads apart */
+.edge.chain path.line { stroke: var(--out-ink); stroke-width: 3.2px; stroke-dasharray: 8 4; }
 .edge path.hit { stroke: transparent; fill: none; stroke-width: 12; }
 .frontier path.line { fill: none; stroke: var(--front-ink); stroke-width: 1.5; stroke-dasharray: 5 4; }
 .frontier text.label { font: 500 11.5px var(--font-ui); fill: var(--front-ink); text-anchor: middle; paint-order: stroke; stroke: var(--paper); stroke-width: 4px; }
@@ -1212,6 +1214,8 @@ g.lane text.lane-col.o0 { fill: var(--o0-line); }
 g.lane text.lane-col.o1 { fill: #C0835C; }
 g.lane text.lane-col.o2 { fill: #A88E3C; }
 g.lane text.lane-col.o3 { fill: #B57A8D; }
+g.lane text.lane-col.out { fill: var(--out-ink); }
+.predict-bar .chain-key { color: var(--out-ink); font-weight: 600; white-space: nowrap; }
 g.lane text.lane-arrow { font: 600 16px var(--font-mono); fill: var(--ink-3); }
 body.laned g.pill:not(.in-lane), body.laned g.card-super { opacity: 0.6; transition: opacity 0.2s; }
 body.laned g.edge:not(.staged-path):not(.staged-new):not(.staged-retired) path.line { opacity: 0.3; }
@@ -1697,6 +1701,7 @@ body.finding #caption { opacity: 0; pointer-events: none; transition: opacity .2
 .px-edge.done { animation: none; stroke-dasharray: none; }
 .px-edge.hot { stroke-width: 4; }
 .px-edge.dim { opacity: .25; }
+.px-edge.chain, .px-edge.chain.done { stroke: var(--out-ink); stroke-dasharray: 7 4; }
 @keyframes px-flow { to { stroke-dashoffset: -11; } }
 @media (prefers-reduced-motion: reduce) { .px-edge.live { animation: none; } }
 .px-loading { display: flex; align-items: center; gap: 10px; padding: 10px 2px 14px; color: var(--ink-2); font-size: 13px; }

@@ -294,32 +294,50 @@ export class SvgRenderer extends GraphRenderer {
 
   homeOf(box) {
     const h = this.layoutHome(box);
-    const dy = this.shifts?.get(box.id);
-    return dy ? { x: h.x, y: h.y + dy } : h;
+    const d = this.shifts?.get(box.id);
+    return d ? { x: h.x + d.dx, y: h.y + d.dy } : h;
   }
 
-  // Oct 14: an entity opens where it is. The layout keeps closed sizes, so an open entity makes room by pushing down the
-  // boxes beneath it whose span overlaps its own (its column, and what lies straight below); nothing else moves.
+  // Oct 14: an entity opens where it is. The layout keeps closed sizes, so an open entity makes room by pushing the boxes
+  // in its way; nothing else moves. Oct 15: in both directions. What lies beneath an open entity moves down, and what
+  // sits beside it (an open entity is wider than its pill) moves outward, away from it; a box pushed into another
+  // pushes that one in turn, a few rounds, so no open entity overlaps its neighbors at any zoom.
   openShifts() {
     const shifts = new Map();
     this.shifts = shifts;
     if (!this.model || this.isolated || this.mode !== "gravity") return;
-    const boxes = this.model.boxes.filter((b) => !this.hasFixedHome(b.id));
-    const at = new Map(boxes.map((b) => [b.id, this.layoutHome(b)]));
-    const opened = boxes.filter((b) => b.kind === "entity" && b.open && b.h > GEOM.HEAD_H)
-      .sort((a, z) => at.get(a.id).y - at.get(z.id).y || at.get(a.id).x - at.get(z.id).x);
-    for (const o of opened) {
-      const ho = at.get(o.id);
-      const extra = o.h - GEOM.HEAD_H + 6;
-      const x0 = ho.x - o.w / 2 - 10;
-      const x1 = ho.x + o.w / 2 + 10;
-      for (const b of boxes) {
-        if (b.id === o.id) continue;
-        const hb = at.get(b.id);
-        if (hb.y <= ho.y + 1 || hb.x + b.w / 2 <= x0 || hb.x - b.w / 2 >= x1) continue;
-        shifts.set(b.id, (shifts.get(b.id) ?? 0) + extra);
+    const GAP = 12;
+    const boxes = this.model.boxes.filter((b) => !this.hasFixedHome(b.id)).map((b) => {
+      const h = this.layoutHome(b);
+      return { b, x: h.x, y: h.y, top: h.y + b.oy, w: b.w, h: b.h, dx: 0, dy: 0,
+               open: b.kind === "entity" && b.open && b.h > GEOM.HEAD_H };
+    });
+    if (!boxes.some((o) => o.open)) return;
+    // reading order: what comes first stays, what comes after makes room
+    boxes.sort((a, z) => a.top - z.top || a.x - z.x);
+    const rect = (o) => ({ x0: o.x + o.dx - o.w / 2, x1: o.x + o.dx + o.w / 2, y0: o.top + o.dy, y1: o.top + o.dy + o.h });
+    for (let round = 0; round < 6; round++) {
+      let moved = false;
+      for (let i = 0; i < boxes.length; i++) {
+        const a = boxes[i];
+        for (let j = i + 1; j < boxes.length; j++) {
+          const b = boxes[j];
+          if (!a.open && !b.open) continue;          // two closed boxes keep the layout's own spacing
+          const ra = rect(a);
+          const rb = rect(b);
+          const ox = Math.min(ra.x1, rb.x1) - Math.max(ra.x0, rb.x0) + GAP;
+          const oy = Math.min(ra.y1, rb.y1) - Math.max(ra.y0, rb.y0) + GAP;
+          if (ox <= GAP || oy <= GAP) continue;
+          // b began beneath a's head: it moves down; else it sits beside a, and moves away from it
+          if (b.top >= a.top + GEOM.HEAD_H * 0.75) b.dy += oy;
+          else if (b.x >= a.x) b.dx += ox;
+          else b.dx -= ox;
+          moved = true;
+        }
       }
+      if (!moved) break;
     }
+    for (const o of boxes) if (o.dx || o.dy) shifts.set(o.b.id, { dx: o.dx, dy: o.dy });
   }
 
   layoutHome(box) {
@@ -575,7 +593,7 @@ export class SvgRenderer extends GraphRenderer {
       x += c.w + GAP_X;
     }
     this.laneBox = { x0: (x0 + x1) / 2 - W / 2 - 36, x1: (x0 + x1) / 2 + W / 2 + 36, y0: top - 64, y1: top + H + 30,
-                     cols: cols.map((c) => ({ key: c.key, label: c.label, x: c.x + c.w / 2, cls: c.cls })) };
+                     title: lane.title, cols: cols.map((c) => ({ key: c.key, label: c.label, x: c.x + c.w / 2, cls: c.cls })) };
   }
 
   drawLane() {
@@ -584,11 +602,11 @@ export class SvgRenderer extends GraphRenderer {
     sel.exit().transition().duration(this.opts.reducedMotion ? 0 : 160).style("opacity", 0).remove();
     const enter = sel.enter().append("g").attr("class", "lane").style("opacity", 0);
     enter.append("rect").attr("class", "lane-band").attr("rx", 18);
-    enter.append("text").attr("class", "lane-title").text("Transmission path");
+    enter.append("text").attr("class", "lane-title");
     enter.transition().duration(this.opts.reducedMotion ? 0 : 220).style("opacity", 1);
     const all = enter.merge(sel);
     all.select("rect.lane-band").attr("x", (d) => d.x0).attr("y", (d) => d.y0).attr("width", (d) => d.x1 - d.x0).attr("height", (d) => d.y1 - d.y0);
-    all.select("text.lane-title").attr("x", (d) => d.x0 + 18).attr("y", (d) => d.y0 - 12);
+    all.select("text.lane-title").attr("x", (d) => d.x0 + 18).attr("y", (d) => d.y0 - 12).text((d) => d.title ?? "Transmission path");
     const heads = all.selectAll("text.lane-col").data((d) => d.cols.map((c) => ({ ...c, y: d.y0 + 30 })), (c) => c.key);
     heads.exit().remove();
     heads.enter().append("text").merge(heads).attr("class", (c) => `lane-col ${c.cls ?? ""}`)
@@ -831,14 +849,14 @@ export class SvgRenderer extends GraphRenderer {
     else if (this.savedHomes) this.mode = this.savedHomes.mode;
     this.isolated = iso;
     this.isoHomes = iso?.homes ?? null;
-    this.view = iso ? filterView(this.fullView, iso.keep) : this.fullView;
+    this.view = iso ? filterView(this.fullView, iso.keep, { subs: iso.subs, links: iso.links, hulls: iso.hulls }) : this.fullView;
     this.ui.collapsed.clear();
     if (iso) {
       this.gravHomes.clear();
       this.regionHomes = null;
       // a small isolated graph opens its entities, so its values and their links show at once; the transmission
       // grid's isolation (iso.open === false) starts compact, since the grid beside it already shows the values
-      this.ui.expanded = new Set(iso.open === false ? [] : iso.keep.size <= 8 ? iso.keep : iso.ids);
+      this.ui.expanded = new Set(iso.expand ?? (iso.open === false ? [] : iso.keep.size <= 8 ? iso.keep : iso.ids));
       this.lod.reset();
       this.lod.pin(this.ui.expanded);
     } else if (this.savedHomes) {
@@ -2287,7 +2305,8 @@ export class SvgRenderer extends GraphRenderer {
     this.hullSel?.classed("dim", (g) => on && !hullKeys.has(g.key));
     this.tabSel?.classed("dim", (g) => on && !hullKeys.has(g.key));
     this.edgeSel?.classed("dim", (d) => on && !d.ids.some((i) => links.has(i)))
-      .classed("hl", (d) => d.ids.some((i) => hot.has(i)));
+      .classed("hl", (d) => d.ids.some((i) => hot.has(i)))
+      .classed("chain", (d) => d.ids.some((i) => hl?.chain?.has(i)));
     this.edgeSel?.select("path.line").attr("marker-end", (d) => (d.ids.some((i) => hot.has(i)) ? "url(#arr-hl)"
       : d.super ? "url(#arr-super)" : d.learned ? "url(#arr-learned)" : "url(#arr)"));
   }

@@ -10,18 +10,14 @@
 // Selecting text in a brief offers "Ask about this", a chat mock-up that is not implemented yet.
 import { api } from "../api.js";
 import { qualifiedHtml } from "../names.js";
-import { emit, on, store } from "../store.js";
+import { emit, on } from "../store.js";
 import { errorText, esc, fmt } from "../util.js";
 
 const day = (iso) => (iso ? new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }) : "");
 const arrow = (v, unit = "sd") => (Math.abs(v) < 0.005 ? `<span class="faint">≈ 0</span>`
   : `<span class="${v > 0 ? "z-up" : "z-down"}">${v > 0 ? "▲" : "▼"} ${fmt(Math.abs(v))}${unit ? ` ${unit}` : ""}</span>`);
-const ORD = (n) => (n === 0 ? "the shock" : n === 1 ? "1st order" : n === 2 ? "2nd order" : n === 3 ? "3rd order" : `${n}th order`);
 const ORD_SHORT = (n) => (n === 1 ? "1st" : n === 2 ? "2nd" : n === 3 ? "3rd" : `${n}th`);
-const ORD_HELP = (n) => (n === 0 ? "The value the question changes directly" : n === 1 ? "Moved directly by the shock"
-  : `Through ${n - 1} more interaction${n > 2 ? "s" : ""}`);
 const SCEN = ["#E8CFEC", "#DCE6F0", "#F7E1D3", "#E1ECDF"];
-const reduced = () => !!store.settings?.reducedMotion || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
 export function initBriefs({ openLeft, onWalk, onChat, focusNode, openForecast, onEdit, onRerun }) {
   const body = document.getElementById("briefs-body");
@@ -31,8 +27,6 @@ export function initBriefs({ openLeft, onWalk, onChat, focusNode, openForecast, 
   let openId = null;
   let writing = null;            // the forecast being computed: {scope, question, phase}
   const cache = new Map();
-  const step = new Map();        // forecast id -> the transmission step shown (rewind)
-  let playing = null;
   let noting = null;             // the anchor a note is being written for
 
   const askBtn = document.createElement("button");
@@ -56,17 +50,20 @@ export function initBriefs({ openLeft, onWalk, onChat, focusNode, openForecast, 
     if (!panel.hidden && panel.dataset.tab === "briefs" && !shown) render();
   }
 
+  let onCanvas = null;           // the brief whose transmission path the canvas shows
   function render() {
     panel.classList.toggle("wide", !!openId && panel.dataset.tab === "briefs");
+    // opening a brief lays its forecast's transmission path out on the canvas (main.js), once per brief opened
+    if (openId && openId !== onCanvas && panel.dataset.tab === "briefs" && !panel.hidden) emit("brief-canvas", openId);
+    onCanvas = openId;
     if (openId) renderBrief(openId);
     else renderList();
   }
 
   function renderList() {
-    stopPlay();
     body.innerHTML = `
       <div class="group-label">Forecast briefs</div>
-      <p class="small muted">A short reading of each forecast: what moves, when, through which transmission path, and how sure.
+      <p class="small muted">A concise reading of each forecast: what moves, when, through which channels, and with what confidence.
         Add a note to any section or line; select any text to ask about it.</p>
       ${writing ? `<div class="card brief-card writing"><div class="meta"><span class="spinner" aria-hidden="true"></span>
         <span>Writing the brief…</span><span class="spacer"></span><span class="faint">${esc(writing.phase ?? "")}</span></div>
@@ -100,36 +97,17 @@ export function initBriefs({ openLeft, onWalk, onChat, focusNode, openForecast, 
   }
   const head = (b, title, anchor, extra = "") => `<div class="b-head"><h4>${title}</h4>${extra}<span class="spacer"></span>${noteBtn(anchor)}</div>${notesHtml(b, anchor)}`;
 
-  // -- the transmission path, rewindable ---------------------------------------------------------------------------
-  function transmissionHtml(b, id) {
-    const t = b.transmission;
-    const steps = t?.steps ?? [];
-    if (!steps.length) return "";
-    const last = steps.length - 1;
-    const k = Math.min(step.get(id) ?? last, last);
-    const cur = steps[k];
-    const chip = (v, o) => `<div class="tp-val ${v.output ? "out" : ""}">
-        <div class="tp-name"><a href="#" data-node="${esc(v.id)}">${v.entity ? qualifiedHtml(v.name, v.entity) : esc(v.name)}</a>
-          ${o > 0 ? arrow(v.peak) : `<span class="faint small">the shock</span>`}${v.output ? `<span class="tp-tag" title="What the question asks about">asked</span>` : ""}</div>
-        ${o > 0 ? `<div class="tp-from small">${v.from.slice(0, 2).map((f) => `<span>← ${esc(f.name)} <i class="via">${esc(f.label)}</i> <span class="faint">${f.delay_days} d</span></span>`).join("")}</div>
-        <div class="tp-when faint small">half in by ${esc(day(v.onset))}</div>` : ""}</div>`;
-    const wl = t.watchlist;
+  // -- the transmission path (Oct 15): drawn on the canvas, laid out as the grid is; the brief only points to it
+  function transmissionHtml(b) {
+    const n = b.transmission?.steps?.length ?? 0;
+    if (!n) return "";
+    const wl = b.transmission.watchlist;
     const c = wl?.counts ?? {};
     return `<section data-sec="paths">${head(b, "Transmission path", "section:paths",
-        `<button class="small ghost" data-act="grid" title="The same paths as a grid, moving day by day (G)">As a grid</button>`)}
-      <div class="tp-ctl" role="group" aria-label="Rewind the transmission path">
-        <button class="small" data-step="-1" ${k === 0 ? "disabled" : ""} aria-label="Back one order" title="Back one order">◀</button>
-        <div class="tp-dots">${steps.map((s, i) => `<button class="tp-dot o${Math.min(3, s.order)} ${i <= k ? "on" : ""} ${i === k ? "cur" : ""}" data-goto="${i}"
-          title="${esc(`${ORD(s.order)}: ${ORD_HELP(s.order)}`)}">${s.order === 0 ? "shock" : ORD_SHORT(s.order)}</button>`).join("<i></i>")}</div>
-        <button class="small" data-step="1" ${k === last ? "disabled" : ""} aria-label="Forward one order" title="Forward one order">▶</button>
-        <button class="small ghost" data-play title="Build the path up from the shock, one order at a time">${playing ? "❚❚" : "Replay"}</button>
-        <span class="faint small tp-at">${k === 0 ? "the shock" : `${esc(ORD(cur.order))} · by ${esc(day(cur.by))}`}</span>
-      </div>
-      <div class="tp-steps">${steps.map((s, i) => `<div class="tp-step o${Math.min(3, s.order)} ${i > k ? "later" : ""} ${i === k ? "cur" : ""}" ${i > k ? "aria-hidden=\"true\"" : ""}>
-          <div class="tp-ord" title="${esc(ORD_HELP(s.order))}">${esc(ORD(s.order))}${s.order ? `<span class="faint"> · ${s.values.length} value${s.values.length === 1 ? "" : "s"}</span>` : ""}</div>
-          <div class="tp-vals">${s.values.map((v) => chip(v, s.order)).join("")}</div></div>`).join("")}</div>
-      <p class="small faint" style="margin-top:4px">The relevant paths, as the grid shows them: each step adds the values the shock reaches through one more
-        interaction${t.hidden > 0 ? `; ${t.hidden} smaller effect${t.hidden === 1 ? " is" : "s are"} left out` : ""}.${wl ? ` ${esc(wl.name)}: ${c.moves ?? 0} names move, ${c.small ?? 0} slightly, ${(c.negligible ?? 0) + (c.no_path ?? 0)} not reached.` : ""}</p>
+        `<button class="small" data-act="canvas" title="Lay the transmission path out on the canvas again">Show on the canvas</button>
+         <button class="small ghost" data-act="grid" title="The same path as a grid, moving day by day (G)">As a grid</button>`)}
+      <p class="small muted">Laid out on the canvas from the shock (left) through each order to the outputs (right), with each value's
+        peak effect.${wl ? ` ${esc(wl.name)}: ${c.moves ?? 0} names move, ${c.small ?? 0} marginally, ${(c.negligible ?? 0) + (c.no_path ?? 0)} are not reached.` : ""}</p>
     </section>`;
   }
 
@@ -158,9 +136,9 @@ export function initBriefs({ openLeft, onWalk, onChat, focusNode, openForecast, 
           <td class="tl-note">${noteBtn(anchor, "")}</td></tr>
         ${ns.length || noting === anchor ? `<tr class="tl-notes"><td></td><td colspan="4">${notesHtml(b, anchor)}</td></tr>` : ""}`;
     };
-    return `<section data-sec="timeline">${head(b, "Timeline", "section:timeline")}
-      <table class="tl-table"><thead><tr><th title="When the effect is half in">When</th><th>What moves</th><th title="The median effect at its peak, in sd of the value">By how much</th>
-        <th title="The order (how many interactions from the shock) and the transmission path that carries it">Order · path</th><th></th></tr></thead>
+    return `<section data-sec="timeline">${head(b, "Expected timing", "section:timeline")}
+      <table class="tl-table"><thead><tr><th title="When the effect is half in">Onset</th><th>Value</th><th title="The median effect at its peak, in sd of the value">Peak effect</th>
+        <th title="The order (how many interactions from the shock) and the channel that carries it">Order · channel</th><th></th></tr></thead>
       <tbody>${b.timeline.map(row).join("")}</tbody></table></section>`;
   }
 
@@ -178,7 +156,7 @@ export function initBriefs({ openLeft, onWalk, onChat, focusNode, openForecast, 
     const evCard = (e) => `<div class="ev">
         <div class="meta"><span class="rel" title="relevance ${fmt(e.relevance)}"><i style="width:${Math.round(e.relevance * 100)}%"></i></span>
           <span class="faint">${esc(day(e.published_at))}</span>${e.after ? `<span class="badge ${e.stance === "supports" ? "wm" : e.stance === "pushes against" ? "front" : ""}">${esc(e.stance)}</span>` : ""}
-          <span class="spacer"></span><button class="ghost small" data-walk="${esc(e.id)}" title="Step through what the model did with this news">How it learned ▸</button></div>
+          <span class="spacer"></span><button class="ghost small" data-walk="${esc(e.id)}" title="Step through how the model incorporated this item">How it learned ▸</button></div>
         <div class="title">${esc(e.headline)}</div>
         <ul class="reasons">${e.reasons.slice(0, 2).map((r) => `<li>${esc(r)}</li>`).join("")}</ul></div>`;
     const runs = b.runs ?? [];
@@ -198,24 +176,24 @@ export function initBriefs({ openLeft, onWalk, onChat, focusNode, openForecast, 
         ${runs.length > 1 ? `<span class="small faint b-runs">runs ${runs.map((r, i) => (r.id === id ? `<b>#${i + 1}</b>` : `<a href="#" data-run="${esc(r.id)}" title="${esc(r.id)} at v${r.version}">#${i + 1}</a>`)).join(" ")}</span>` : ""}
       </div>
       ${newer ? `<p class="small b-newer">A newer run of this thesis exists (v${newer.version}). <a href="#" data-run="${esc(newer.id)}">Open it ▸</a></p>` : ""}
-      <section data-sec="bottom">${head(b, "Bottom line", "section:bottom")}<p class="lede">${esc(b.bottom_line)}</p>
-        ${b.scenarios.length > 1 ? `<div class="weightbar small" title="How sure: the scenarios the forecast mixes, by weight">${b.scenarios.map((s, i) => `<div style="width:${(s.weight * 100).toFixed(1)}%;background:${SCEN[i % 4]}" title="${esc(s.name)}: ${Math.round(s.weight * 100)}%">${s.weight > 0.16 ? esc(`${s.name.split(" · ")[0]} ${Math.round(s.weight * 100)}%`) : ""}</div>`).join("")}</div>` : ""}</section>
-      ${transmissionHtml(b, id)}
+      <section data-sec="bottom">${head(b, "Summary", "section:bottom")}<p class="lede">${esc(b.bottom_line)}</p>
+        ${b.scenarios.length > 1 ? `<div class="weightbar small" title="Confidence: the scenarios the forecast mixes, by weight">${b.scenarios.map((s, i) => `<div style="width:${(s.weight * 100).toFixed(1)}%;background:${SCEN[i % 4]}" title="${esc(s.name)}: ${Math.round(s.weight * 100)}%">${s.weight > 0.16 ? esc(`${s.name.split(" · ")[0]} ${Math.round(s.weight * 100)}%`) : ""}</div>`).join("")}</div>` : ""}</section>
+      ${transmissionHtml(b)}
       ${timelineHtml(b)}
-      ${b.affected.length ? `<section data-sec="affected">${head(b, "Who is affected", "section:affected")}
+      ${b.affected.length ? `<section data-sec="affected">${head(b, "Exposures", "section:affected")}
         ${b.affected.map((a) => `<div class="small b-aff"><span class="pick ${["sector", "superentity", "category"].includes(a.kind) ? a.kind : "actor"}"><span class="k">${esc(a.kind)}</span>${esc(a.name)}</span>
           ${arrow(a.effect)} on average${a.top.length ? `, led by ${a.top.slice(0, 2).map((t) => `${esc(t.name)} ${arrow(t.effect)}`).join(", ")}` : ""}</div>`).join("")}</section>` : ""}
-      ${b.watch.length || b.change.length ? `<section data-sec="watch">${head(b, "What to watch, and what would change the view", "section:watch")}
-        <ul class="wlist">${b.watch.map((w) => `<li>${sub(w)}${w.direction ? `, expected to ${w.direction === "up" ? "rise" : "fall"}` : ""} <span class="faint">· ${esc(w.why)}</span></li>`).join("")}
+      ${b.watch.length || b.change.length ? `<section data-sec="watch">${head(b, "Indicators and risks to the view", "section:watch")}
+        <ul class="wlist">${b.watch.map((w) => `<li>${sub(w)}${w.direction ? `, expected to ${w.direction === "up" ? "rise" : "decline"}` : ""} <span class="faint">· ${esc(w.why)}</span></li>`).join("")}
         ${b.change.map((c) => `<li class="b-change">${esc(c.text)}${c.kind === "hypothesis" ? ` <span class="faint small">p ${fmt(c.probability)}</span>` : ""}</li>`).join("")}</ul></section>` : ""}
-      <details class="section fold" data-sec="news" ${notesFor(b, "section:news").length ? "open" : ""}><summary><h4>The news behind it, and since <span class="faint small">${news ? `${b.shaped_by.length + b.since.length} items` : "none"}</span></h4></summary>
+      <details class="section fold" data-sec="news" ${notesFor(b, "section:news").length ? "open" : ""}><summary><h4>Evidence and subsequent developments <span class="faint small">${news ? `${b.shaped_by.length + b.since.length} items` : "none"}</span></h4></summary>
         ${notesHtml(b, "section:news")}
-        ${b.shaped_by.length ? b.shaped_by.map(evCard).join("") : `<p class="small muted">No news so far touched its drivers: it rests on the history the model was built from.</p>`}
-        ${b.tracking.length ? `<div class="small muted" style="margin:8px 0 4px">How the realized values track it so far:</div>${b.tracking.map((t) => `<div class="track ${t.where.startsWith("inside") ? "ok" : "off"}">
+        ${b.shaped_by.length ? b.shaped_by.map(evCard).join("") : `<p class="small muted">No research to date bears on its drivers; the view rests on the model as calibrated.</p>`}
+        ${b.tracking.length ? `<div class="small muted" style="margin:8px 0 4px">Realized values against the forecast:</div>${b.tracking.map((t) => `<div class="track ${t.where.startsWith("inside") ? "ok" : "off"}">
           ${sub(t)}: ${fmt(t.realized)} sd after ${t.days} days, ${esc(t.where)}</div>`).join("")}` : ""}
-        ${b.since.length ? `<div class="small muted" style="margin:8px 0 4px">News since that bears on it:</div>${b.since.map(evCard).join("")}` : ""}
+        ${b.since.length ? `<div class="small muted" style="margin:8px 0 4px">Developments since the forecast:</div>${b.since.map(evCard).join("")}` : ""}
         <div style="margin-top:4px">${noteBtn("section:news")}</div></details>
-      <details class="section fold"><summary><h4>Caveats</h4></summary><ul class="wlist small">${b.caveats.map((c) => `<li>${esc(c)}</li>`).join("")}</ul></details>
+      <details class="section fold"><summary><h4>Caveats and assumptions</h4></summary><ul class="wlist small">${b.caveats.map((c) => `<li>${esc(c)}</li>`).join("")}</ul></details>
       <p class="small faint">Select any text to ask about it.</p>
     </article>`;
     wire(b, id);
@@ -237,30 +215,7 @@ export function initBriefs({ openLeft, onWalk, onChat, focusNode, openForecast, 
     }
     for (const a of body.querySelectorAll("[data-run]")) a.addEventListener("click", (ev) => { ev.preventDefault(); openId = a.dataset.run; noting = null; render(); });
     for (const w of body.querySelectorAll("[data-walk]")) w.addEventListener("click", () => onWalk?.(w.dataset.walk));
-    // rewinding the transmission path
-    const steps = b.transmission?.steps ?? [];
-    // each step also lights the path so far on the canvas (main.js), so the canvas builds up with the brief
-    const go = (k) => {
-      const at = Math.max(0, Math.min(steps.length - 1, k));
-      step.set(id, at);
-      const shown = steps.slice(0, at + 1).flatMap((s) => s.values);
-      emit("brief-path", { entities: [...new Set(shown.map((v) => String(v.id).split(".")[0]))],
-                           links: [...new Set(shown.flatMap((v) => (v.from ?? []).map((f) => String(f.key ?? "").split(":")[0])).filter(Boolean))] });
-      renderBrief(id);
-    };
-    for (const s of body.querySelectorAll("[data-step]")) s.addEventListener("click", () => { stopPlay(); go((step.get(id) ?? steps.length - 1) + +s.dataset.step); });
-    for (const s of body.querySelectorAll("[data-goto]")) s.addEventListener("click", () => { stopPlay(); go(+s.dataset.goto); });
-    body.querySelector("[data-play]")?.addEventListener("click", () => {
-      if (playing) { stopPlay(); renderBrief(id); return; }
-      let k = 0;
-      go(0);
-      playing = setInterval(() => {
-        k += 1;
-        if (k >= steps.length || openId !== id) { stopPlay(); if (openId === id) renderBrief(id); return; }
-        go(k);
-      }, reduced() ? 1400 : 900);
-      renderBrief(id);
-    });
+    body.querySelector('[data-act="canvas"]')?.addEventListener("click", () => emit("brief-canvas", id));
     // notes
     for (const n of body.querySelectorAll("[data-note]")) n.addEventListener("click", () => { noting = n.dataset.note; renderBrief(id).then(focusNote); });
     for (const f of body.querySelectorAll("[data-form]")) {
@@ -290,7 +245,6 @@ export function initBriefs({ openLeft, onWalk, onChat, focusNode, openForecast, 
     });
   }
   function focusNote() { body.querySelector(".note-form textarea")?.focus({ preventScroll: false }); }
-  function stopPlay() { if (playing) clearInterval(playing); playing = null; }
 
   // selecting text in a brief offers "Ask about this"
   document.addEventListener("mouseup", () => {
@@ -315,7 +269,7 @@ export function initBriefs({ openLeft, onWalk, onChat, focusNode, openForecast, 
   });
   // a forecast is in: the list updates; the brief waits to be asked for (Oct 14: the first view is the transmission path)
   on("brief-ready", () => refresh());
-  on("tab-left", (name) => { if (name === "briefs") render(); else { stopPlay(); if (name !== "review") panel.classList.remove("wide"); } });
+  on("tab-left", (name) => { if (name === "briefs") render(); else if (name !== "review") panel.classList.remove("wide"); });
   refresh();
   return {
     refresh,

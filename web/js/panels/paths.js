@@ -11,7 +11,7 @@ import { errorText, esc, signed } from "../util.js";
 
 // the columns come from the server: input, each order the shock reaches (as deep as its effects matter), output
 const ORDINAL = ["", "First", "Second", "Third", "Fourth", "Fifth", "Sixth"];
-const colOf = (id) => (id === "input" ? { id, word: "Input", help: "The values the event or the question moves directly", cls: "o0" }
+export const colOf = (id) => (id === "input" ? { id, word: "Input", help: "The values the event or the question moves directly", cls: "o0" }
   : id === "output" ? { id, word: "Output", help: "What the question asks about, or, in a review, where the ripple ends", cls: "out" }
   : { id, word: `${ORDINAL[+id] ?? `${id}th`} order`, help: +id === 1 ? "Moved directly by an input" : `Through ${+id - 1} more interaction${+id > 2 ? "s" : ""}`,
       cls: `o${Math.min(3, +id)}` });
@@ -196,19 +196,31 @@ export function initPaths({ toast, onSelect, onShow, onHide, onIsolate }) {
     svg.setAttribute("width", String(wrap.scrollWidth));
     svg.setAttribute("height", String(wrap.scrollHeight));
     const at = (id) => pane.querySelector(`.px-chip[data-id="${CSS.escape(id)}"]`)?.getBoundingClientRect();
+    const outs = new Set(grid.outputs ?? []);
     svg.innerHTML = (grid.edges ?? []).map((e, i) => {
       const a = at(e.source);
       const b = at(e.target);
       if (!a || !b) return "";
       const x1 = a.right - box.left + wrap.scrollLeft;
       const y1 = a.top + a.height / 2 - box.top + wrap.scrollTop;
-      const x2 = b.left - box.left + wrap.scrollLeft;
+      let x2 = b.left - box.left + wrap.scrollLeft;
       const y2 = b.top + b.height / 2 - box.top + wrap.scrollTop;
-      const dx = Math.max(24, (x2 - x1) * 0.5);
       const w = (1.2 + 3 * Math.min(1, Math.abs(e.effect) * e.exists)).toFixed(1);
-      return `<path class="px-edge ${e.effect >= 0 ? "up" : "down"}" data-i="${i}" data-s="${esc(e.source)}" data-t="${esc(e.target)}"
-        d="M${x1} ${y1} C${x1 + dx} ${y1} ${x2 - dx} ${y2} ${x2} ${y2}" stroke-width="${w}">
-        <title>${esc(e.label || "interaction")}: ${signed(e.effect)} sd per sd, belief it exists ${Math.round(100 * e.exists)}%, about ${e.delay_days} days</title></path>`;
+      // an output that drives another output (Oct 15): an arc out of the right edge and back into the other output,
+      // dashed, rather than a curve doubling back inside the output column
+      const chain = outs.has(e.source) && outs.has(e.target) && x2 <= x1 + 8;
+      let d;
+      if (chain) {
+        x2 = b.right - box.left + wrap.scrollLeft;
+        const bulge = 26 + Math.min(40, Math.abs(y2 - y1) * 0.25);
+        d = `M${x1} ${y1} C${Math.max(x1, x2) + bulge} ${y1} ${Math.max(x1, x2) + bulge} ${y2} ${x2} ${y2}`;
+      } else {
+        const dx = Math.max(24, (x2 - x1) * 0.5);
+        d = `M${x1} ${y1} C${x1 + dx} ${y1} ${x2 - dx} ${y2} ${x2} ${y2}`;
+      }
+      return `<path class="px-edge ${e.effect >= 0 ? "up" : "down"}${chain ? " chain" : ""}" data-i="${i}" data-s="${esc(e.source)}" data-t="${esc(e.target)}"
+        d="${d}" stroke-width="${w}">
+        <title>${chain ? "Output to output · " : ""}${esc(e.label || "interaction")}: ${signed(e.effect)} sd per sd, belief it exists ${Math.round(100 * e.exists)}%, about ${e.delay_days} days</title></path>`;
     }).join("");
   }
 

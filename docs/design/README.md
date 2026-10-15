@@ -14,7 +14,8 @@ The design of record. It is written in levels, so read only as deep as you need:
 | Why a choice was made, or which old doc is right | [decisions.md](decisions.md) |
 | A term | [glossary.md](glossary.md) |
 | What to code next | [migration.md](migration.md): ordered tasks |
-| The math | [../ml-stack.md](../ml-stack.md) (as built) and [../ml-roadmap.md](../ml-roadmap.md) (R0–R19) |
+| The math | [../ml-stack.md](../ml-stack.md) (as built) and [../ml-roadmap.md](../ml-roadmap.md) (R0–R20) |
+| Which model each step uses, and the fine-tuning plan | [../ml-stack.md, Small models first](../ml-stack.md#small-models-first) and [§14](../ml-stack.md#14-fine-tuning-to-own-the-structure) |
 
 ## Two parts
 

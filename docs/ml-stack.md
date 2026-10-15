@@ -1,10 +1,60 @@
 # The ML stack: a formal specification (as built)
 
-This page states, in mathematical terms, what the code computes today: every model, update, test, and constant, with the file that implements it. It describes the implementation, not the intent. Where the implementation is a heuristic, or where it is unsound, the page says so; [ml-roadmap.md](ml-roadmap.md) proposes what replaces it. Paths are relative to `src/axelrod_wm/`.
+This page states, in mathematical terms, what the code computes today: every model, update, test, and constant, with the file that implements it. It describes the implementation, not the intent. Where the implementation is a heuristic, or where it is unsound, the page says so; [ml-roadmap.md](ml-roadmap.md) proposes what replaces it. Paths are relative to `src/axelrod_wm/`. Two sections are plans rather than descriptions: [Small models first](#small-models-first), on which model each step should use, and [§14](#14-fine-tuning-to-own-the-structure), on fine-tuning models on the structure we own.
 
 This page went through an adversarial review on fidelity, statistics, and finance (§13). Its corrections are folded in; the review's verdict, summarized there, is that **the forecasting core is a defensible linear-Gaussian design, but the stack is not yet sound for its stated purpose**: its evaluation is circular, two learners partly confirm themselves, several components count the same data more than once, and the design has no layer for what markets have already priced in.
 
 **Scope.** Synthetic data only. Nothing here has been fit to, or validated on, real market data. Every number is a design default, not an estimate.
+
+## Small models first
+
+*This section and [§14](#14-fine-tuning-to-own-the-structure) are a plan, not a description of the code. Every replacement below is planned; the "Today" column is what is built.*
+
+**The principle.** Each tool call or pipeline step uses the smallest model that does the job. A step tries, in order:
+
+1. **Rules and templates**: regular expressions, lookup tables, the operation schema.
+2. **Classical ML** over features the model already holds: logistic regression, gradient-boosted trees, conditional random fields (CRFs).
+3. **Small embedders** (sentence-transformer class, about 100M parameters), with nearest-neighbour lookup or by sorting down a Cobweb concept tree ([cognition.md F3](design/cognition.md#in-one-table)).
+4. **Small finetuned classifiers, taggers, and rankers** (encoders of 100–400M parameters).
+5. **JEPA-style (joint-embedding predictive) models** over the world model's own structured state. They predict the embedding of a later state from the present one, never text (§14, P3).
+6. **A large LLM**, only for the long tail, as the last entry of a fallback chain.
+
+In dual-process terms, recognition handles the routine and deliberation only the exceptions. **Every fallback call is logged** with its input, its output, and the reviewer's decision on it, so the long tail becomes training data for steps 2–5 and shrinks over time. The ledger already records each proposal's `produced_by` and its review decision, so a fallback case is a ledger query, not a new store.
+
+**The chain is already the mechanism for translation.** `configs/default.yaml` lists translators per kind, "tried in order until one returns events" (`news: [hand_drawn, template]`). A small extractor goes before `llm`, and `llm` (a stub today) goes last. Other slots are a single choice today; giving a slot an ordered list with a confidence floor per entry is planned.
+
+**What no model does**, at any size:
+- compute an effect, a kernel, a forecast, or a probability the engine uses (the causal engine stays the source of truth);
+- bind an end the article does not name (M05: it may only weight the hedge's candidates);
+- apply a change that the review policy sends to a person (vetted learning).
+
+### Step by step
+
+| Step (tool call) | Today (code) | Small-model replacement (planned) | Training signal we own | Fallback |
+|---|---|---|---|---|
+| **Market-event triage and relevance** | Deduplication by address, or site and title (`intake/scrapers.py`, `dedup_keys`). An import item's `relevance` is the upstream agent's own number. No triage model. | Logistic regression or gradient-boosted trees over TF-IDF and small-embedder features plus the entities named, giving P(the event yields an approved change). It orders the queue; it never drops an event. | Proposals approved or rejected; events logged as untranslated (`translate.missing`); item relevance against outcome | Translate everything, in arrival order |
+| **Entity and value resolution** | `alias_fuzzy`: best `SequenceMatcher` ratio + 0.3 × word Jaccard + 0.2 × constraint fraction (`intake/resolver.py`). The refiner binds only a named mention; otherwise it hedges over up to 4 candidates. | A bi-encoder (about 100M) finetuned contrastively on (mention in context → entity or subentity id), with a cross-encoder reranking the top 4. Its scores become the hedge weights $w_i$ (§5); binding still needs a named mention. | Approved bindings; approved resolutions of hedged ends (`REFINEMENT` proposals); reviewer edits (`Proposal.edited_from`); bundle `entities` and `value_of` ids | `alias_fuzzy`; then an LLM choosing among the candidate ids or "open" |
+| **Signal extraction** (observe, move, link, support, contradict) | Reviewed fixtures (`hand_drawn`); regular-expression templates at confidence 0.6 (`template`); signals written by the upstream agent (`structured`). The `llm` translator is a stub. | A sentence classifier for the signal type, and a CRF or small token tagger for the spans (subject, direction, magnitude, unit, timeframe). Spans are assembled into operations deterministically, by the code that already maps signals to operations (`intake/bundle.py`, `signal_ops`). Then P2's small seq2seq model (§14). | Hand-drawn translations (gold operations with phrase spans); template spans; bundle signals with quotes; approved and edited proposals | `llm`, constrained to the schema |
+| **Interaction typing** | A link's label goes to a family by a keyword table (`model/taxonomy.py`, `label_family`; unmatched → "other"), then signature descent on the interaction's features (`taxonomy_descent`) | A classifier over the label's embedding and the two ends' attribute kinds, giving the interaction generalization | Approved `add_interaction` operations and the kinds they were sorted into | Keyword table and signature descent |
+| **Quote alignment** | Exact substring match (`text.find(quote)` in `translate_item`); an unmatched quote gets no highlight | Rules first: normalize whitespace, case, and punctuation, then fuzzy character alignment. A small embedder matches a paraphrased quote to its sentence. | Bundle quotes that matched exactly (free positives) | Flag "quote not found" in review |
+| **Conflict detection** (planned, M05) | Not built; rules are specified (opposite sign on an existing interaction, a value outside a soft bound, a retired item reused) | The rules, plus a small natural-language-inference cross-encoder scoring a new quote against the evidence already behind the interaction | `support` and `contradict` signals; review decisions on flagged items | `llm_pairwise` (M05's planned alternative) |
+| **Interaction proposal** | The correlation frontier (`residual_comovement`, `threshold`, §8.2) and missing relations from bound patterns | A gradient-boosted link ranker over graph features (kind priors, path distance, co-movement statistics) that orders the candidates the frontier tests; the JEPA prior of P3 later. The statistical test (R2) and review still decide. | Approved and rejected `FRONTIER_PROMOTION` and `MISSING_RELATION` proposals | The frontier alone |
+| **Hypothesis ranking** (the hypothesis frontier) | `forecast_sensitivity_voi`: sensitivity × 4p(1 − p) from on/off Monte Carlo runs (§9) | A gradient-boosted surrogate predicting the value of information, used only to choose which hypotheses to simulate. The simulation stays the score. | Every VOI the engine has computed (cheap, exact labels); hypotheses people marked | Simulate all |
+| **Actor decisions** (Entity memories) | `DecisionProfile`: empirical action frequencies per bucket (`memory/entity_memory.py`) | An ordered probit or multinomial logistic reaction function on the actor's own inputs (R19) | Decision observations already in each Entity memory | The empirical profile |
+| **Superentity and analog recall** | `overlap_attention`: Jaccard of kind signatures, proximity, and support (`shared/recall.py`, §8.4) | Structured vectors (F5) sorted down Cobweb trees (F3); later the P3 state embedding for analogs | Admitted configurations; episodes and their realized responses | Signature Jaccard |
+| **Thesis parsing** ("what if…", Pose a thesis) | `thesis_from_question` runs the template parser; with no match it raises "could not translate the question" | The tagger of signal extraction plus the encoder of resolution, for the subject | Posed theses and their operations; scaffolded theses that people edited | An LLM proposes operations, shown to the person before posing |
+| **Find** | Lexical: stemming, a hand-written synonym table, kinds and their ancestors, filters (`api/find.py`) | Hybrid: BM25 plus a small embedder over names, aliases, and descriptions, grouped by concept-tree node | Aliases and kinds today; logged queries and the hits opened (planned: find does not log) | Lexical |
+| **Brief writing** | Templates over the forecast, its explanation, the folds, and the deviations (`api/brief.py`); no language model | Stays templated. Optionally a small instruction model (≤ 8B) rewrites the prose only, under a check that every number and name it writes appears in the template's facts. | Reader notes on briefs (`ANNOTATION` ledger entries) | The template text |
+| **Agent-context export** | Deterministic mapping into a client's format (`context/v4.py`) | No model. A new client format is a new mapping, written and reviewed once. | None needed | None |
+| **Review confidence and auto-apply** | `DefaultReviewPolicy` rules: structure, deletions, text translations, large reweightings, and confidence below 0.8 go to a person (`repo/review.py`). Confidence is fixed per translator (template 0.6, data feed 1.0) or is the agent's own. | A calibrated (isotonic) gradient-boosted model giving P(approved unchanged) per operation. It orders the queue and preselects operations in staging. It does not widen what applies without review; that stays a policy decision ([decisions.md](design/decisions.md)). | `REVIEW_DECISION` ledger entries; per-operation keep and confidence from staging; edits | The rules |
+
+### Why
+
+- **Client data stays on the client's premises.** Models of 100M–8B parameters run on a CPU or one GPU inside the client's environment, so articles, positions, and research never go to a third-party API.
+- **Determinism and replay.** Fixed weights with greedy or constrained decoding give the same output for the same input, so a version still reproduces from (seed, version) ([design invariant 5](design/README.md#invariants)), and an ablation compares like with like.
+- **Auditability.** A tagger's spans and a classifier's features explain each operation in the review; a fallback call is marked as one in the ledger.
+- **Cost per import item.** A classical or small-encoder step costs microseconds to milliseconds on a CPU; a large-LLM call costs orders of magnitude more per item. With the LLM only on the tail, the cost of a 50-name daily feed is set by the tail's share, which the logged fallbacks drive down.
+- **Owned structure.** Models trained on our ids and our reviewers' decisions encode the graph's schema, which a general model has to be told in every prompt (§14).
 
 ## 1. Objects and notation
 
@@ -133,7 +183,7 @@ Every 7 days, $\sigma_{\text{level}} = \mathrm{sd}(\text{weekly level changes ov
 
 ## 5. Intake: from article to operations
 
-**Translation.** Fixtures; a data feed, where each data point becomes `observe_value` and a decision variable that moves more than half a standardized unit becomes `change_value`; and regular-expression templates at confidence 0.6 (`intake/translators.py`). The LLM translator is a stub. **A data release is read as a level, not as a surprise against a consensus**: there is no expectations field anywhere (review F-C1).
+**Translation.** Fixtures; a data feed, where each data point becomes `observe_value` and a decision variable that moves more than half a standardized unit becomes `change_value`; and regular-expression templates at confidence 0.6 (`intake/translators.py`). The LLM translator is a stub; the plan keeps a large LLM as the last fallback only ([Small models first](#small-models-first)). **A data release is read as a level, not as a surprise against a consensus**: there is no expectations field anywhere (review F-C1).
 
 **Binding** (`intake/refiner.py:271-359`). An entity binds only when the article names it (its name, an alias, or a subentity's name of three or more characters). Otherwise the end stays fuzzy.
 
@@ -462,3 +512,90 @@ Each finding has a roadmap item.
 5. Fix the units.
 6. Add an expectations and factor layer for traded values.
 7. Test everything on misspecified and null synthetic worlds.
+
+## 14. Fine-tuning to own the structure
+
+*A plan; nothing in this section is built.* It sequences as R20 in [ml-roadmap.md](ml-roadmap.md#r20-small-models-first-and-fine-tuning-to-own-the-structure).
+
+### What we own that no general model has
+
+| Structure | Where it lives | What it teaches |
+|---|---|---|
+| The typed graph: entities, subentities, interactions with existence, effect sizes, and kernels | `model/`, committed versions | Our ids, kinds, units, and which values can move which |
+| Superentity patterns, with roles and rivals | long-term memory (`object_generalizations`) | Recurring configurations, by name |
+| The review ledger: each proposal, the reviewer's decision, per-operation keep and confidence, and edits (`edited_from`) | `repo/ledger.py`, `repo/review.py` | What a person accepts, and how they correct a machine reading |
+| Bundle signals with quotes (`axelrod.import/v1`) and hand-drawn translations with phrase spans | `intake/bundle.py`, `data/scenarios/*/translations/` | Text aligned to operations, span by span |
+| Forecasts with their outcomes and evaluations | `FORECAST`, `OUTCOME`, `EVALUATION` ledger entries | Which structure predicted well |
+| Daily state: every value's level and spread, every day | working memory, snapshots | State transitions, for P3 |
+
+A general model sees this structure only through a prompt (`LLMTranslator.build_prompt` sends the vocabulary, the taxonomies, the patterns, and every entity on each call). Fine-tuning puts it in the weights of a model we own.
+
+### Phases
+
+| | P0 · Datasets | P1 · Encoders and classifiers | P2 · A small structured generator | P3 · A JEPA-style state predictor |
+|---|---|---|---|---|
+| **Learns** | Nothing: collects and versions | Entity and value linking; interaction typing; signal type; triage; review confidence | Market event → `axelrod.import/v1` signals and `GraphUpdateEvent` operations | The embedding of the world model's state at $t + h$ from its state at $t$ |
+| **Data** | Ledger, imports, fixtures, snapshots (below) | D1–D4 | D2, D3, with D4 as the reward for preference tuning | D5 |
+| **Model** | — | Bi-encoder and cross-encoder of about 100M; CRF; gradient-boosted trees; logistic regression | An open-weight instruction model of at most 8B, tuned with LoRA or QLoRA, decoded under the JSON schema | A graph or set encoder over values (about 10–50M), a predictor, and an EMA target encoder, trained in embedding space |
+| **Metric** | Coverage and leakage audits | Linking recall@4 and accuracy@1; signal-type macro-F1; calibration error of review confidence | Agreement with reviewers' final operations on held-out reviews; schema validity; dropped-signal rate | Analog hit rate on held-out shocks; anomaly AUROC on worlds with planted breaks; precision@k of proposed interactions |
+| **Acceptance bar** | Every example traces to a ledger sequence number; no test example precedes a training one | Linking recall@4 ≥ `alias_fuzzy` + 10 points and accuracy@1 ≥ 0.95 on named mentions; signal-type macro-F1 ≥ 0.85; under 20 ms per item on a CPU | Approved-unchanged rate within 2 points of the large-LLM fallback on the held-out period; 100% schema-valid; p95 latency under 2 s on one GPU; cost per item at least 20× lower | Beats signature Jaccard on analog hit rate (cognition.md ablation); anomaly AUROC ≥ 0.8; proposals it ranks first pass R2's test more often than the frontier's own order |
+| **Plugs into** | A planned `axelrod dataset export` command | `entity_resolver: biencoder`; new planned slots `triage`, `review_ranker`; a `label_family` classifier behind `classifier` | A `translator: small_extractor` entry ahead of `llm` in the `translators:` chain | Planned slot `state_encoder`, read by `recaller` (analogs), `frontier` (candidate order), and the open-world display |
+
+The thresholds are starting bars, to be revisited once D1–D4 hold a few thousand reviewed items.
+
+### P0 · Collect and version the datasets
+
+| Set | One example | Source |
+|---|---|---|
+| D1 · Linking | (mention, its sentence, constraints) → entity or subentity id, or "open" | Bound mentions; approved `REFINEMENT` resolutions; edits that changed a target |
+| D2 · Spans and signals | Text → spans with signal type and operation index | Hand-drawn translations, template spans, bundle quotes found in the text |
+| D3 · Operations | (market event, model at the version before it) → the operations the reviewer kept, with edits applied | Proposals with `REVIEW_DECISION`, `edited_from`, and staging `keep` |
+| D4 · Review outcome | (proposal features, operation) → kept unchanged, edited, or dropped | The same entries, plus `review_reasons` |
+| D5 · State transitions | (state at $t$, state at $t + h$), each value's observation where one exists | Snapshots, and raw observations (R0); in synthetic worlds, the true state |
+
+- **Schemas.** Each set is a versioned pydantic schema next to the code; a row records its ledger sequence numbers and the state version it was read at.
+- **Splits by time.** Train on items decided before a cutoff, validate on the next window, test on the one after, so no model sees the future of what it is scored on. D1 also has an entity-held-out split, for names first seen after the cutoff. Syndicated copies of one story stay in one split.
+- **Leak-free inputs.** An example's input is the model as it stood before the event (`as_of` its version, from the snapshots), never the committed state after it.
+- **Client data never leaves the client.** Datasets, weights trained on them, and fallback logs stay in the client's environment and out of this repository. The repository holds only code, schemas, and synthetic examples. Only aggregate metrics leave, and only by agreement.
+
+### P1 · Small encoders and classifiers on our ids
+
+- **Linking.** A bi-encoder trained contrastively: each mention against its approved id, with hard negatives from the same kind (another airline for an airline). A cross-encoder reranks the top candidates. Its scores replace the resolver weights $w_i$ of the hedge (§5); the binding rule is unchanged.
+- **Interaction typing.** A classifier from a link's label and its ends' attribute kinds to the interaction generalization, replacing `label_family`'s keyword table.
+- **Signals and spans.** A sentence classifier for the signal type and a CRF or token tagger for its spans (D2).
+- **Triage and review confidence.** Gradient-boosted trees on D4, calibrated by isotonic regression on the validation window.
+
+### P2 · A small model that emits our schema
+
+- **Model.** An open-weight instruction model of at most 8B, with a licence that permits on-premises use, tuned with LoRA or QLoRA on D3.
+- **Output.** `TranslationResult` JSON, either import signals or `GraphUpdateEvent` operations. Decoding is constrained to the JSON schema (grammar-constrained decoding), so every output parses; ids are constrained to the graph's own.
+- **Context.** The candidate ids from P1's encoder, not the whole graph, so the prompt stays short.
+- **Preference tuning, optional.** Kept-versus-dropped operations from D4 form preference pairs.
+- **Harness.** Replay the held-out period: for each event, restore the version before it, run the candidate translator, and compare with the reviewer's final operations. Report agreement by operation type, dropped signals, latency, and cost, beside the large-LLM fallback on the same events.
+
+### P3 · A JEPA-style predictor of world-model state
+
+- **Idea.** A joint-embedding predictive architecture predicts the *representation* of a target from the representation of its context, rather than reconstructing the target (LeCun, 2022; Assran et al., 2023). Here the context is the state at $t$ and the target is the state at $t + h$.
+- **Input.** Each value's standardized level and recent changes, its kind, and its place in the graph; masked values and masked horizons serve as targets.
+- **Training data.** Raw observations, never the filter's points, and the true state in synthetic worlds (ground rule 1 of the roadmap). Trained on filtered values, it would learn the engine's own predictions back.
+- **Uses**, each a ranking or a proposal, never a forecast:
+  - **analog recall**: nearby states retrieve past episodes (F8);
+  - **anomaly detection**: a large prediction error marks what the graph does not explain, for the open-world measures and the frontier's movers;
+  - **a prior for interaction proposals**: a source whose masking hurts the prediction of a target most is tested first.
+- **Separated from the causal engine.** Its outputs never enter the filter, the Monte Carlo, or a scenario weight. A pair it suggests passes R2's test and a person's review like any other. The causal engine stays the source of truth for forecasts.
+
+### How a model is swapped in
+
+Every phase lands behind a slot, chosen by config, so it can be compared by ablation on the same history and seed ([cognition.md](design/cognition.md#how-to-test-the-claim)):
+
+```yaml
+translators:
+  news: [hand_drawn, template, small_extractor, llm]   # small_extractor: P2 (planned); llm last, logged
+components:
+  entity_resolver: biencoder        # P1 (planned); alias_fuzzy today
+  triage: gbt_relevance             # P1 (planned slot)
+  review_ranker: gbt_calibrated     # P1 (planned slot)
+  state_encoder: jepa               # P3 (planned slot)
+```
+
+A model's weights and the dataset version it was trained on are to be recorded (planned) in the change set of anything it produced, so a reviewer, and an audit, can tell which model read which event.
