@@ -2,11 +2,13 @@
 // or a card shows what it holds without opening it. An entity shows its values as bars from normal (up green, down
 // red) with each value's open node; a superentity shows its members and the interactions among them as a small
 // graph; an interaction shows its effect and the belief that it exists.
+import { ownPart } from "../names.js";
 import { esc } from "../util.js";
 
 const W = 240;
 
-export function entityLens(subs) {
+// The card is headed by the entity, so each value reads by its own part ("share price", not "Delta share price").
+export function entityLens(subs, entName = null, kind = null) {
   if (!subs?.length) return "";
   const rows = subs.slice(0, 8);
   const rh = 17;
@@ -21,7 +23,7 @@ export function entityLens(subs) {
       const b = bar(s.z ?? 0);
       const r = 1.8 + 3 * Math.max(0, Math.min(1, s.open ?? 1));
       return `<g transform="translate(0,${y})">
-        <text x="0" y="${rh / 2 + 3}" class="lens-name">${esc(trim(s.name, 22))}</text>
+        <text x="0" y="${rh / 2 + 3}" class="lens-name">${esc(trim(entName ? ownPart(s.name, entName, kind) : s.name, 22))}</text>
         <rect x="${b >= 0 ? mid : mid + b}" y="3" width="${Math.max(1, Math.abs(b))}" height="${rh - 7}" rx="2" class="${(s.z ?? 0) >= 0 ? "lens-up" : "lens-down"}"/>
         <circle cx="${W - 8}" cy="${rh / 2}" r="${r.toFixed(1)}" class="lens-open"><title>${Math.round(100 * (s.open ?? 1))}% not explained by the graph yet</title></circle>
       </g>`;

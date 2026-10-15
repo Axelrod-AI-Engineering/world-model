@@ -5,6 +5,7 @@
 // granularity. The full shock builder sits one click down.
 import { api } from "../api.js";
 import { CATEGORY_CODES, CATEGORY_NAMES } from "../graph/layouts.js";
+import { names, qualified, qualifiedHtml } from "../names.js";
 import { emit, on, store } from "../store.js";
 import { errorText, esc } from "../util.js";
 
@@ -70,7 +71,7 @@ export function initThesis({ toast }) {
 
   function labelOf(p) {
     const hit = catalog().find((x) => x.kind === p.kind && x.ref === p.ref);
-    return hit ? hit.name : p.ref;
+    return hit ? (hit.sub ? qualified(hit.name, hit.sub) : hit.name) : p.ref;
   }
 
   // what the server needs: subentities as targets, the rest as target groups
@@ -93,7 +94,7 @@ export function initThesis({ toast }) {
   }
 
   function subOptions() {
-    return (view()?.subentities ?? []).map((s) => `<option value="${esc(s.id)}">${esc(s.name)}</option>`).join("");
+    return (view()?.subentities ?? []).map((s) => `<option value="${esc(s.id)}">${esc(names(view()).value(s.id))}</option>`).join("");
   }
 
   function render() {
@@ -129,7 +130,7 @@ export function initThesis({ toast }) {
             <button class="x" data-rm="${i}" aria-label="Remove ${esc(labelOf(p))}">✕</button></span>`).join("")}
           ${adding ? `<input id="th-add-q" class="pick-input" type="text" placeholder="a value, actor, idea, sector…" value="${esc(query)}" aria-label="Add a forecast target">`
             : `<button class="pick add" id="th-add-t">+ add</button>`}</div>
-        ${adding && sugg.length ? `<div class="chips suggest">${sugg.map((x, i) => `<button class="pick ${x.kind}" data-sg="${i}"><span class="k">${esc(KIND_LABEL[x.kind])}</span>${esc(x.name)}${x.sub ? `<span class="faint"> · ${esc(x.sub)}</span>` : ""}</button>`).join("")}</div>` : ""}
+        ${adding && sugg.length ? `<div class="chips suggest">${sugg.map((x, i) => `<button class="pick ${x.kind}" data-sg="${i}"><span class="k">${esc(KIND_LABEL[x.kind])}</span>${x.sub ? qualifiedHtml(x.name, x.sub) : esc(x.name)}</button>`).join("")}</div>` : ""}
         ${adding && query && !sugg.length ? `<div class="small faint" style="margin-top:4px">No match.</div>` : ""}
       </div>
       <div class="ask-row small"><label for="th-h">Horizon</label><input id="th-h" type="number" value="${horizon}" style="width:76px"> days</div>
@@ -147,7 +148,7 @@ export function initThesis({ toast }) {
             <label class="small">starts in <input id="th-start" type="number" value="12" style="width:56px"> weeks</label></div></div>
         <div class="section"><h4>Interventions</h4>
           ${interventions.map((v, i) => `<div class="shock-row" data-v="${i}">
-            <select data-f="sid" aria-label="Decision variable" class="grow">${decisions.map((d) => `<option value="${esc(d.id)}" ${d.id === v.sid ? "selected" : ""}>${esc(d.name)}</option>`).join("")}</select>
+            <select data-f="sid" aria-label="Decision variable" class="grow">${decisions.map((d) => `<option value="${esc(d.id)}" ${d.id === v.sid ? "selected" : ""}>${esc(names(view()).value(d.id))}</option>`).join("")}</select>
             <select data-f="kind" aria-label="Hold or change"><option ${v.kind === "hold" ? "selected" : ""}>hold</option><option ${v.kind === "change" ? "selected" : ""}>change</option></select>
             <input type="number" step="0.25" data-f="delta" value="${v.delta}" ${v.kind === "hold" ? "disabled" : ""} aria-label="Change" style="width:72px">
             <input type="number" data-f="window" value="${v.window}" aria-label="Window (days)" title="window (days)" style="width:72px">

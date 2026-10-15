@@ -4,6 +4,7 @@
 // change the view. The server builds it from what the model holds (GET /api/forecasts/{id}/brief).
 // Selecting text in a brief offers "Ask about this", a chat mock-up that is not implemented yet.
 import { api } from "../api.js";
+import { qualifiedHtml } from "../names.js";
 import { on, store } from "../store.js";
 import { esc, fmt } from "../util.js";
 
@@ -76,7 +77,7 @@ export function initBriefs({ openLeft, onWalk, onChat, focusNode, openForecast }
     return `<section><h4>How it travels</h4>
       <div class="small">${t.orders.filter((o) => o.material).map((o) => `${o.material} ${ord(o.order)}-order effect${o.material === 1 ? "" : "s"}`).join(", ") || "No effect"} of 0.05 sd or more
         <span class="faint">(${t.orders.reduce((a, o) => a + o.values, 0)} values reached in all)</span>.</div>
-      ${t.path ? `<p class="small" style="margin:6px 0 2px">The longest material chain reaches <b>${esc(t.path.name)}</b> (${esc(t.path.entity)}), a ${esc(t.path.order_word)} effect of ${arrow(t.path.peak)} at its peak:</p>
+      ${t.path ? `<p class="small" style="margin:6px 0 2px">The longest material chain reaches <b>${qualifiedHtml(t.path.name, t.path.entity)}</b>, a ${esc(t.path.order_word)} effect of ${arrow(t.path.peak)} at its peak:</p>
         <div class="small muted">${esc(t.path_text)}</div>` : ""}
       ${wl ? `<p class="small" style="margin-top:6px">${esc(wl.name)}: ${c.moves ?? 0} names move${wl.moves.length ? ` (${wl.moves.slice(0, 5).map((m) => `${esc(m.name)} ${arrow(m.peak)}, ${ord(m.order)} order`).join("; ")})` : ""};
         ${c.small ?? 0} move slightly; ${(c.negligible ?? 0) + (c.no_path ?? 0)} are not reached${c.no_path ? `, ${c.no_path} with no path in the graph at all` : ""}.</p>` : ""}
@@ -123,7 +124,7 @@ export function initBriefs({ openLeft, onWalk, onChat, focusNode, openForecast }
           ${sub(t)}: ${fmt(t.realized)} sd after ${t.days} days, ${esc(t.where)} <span class="faint">(median ${fmt(t.median)}, 90% ${fmt(t.q05)} to ${fmt(t.q95)})</span></div>`).join("")}`
           : `<p class="small muted">Nothing realized yet: the model has not processed a day since it was posed.</p>`}
         ${b.since.length ? `<div class="small muted" style="margin:8px 0 4px">News since that bears on it:</div>${b.since.map(evCard).join("")}` : ""}</section>
-      ${b.watch.length ? `<section><h4>What to watch</h4><ul class="wlist">${b.watch.map((w) => `<li>${sub(w)} (${esc(w.entity)})${w.direction ? `, expected to ${w.direction === "up" ? "rise" : "fall"}` : ""}: ${esc(w.why)}</li>`).join("")}</ul></section>` : ""}
+      ${b.watch.length ? `<section><h4>What to watch</h4><ul class="wlist">${b.watch.map((w) => `<li><a href="#" data-node="${esc(w.id)}">${qualifiedHtml(w.name, w.entity)}</a>${w.direction ? `, expected to ${w.direction === "up" ? "rise" : "fall"}` : ""}: ${esc(w.why)}</li>`).join("")}</ul></section>` : ""}
       ${b.change.length ? `<section><h4>What would change the view</h4><ul class="wlist">${b.change.map((c) => `<li>${esc(c.text)}${c.kind === "hypothesis" ? ` <span class="faint small">p ${fmt(c.probability)}</span>` : ""}</li>`).join("")}</ul></section>` : ""}
       <details class="section fold"><summary><h4>Caveats</h4></summary><ul class="wlist small">${b.caveats.map((c) => `<li>${esc(c)}</li>`).join("")}</ul></details>
       <p class="small faint">Select any text to ask about it.</p>

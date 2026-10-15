@@ -7,7 +7,7 @@
 import { api } from "../api.js";
 import { densitySvg } from "../charts/density.js";
 import { fanChart } from "../charts/fan.js";
-import { names } from "../names.js";
+import { names, qualifiedHtml } from "../names.js";
 import { emit, on, store } from "../store.js";
 import { esc, fmt, signed } from "../util.js";
 /* global d3 */
@@ -69,10 +69,10 @@ function pathHtml(p, nm) {
   const ids = p.interaction_ids ?? [];
   const hops = ids.map((i, k) => {
     const l = nm.links.get(String(i).split(":")[0]);
-    const to = k === ids.length - 1 ? nm.node(p.target_id) : l ? nm.node(l.target) : "…";
+    const to = k === ids.length - 1 ? nm.value(p.target_id) : l ? nm.value(l.target) : "…";
     return ` → <i class="via">${esc(l?.label ?? i)}</i> → ${esc(to)}`;
   }).join("");
-  return `<div class="top-path"><span class="ord" title="the number of interactions between the shock and the target">${esc(ORDER_SHORT(ids.length))}</span> ${esc(nm.node(p.shock_id))}${hops} <span class="muted">(${fmt(p.share * 100, 0)}%)</span></div>`;
+  return `<div class="top-path"><span class="ord" title="the number of interactions between the shock and the target">${esc(ORDER_SHORT(ids.length))}</span> ${(nm.valueHtml(p.shock_id))}${hops} <span class="muted">(${fmt(p.share * 100, 0)}%)</span></div>`;
 }
 
 // -- transmission (addition): effects by order, the transmission path, and the watchlist -------------------
@@ -193,7 +193,7 @@ export function initForecast({ renderer, activateTab, onWalk }) {
       card.innerHTML = `<div class="fc-head"><span class="k">${esc(GROUP_KIND[g.kind] ?? g.kind)}</span><b>${esc(g.name)}</b>
           <span class="mono small" title="median average effect at the horizon">${arrow(last?.q50 ?? 0)} sd</span></div>
         <div class="fc-viz"></div>
-        <div class="small muted">${g.members} values averaged${flat(g.effects) ? "" : ` · most moved: ${g.top.filter((t) => Math.abs(t.effect) >= 0.05).slice(0, 3).map((t) => `${esc(t.name)} ${arrow(t.effect)} sd`).join(", ") || "none by much"}`}</div>`;
+        <div class="small muted">${g.members} values averaged${flat(g.effects) ? "" : ` · most moved: ${g.top.filter((t) => Math.abs(t.effect) >= 0.05).slice(0, 3).map((t) => `${names().subs.has(t.id) ? names().valueHtml(t.id) : esc(t.name)} ${arrow(t.effect)} sd`).join(", ") || "none by much"}`}</div>`;
       const viz = card.querySelector(".fc-viz");
       if (flat(g.effects)) {
         viz.innerHTML = `<span class="small faint">No visible effect within ${fv.dates.length - 1} days: the shock does not reach it through the graph.</span>`;
@@ -218,10 +218,10 @@ export function initForecast({ renderer, activateTab, onWalk }) {
       const isOpen = open === t.id;
       card.className = `card fan fc-card selectable ${isOpen ? "wide" : ""}`;
       card.tabIndex = 0;
-      card.innerHTML = `<div class="fc-head"><b>${esc(t.name)}</b>
+      card.innerHTML = `<div class="fc-head"><b>${qualifiedHtml(t.name, t.entity)}</b>
           <span class="mono small">${mode === "levels" ? `${fmt(last?.q50)} ${esc(t.unit)}` : `${arrow(last?.q50 ?? 0)} sd`}</span>
           ${c ? `<span class="mono faint small" title="compare">vs ${mode === "levels" ? fmt(c.levels.at(-1)?.q50) : signed(c.effects.at(-1)?.q50)}</span>` : ""}</div>
-        ${t.entity ? `<div class="small faint">${esc(t.entity)}</div>` : ""}<div class="fc-viz"></div>`;
+        <div class="fc-viz"></div>`;
       const viz = card.querySelector(".fc-viz");
       viz.appendChild(fanChart({ dates: fv.dates, series, compare: c ? (mode === "levels" ? c.levels : c.effects) : null,
                                  unit: mode === "levels" ? t.unit : "effect (sd)", title: t.name, zeroLine: mode === "effects",
@@ -278,7 +278,7 @@ export function initForecast({ renderer, activateTab, onWalk }) {
       const faint = rows.filter((v) => !v.material);
       const ents = new Set(values.map((v) => v.entity_id)).size;
       const row = (v) => `<button class="tx-row ${v.id === sel?.id ? "on" : ""}" data-tx="${esc(v.id)}" title="Show how it gets there">
-          <span class="ord">${esc(ORDER_SHORT(v.order))}</span><span class="nm"><b>${esc(v.name)}</b></span>
+          <span class="ord">${esc(ORDER_SHORT(v.order))}</span><span class="nm"><b>${qualifiedHtml(v.name, v.entity)}</b></span>
           ${sdSpan(v.peak)}<span class="faint small">from day ${v.arrives_day} · peak day ${v.peak_day}</span></button>`;
       html += `<div class="section"><h4>Effects by order</h4>
         <div class="small muted">The question reaches ${values.length} values across ${ents} actors and ideas. A first-order effect is direct;
@@ -292,7 +292,7 @@ export function initForecast({ renderer, activateTab, onWalk }) {
         html += `<div class="section"><div class="ask-row"><h4 style="flex:1;margin:0">Transmission path</h4>
             <button id="fc-tx-show" title="Light this path on the canvas">Show on the canvas</button>
             <button id="fc-tx-grid" title="Input, each order, and output as a grid, moving day by day (G)">As a grid</button></div>
-          <div class="small muted"><b>${esc(sel.name)}</b> (${esc(sel.entity)}) is a ${esc(sel.order_word)} effect: ${sdSpan(sel.peak)} at its peak on day ${sel.peak_day},
+          <div class="small muted"><b>${qualifiedHtml(sel.name, sel.entity)}</b> is a ${esc(sel.order_word)} effect: ${sdSpan(sel.peak)} at its peak on day ${sel.peak_day},
             ${sdSpan(sel.effect)} at the horizon. The first effect can arrive after about ${sel.arrives_day} days, the sum of the delays below.</div>
           ${chainHtml(sel, byId)}</div>`;
       }
@@ -304,7 +304,7 @@ export function initForecast({ renderer, activateTab, onWalk }) {
         const sub = nm.subs.get(sid);
         const c = sub?.constraint;
         const bound = c ? [c.min != null ? `at least ${fmt(c.min)}` : "", c.max != null ? `at most ${fmt(c.max)}` : ""].filter(Boolean).join(" and ") : "";
-        return `<div class="small"><b>${esc(nm.node(sid))}</b> bends toward its bound${bound ? ` (${esc(bound)} ${esc(sub?.unit ?? "")})` : ""} in ${fmt(share * 100, 0)}% of samples.
+        return `<div class="small"><b>${(nm.valueHtml(sid))}</b> bends toward its bound${bound ? ` (${esc(bound)} ${esc(sub?.unit ?? "")})` : ""} in ${fmt(share * 100, 0)}% of samples.
           <span class="muted">${esc(c?.reason ?? "")} The bound is soft: an economic tendency, not a law.</span></div>`;
       }).join("")}</div>`;
     }

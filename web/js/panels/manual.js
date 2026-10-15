@@ -3,6 +3,7 @@
 // size, timing), why they believe it, and how sure they are. It is staged and reviewed like any article. A manual
 // example opens the form prefilled, so the example shows how it is done; the person can change anything first.
 import { api } from "../api.js";
+import { qualified } from "../names.js";
 import { store } from "../store.js";
 import { errorText, esc } from "../util.js";
 
@@ -28,7 +29,7 @@ export function initManual({ toast, onProposal }) {
   function valueOptions(selected) {
     const view = store.view;
     const ents = new Map((view?.entities ?? []).map((e) => [e.id, e.name]));
-    const existing = (view?.subentities ?? []).map((s) => [s.id, `${ents.get(s.entity_id) ?? s.entity_id} · ${s.name}`])
+    const existing = (view?.subentities ?? []).map((s) => [s.id, qualified(s.name, ents.get(s.entity_id) ?? s.entity_id)])
       .sort((a, b) => a[1].localeCompare(b[1]));
     const fresh = spec.values.map((v) => [`new:${v.slug}`, `${spec.entity?.name || ents.get(v.entity) || "new"} · ${v.name || "(new value)"} (new)`]);
     // a prefilled value the graph does not have yet: the earlier examples add it when they play

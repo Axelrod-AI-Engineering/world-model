@@ -4,6 +4,7 @@
 // on the canvas, and the neighborhood control widens the light to what they touch: one hop (their neighbors through
 // interactions), then two (the neighbors' neighbors). Everything else dims. Enter or a click goes to a hit; Esc clears.
 import { api } from "../api.js";
+import { names } from "../names.js";
 import { on, store } from "../store.js";
 import { esc } from "../util.js";
 
@@ -85,6 +86,11 @@ export function initFind({ renderer, toast }) {
       groups.get(h.kind).push({ h, i });
     });
     const filt = Object.keys(r.filters ?? {});
+    // a value reads with its entity, an interaction with each end's (names.js)
+    const nm = names();
+    const hitName = (h) => (h.kind === "subentity" && nm.subs.has(h.id) ? nm.valueHtml(h.id)
+      : h.kind === "subentity" && h.entity_name ? `<span class="qn-ent">${esc(h.entity_name)} ·</span> ${esc(h.name)}`
+        : h.kind === "interaction" ? nm.linkHtml(h.id) ?? esc(h.name) : esc(h.name));
     box.innerHTML = `
       <div class="fr-head"><span class="small"><b>${r.total}</b> match${r.total === 1 ? "" : "es"}${filt.length ? ` <span class="muted">· filters: ${filt.map(esc).join(", ")}</span>` : ""}</span>
         <span class="spacer"></span>
@@ -94,7 +100,7 @@ export function initFind({ renderer, toast }) {
       ${[...groups.entries()].map(([k, xs]) => `<div class="fr-group"><div class="fr-gh">${esc(KIND_WORD[k] ?? k)} <span class="muted">${xs.length}</span></div>
         ${xs.map(({ h, i }) => `<div class="fr-hit${i === st.active ? " active" : ""}" role="option" data-i="${i}" aria-selected="${i === st.active}">
           <span class="fr-mk" aria-hidden="true">${KIND_MARK[h.kind] ?? "·"}</span>
-          <span class="fr-name">${esc(h.name)}${h.label && h.kind === "interaction" ? ` <span class="muted">(${esc(h.label)})</span>` : ""}</span>
+          <span class="fr-name">${hitName(h)}${h.label && h.kind === "interaction" ? ` <span class="muted">(${esc(h.label)})</span>` : ""}</span>
           <span class="fr-detail small muted">${esc(h.detail ?? "")}</span>
           ${(h.why ?? []).length ? `<span class="fr-why">${h.why.map((w) => `<span>${esc(w)}</span>`).join("")}</span>` : ""}</div>`).join("")}</div>`).join("")}
       ${st.hops && (ring1.size || ring2.size) ? `<div class="fr-foot small muted">Lit on the canvas: the matches${ring1.size ? `, ${ring1.size} neighbor${ring1.size === 1 ? "" : "s"}` : ""}${ring2.size ? `, and ${ring2.size} more at two hops` : ""}.</div>` : ""}`;

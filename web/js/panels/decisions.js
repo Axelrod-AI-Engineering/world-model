@@ -2,6 +2,7 @@
 // version, review date, and outcome. "Trace" opens the cited forecasts and a read-only view of the state
 // at the decision's version. "Resolve" scores a decision once its review date has passed.
 import { api } from "../api.js";
+import { names } from "../names.js";
 import { emit, on, openVersion, store } from "../store.js";
 import { errorText, esc, fmt, fmtDate } from "../util.js";
 
@@ -17,8 +18,8 @@ export function initDecisions({ toast }) {
       ${ds.map((d) => `<div class="card" data-d="${esc(d.id)}">
         <div class="meta"><span class="mono">${esc(d.id)}</span><span>${esc(d.agent_id)}</span><span class="spacer"></span>
           <span class="badge ltm">v${d.state_version}</span></div>
-        <div class="title">${esc(d.recommendation)}</div>
-        ${d.rationale ? `<div class="small muted">${esc(d.rationale)}</div>` : ""}
+        <div class="title">${names().proseHtml(d.recommendation)}</div>
+        ${d.rationale ? `<div class="small muted">${names().proseHtml(d.rationale)}</div>` : ""}
         <div class="small">cites ${d.forecast_ids.map((f) => `<a href="#" data-fc="${esc(f)}">${esc(f)}</a>`).join(", ")}</div>
         <div class="small">review after ${fmtDate(d.review_after)}</div>
         ${d.outcome ? `<div class="small"><span class="badge eval">outcome</span> CRPS ${fmt(d.outcome.crps, 3)} · resolved ${fmtDate(d.outcome.resolved_at)}</div>` : ""}

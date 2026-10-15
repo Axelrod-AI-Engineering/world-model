@@ -8,6 +8,7 @@
 // values tinted by order. Approving commits only the selected items.
 import { api } from "../api.js";
 import { scatter } from "../charts/fan.js";
+import { names } from "../names.js";
 import { clearStaged, emit, on, refreshGraph, showStaged, store } from "../store.js";
 import { errorText, esc, fmt, signed } from "../util.js";
 
@@ -26,11 +27,14 @@ const KIND_HELP = {
 const ORDER = ["The event's own move", "First order", "Second order", "Third order"];
 const ACTION_MARK = { add: "+", retire: "−", move: "↕", observe: "◉", collapse: "⊂", expand: "⊃", hedge: "≈" };
 const pct = (x) => `${Math.round(100 * x)}%`;
+// a value the server names reads "Entity · subentity" (names.js), by its id when it has one, else by its name in prose
+const subOr = (id, name) => { const nm = names(); return nm.subs.has(id) ? nm.valueHtml(id) : nm.namedHtml(name ?? id ?? ""); };
+const prose = (s) => names().namedHtml(s);
 
 // a hedge's candidates as bars (Oct 8): each candidate's probability, with its value before this event when known
 function hedgeBars(cands, { before = false } = {}) {
   return `<ul class="hg-bars">${cands.map((c) => `<li class="${c.id === "__open__" ? "open" : ""}">
-    <span class="hg-name">${esc(c.name)}</span>
+    <span class="hg-name">${c.id === "__open__" ? esc(c.name) : subOr(c.id, c.name)}</span>
     <span class="hg-bar"><i style="width:${(100 * c.p).toFixed(1)}%"></i>${before && c.before != null
       ? `<b class="hg-was" style="left:${(100 * c.before).toFixed(1)}%" title="before: ${pct(c.before)}"></b>` : ""}</span>
     <span class="mono hg-p">${before && c.before != null && Math.abs(c.before - c.p) >= 0.005 ? `${pct(c.before)} → ` : ""}<b>${pct(c.p)}</b></span></li>`).join("")}</ul>`;
@@ -43,12 +47,12 @@ const STAGE_STATE = { done: "✓", waiting: "●", next: "○", skipped: "–" }
 function foldRow(x) {
   const chg = x.before ? ` <span class="muted">(${signed(100 * (x.after - x.before) / Math.abs(x.before), 1)}%)</span>` : "";
   if (x.kind === "existence") {
-    return `Belief that <b>${esc(x.name)}</b> exists: ${x.before == null ? "new" : `${(100 * x.before).toFixed(1)}%`} → <b>${(100 * x.after).toFixed(1)}%</b>`;
+    return `Belief that <b>${prose(x.name)}</b> exists: ${x.before == null ? "new" : `${(100 * x.before).toFixed(1)}%`} → <b>${(100 * x.after).toFixed(1)}%</b>`;
   }
   if (x.kind === "effect") {
-    return `Effect of <b>${esc(x.name)}</b>: ${x.before == null ? "new" : fmt(x.before)} → <b>${fmt(x.after)}</b> sd per sd`;
+    return `Effect of <b>${prose(x.name)}</b>: ${x.before == null ? "new" : fmt(x.before)} → <b>${fmt(x.after)}</b> sd per sd`;
   }
-  return `<b>${esc(x.name)}</b>: ${x.before == null ? "new" : fmt(x.before)} → <b>${fmt(x.after)}</b> ${esc(x.unit ?? "")}${chg}`;
+  return `<b>${subOr(x.ref, x.name)}</b>: ${x.before == null ? "new" : fmt(x.before)} → <b>${fmt(x.after)}</b> ${esc(x.unit ?? "")}${chg}`;
 }
 
 // a lesson, under the long-term store it lands in, said plainly (control/stage.py writes them)
@@ -67,7 +71,7 @@ function lessonText(x) {
   if (/^The explanation of what was learned is stored with the prior states$/.test(x)) {
     return "Keeps today as a prior state, with an explanation of what changed and why, so recall can bring it back when a similar article arrives";
   }
-  return esc(x);
+  return prose(x);
 }
 function keepsList(lessons) {
   const by = new Map();
@@ -297,7 +301,7 @@ export function initReview({ openModal, toast, onFocusGraph }) {
     const n = Math.round(h.support ?? 0);
     return `<div class="ck-meter small" title="A fuzzy end resolves when one candidate passes ${pct(bound)} and at least ${needed} articles have borne on it">
       <span class="ck-part ${top.p >= bound ? "met" : ""}"><span class="ck-bar"><i style="width:${Math.min(100, (100 * top.p) / bound).toFixed(0)}%"></i></span>
-        ${esc(top.name)} ${pct(top.p)} <span class="muted">of ${pct(bound)}</span></span>
+        ${subOr(top.id, top.name)} ${pct(top.p)} <span class="muted">of ${pct(bound)}</span></span>
       <span class="ck-part ${n >= needed ? "met" : ""}">${Array.from({ length: Math.max(needed, n) }, (_, k) => `<b class="ck-dot${k < n ? " on" : ""}"></b>`).join("")}
         ${n} of ${needed} articles</span></div>`;
   }
@@ -311,7 +315,7 @@ export function initReview({ openModal, toast, onFocusGraph }) {
     const card = (a, cur) => `<div class="ev-art${cur ? " cur" : ""}"><div class="eh">${esc(a.headline)}</div>
       <div class="small muted">${esc(a.source)} · ${esc(a.date)}${cur ? " · this article" : ""}</div></div>`;
     return `<section class="rv-sec rv-evidence"><h4>The articles behind it</h4>
-      <p class="ev-lede">${esc(word)}, ${esc(ev.earlier)} moved and ${esc(ev.later)} ${ev.sign > 0 ? "followed it" : "moved the other way"} ${esc(when)},
+      <p class="ev-lede">${esc(word)}, ${prose(ev.earlier)} moved and ${prose(ev.later)} ${ev.sign > 0 ? "followed it" : "moved the other way"} ${esc(when)},
         with nothing in the graph to explain it. <span class="small muted">Correlation ${fmt(ev.corr)} over the checks; a person decides whether it is a cause.</span></p>
       <p class="small muted">Checked at most once every spaced interval: passed ${ev.consistent ?? n}, failed ${ev.inconsistent ?? 0}; it needed ${ev.needed ?? n} more passes than failures.
         ${ev.first_seen ? `First seen ${esc(ev.first_seen.date)} (not a check).` : ""}</p>
@@ -329,13 +333,13 @@ export function initReview({ openModal, toast, onFocusGraph }) {
     for (const c of h.checks ?? []) if (!["intake", "narrowed", "rejected"].includes(c.kind) && !nums.has(art(c))) nums.set(art(c), nums.size + 1);
     const label = (c) => (c.kind === "intake" ? "start" : c.kind === "narrowed" ? "narrowed" : c.kind === "rejected" ? "rejected" : `check ${nums.get(art(c))}`);
     return `<section class="rv-sec rv-evidence"><h4>The fuzzy end this settles</h4>
-      <p class="ev-lede">${esc(h.label)}: <b>${esc(w?.name ?? "")}</b> now holds ${pct(w?.p ?? 0)}, past the ${pct(bound)} bound,
+      <p class="ev-lede">${prose(h.label)}: <b>${subOr(w?.id, w?.name ?? "")}</b> now holds ${pct(w?.p ?? 0)}, past the ${pct(bound)} bound,
         after ${nums.size} article${nums.size === 1 ? "" : "s"} of evidence. <span class="small muted">Approving keeps it and retires its rivals; rejecting sends half its weight back to the open share.</span></p>
       ${hedgeBars(h.candidates)}
       <ol class="ev-checks">${(h.checks ?? []).map((c) => `<li><span class="ev-n">${label(c)}</span>
         <div class="ev-art"><div class="eh">${esc(c.headline ?? (c.kind === "intake" ? "The first article: the end is hedged" : ""))}</div>
-          <div class="small muted">${esc(c.date)}${c.kind !== "intake" ? ` · ${esc(c.candidate ?? "")} ${esc(EVIDENCE_WORD[c.kind] ?? c.kind)}${c.kind === "mention" ? " here" : ""} (+${fmt(c.weight)})` : ""}
-            ${c.p != null ? ` · ${esc(w?.name ?? "")} at ${pct(c.p)}` : ""}</div></div></li>`).join("")}</ol></section>`;
+          <div class="small muted">${esc(c.date)}${c.kind !== "intake" ? ` · ${prose(c.candidate ?? "")} ${esc(EVIDENCE_WORD[c.kind] ?? c.kind)}${c.kind === "mention" ? " here" : ""} (+${fmt(c.weight)})` : ""}
+            ${c.p != null ? ` · ${subOr(w?.id, w?.name ?? "")} at ${pct(c.p)}` : ""}</div></div></li>`).join("")}</ol></section>`;
   }
 
   // the article, with each phrase that asked for an operation marked; hovering a phrase lights its items
@@ -400,14 +404,14 @@ export function initReview({ openModal, toast, onFocusGraph }) {
             data-refs="${esc(it.refs.join(" "))}">
           <div class="rv-row"><label><input type="checkbox" data-item="${it.index}" ${keep.has(it.index) ? "checked" : ""}>
             <span class="mk ${esc(it.action)}" aria-hidden="true">${ACTION_MARK[it.action] ?? "·"}</span>
-            <span>${esc(it.label)}</span></label>
+            <span>${prose(it.label)}</span></label>
             <button class="rv-conf-chip${it.own_confidence ? " own" : ""}" data-conf-item="${it.index}" aria-expanded="${st.openConf === it.index}"
               title="${it.own_confidence ? "Your confidence in this change" : "Follows the article's confidence"}: click to set it for this change alone">${pct(it.confidence)}</button></div>
           ${st.openConf === it.index ? `<div class="rv-conf item"><input type="range" min="0" max="100" step="5" value="${Math.round(100 * it.confidence)}" data-conf-op="${it.index}" aria-label="Confidence in this change">
             <span class="mono rv-conf-v">${pct(it.confidence)}</span>
             ${it.own_confidence ? `<button class="linkish small" data-conf-reset="${it.index}">follow the article</button>` : `<span class="small muted">set for this change alone</span>`}</div>` : ""}</li>`).join("")}</ul>
         ${items.some((it) => it.requires.length) ? `<p class="small muted">Deselecting an item also deselects what needs it; the review is staged again without them.</p>` : ""}
-        ${(r.pending ?? []).map((pd) => `<div class="rv-pending"><b>Fuzzy end, hedged:</b> ${esc(pd.label)}
+        ${(r.pending ?? []).map((pd) => `<div class="rv-pending"><b>Fuzzy end, hedged:</b> ${prose(pd.label)}
           ${hedgeBars(pd.candidates)}
           <div class="small muted">The article names none of them, so nothing is chosen.${pd.soft ? " Each candidate gets a soft interaction, as strong as it is probable, so forecasts hedge across them." : ""}
             Later articles move the odds; once one passes ${pct(bound)} after ${needed} articles that bear on it, a resolution comes back here for review.</div></div>`).join("")}
@@ -415,10 +419,10 @@ export function initReview({ openModal, toast, onFocusGraph }) {
     }
     if (r.hedges?.length) {
       working.push(`<section class="rv-sec"><h4>What the fuzzy ends learn <span class="small muted">this article as evidence for each candidate</span></h4>
-        ${r.hedges.map((h) => `<div class="rv-hedge"><div class="hg-label">${esc(h.label)}${h.resolves ? ` <span class="badge real">passes the bound: a resolution goes to review</span>` : ""}</div>
+        ${r.hedges.map((h) => `<div class="rv-hedge"><div class="hg-label">${prose(h.label)}${h.resolves ? ` <span class="badge real">passes the bound: a resolution goes to review</span>` : ""}</div>
           ${hedgeBars(h.candidates, { before: true })}
           ${checkMeter(h, bound, needed)}
-          <ul class="rv-plain small">${(h.evidence ?? []).map((e) => `<li>${esc(e.candidate ?? "")}: ${esc(EVIDENCE_WORD[e.kind] ?? e.kind)} ${e.kind === "mention" ? "in this article" : ""}
+          <ul class="rv-plain small">${(h.evidence ?? []).map((e) => `<li>${prose(e.candidate ?? "")}: ${esc(EVIDENCE_WORD[e.kind] ?? e.kind)} ${e.kind === "mention" ? "in this article" : ""}
             <span class="muted">(+${fmt(e.weight)}${e.confidence < 1 ? ` at your ${pct(e.confidence)}` : ""})</span></li>`).join("")}</ul></div>`).join("")}</section>`);
     }
     // the event's moves and the ripple, by order
@@ -442,14 +446,14 @@ export function initReview({ openModal, toast, onFocusGraph }) {
       const size = a.order ? a.peak : a.effect;
       const arrow = `<span class="${size >= 0 ? "z-up" : "z-down"}">${size >= 0 ? "▲" : "▼"} ${signed(size)} sd</span>`;
       const scaled = a.order && w * up < 0.995 ? ` <span class="small muted rv-scaled">→ ${signed(size * w * up)} expected</span>` : "";
-      const path = a.path?.length > 1 ? `<div class="small muted rv-path">${a.path.map(esc).join(" → ")}</div>` : "";
+      const path = a.path?.length > 1 ? `<div class="small muted rv-path">${a.path.map(prose).join(" → ")}</div>` : "";
       if (!a.order) {
-        return `<li data-refs="${esc([a.subentity_id, ...(a.via ?? [])].join(" "))}">${arrow} <b>${esc(a.name)}</b>${path}</li>`;
+        return `<li data-refs="${esc([a.subentity_id, ...(a.via ?? [])].join(" "))}">${arrow} <b>${subOr(a.subentity_id, a.name)}</b>${path}</li>`;
       }
       const sid = esc(a.subentity_id);
       return `<li class="rv-rip${w <= 0 ? " off" : ""}" data-refs="${esc([a.subentity_id, ...(a.via ?? [])].join(" "))}">
         <div class="rv-row"><label><input type="checkbox" data-rip="${sid}" ${w > 0 ? "checked" : ""}>
-          <span>${arrow} <b>${esc(a.name)}</b> <span class="small muted">peaks ~day ${a.peak_day}</span>${scaled}</span></label>
+          <span>${arrow} <b>${subOr(a.subentity_id, a.name)}</b> <span class="small muted">peaks ~day ${a.peak_day}</span>${scaled}</span></label>
           <button class="rv-conf-chip${w < 1 ? " own" : ""}" data-rip-conf="${sid}" aria-expanded="${st.openRip === a.subentity_id}"
             title="The probability that this ripple arrives: click to set it">${pct(w)}</button></div>
         ${path}
@@ -479,7 +483,7 @@ export function initReview({ openModal, toast, onFocusGraph }) {
           : `Superentity “${esc(x.label)}”`}</span>
           <span class="rc-bar" title="attention ${fmt(x.attention)}"><i style="width:${(100 * x.attention / top).toFixed(0)}%"></i></span></li>`).join("")}</ul>
         ${(r.adjusted ?? []).length ? `<p class="small muted rv-sub">What followed those past days adjusts the expected moves:</p><ul class="rv-plain">
-          ${r.adjusted.slice(0, 6).map((a) => `<li>${esc(a.name)} ${signed(a.before)} → <b>${signed(a.after)}</b></li>`).join("")}
+          ${r.adjusted.slice(0, 6).map((a) => `<li>${names().linkHtml(a.interaction_id) ?? prose(a.name)} ${signed(a.before)} → <b>${signed(a.after)}</b></li>`).join("")}
           ${r.adjusted.length > 6 ? `<li class="muted">… and ${r.adjusted.length - 6} smaller adjustments</li>` : ""}</ul>` : ""}</section>`);
     }
     if (r.kind === "frontier_promotion") longTerm.push(`<div class="series"></div>`);
