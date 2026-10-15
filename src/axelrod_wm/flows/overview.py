@@ -33,7 +33,7 @@ OVERVIEW_STYLE = """
 .fl-edge.dashed { stroke-dasharray: 4 4; }
 """
 
-# The module map (docs/design/README.md), top layer first: (number, name, look).
+# The module map (docs/design/README.md), foundation first, so imports point up: (number, name, look).
 LAYERS: list[tuple[str, list[tuple[str, str, str]]]] = [
     ("5 · Interfaces", [("M14", "Views · API · CLI", "step"), ("M15", "Context layer (MCP)", "step"),
                         ("M16", "Web: Learn · Predict", "step")]),
@@ -205,7 +205,7 @@ def render_overview_svg() -> str:
     arch_h = 40 + row_h * len(LAYERS) + 16
     _band(o, LEFT, y, WIDTH - 2 * LEFT, arch_h, "Architecture · 17 modules in six layers (docs/design)")
     ry = y + 40
-    for k, (layer, mods) in enumerate(LAYERS):
+    for k, (layer, mods) in enumerate(reversed(LAYERS)):
         o.add(f'<rect class="fl-phase-band{" alt" if k % 2 else ""}" x="{LEFT + 8}" y="{ry}" width="{WIDTH - 2 * LEFT - 16}" '
               f'height="{row_h - 6}" rx="6"/>')
         o.add(f'<text class="fl-phase" x="{LEFT + 22}" y="{ry + 25}">{escape(layer)}</text>')
@@ -223,9 +223,9 @@ def render_overview_svg() -> str:
             cx += w + 12
         ry += row_h
     ax = WIDTH - LEFT - 34
-    o.add(f'<path class="fl-edge happy" d="M{ax},{y + 50} L{ax},{ry - 18}"/>'
-          + _arrow(ax, ry - 16, "down").replace('class="fl-arrow"', 'class="fl-arrow happy"'))
-    o.add(f'<text class="fl-elabel" x="{ax - 8}" y="{y + 34}" text-anchor="end">imports point down only</text>')
+    o.add(f'<path class="fl-edge happy" d="M{ax},{ry - 18} L{ax},{y + 52}"/>'
+          + _arrow(ax, y + 50, "up").replace('class="fl-arrow"', 'class="fl-arrow happy"'))
+    o.add(f'<text class="fl-elabel" x="{ax - 8}" y="{y + 34}" text-anchor="end">imports point up only</text>')
     height = y + arch_h + 20
 
     head = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {WIDTH} {height:.0f}" width="{WIDTH}" '

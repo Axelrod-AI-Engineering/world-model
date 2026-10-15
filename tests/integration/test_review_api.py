@@ -34,7 +34,7 @@ def test_flowchart_and_contracts(client):
     flows = {f["id"]: f for f in client.get("/api/flows").json()}
     phases = flows["world-model"]["phases"]
     assert [p["id"] for p in phases] == ["intake", "working", "long_term", "review", "commit"]
-    assert [p["id"] for p in flows["inference"]["phases"]][0] == "pose" and "inf-score" in flows
+    assert [p["id"] for p in flows["inference"]["phases"]][0] == "pose" and "inf-evaluate" in flows
     assert all(p["input"] and p["output"] and p["flow"] in flows for p in phases)
     svg = client.get("/api/flows/stage-review/svg?bare=true")
     assert svg.status_code == 200 and 'data-node="restage"' in svg.text and "fl-title" not in svg.text.split("<style>")[0]

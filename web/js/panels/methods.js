@@ -125,8 +125,8 @@ export function initMethods() {
         and the forecast is their mixture, weighted by support, fit, and track record. Every value is read out with the <b>order</b> and
         <b>path</b> by which the shock reaches it. Only one thing flows back: once a decision's horizon passes, the outcome scores the
         forecast, and the superentities that called it gain track record.</p></div>
-      <h2 id="inf-overview">The six stages of inference</h2>
-      <p>Each stage takes one thing in and hands one thing on.</p>
+      <h2 id="inf-overview">The ${overview.phases.length} stages of inference</h2>
+      <p>Each stage answers one question: it takes one thing in and hands one thing on, and no step belongs to two stages.</p>
       <figure class="fc">${overviewMarkup(overview, () => "st-inference")}</figure>
       ${overview.phases.map((ph, k) => stageSection(ph, k, byId.get(ph.flow), k === 0 ? xs : [], "st-inference")).join("")}
       ${KEY}

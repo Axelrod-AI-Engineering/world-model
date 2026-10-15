@@ -21,7 +21,7 @@ def _source_text() -> str:
 
 
 def test_learning_ends_in_review_and_commit_and_inference_stands_apart():
-    assert list(FLOWS)[0] == "world-model" and len(FLOWS) == 13
+    assert list(FLOWS)[0] == "world-model" and len(FLOWS) == 14
     phases = [p.id for p in WORLD_MODEL.phases]
     assert phases == ["intake", "working", "long_term", "review", "commit"]
     # the person checks at the end of learning: review comes after both memories and before any commit
@@ -32,7 +32,8 @@ def test_learning_ends_in_review_and_commit_and_inference_stands_apart():
             assert SMALL.example(ex).stage == p.id, (p.id, ex)
         assert p.flow in FLOWS, f"{p.id} has no flowchart of its own"
     # inference has its own overview and a flowchart per stage, and nothing in it writes either memory
-    assert [p.id for p in INFERENCE.phases] == ["pose", "isolate", "simulate", "unify", "read_out", "score"]
+    assert [p.id for p in INFERENCE.phases] == ["pose", "isolate", "isolated", "distributed", "unify", "read_out",
+                                                "evaluate"]   # MECE, in the naming guide's terms
     for p in INFERENCE.phases:
         assert p.input and p.output and p.flow in FLOWS
         assert not any(n.writes for n in FLOWS[p.flow].nodes), p.flow
