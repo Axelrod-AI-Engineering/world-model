@@ -16,15 +16,60 @@ This page went through an adversarial review on fidelity, statistics, and financ
 2. **Classical ML** over features the model already holds: logistic regression, gradient-boosted trees, conditional random fields (CRFs).
 3. **Small embedders** (sentence-transformer class, about 100M parameters), with nearest-neighbour lookup or by sorting down a Cobweb concept tree ([cognition.md F3](design/cognition.md#in-one-table)).
 4. **Small finetuned classifiers, taggers, and rankers** (encoders of 100–400M parameters).
-5. **JEPA-style (joint-embedding predictive) models** over the world model's own structured state. They predict the embedding of a later state from the present one, never text (§14, P3).
+5. **Decision models** (Jev-type, "System One"; [below](#decision-models-jev-type)): state in, typed decisions with calibrated probabilities out, in one pass and with no free text. Our own, finetuned on the ledger, or a hosted one such as TypeSafe's Jev where a client allows it.
 6. **A large LLM**, only for the long tail, as the last entry of a fallback chain.
 
 In dual-process terms, recognition handles the routine and deliberation only the exceptions. **Every fallback call is logged** with its input, its output, and the reviewer's decision on it, so the long tail becomes training data for steps 2–5 and shrinks over time. The ledger already records each proposal's `produced_by` and its review decision, so a fallback case is a ledger query, not a new store.
 
 **The chain is already the mechanism for translation.** `configs/default.yaml` lists translators per kind, "tried in order until one returns events" (`news: [hand_drawn, template]`). A small extractor goes before `llm`, and `llm` (a stub today) goes last. Other slots are a single choice today; giving a slot an ordered list with a confidence floor per entry is planned.
 
+### Decision models (Jev-type)
+
+**What they are.** TypeSafe AI's Jev is the first public "System One model": "unstructured state in, typed probabilistic decisions out" ([TypeSafe, 2026](https://typesafe.ai/blog/introducing-system-one-models-and-jev)). A caller declares the questions and their possible answers in advance; the model answers every question about one state in parallel, in a single query, and generates no text. There are three answer types ([LangChain, 2026](https://www.langchain.com/blog/building-a-harness-with-jev)):
+
+| Type | Answers | Returns |
+|---|---|---|
+| **Choice** | one of a declared set of options (Jev caps a set at 255) | a probability per option, and a confidence |
+| **Score** | a level on an ordered scale | a continuous score, its distribution, and a confidence |
+| **Noul** (yes or no) | whether a statement holds | the probability that it is true |
+
+Jev is trained by *reinforcement learning for calibrated decisions* (RLCD), which rewards "epistemically honest probabilities" rather than human preference (RLHF) or verifiable answers (RLVR). Its architecture, size, and training data are undisclosed, and its speed, cost, and accuracy figures (70–500 ms; 40–200× faster than a frontier LLM on such queries) are the vendor's own. The name is Kahneman's System 1 (fast, automatic judgment) and Jevons's paradox (cheaper intelligence, more of it used).
+
+**The research it draws on**, and what each part tells us:
+
+| Line of work | Finding | What we take |
+|---|---|---|
+| Small models for agents ([Belcak et al., 2025](https://arxiv.org/abs/2506.02153)) | Most calls an agent makes are narrow and repetitive; small models are sufficient, more suitable, and cheaper for them, with a large model kept for open-ended turns | A heterogeneous system: decision models for the routine calls, a large model for the rest |
+| Cascades and routers (FrugalGPT, RouteLLM, AutoMix; [survey, 2026](https://arxiv.org/abs/2603.04445)) | A cheap model answers first and defers when its confidence is low; thresholds on *uncalibrated* scores must be retuned per workload, while thresholds on calibrated error probabilities can be set once | Escalate on a calibrated probability, never on a raw score |
+| Calibration audits of a System One model ([Calibrated Decisions at Scale, 2026](https://arxiv.org/abs/2609.24052)) | Jev coded 195,857 police narratives against a 27-question schema at F1 0.908 against blinded human labels, level with one frontier LLM; recalibrating on labels cut calibration error 3.3×; calibration "depends on the model, not the paradigm"; a probability grid has a resolution floor | Audit and recalibrate every decision model on our own labels; spend the review budget where the model is unsure |
+| Distilling LLM judgments into small classifiers ([soft-label distillation, 2026](https://arxiv.org/abs/2605.11954)) | A small encoder trained on a large model's soft labels gives better-calibrated probabilities than the teacher's verbalized confidence | Cold-start our decision models from a large model's labels, then train on reviewers' decisions |
+
+**Why they suit this world model.** The engine is probabilistic from end to end, and most of what it asks of text is a choice among options it already knows: which of four candidate ids a mention names, which signal a sentence carries, whether a quote supports or contradicts an interaction, how likely a reviewer is to keep an operation. A decision model answers exactly those questions, in our types, with probabilities that enter where the engine already expects one: the hedge's weights $w_i$ (§5), an operation's confidence, the order of the review queue. A text generator would have to be parsed and its confidence guessed. Typed outputs cannot be malformed, and every answer is one of our ids or labels.
+
+**The decisions, as questions.** Each is a question over one state (the item, its sentence, and the candidates the graph supplies), all answered in one call:
+
+| Step | Question (type) | Where the probability goes |
+|---|---|---|
+| Triage | "Will this item yield an approved change?" (Noul) | Queue order; nothing is dropped |
+| Resolution | "Which of these candidates does the mention name?" (Choice over the top candidate ids, plus "none of these") | The hedge weights $w_i$; binding still needs a named mention |
+| Signal type | "What does this sentence claim?" (Choice: observe, move, link, support, contradict, none) | Which signal-to-operation mapping runs |
+| Direction and size | "Which way, and how far?" (Choice of sign; Score over the magnitude buckets the templates use) | The operation's delta, as a distribution |
+| Conflict | "Does this quote support, contradict, or not bear on the interaction?" (Choice) | Support and contradict signals; a contradiction is flagged in review |
+| Review | "Would a reviewer keep this operation unchanged?" (Noul) | Staging's preselection and queue order; never wider auto-apply |
+| Thesis subject | "Which value does this question shock?" (Choice over candidate ids) | Pose a thesis, shown before posing |
+| Hypothesis worth simulating | "How much would resolving this change the forecast?" (Score) | Which hypotheses the Monte Carlo scores first |
+| Agent guardrail | "Is this agent request a write?" (Noul) | Writes go to review (M15) |
+
+**Hosted or owned.** A hosted decision model needs no training but sends the item to its vendor, so it fits synthetic and public data, and clients who allow it. Our own decision models run inside the client's environment and learn our ids from the ledger (§14, P1). Both sit behind one slot, so they can be compared on the same history.
+
+**The audit, for any decision model.**
+- **Calibration** on held-out reviewer decisions: expected calibration error, Brier score, and a reliability curve per question.
+- **Recalibration** by isotonic regression or temperature on the validation window, rechecked on the test window.
+- **Escalation** to the next rung when the calibrated probability of the top answer falls below a threshold set once, from the cost of a review against the cost of an error.
+- **Review budget**: the uncertain answers go to a person first.
+
 **What no model does**, at any size:
-- compute an effect, a kernel, a forecast, or a probability the engine uses (the causal engine stays the source of truth);
+- compute an effect, a kernel, a forecast, an existence belief, or a scenario weight (the causal engine stays the source of truth). A decision model's calibrated probabilities weigh only *readings* of text: which candidate, which signal, how sure the reading is;
 - bind an end the article does not name (M05: it may only weight the hedge's candidates);
 - apply a change that the review policy sends to a person (vetted learning).
 
@@ -32,12 +77,12 @@ In dual-process terms, recognition handles the routine and deliberation only the
 
 | Step (tool call) | Today (code) | Small-model replacement (planned) | Training signal we own | Fallback |
 |---|---|---|---|---|
-| **Market-event triage and relevance** | Deduplication by address, or site and title (`intake/scrapers.py`, `dedup_keys`). An import item's `relevance` is the upstream agent's own number. No triage model. | Logistic regression or gradient-boosted trees over TF-IDF and small-embedder features plus the entities named, giving P(the event yields an approved change). It orders the queue; it never drops an event. | Proposals approved or rejected; events logged as untranslated (`translate.missing`); item relevance against outcome | Translate everything, in arrival order |
-| **Entity and value resolution** | `alias_fuzzy`: best `SequenceMatcher` ratio + 0.3 × word Jaccard + 0.2 × constraint fraction (`intake/resolver.py`). The refiner binds only a named mention; otherwise it hedges over up to 4 candidates. | A bi-encoder (about 100M) finetuned contrastively on (mention in context → entity or subentity id), with a cross-encoder reranking the top 4. Its scores become the hedge weights $w_i$ (§5); binding still needs a named mention. | Approved bindings; approved resolutions of hedged ends (`REFINEMENT` proposals); reviewer edits (`Proposal.edited_from`); bundle `entities` and `value_of` ids | `alias_fuzzy`; then an LLM choosing among the candidate ids or "open" |
-| **Signal extraction** (observe, move, link, support, contradict) | Reviewed fixtures (`hand_drawn`); regular-expression templates at confidence 0.6 (`template`); signals written by the upstream agent (`structured`). The `llm` translator is a stub. | A sentence classifier for the signal type, and a CRF or small token tagger for the spans (subject, direction, magnitude, unit, timeframe). Spans are assembled into operations deterministically, by the code that already maps signals to operations (`intake/bundle.py`, `signal_ops`). Then P2's small seq2seq model (§14). | Hand-drawn translations (gold operations with phrase spans); template spans; bundle signals with quotes; approved and edited proposals | `llm`, constrained to the schema |
+| **Market-event triage and relevance** | Deduplication by address, or site and title (`intake/scrapers.py`, `dedup_keys`). An import item's `relevance` is the upstream agent's own number. No triage model. | A decision model's Noul, "will this item yield an approved change?" (or, before there are labels, logistic regression over TF-IDF and small-embedder features). It orders the queue; it never drops an event. | Proposals approved or rejected; events logged as untranslated (`translate.missing`); item relevance against outcome | Translate everything, in arrival order |
+| **Entity and value resolution** | `alias_fuzzy`: best `SequenceMatcher` ratio + 0.3 × word Jaccard + 0.2 × constraint fraction (`intake/resolver.py`). The refiner binds only a named mention; otherwise it hedges over up to 4 candidates. | A bi-encoder (about 100M) finetuned contrastively on (mention in context → entity or subentity id) retrieves candidates; a decision model's Choice over the top 4 (plus "none of these") gives calibrated hedge weights $w_i$ (§5); binding still needs a named mention. | Approved bindings; approved resolutions of hedged ends (`REFINEMENT` proposals); reviewer edits (`Proposal.edited_from`); bundle `entities` and `value_of` ids | `alias_fuzzy`; then an LLM choosing among the candidate ids or "open" |
+| **Signal extraction** (observe, move, link, support, contradict) | Reviewed fixtures (`hand_drawn`); regular-expression templates at confidence 0.6 (`template`); signals written by the upstream agent (`structured`). The `llm` translator is a stub. | A decision model's Choice for the signal type, direction, and size bucket, and a CRF or small token tagger for the spans (subject, direction, magnitude, unit, timeframe). Spans are assembled into operations deterministically, by the code that already maps signals to operations (`intake/bundle.py`, `signal_ops`). Then P2's small seq2seq model (§14). | Hand-drawn translations (gold operations with phrase spans); template spans; bundle signals with quotes; approved and edited proposals | `llm`, constrained to the schema |
 | **Interaction typing** | A link's label goes to a family by a keyword table (`model/taxonomy.py`, `label_family`; unmatched → "other"), then signature descent on the interaction's features (`taxonomy_descent`) | A classifier over the label's embedding and the two ends' attribute kinds, giving the interaction generalization | Approved `add_interaction` operations and the kinds they were sorted into | Keyword table and signature descent |
 | **Quote alignment** | Exact substring match (`text.find(quote)` in `translate_item`); an unmatched quote gets no highlight | Rules first: normalize whitespace, case, and punctuation, then fuzzy character alignment. A small embedder matches a paraphrased quote to its sentence. | Bundle quotes that matched exactly (free positives) | Flag "quote not found" in review |
-| **Conflict detection** (planned, M05) | Not built; rules are specified (opposite sign on an existing interaction, a value outside a soft bound, a retired item reused) | The rules, plus a small natural-language-inference cross-encoder scoring a new quote against the evidence already behind the interaction | `support` and `contradict` signals; review decisions on flagged items | `llm_pairwise` (M05's planned alternative) |
+| **Conflict detection** (planned, M05) | Not built; rules are specified (opposite sign on an existing interaction, a value outside a soft bound, a retired item reused) | The rules, plus a decision model's Choice (supports, contradicts, does not bear) on the new quote against the evidence already behind the interaction | `support` and `contradict` signals; review decisions on flagged items | `llm_pairwise` (M05's planned alternative) |
 | **Interaction proposal** | The correlation frontier (`residual_comovement`, `threshold`, §8.2) and missing relations from bound patterns | A gradient-boosted link ranker over graph features (kind priors, path distance, co-movement statistics) that orders the candidates the frontier tests; the JEPA prior of P3 later. The statistical test (R2) and review still decide. | Approved and rejected `FRONTIER_PROMOTION` and `MISSING_RELATION` proposals | The frontier alone |
 | **Hypothesis ranking** (the hypothesis frontier) | `forecast_sensitivity_voi`: sensitivity × 4p(1 − p) from on/off Monte Carlo runs (§9) | A gradient-boosted surrogate predicting the value of information, used only to choose which hypotheses to simulate. The simulation stays the score. | Every VOI the engine has computed (cheap, exact labels); hypotheses people marked | Simulate all |
 | **Actor decisions** (Entity memories) | `DecisionProfile`: empirical action frequencies per bucket (`memory/entity_memory.py`) | An ordered probit or multinomial logistic reaction function on the actor's own inputs (R19) | Decision observations already in each Entity memory | The empirical profile |
@@ -46,7 +91,7 @@ In dual-process terms, recognition handles the routine and deliberation only the
 | **Find** | Lexical: stemming, a hand-written synonym table, kinds and their ancestors, filters (`api/find.py`) | Hybrid: BM25 plus a small embedder over names, aliases, and descriptions, grouped by concept-tree node | Aliases and kinds today; logged queries and the hits opened (planned: find does not log) | Lexical |
 | **Brief writing** | Templates over the forecast, its explanation, the folds, and the deviations (`api/brief.py`); no language model | Stays templated. Optionally a small instruction model (≤ 8B) rewrites the prose only, under a check that every number and name it writes appears in the template's facts. | Reader notes on briefs (`ANNOTATION` ledger entries) | The template text |
 | **Agent-context export** | Deterministic mapping into a client's format (`context/v4.py`) | No model. A new client format is a new mapping, written and reviewed once. | None needed | None |
-| **Review confidence and auto-apply** | `DefaultReviewPolicy` rules: structure, deletions, text translations, large reweightings, and confidence below 0.8 go to a person (`repo/review.py`). Confidence is fixed per translator (template 0.6, data feed 1.0) or is the agent's own. | A calibrated (isotonic) gradient-boosted model giving P(approved unchanged) per operation. It orders the queue and preselects operations in staging. It does not widen what applies without review; that stays a policy decision ([decisions.md](design/decisions.md)). | `REVIEW_DECISION` ledger entries; per-operation keep and confidence from staging; edits | The rules |
+| **Review confidence and auto-apply** | `DefaultReviewPolicy` rules: structure, deletions, text translations, large reweightings, and confidence below 0.8 go to a person (`repo/review.py`). Confidence is fixed per translator (template 0.6, data feed 1.0) or is the agent's own. | A decision model's Noul, "would a reviewer keep this operation unchanged?", recalibrated by isotonic regression (gradient-boosted trees as the baseline). It orders the queue and preselects operations in staging. It does not widen what applies without review; that stays a policy decision ([decisions.md](design/decisions.md)). | `REVIEW_DECISION` ledger entries; per-operation keep and confidence from staging; edits | The rules |
 
 ### Why
 
@@ -532,14 +577,14 @@ A general model sees this structure only through a prompt (`LLMTranslator.build_
 
 ### Phases
 
-| | P0 · Datasets | P1 · Encoders and classifiers | P2 · A small structured generator | P3 · A JEPA-style state predictor |
+| | P0 · Datasets | P1 · Decision models and encoders | P2 · A small structured generator | P3 · A JEPA-style state predictor |
 |---|---|---|---|---|
-| **Learns** | Nothing: collects and versions | Entity and value linking; interaction typing; signal type; triage; review confidence | Market event → `axelrod.import/v1` signals and `GraphUpdateEvent` operations | The embedding of the world model's state at $t + h$ from its state at $t$ |
+| **Learns** | Nothing: collects and versions | Typed decisions with calibrated probabilities: linking, signal type, direction and size, conflict, triage, review confidence; interaction typing | Market event → `axelrod.import/v1` signals and `GraphUpdateEvent` operations | The embedding of the world model's state at $t + h$ from its state at $t$ |
 | **Data** | Ledger, imports, fixtures, snapshots (below) | D1–D4 | D2, D3, with D4 as the reward for preference tuning | D5 |
-| **Model** | — | Bi-encoder and cross-encoder of about 100M; CRF; gradient-boosted trees; logistic regression | An open-weight instruction model of at most 8B, tuned with LoRA or QLoRA, decoded under the JSON schema | A graph or set encoder over values (about 10–50M), a predictor, and an EMA target encoder, trained in embedding space |
-| **Metric** | Coverage and leakage audits | Linking recall@4 and accuracy@1; signal-type macro-F1; calibration error of review confidence | Agreement with reviewers' final operations on held-out reviews; schema validity; dropped-signal rate | Analog hit rate on held-out shocks; anomaly AUROC on worlds with planted breaks; precision@k of proposed interactions |
-| **Acceptance bar** | Every example traces to a ledger sequence number; no test example precedes a training one | Linking recall@4 ≥ `alias_fuzzy` + 10 points and accuracy@1 ≥ 0.95 on named mentions; signal-type macro-F1 ≥ 0.85; under 20 ms per item on a CPU | Approved-unchanged rate within 2 points of the large-LLM fallback on the held-out period; 100% schema-valid; p95 latency under 2 s on one GPU; cost per item at least 20× lower | Beats signature Jaccard on analog hit rate (cognition.md ablation); anomaly AUROC ≥ 0.8; proposals it ranks first pass R2's test more often than the frontier's own order |
-| **Plugs into** | A planned `axelrod dataset export` command | `entity_resolver: biencoder`; new planned slots `triage`, `review_ranker`; a `label_family` classifier behind `classifier` | A `translator: small_extractor` entry ahead of `llm` in the `translators:` chain | Planned slot `state_encoder`, read by `recaller` (analogs), `frontier` (candidate order), and the open-world display |
+| **Model** | — | One shared encoder (100–400M) with a head per answer type (Choice, Score, Noul); a bi-encoder for candidate retrieval; CRF; gradient-boosted baselines | An open-weight instruction model of at most 8B, tuned with LoRA or QLoRA, decoded under the JSON schema | A graph or set encoder over values (about 10–50M), a predictor, and an EMA target encoder, trained in embedding space |
+| **Metric** | Coverage and leakage audits | Linking recall@4 and accuracy@1; signal-type macro-F1; expected calibration error and Brier score per question | Agreement with reviewers' final operations on held-out reviews; schema validity; dropped-signal rate | Analog hit rate on held-out shocks; anomaly AUROC on worlds with planted breaks; precision@k of proposed interactions |
+| **Acceptance bar** | Every example traces to a ledger sequence number; no test example precedes a training one | Linking recall@4 ≥ `alias_fuzzy` + 10 points and accuracy@1 ≥ 0.95 on named mentions; signal-type macro-F1 ≥ 0.85; calibration error ≤ 0.05 after recalibration; every question of an item answered in one pass, under 20 ms on a CPU | Approved-unchanged rate within 2 points of the large-LLM fallback on the held-out period; 100% schema-valid; p95 latency under 2 s on one GPU; cost per item at least 20× lower | Beats signature Jaccard on analog hit rate (cognition.md ablation); anomaly AUROC ≥ 0.8; proposals it ranks first pass R2's test more often than the frontier's own order |
+| **Plugs into** | A planned `axelrod dataset export` command | Planned slot `decision_model` (ours, a hosted one, or a large model wrapped to answer typed questions), read by `entity_resolver`, `triage`, `review_ranker`, and the translators; a `label_family` classifier behind `classifier` | A `translator: small_extractor` entry ahead of `llm` in the `translators:` chain | Planned slot `state_encoder`, read by `recaller` (analogs), `frontier` (candidate order), and the open-world display |
 
 The thresholds are starting bars, to be revisited once D1–D4 hold a few thousand reviewed items.
 
@@ -558,12 +603,17 @@ The thresholds are starting bars, to be revisited once D1–D4 hold a few thousa
 - **Leak-free inputs.** An example's input is the model as it stood before the event (`as_of` its version, from the snapshots), never the committed state after it.
 - **Client data never leaves the client.** Datasets, weights trained on them, and fallback logs stay in the client's environment and out of this repository. The repository holds only code, schemas, and synthetic examples. Only aggregate metrics leave, and only by agreement.
 
-### P1 · Small encoders and classifiers on our ids
+### P1 · Our own decision models
 
-- **Linking.** A bi-encoder trained contrastively: each mention against its approved id, with hard negatives from the same kind (another airline for an airline). A cross-encoder reranks the top candidates. Its scores replace the resolver weights $w_i$ of the hedge (§5); the binding rule is unchanged.
+The open counterpart of a hosted System One model, trained on structure only we hold.
+
+- **Shape.** One encoder reads the state (the item, its sentence, the candidate ids with their names and kinds) once; a head per question answers it: a softmax over a Choice's options, an ordinal head for a Score, a sigmoid for a Noul. Every question of an item is answered in the same pass, as Jev does. Choices over ids are scored against the candidates' own encodings, so a new entity needs no retraining.
+- **Objective.** Proper scoring rules (log loss for Choices and Nouls, ranked probability score for Scores), which reward honest probabilities. That is the aim RLCD names; a proper scoring rule reaches it by supervised training, with recalibration on the validation window to finish.
+- **Labels.** Reviewers' decisions (D1, D3, D4). Before there are enough, soft labels from a large model or a hosted decision model on synthetic and public items start the heads, and reviewed items replace them as they accrue.
+- **Retrieval.** A bi-encoder trained contrastively (each mention against its approved id, hard negatives of the same kind) supplies the top candidates the Choice decides among.
+- **Spans.** A CRF or token tagger marks the subject, magnitude, unit, and timeframe (D2); the decision model reads the marked sentence.
 - **Interaction typing.** A classifier from a link's label and its ends' attribute kinds to the interaction generalization, replacing `label_family`'s keyword table.
-- **Signals and spans.** A sentence classifier for the signal type and a CRF or token tagger for its spans (D2).
-- **Triage and review confidence.** Gradient-boosted trees on D4, calibrated by isotonic regression on the validation window.
+- **Audit.** The protocol [above](#decision-models-jev-type), per question, on the held-out window, beside a hosted decision model and the large-LLM fallback on the same items where the data allows.
 
 ### P2 · A small model that emits our schema
 
@@ -592,9 +642,10 @@ Every phase lands behind a slot, chosen by config, so it can be compared by abla
 translators:
   news: [hand_drawn, template, small_extractor, llm]   # small_extractor: P2 (planned); llm last, logged
 components:
-  entity_resolver: biencoder        # P1 (planned); alias_fuzzy today
-  triage: gbt_relevance             # P1 (planned slot)
-  review_ranker: gbt_calibrated     # P1 (planned slot)
+  decision_model: own              # P1 (planned slot): own | hosted (e.g. Jev, where a client allows) | llm_typed
+  entity_resolver: biencoder        # P1 (planned); alias_fuzzy today; the decision model weighs its candidates
+  triage: decision_model            # P1 (planned slot)
+  review_ranker: decision_model     # P1 (planned slot)
   state_encoder: jepa               # P3 (planned slot)
 ```
 
