@@ -33,7 +33,7 @@ SOURCES = ROOT / "docs" / "design" / "diagrams"
 MERMAID = "11.4.1"
 MERMAID_URL = f"https://cdn.jsdelivr.net/npm/mermaid@{MERMAID}/dist/mermaid.min.js"
 CACHE = Path.home() / ".cache" / "axelrod" / f"mermaid-{MERMAID}.min.js"
-STYLE_VERSION = "3"          # bump when the look below changes, so every SVG re-renders
+STYLE_VERSION = "4"          # bump when the look below changes, so every SVG re-renders
 BACKGROUND = "#FFFDF8"
 
 HAPPY = "stroke:#7C64C4,stroke-width:2.6px,color:#5B4A99"
@@ -125,11 +125,11 @@ def finish(svg: str, name: str, sha: str) -> str:
     x, y, w, h = (float(v) for v in m.group(1).replace(",", " ").split())
     svg = re.sub(r'<svg ([^>]*?)width="100%"', rf'<svg \1width="{w:.0f}" height="{h:.0f}"', svg, count=1)
     svg = re.sub(r' style="max-width: [\d.]+px;"', "", svg, count=1)
-    head_end = svg.index(">") + 1
+    # the background goes first, right after <svg ...>: a sequence diagram draws its actors and lifelines before its
+    # <style>, so a background placed after the style covered them
+    head_end = svg.index(">", svg.index("<svg")) + 1
     bg = f'<rect x="{x}" y="{y}" width="{w}" height="{h}" fill="{BACKGROUND}"/>'
-    style_end = svg.find("</style>", head_end)
-    at = style_end + len("</style>") if style_end != -1 else head_end
-    svg = svg[:at] + bg + svg[at:]
+    svg = svg[:head_end] + bg + svg[head_end:]
     return (f'<?xml version="1.0" encoding="UTF-8"?>\n<!-- source sha: {sha} -->\n'
             f'<!-- generated from {name}.mmd by scripts/docs/diagrams.py; edit the source, not this file -->\n'
             + svg + "\n")
