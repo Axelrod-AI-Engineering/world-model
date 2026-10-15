@@ -40,6 +40,9 @@ textarea { width: 100%; font-family: var(--font-mono); font-size: 11.5px; }
 :focus-visible { outline: none; box-shadow: var(--focus); }
 .muted { color: var(--ink-2); }
 .faint { color: var(--ink-3); }
+/* a subentity named on its own: "Tokio Marine · share price", the entity's part muted (names.js valueHtml) */
+.qn-ent { color: var(--ink-2); font-weight: 400; }
+a .qn-ent { color: inherit; opacity: 0.72; }
 .small { font-size: 11.5px; }
 .tiny { font-size: 10.5px; }
 .hidden { display: none !important; }
@@ -751,15 +754,17 @@ g.netline { pointer-events: none; }
 .progress-card .bar { height: 5px; border-radius: 3px; background: var(--hyp-fill); overflow: hidden; margin-bottom: 6px; }
 .progress-card .bar i { display: block; height: 100%; background: var(--hyp-line); transition: width 0.4s ease; }
 
-/* -- the guide (a raccoon) ------------------------------------------------------------------------------ */
+/* -- the guide (a red panda) ------------------------------------------------------------------------------ */
 .guide { position: absolute; left: 0; top: 0; z-index: 40; pointer-events: none; display: flex; align-items: flex-start; gap: 4px;
   transition: opacity 0.3s; will-change: transform; }
 .guide.hidden { display: none; }
 .guide.leaving { opacity: 0; }
 .guide .critter { width: 46px; height: 42px; filter: drop-shadow(0 3px 4px rgba(47, 42, 37, 0.25)); animation: bob 2.4s ease-in-out infinite; transform-origin: 50% 90%; }
 .guide .critter.land { animation: land 0.3s cubic-bezier(.3,1.6,.5,1), bob 2.4s ease-in-out 0.3s infinite; }
-.guide .critter .glint { animation: glint 4.2s infinite; }
-@keyframes glint { 0%, 84%, 100% { opacity: 0.9; } 90% { opacity: 0; } 95% { opacity: 0.3; } }
+.guide .critter .eyes { transform-box: fill-box; transform-origin: 50% 50%; animation: panda-blink 4.6s infinite; }
+@keyframes panda-blink { 0%, 90%, 100% { transform: scaleY(1); } 93% { transform: scaleY(0.12); } 96% { transform: scaleY(1); } }
+@media (prefers-reduced-motion: reduce) { .guide .critter, .guide .critter .eyes { animation: none !important; } }
+body.reduced-motion .guide .critter, body.reduced-motion .guide .critter .eyes { animation: none !important; }
 @keyframes bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
 @keyframes land { 0% { transform: scale(1.12, 0.84); } 60% { transform: scale(0.94, 1.08); } 100% { transform: scale(1); } }
 .guide .bubble { pointer-events: auto; cursor: pointer; max-width: 300px; margin-top: 2px; padding: 8px 10px 7px; background: var(--sheet);
@@ -1670,3 +1675,89 @@ body.predict-blank #levels { opacity: 0; pointer-events: none; }
 .imp-tools { display: flex; align-items: center; gap: 4px; margin: 0 16px 4px; flex-wrap: wrap; }
 @media (prefers-reduced-motion: reduce) { #predict-hint, .imp-row, .examples.import { animation: none !important; } }
 text.rz.forecast { font-style: italic; }
+
+/* -- motion (demo polish, Oct 14): panels, menus, toasts, and lists move in and out quickly (150-350 ms); the canvas's
+   own motion is in its block. Exits use `transition-behavior: allow-discrete`, so a window set hidden fades before it
+   goes; a browser without it simply skips the exit. Nothing here runs while the view moves. ------------------------ */
+:root { --ease-out: cubic-bezier(.2, .7, .2, 1); --t-in: 220ms; --t-out: 160ms; }
+.sheet-panel, .menu-panel, .demo-progress, .walk, .admin, .methods, .console, .chat, .examples, .manual, #tooltip {
+  transition: opacity var(--t-out) ease-in, translate var(--t-out) ease-in, scale var(--t-out) ease-in,
+              display var(--t-out) allow-discrete, overlay var(--t-out) allow-discrete;
+}
+/* side panels slide in from their own side (the insets read layout offsets, so the slide never shifts the camera) */
+.sheet-panel { animation: none; }
+.sheet-panel:not([hidden]) { transition-duration: var(--t-in); transition-timing-function: var(--ease-out); }
+@starting-style { .sheet-panel.left:not([hidden]) { opacity: 0; translate: -14px 0; } .sheet-panel.right:not([hidden]) { opacity: 0; translate: 14px 0; } }
+.sheet-panel.left[hidden] { opacity: 0; translate: -14px 0; }
+.sheet-panel.right[hidden] { opacity: 0; translate: 14px 0; }
+/* menus drop from their button */
+.menu-panel { transform-origin: top right; }
+.menu-panel:not([hidden]) { transition-duration: 180ms; transition-timing-function: var(--ease-out); }
+@starting-style { .menu-panel:not([hidden]) { opacity: 0; translate: 0 -4px; scale: 0.98; } }
+.menu-panel[hidden] { opacity: 0; translate: 0 -4px; scale: 0.98; }
+/* windows over the canvas fade and settle; going, they sink a little */
+.walk.hidden, .admin.hidden, .methods.hidden, .console.hidden, .chat.hidden, .examples.hidden, .manual.hidden { opacity: 0; translate: 0 6px; }
+#tooltip { transition-duration: 120ms; }
+#tooltip.hidden { opacity: 0; }
+@starting-style { #tooltip:not(.hidden) { opacity: 0; } }
+/* toasts rise in (toast-in) and fall away */
+#toast .t { transition: opacity 200ms ease-in, translate 200ms ease-in; }
+#toast .t.out { opacity: 0; translate: 0 6px; }
+/* modals: the backdrop fades, the dialog settles */
+.modal-backdrop { animation: fade-in 180ms ease-out; }
+.modal { animation: modal-in 220ms var(--ease-out); }
+@keyframes fade-in { from { opacity: 0; } }
+@keyframes modal-in { from { opacity: 0; translate: 0 8px; scale: 0.985; } }
+/* lists that arrive at once come in one after another: web/js/motion.js animates only items that are new */
+/* a count that changes bumps once */
+@keyframes bump { 40% { scale: 1.28; } }
+.count.bump { animation: bump 300ms var(--ease-out); }
+/* Learn and Predict: the bar's controls and the canvas crossfade */
+@keyframes swap-in { from { opacity: 0.25; translate: 0 3px; } }
+@keyframes canvas-swap { from { opacity: 0.55; } }
+body.mode-swap #topbar .actions, body.mode-swap #topbar .tools { animation: swap-in 280ms var(--ease-out); }
+body.mode-swap #graph-svg { animation: canvas-swap 320ms ease-out; }
+/* the demo menu, beside the name */
+.demo-wrap { position: relative; margin-left: -6px; }
+#btn-demo { display: inline-flex; align-items: center; gap: 3px; padding: 4px 6px 4px 9px; font-size: 12.5px; color: var(--ink-2);
+  border: 1px solid var(--rule); border-radius: 999px; }
+#btn-demo:hover, #btn-demo[aria-expanded="true"] { border-color: var(--rule-strong); color: var(--ink); }
+#btn-demo svg { width: 14px; height: 14px; transition: rotate 180ms var(--ease-out); }
+#btn-demo[aria-expanded="true"] svg { rotate: 180deg; }
+.demo-panel { left: 0; right: auto; min-width: 300px; transform-origin: top left; }
+.demo-panel .demo-item { align-items: flex-start; }
+.demo-panel .demo-item .tick { width: 12px; flex: none; color: var(--real-ink); font-weight: 700; line-height: 1.45; }
+.demo-panel .demo-item .txt { display: flex; flex-direction: column; gap: 1px; }
+.demo-panel .demo-item b { font-weight: 600; color: var(--ink); }
+.demo-panel .demo-item[aria-current="true"] { background: var(--real-fill); }
+.demo-panel .demo-item .cold { color: var(--out-ink); }
+.demo-progress { position: absolute; left: 0; top: calc(100% + 8px); z-index: 61; width: 320px; padding: 10px 12px; display: grid; gap: 6px;
+  background: var(--sheet); border: 1px solid var(--rule); border-radius: 12px; box-shadow: var(--shadow-lg); font-size: 12.5px; }
+.demo-progress.hidden { opacity: 0; translate: 0 -4px; }
+@starting-style { .demo-progress:not(.hidden) { opacity: 0; translate: 0 -4px; } }
+.demo-progress .hd { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.demo-progress p { margin: 0; }
+.demo-progress .bar { height: 5px; border-radius: 999px; background: var(--rule-soft); overflow: hidden; }
+.demo-progress .bar i { display: block; height: 100%; border-radius: 999px; background: var(--real-line); transition: width 0.4s ease; }
+.demo-progress .bar.indet i { animation: indet 1.3s ease-in-out infinite; }
+@keyframes indet { from { translate: -100% 0; } to { translate: 340% 0; } }
+body.switching-out #stage, body.switching-out #topbar .actions, body.switching-out #topbar .tools { opacity: 0.35; transition: opacity 180ms ease-in; }
+@media (max-width: 860px) { #btn-demo .lbl { max-width: 9ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } }
+/* reduced motion: nothing slides or staggers; state still changes at once */
+@media (prefers-reduced-motion: reduce) {
+  .sheet-panel, .menu-panel, .demo-progress, .walk, .admin, .methods, .console, .chat, .examples, .manual, #tooltip, #toast .t { transition: none !important; }
+  .count.bump, .modal, .modal-backdrop,
+  body.mode-swap #topbar .actions, body.mode-swap #topbar .tools, body.mode-swap #graph-svg { animation: none !important; }
+  .demo-progress .bar.indet i { animation: none !important; width: 100% !important; opacity: 0.5; }
+}
+body.reduced-motion :is(.sheet-panel, .menu-panel, .demo-progress, .walk, .admin, .methods, .console, .chat, .examples, .manual, #tooltip, #toast .t) { transition: none !important; }
+body.reduced-motion :is(.count.bump, .modal, .modal-backdrop) { animation: none !important; }
+body.reduced-motion.mode-swap :is(#topbar .actions, #topbar .tools, #graph-svg) { animation: none !important; }
+
+/* -- canvas: edges and entrances (demo polish) -- */
+/* a new interaction draws in from its cause; its arrowhead and label wait for the line to arrive */
+g.edge.entering path.line { marker-start: none; marker-end: none; }
+g.edge.entering text { visibility: hidden; }
+g.edge.exiting, g.frontier.exiting { pointer-events: none; }
+/* arrowheads meet the border, so the line ends square under them */
+.edge path.line, .frontier path.line { stroke-linejoin: round; }

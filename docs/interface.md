@@ -15,6 +15,7 @@ The bar shows only what the moment needs. Left to right:
 
 | Control | What it does |
 |---|---|
+| **Demo menu** (beside the name) | Switch the running server to the small, production, full, or Emily's demo. A demo comes back as you left it, and the first open of a demo shows its progress ([demos.md](demos.md#switching-demos)). |
 | **Learn / Predict** | Switch views |
 | Date and `v` number | The simulated date and the state version. The version goes up by one with each commit. |
 | **Import** (`I`) | In a model fed by imports (Emily's demo): bring in a bundle of research, each item reviewed on its date ([demos.md](demos.md#emilys-demo)) |
@@ -33,7 +34,7 @@ In Predict, the caption shows only when it is about a question; a Learn example'
 
 ## The canvas
 
-**Nodes.** An entity is a pill. Open it (double-click) to see its subentities as rows, each with a distribution glyph and its latest move. Superentities are outlines around their members, with a tab naming them. Closed, they become cards.
+**Nodes.** An entity is a pill. Open it (double-click) to see its subentities as rows, each with a distribution glyph and its latest move. Anywhere a subentity appears away from its entity (a tooltip, the review, find, checks, a forecast), it is named with its entity, as in "Tokio Marine · share price". Superentities are outlines around their members, with a tab naming them. Closed, they become cards.
 
 **Interacting with nodes.** Hover to see what something is, click to inspect it, double-click to open it, and right-click for every option. In Learn, right-click offers **Group into a superentity**, **Dissolve it**, and **Retire** for entities and interactions. Each is staged and waits for review. **Draw** (`D`) proposes an edge: drag from one node to another. A subentity gives a concrete end; an entity or a superentity gives an abstract end that intake refines.
 
@@ -82,6 +83,10 @@ In Predict, the caption shows only when it is about a question; a Learn example'
 | **Admin and settings** | ☰ or `,` | Story (every scripted step), Map (the categories, superentities, actors, and the key of symbols), View, and Settings |
 
 Side panels can be enlarged to full screen (⤢) and closed (✕).
+
+**Motion.** Movement is quick, between 150 and 350 ms. Side panels slide in from their own side and fade, and so do menus and windows. Toasts rise in and fall away, and a count that changes bumps once. Items new to a list (review sections, news, examples, find results, checks) come in one after another, and a list redrawn with the same items doesn't animate again. Switching between Learn and Predict crossfades the bar's controls and the canvas. On the canvas, nodes and interactions draw in as they appear. Nothing animates while the view moves. The system's reduced-motion setting, or Admin › Settings › Reduced motion, turns all of this off.
+
+**The guide** is a small red panda. The first time the model forecasts or reads news, it hops to whatever the model is working on and says what it does ([Admin › Settings](#panels) turns it off).
 
 ## Shortcuts
 

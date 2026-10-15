@@ -20,6 +20,8 @@ import { initCaption } from "./panels/caption.js";
 import { initChat } from "./panels/chat.js";
 import { initConsole } from "./panels/console.js";
 import { initDecisions } from "./panels/decisions.js";
+import { initDemos } from "./panels/demos.js";
+import { installListMotion } from "./motion.js";
 import { initExamples } from "./panels/examples.js";
 import { initImport } from "./panels/import.js";
 import { initChecks } from "./panels/checks.js";
@@ -41,6 +43,7 @@ import { initThesis } from "./panels/thesis.js";
 import { initTimeline } from "./panels/timeline.js";
 import { initUpdate } from "./panels/update.js";
 import { initWalkthrough } from "./panels/walkthrough.js";
+import { names } from "./names.js";
 import { applyTrace, backToLive, clearStaged, emit, on, openVersion, refreshGraph, scheduleRefresh, setStatus, stepShown, store } from "./store.js";
 import { errorText, esc, fmt, signed } from "./util.js";
 
@@ -92,7 +95,8 @@ function toast(text, kind = "real", action = null) {
   }
   box.prepend(t);
   while (box.children.length > 2) box.lastChild.remove();
-  setTimeout(() => t.remove(), kind === "err" ? 9000 : action ? 7000 : 3600);
+  // it fades and drops away before it goes (CSS: #toast .t.out)
+  setTimeout(() => { t.classList.add("out"); setTimeout(() => t.remove(), 220); }, kind === "err" ? 9000 : action ? 7000 : 3600);
 }
 
 // a toast that explains something the first time only (per browser)
@@ -104,9 +108,17 @@ function once(key, text) {
 // counts read "0" most of the time; a zero count hides itself so only news that needs you shows
 function hideZeroCounts() {
   const sync = (el) => el.classList.toggle("zero", el.textContent.trim() === "0" || !el.textContent.trim());
+  // a count that changes gives a small bump (CSS: .count.bump), so the change is seen without a toast
+  const bump = (el) => { el.classList.remove("bump"); void el.offsetWidth; el.classList.add("bump"); };
   for (const el of document.querySelectorAll(".count")) {
     sync(el);
-    new MutationObserver(() => sync(el)).observe(el, { childList: true, characterData: true, subtree: true });
+    let was = el.textContent.trim();
+    new MutationObserver(() => {
+      sync(el);
+      const now = el.textContent.trim();
+      if (now !== was && !el.classList.contains("zero")) bump(el);
+      was = now;
+    }).observe(el, { childList: true, characterData: true, subtree: true });
   }
 }
 
@@ -147,9 +159,11 @@ async function boot() {
     return { ...insets, top: Math.max(0, Math.min(pane.getBoundingClientRect().bottom - c.top + 8, c.height - 260)) };
   };
   function syncInsets() {
-    const c = $("#canvas").getBoundingClientRect();
-    const l = left.hidden ? 0 : Math.max(0, Math.round(left.getBoundingClientRect().right - c.left));
-    const r = right.hidden ? 0 : Math.max(0, Math.round(c.right - right.getBoundingClientRect().left));
+    // layout offsets, not bounding boxes: a panel sliding in (CSS translate) covers its final place already
+    const cv = $("#canvas");
+    const c = { width: cv.clientWidth };
+    const l = left.hidden ? 0 : Math.max(0, Math.round(left.offsetLeft + left.offsetWidth - cv.offsetLeft));
+    const r = right.hidden ? 0 : Math.max(0, Math.round(cv.offsetLeft + cv.clientWidth - right.offsetLeft));
     insets = { left: l, right: r };
     stage.style.setProperty("--inset-l", `${l}px`);
     stage.style.setProperty("--inset-r", `${r}px`);
@@ -283,15 +297,17 @@ async function boot() {
     onQuestion: (q) => { setMode("predict", false); thesis.setQuestion(q); openRight("thesis"); },
     onReset: () => loadScenario(store.status?.scenario_id ?? "small_demo"),
   });
+  // the demo menu (top bar): switching reloads the page into the other demo
+  const demos = initDemos({ toast });
   // DECISION (Oct 11): an imported model's Tutorial is the small demo: it loads in place of the model, and Back
-  // (top bar) loads the model again. The scenario to return to is kept for this tab only.
+  // (top bar) loads the model again. The scenario to return to is kept for this tab only. (Oct 14: both go through
+  // the demo menu's switch, so the model is kept as it was left.)
   const RETURN = "axelrod.tutorialReturn";
   const returnTo = () => { try { return sessionStorage.getItem(RETURN); } catch { return null; } };
   async function openTutorial() {
     if (!store.status?.imports) { examples.toggle(); return; }
     try { sessionStorage.setItem(RETURN, store.status.scenario_id); } catch { /* the tutorial still opens */ }
-    await loadScenario("small_demo");
-    examples.open();
+    await demos.choose("small_demo", { after: "examples" });
   }
   const importer = initImport({
     toast,
@@ -412,7 +428,7 @@ async function boot() {
           <div class="tt-s">${e.category_tags.map((t) => esc(CATEGORY_NAMES[t] ?? t)).join(", ")} · ${subs.length} subentities</div>
           ${actor && e.kind_name ? `<div class="small">${esc(e.kind_name)}${sibs.length ? ` <span class="muted">· like ${esc(listNames(sibs))}</span>` : ""}</div>` : ""}
           ${e.description ? `<div class="tt-d">${esc(e.description)}</div>` : ""}
-          ${top && Math.abs(top.z) >= 0.25 ? `<div>${top.z > 0 ? "<span class='z-up'>▲</span>" : "<span class='z-down'>▼</span>"} ${esc(top.name)}: ${signed(top.z)} sd
+          ${top && Math.abs(top.z) >= 0.25 ? `<div>${top.z > 0 ? "<span class='z-up'>▲</span>" : "<span class='z-down'>▼</span>"} ${esc(names().short(top.id))}: ${signed(top.z)} sd
             ${top.observed_today ? "(observed today)" : "(propagated)"}</div>` : ""}
           ${(() => {
             const os = renderer.model?.owners.get(e.id) ?? [];
@@ -422,15 +438,15 @@ async function boot() {
             return gs.length ? `<div class="small muted">In ${gs.map(esc).join("; ")}</div>` : `<div class="small muted">In no superentity yet</div>`;
           })()}
           ${openLine(e.open, "its values' movement")}
-          ${renderer.ui.expanded.has(e.id) ? "" : entityLens(subs)}
+          ${renderer.ui.expanded.has(e.id) ? "" : entityLens(subs, e.name, e.kind)}
           <div class="tt-f">double-click: subentities · right-click: options</div>`;
       }
     } else if (info.kind === "subentity") {
       const s = v?.subentities.find((x) => x.id === info.id);
       if (s) {
         const used = (renderer.model?.marks.get(s.id) ?? []).map(groupLabel);
-        html = `<div class="tt-h">${esc(s.name)}</div>
-          <div class="tt-s">${esc(v.entities.find((e) => e.id === s.entity_id)?.name ?? s.entity_id)} · ${esc(s.unit)}</div>
+        html = `<div class="tt-h">${names().valueHtml(s.id)}</div>
+          ${s.unit ? `<div class="tt-s">${esc(s.unit)}</div>` : ""}
           <div>median ${fmt(s.summary.q50)} ${esc(s.unit)} <span class="muted">(90%: ${fmt(s.summary.q05)} to ${fmt(s.summary.q95)})</span></div>
           <div>${s.z > 0.25 ? "<span class='z-up'>▲</span>" : s.z < -0.25 ? "<span class='z-down'>▼</span>" : "·"} ${signed(s.z)} sd from normal ·
             ${s.observed_today ? "observed today" : s.observed ? "carried forward by the graph" : "never observed; moved by the graph"}</div>
@@ -463,16 +479,16 @@ async function boot() {
       }
     } else if (info.kind === "link") {
       const ls = (v?.links ?? []).filter((l) => info.ids.includes(l.id)).sort((a, b) => b.significance - a.significance);
-      const name = (sid) => v.subentities.find((s) => s.id === sid)?.name ?? sid;
+      const nm = names();
       html = ls.slice(0, 3).map((l) => `<div class="tt-h">${esc(l.label)}${l.edge_type === "learned_causal" ? " <span class='badge real'>learned</span>" : ""}</div>
-        <div class="tt-s">${esc(name(l.source))} → ${esc(name(l.target))}</div>
+        <div class="tt-s">${nm.valueHtml(l.source)} → ${nm.valueHtml(l.target)}</div>
         <div class="small">effect ${signed(l.effect)} · exists ${fmt(l.existence)} · confidence ${fmt(l.confidence)}</div>
         ${ls.length === 1 ? linkLens(l) : ""}`).join("<hr>")
         + (ls.length > 3 ? `<div class="tt-f">+ ${ls.length - 3} more on this arrow</div>` : "");
     } else if (info.kind === "frontier") {
       const f = info.entry;
-      const name = (sid) => v.subentities.find((s) => s.id === sid)?.name ?? sid;
-      html = `<div class="tt-h">Co-movement</div><div>${esc(name(f.earlier))} → ${esc(name(f.later))}</div>
+      const nm = names();
+      html = `<div class="tt-h">Co-movement</div><div>${nm.valueHtml(f.earlier)} → ${nm.valueHtml(f.later)}</div>
         <div class="small muted">${f.lag_days} days later · ${f.sign > 0 ? "same" : "opposite"} direction · support ${fmt(f.support)} · ${esc(f.status.replace(/_/g, " "))}</div>
         <div class="tt-f">not causal until promoted</div>`;
     }
@@ -535,7 +551,7 @@ async function boot() {
       const s = v.subentities.find((x) => x.id === target.id);
       const used = renderer.model?.marks.get(target.id) ?? [];
       openMenu(at, {
-        title: s?.name ?? target.id, subtitle: v.entities.find((e) => e.id === s?.entity_id)?.name,
+        title: names().value(target.id), subtitle: s?.unit || null,
         items: [
           { label: "Inspect", kbd: "click", action: () => select({ kind: "subentity", id: target.id }) },
           { label: "What if it moves?", action: () => { thesis.prefill(target.id); openRight("thesis"); } },
@@ -576,7 +592,7 @@ async function boot() {
     } else if (target.kind === "edge") {
       const ls = v.links.filter((l) => target.ids.includes(l.id));
       openMenu(at, {
-        title: ls[0]?.label ?? "Interaction", subtitle: ls.length > 1 ? `${ls.length} interactions on this arrow` : null,
+        title: ls[0]?.label ?? "Interaction", subtitle: ls.length > 1 ? `${ls.length} interactions on this arrow` : ls[0] ? names().link(ls[0].id) : null,
         items: [
           ...ls.slice(0, 6).map((l) => ({ label: `Inspect ${l.label} (${l.id})`, action: () => select({ kind: "interaction", id: l.id, ids: target.ids }) })),
           ...(learning() ? [{ sep: true }, { group: "Structure (proposed, then vetted)" },
@@ -741,7 +757,9 @@ async function boot() {
     renderer.quiet = false;
   }
 
+  // reload the demo shown from its start; another demo goes through the demo menu's switch
   async function loadScenario(id) {
+    if (id !== store.status?.scenario_id) { await demos.choose(id); return; }
     clearStaged();
     // another world: what was open about this one (a forecast, its grid, the side panels) does not carry over
     if (paths.isOpen()) paths.close();
@@ -997,7 +1015,7 @@ async function boot() {
     const back = returnTo();
     try { sessionStorage.removeItem(RETURN); } catch { /* nothing kept */ }
     examples.close();
-    if (back) await loadScenario(back);
+    if (back) await demos.choose(back);
   });
 
   // -- views (restructure): Learn for backend users, who update the one world model; Predict for everyone
@@ -1018,6 +1036,14 @@ async function boot() {
         if (!left.hidden && left.dataset.tab === "briefs") closeLeft();
         if (paths.isOpen() && gridTarget?.kind === "forecast") paths.close();
       }
+    }
+    // a change of view crossfades the bar's controls and the canvas (CSS: body.mode-swap), never on the first paint
+    if (announce && store.settings.mode && store.settings.mode !== mode) {
+      document.body.classList.remove("mode-swap");
+      void document.body.offsetWidth;
+      document.body.classList.add("mode-swap");
+      clearTimeout(setMode.swapT);
+      setMode.swapT = setTimeout(() => document.body.classList.remove("mode-swap"), 400);
     }
     store.settings.mode = mode;
     document.body.classList.toggle("mode-learn", mode === "learn");
@@ -1292,6 +1318,7 @@ async function boot() {
       if (k === "k") { ev.preventDefault(); $("#search").focus(); return; }
     }
     if (ev.key === "Escape") {
+      if (demos.isOpen()) { demos.close(); return; }
       if (!$("#menu-panel").hidden) { $("#menu-panel").hidden = true; $("#btn-menu").setAttribute("aria-expanded", "false"); return; }
       if (menuOpen()) { closeMenu(); return; }
       if ($("#modal-root").innerHTML) { $("#modal-root").innerHTML = ""; return; }
@@ -1406,8 +1433,12 @@ async function boot() {
     onStatus: (st) => setStatus(st),
     onOpen: () => document.body.classList.remove("offline"),
     onClose: () => document.body.classList.add("offline"),
+    onSwitched: () => demos.reload(),
   });
   stream.connect();
+  installListMotion();
+  // a switch that asked for something once the new demo is up (Tutorial from an imported model)
+  if (demos.takeAfter() === "examples") examples.open();
   setTimeout(() => renderer.fitReadable(0), 400);
   // pills and tabs are sized by measuring text, so measure again once the web fonts have loaded
   document.fonts?.ready.then(() => { renderer.recompute("data"); });
