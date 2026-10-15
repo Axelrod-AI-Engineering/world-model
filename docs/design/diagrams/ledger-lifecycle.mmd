@@ -1,0 +1,7 @@
+flowchart LR
+  ME["Market event<br/>MARKET_EVENT"]:::start ==> PR["Proposal<br/>PROPOSAL"]:::step
+  PR ==> SB["Staged on a branch<br/>throwaway ledger"]:::opt
+  SB ==> RV{"Review decision<br/>REVIEW_DECISION"}:::check
+  RV ==>|approved selection| CS[("ChangeSet<br/>process · memory · proposal · vetted_by")]:::store
+  CS ==> SV[("StateVersion<br/>hash · seq")]:::store
+  SV --> AUD["log · show · diff · restore · as_of · PROV export"]:::done

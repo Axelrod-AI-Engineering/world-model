@@ -4,6 +4,19 @@
 - **Adds:** `Branch`, PROV fields, and record stores.
 - **Loses:** `Proposal` and `ReviewPolicy`, to M13 and M01.
 
+<!-- toc -->
+**Contents**
+
+- [Purpose](#purpose)
+- [Owns](#owns)
+- [Interface](#interface)
+- [Depends on](#depends-on)
+- [Diagram](#diagram)
+- [Invariants](#invariants)
+- [Planned](#planned)
+- [Done when](#done-when)
+<!-- /toc -->
+
 **Code today:** `repo/mutator.py`, `ledger.py`, `snapshots.py`, `history.py`, `review.py`.
 
 ## Purpose
@@ -35,7 +48,7 @@ log(limit) · show(version) · diff(a, b) · export_prov(since_seq) -> PROV grap
 
 ## Diagram
 
-The ledger lifecycle (record → stage → govern → commit → audit) is in [architecture.md §6](../architecture.md#6-the-ledger-lifecycle).
+The ledger lifecycle (record → stage → govern → commit → audit) is in [architecture.md §6](../architecture.md#the-ledger-lifecycle).
 
 ## Invariants
 

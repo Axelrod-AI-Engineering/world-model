@@ -1,0 +1,21 @@
+flowchart TD
+  IN["Graph update event, on its day"]:::start ==> OPEN["The day opens: yesterday's moves ripple forward<br/>daily_propagator · once a day"]:::wm
+  OPEN ==> P["Apply each operation: add or retire structure;<br/>a change becomes a shock, a report an observation · parser"]:::wm
+  P ==> NEW{"New items?"}:::check
+  NEW ==>|no| RC["Recall superentities and past days · recaller"]:::step
+  RC ==> FIT{"Does a recalled superentity fit?"}:::check
+  FIT ==>|no| PF["Build the working set from similar past days · prefiller"]:::step
+  PF ==> MV{"Does the event move a value?"}:::check
+  MV ==>|no| RP{"Does the event report a value?"}:::check
+  RP ==>|no| HG{"Hedged ends waiting?"}:::check
+  HG ==>|no| OUT["Staged working memory: structure, moves,<br/>ripple by order, values, effects, hedges"]:::done
+  NEW -->|yes| CL["Sort each into its kind;<br/>inherit its priors · classifier"]:::opt
+  CL --> RC
+  FIT -->|yes| BD["Bind it as an instance · binder"]:::opt
+  BD --> PF
+  MV -->|yes| AN["Simulate with and without the move;<br/>order, path, peak · analyzer"]:::opt
+  AN --> RP
+  RP -->|yes| FO["Surprise = report − prediction; update the level<br/>and each incoming interaction · folder"]:::opt
+  FO --> HG
+  HG -->|yes| WH["Weigh candidates × your confidence;<br/>propose a resolution past the bound"]:::opt
+  WH --> OUT

@@ -2,6 +2,19 @@
 
 [ml-stack.md](ml-stack.md) states what the code computes today and what an adversarial review found wrong with it (§13 there). This page is the plan: for each problem, the method that replaces it, why it is sound, what it assumes, and the test that says it works. It was revised after the same review, which corrected several of its first claims; those corrections are noted where they apply. Nothing here is in the front end yet.
 
+<!-- toc -->
+**Contents**
+
+- [Ground rules](#ground-rules)
+- [Phase 0: stop the model confirming itself](#phase-0-stop-the-model-confirming-itself)
+- [Phase 1: measure and model markets properly](#phase-1-measure-and-model-markets-properly)
+- [Phase 2: discovery with error control](#phase-2-discovery-with-error-control)
+- [Phase 3: one model, with honest uncertainty](#phase-3-one-model-with-honest-uncertainty)
+- [Phase 4: structure and inference](#phase-4-structure-and-inference)
+- [Phases](#phases)
+- [How this was reviewed](#how-this-was-reviewed)
+<!-- /toc -->
+
 ## Ground rules
 
 1. **Truth is observed, never filtered.** Every score, fit, and test compares against raw observations (with the forecast's spread widened by observation noise) or, in synthetic worlds, against the world's true state. Nothing is ever scored against the model's own filtered values.

@@ -1,0 +1,20 @@
+flowchart TD
+  ST["Every staged change: items, moves, ripple by order, lessons"]:::start ==> SH["Show each change with the phrase that asked for it"]:::step
+  SH ==> CONF["Set confidence: the article's, and any change's own"]:::step
+  CONF ==> CHK["Check the event's own move, then each further order"]:::step
+  CHK ==> OK{"Does every change make sense?"}:::check
+  OK ==>|yes| AP["Approve the selection"]:::step
+  AP ==> C1[("commit · review effects<br/>pending ends, soft support, ripple judgments")]:::store
+  C1 ==> C2[("commit · learn.working")]:::store
+  C2 ==> C3[("commit · learn.long_term")]:::store
+  C3 ==> LAST{"The day's last event?"}:::check
+  LAST ==>|no| PR{"Proposals raised?"}:::check
+  PR ==>|no| VER["A new version in the log"]:::done
+  OK -->|deselect some| RS["Re-stage without them, on a fresh copy"]:::opt
+  RS --> SH
+  OK -.->|not yet| DEF["Defer: approved later, it folds in late"]:::opt
+  OK -->|none| REJ["Reject with a note; nothing changes"]:::done
+  LAST -->|yes| C4[("day.record → day.distill → day.close")]:::store
+  C4 --> PR
+  PR -->|yes| QUEUE["They join the review queue"]:::opt
+  QUEUE --> VER

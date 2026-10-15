@@ -2,6 +2,17 @@
 
 We compared two open-source frameworks to decide what to build, what to borrow, and what to run. Both were read at their source on 2026-10-12; neither was run.
 
+<!-- toc -->
+**Contents**
+
+- [Recommendation](#recommendation)
+- [Side by side](#side-by-side)
+- [What neither provides](#what-neither-provides)
+- [What we borrow](#what-we-borrow)
+- [What we don't take](#what-we-dont-take)
+- [Open questions for the review call](#open-questions-for-the-review-call)
+<!-- /toc -->
+
 ## Recommendation
 
 1. **Build the core ourselves.** That covers model, memory, repo, intake, the shared read, dynamics, learning, inference, and evaluation (M01–M13). This is mostly done; [migration.md](migration.md) cleans its boundaries.
@@ -9,35 +20,7 @@ We compared two open-source frameworks to decide what to build, what to borrow, 
 3. **Optionally run Cognee upstream, as research memory, behind the import bundle.** A research agent keeps articles, filings, and analyst notes in Cognee, which is strong at unstructured documents and sessions, and emits `axelrod.import/v1` items with quotes. The world model reviews them like any import. This is the only place a framework would run as a component, and the bundle keeps it swappable.
 4. **Don't depend on Semantica.** Borrow its patterns. It is pre-1.0 and fast-moving, and its value (lineage, time, conflicts) maps onto fields and a ledger we already own.
 
-```mermaid
-%% style: begin (scripts/docs/style_mermaid.py)
-%%{init: {"theme": "base", "themeVariables": {"fontSize": "14px", "primaryColor": "#FFFDF8", "primaryBorderColor": "#C9BFAF", "primaryTextColor": "#2F2A25", "lineColor": "#857C70", "textColor": "#2F2A25", "secondaryColor": "#F7F2EA", "tertiaryColor": "#FBF8F2", "edgeLabelBackground": "#F7F2EA", "clusterBkg": "#F7F2EA", "clusterBorder": "#E4DACB", "titleColor": "#665E54"}}}%%
-%% style: end
-flowchart LR
-  subgraph UP["Upstream (optional)"]
-    DOCS["Articles · filings · notes"]:::ext --> COG[("Research memory<br/>Cognee")]:::store
-    COG --> RA["Research agent"]:::ext
-  end
-  RA ==>|"axelrod.import/v1<br/>items with quotes"| IN
-  subgraph WM["World model (ours) · M01–M13"]
-    IN["Intake"]:::step ==> REV{"Staged review"}:::check
-    REV ==> LED[("Ledger<br/>PROV + bitemporal<br/>Semantica's patterns")]:::store
-  end
-  subgraph CL["Context layer (ours) · M15"]
-    V["recall · ask · trace<br/>propose · feedback · status<br/>Cognee's verb shape"]:::step
-  end
-  LED ==> V
-  V -.->|propose → review| IN
-  AG["Agents · analysts"]:::start ==>|recall · ask · propose| V
-  %% style: classes and happy path
-  classDef start fill:#DAD0F4,stroke:#7C64C4,stroke-width:1.5px,color:#2F2A25
-  classDef step fill:#FFFDF8,stroke:#C9BFAF,stroke-width:1.3px,color:#2F2A25
-  classDef check fill:#F5EAC6,stroke:#D2BB72,stroke-width:1.3px,color:#2F2A25,font-weight:600
-  classDef store fill:#F7E1D3,stroke:#E0B092,stroke-width:1.3px,color:#2F2A25
-  classDef ext fill:#FBF8F2,stroke:#7C64C4,stroke-width:1.3px,stroke-dasharray:2 3,color:#2F2A25
-  linkStyle 2,3,4,5,7 stroke:#7C64C4,stroke-width:2.6px,color:#5B4A99
-  %% style: end
-```
+![Cognee and Semantica around the model](diagrams/frameworks-around-the-model.svg)
 
 ## Side by side
 

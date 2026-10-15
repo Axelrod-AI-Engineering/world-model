@@ -1,0 +1,16 @@
+flowchart LR
+  engine["engine"]:::check <--> dynamics["dynamics"]:::step
+  engine <--> memory["memory"]:::store
+  engine <--> repo["repo"]:::store
+  engine <--> intake["intake"]:::step
+  engine <--> evaluation["evaluation"]:::step
+  dynamics <--> memory
+  memory <--> inference["inference"]:::inf
+  repo <--> intake
+  inference <--> shared["shared"]:::step
+  shared <--> memory
+  intake <--> shared
+  control["control"]:::check -.->|lazy| api["api"]:::step
+  api --> sim["sim"]:::ext
+  intake -.->|lazy| sim
+  shared -.->|lazy| inference

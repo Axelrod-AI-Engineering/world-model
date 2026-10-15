@@ -3,6 +3,17 @@
 **Layer** 3 · **Package** `evaluation/` · **Status** exists; it receives decisions from `inference/`.
 **Code today:** `evaluation/backtest.py`, `metrics.py`, `inference/decisions.py`.
 
+<!-- toc -->
+**Contents**
+
+- [Purpose](#purpose)
+- [Interface](#interface)
+- [Slots](#slots)
+- [Depends on](#depends-on)
+- [Invariants](#invariants)
+- [Done when](#done-when)
+<!-- /toc -->
+
 ## Purpose
 
 How inference earns trust:

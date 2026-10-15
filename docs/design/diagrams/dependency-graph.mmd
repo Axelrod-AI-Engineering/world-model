@@ -1,0 +1,51 @@
+flowchart BT
+  subgraph L5["Layer 5 · Interfaces"]
+    direction BT
+    M16["M16 web"]:::step
+    M15["M15 context layer"]:::step
+    M14["M14 views · API · CLI"]:::step
+  end
+  subgraph L4["Layer 4 · Runtime"]
+    direction BT
+    M13["M13 services"]:::check
+    M12["M12 runtime"]:::check
+  end
+  subgraph L3["Layer 3 · Engines"]
+    direction BT
+    M11["M11 evaluation"]:::step
+    M10["M10 inference"]:::inf
+    M09["M09 learning · LTM"]:::ltm
+    M08["M08 learning · WM"]:::wm
+    M05["M05 intake"]:::step
+    M06["M06 shared read"]:::step
+    M07["M07 dynamics"]:::step
+  end
+  subgraph L2["Layer 2 · State"]
+    direction BT
+    M04["M04 repo"]:::store
+    M03["M03 memory"]:::store
+  end
+  subgraph L1["Layer 1 · Domain"]
+    M02["M02 model"]:::step
+  end
+  subgraph L0["Layer 0 · Foundation"]
+    M01["M01 foundation · core, ports"]:::start
+  end
+  M17["M17 demo (side)"]:::ext
+
+  M02 --> M01
+  M03 --> M02
+  M04 --> M03
+  M05 --> M03
+  M07 --> M03
+  M06 --> M07
+  M08 --> M06 & M05
+  M09 --> M06
+  M10 --> M06 & M04
+  M11 --> M04
+  M12 --> M08 & M09 & M10 & M11
+  M13 --> M12
+  M14 --> M13
+  M15 --> M14
+  M16 -.->|HTTP · /ws| M14
+  M17 -.-> M13

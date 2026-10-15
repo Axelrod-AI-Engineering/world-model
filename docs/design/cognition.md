@@ -2,6 +2,17 @@
 
 Why the world model organizes memory the way a cognitive architecture does, instead of the standard stack of chunks, embeddings, a vector index, and top-k retrieval. The framings come from research on concept formation, analogy, and causal learning, including our own work on hierarchical retrieval with Cobweb (Gupta et al., 2025) and on concepts and chunks (Singaravadivelan & Langley, 2026). Every framing lands in a slot, so each claim can be tested by swapping in the standard method and comparing ([how to test it](#how-to-test-the-claim)).
 
+<!-- toc -->
+**Contents**
+
+- [In one table](#in-one-table)
+- [The difference in one picture](#the-difference-in-one-picture)
+- [The framings](#the-framings)
+- [Where standard tools still fit](#where-standard-tools-still-fit)
+- [How to test the claim](#how-to-test-the-claim)
+- [References](#references)
+<!-- /toc -->
+
 ## In one table
 
 | # | Framing | The standard approach | What we do instead | What it buys a PM | Status |
@@ -23,38 +34,7 @@ Why the world model organizes memory the way a cognitive architecture does, inst
 
 ## The difference in one picture
 
-```mermaid
-%% style: begin (scripts/docs/style_mermaid.py)
-%%{init: {"theme": "base", "themeVariables": {"fontSize": "14px", "primaryColor": "#FFFDF8", "primaryBorderColor": "#C9BFAF", "primaryTextColor": "#2F2A25", "lineColor": "#857C70", "textColor": "#2F2A25", "secondaryColor": "#F7F2EA", "tertiaryColor": "#FBF8F2", "edgeLabelBackground": "#F7F2EA", "clusterBkg": "#F7F2EA", "clusterBorder": "#E4DACB", "titleColor": "#665E54"}}}%%
-%% style: end
-flowchart LR
-  subgraph STD["Standard retrieval stack"]
-    direction TB
-    D1["Documents"]:::ext --> C1["Chunk"]:::step --> E1["Embed text"]:::step --> V1[("One vector index")]:::store
-    Q1["Query"]:::ext --> K1["Top-k cosine"]:::step
-    V1 --> K1 --> L1["An LLM reads the chunks"]:::done
-  end
-  subgraph OURS["The world model's memory"]
-    direction TB
-    D2["Event"]:::start ==> S2["Sort each part into its own tree<br/>subentity · entity · interaction · episode"]:::ltm
-    S2 ==> P2["Inherit the kind's priors"]:::ltm
-    S2 ==> R2["Recall: filter, then align structure"]:::ltm
-    P2 & R2 ==> W2["Working memory<br/>the exact state now"]:::wm
-    W2 ==>|daily distillation| L2["Long-term memory<br/>kinds · schemas · Entity memories · frontier"]:::ltm
-    L2 -->|priors · analogs · schemas| W2
-    W2 ==> H2["Hypothesis frontier<br/>what is worth learning next"]:::done
-  end
-  %% style: classes and happy path
-  classDef start fill:#DAD0F4,stroke:#7C64C4,stroke-width:1.5px,color:#2F2A25
-  classDef step fill:#FFFDF8,stroke:#C9BFAF,stroke-width:1.3px,color:#2F2A25
-  classDef store fill:#F7E1D3,stroke:#E0B092,stroke-width:1.3px,color:#2F2A25
-  classDef done fill:#FBF8F2,stroke:#93897C,stroke-width:1.6px,color:#2F2A25
-  classDef wm fill:#E1ECDF,stroke:#A9C6A9,stroke-width:1.3px,color:#3E6A46
-  classDef ltm fill:#DCE6F0,stroke:#A9BFD6,stroke-width:1.3px,color:#3B5B7C
-  classDef ext fill:#FBF8F2,stroke:#7C64C4,stroke-width:1.3px,stroke-dasharray:2 3,color:#2F2A25
-  linkStyle 6,7,8,9,10,11,13 stroke:#7C64C4,stroke-width:2.6px,color:#5B4A99
-  %% style: end
-```
+![The standard retrieval stack vs the model memory](diagrams/memory-vs-retrieval.svg)
 
 The standard stack answers "which text is like this text". The world model answers "what kind of thing is this, what does that kind usually do, what past case had the same shape, and what don't we know yet". It is the second question set that a forecast needs.
 

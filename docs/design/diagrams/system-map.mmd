@@ -1,0 +1,18 @@
+flowchart TD
+  S1["News"]:::start & S2["Data releases"]:::start & S3["Import bundle<br/>axelrod.import/v1"]:::start & S4["Backend user<br/>draw · own knowledge"]:::start ==> INT["Intake · M05<br/>translate → refine"]:::step
+  INT ==> SR["Shared read · M06<br/>parse · classify · recall · bind · prefill · analyze"]:::step
+  SR ==> LWM["Learning · working memory · M08<br/>fold · hedges · ripple"]:::wm
+  LWM ==> LLTM["Learning · long-term memory · M09<br/>kinds · Entity memories · frontier · superentities"]:::ltm
+  LLTM ==> REV{"Human review · M13<br/>approve all, some, or none?"}:::check
+  REV ==>|approved| REPO[("Commit · M04<br/>ledger · snapshots · versions")]:::store
+  REPO ==> BR["Branch of a committed version<br/>never merged"]:::step
+  BR ==> INF["Inference · M10<br/>isolate · isolated and distributed prediction · unify"]:::inf
+  INF ==> FC["Forecast by order and path + brief"]:::done
+  RA["Research agent (optional)"]:::ext -.-> S3
+  DYN["Dynamics · M07<br/>kernels · propagation · daily filter"]:::step -.-> SR
+  REV -->|rejected| LOG["Logged; nothing changes"]:::done
+  TH["Pose a thesis"]:::start --> BR
+  FC -.->|outcome at horizon| EVAL["Evaluation · M11<br/>track records"]:::opt
+  REPO --> API["Views · API · CLI · M14"]:::step
+  API --> WEB["Web · M16"]:::step
+  API --> CTX["Context layer · M15"]:::step

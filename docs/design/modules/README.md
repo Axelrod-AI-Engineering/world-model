@@ -1,6 +1,9 @@
 # Module specs
 
-One file per module, 17 in all. Each can be handed to an engineer or a coding agent on its own, together with [../architecture.md §2](../architecture.md#2-module-layers) (the layer rules). Every spec has the same sections:
+One file per module, 17 in all. Each can be handed to an engineer or a coding agent on its own, together with [../architecture.md §2](../architecture.md#dependency-graph) (the layer rules). Every spec has the same sections:
+
+<!-- toc -->
+<!-- /toc -->
 
 - **Purpose:** one or two sentences.
 - **Owns:** the types and state only this module defines.
@@ -12,7 +15,7 @@ One file per module, 17 in all. Each can be handed to an engineer or a coding ag
 - **Planned:** known issues and their fixes, citing [ml-stack](../../ml-stack.md) findings (S-, F-) and [ml-roadmap](../../ml-roadmap.md) items (R#).
 - **Done when:** the tests that define the module as built.
 
-The module list, by layer, is on the [design front page](../README.md#modules).
+The module list, by layer, is on the [design front page](../README.md#12-modules).
 
 **Conventions in signatures:**
 - `ctx` is a `ProcessContext`: config, rng substreams, tracer, clock, and scope.

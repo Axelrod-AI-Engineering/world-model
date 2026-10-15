@@ -3,6 +3,16 @@
 **Layer** side: it uses the product, and nothing in the product uses it. **Package** `demo/` (today `sim/`). **Status** split; the product paths leave.
 **Code today:** `sim/world.py`, `scenario.py`, `runner.py`, `checklist.py`, `imports.py` (moves to M05/M13), `examples/`.
 
+<!-- toc -->
+**Contents**
+
+- [Purpose](#purpose)
+- [Owns](#owns)
+- [Depends on](#depends-on)
+- [Invariants](#invariants)
+- [Done when](#done-when)
+<!-- /toc -->
+
 ## Purpose
 
 The demos and their synthetic world. The user guide is [../../demos.md](../../demos.md).

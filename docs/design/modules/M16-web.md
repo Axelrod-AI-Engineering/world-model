@@ -2,6 +2,17 @@
 
 **Layer** 5 · **Package** `web/` · **Status** exists. The two monoliths get split, and each feature gets a boundary.
 
+<!-- toc -->
+**Contents**
+
+- [Purpose](#purpose)
+- [Owns](#owns)
+- [Target](#target)
+- [Depends on](#depends-on)
+- [Invariants](#invariants)
+- [Done when](#done-when)
+<!-- /toc -->
+
 **Code today:**
 - `js/main.js` (1,460 lines);
 - `js/graph/renderer.js` (2,527 lines);

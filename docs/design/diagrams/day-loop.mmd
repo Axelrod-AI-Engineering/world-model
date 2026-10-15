@@ -1,0 +1,34 @@
+sequenceDiagram
+  autonumber
+  participant U as Backend user / scheduler
+  participant US as UpdateService (M13)
+  participant SRC as Sources (M05)
+  participant IP as IngestionPipeline (M05)
+  participant RS as ReviewService (M13)
+  participant LT as LearningTask (M12)
+  participant R as Repo (M04)
+
+  U->>US: request_update(until, sources)
+  US->>SRC: poll(since=cursor, until)
+  SRC-->>US: market events (deduped, queued by day)
+  loop each day d
+    US->>LT: open_day(d)  [day.predict]
+    US->>LT: fold the late queue
+    loop each market event on d
+      US->>IP: ingest(event)  translate → refine
+      IP->>RS: propose(graph_update, world=true)
+      RS->>RS: review_policy.assess
+      alt auto-approved
+        RS->>LT: run(event)  [learn.working, learn.long_term]
+      else needs review
+        RS-->>US: AWAITING_REVIEW (run pauses)
+        Note over U,RS: the user stages and approves (see M13)
+        RS->>US: resume(run)
+        US->>LT: run(approved selection)
+      end
+    end
+    US->>LT: close_day(d)  [day.record, day.distill, day.close]
+    LT-->>RS: proposal events (collapse, promotion, resolution)
+    US->>R: snapshot every N days
+  end
+  US-->>U: UpdateReport

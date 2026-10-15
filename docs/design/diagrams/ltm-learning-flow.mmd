@@ -1,0 +1,28 @@
+flowchart TD
+  subgraph PE["Per event · learn.long_term"]
+    I["What working memory learned"]:::start ==> RT{"Retired anything?"}:::check
+    RT ==>|no| GU["New items join their kinds;<br/>statistics update along the path"]:::ltm
+    GU ==> CR{"Is a kind crowded?"}:::check
+    CR ==>|no| DC{"Did an actor decide?"}:::check
+    DC ==>|no| UX{"A move the graph did not explain?"}:::check
+    UX ==>|no| EX["Explain what was learned; keep it in Prior states"]:::ltm
+    RT -->|yes| FG["Retired items leave their kinds;<br/>frontier entries decay"]:::opt
+    FG --> GU
+    CR -->|yes| SP["Split: a new child kind"]:::opt
+    SP --> DC
+    DC -->|yes| EM["Record it in the actor's Entity memory"]:::opt
+    EM --> UX
+    UX -->|yes| FR["Pair it with earlier unexplained moves;<br/>propose an interaction once a pair holds"]:::opt
+    FR --> EX
+  end
+  subgraph PD["Per day · day.distill"]
+    EP["Summarize the day as an episode"]:::ltm ==> CT["Count which interactions fired together"]:::ltm
+    CT ==> ADM{"A group's support above the admission threshold?"}:::check
+    ADM ==>|no| FADE{"An admitted superentity below its floor?"}:::check
+    FADE ==>|no| DONE["Staged lessons, and the proposals they raise"]:::done
+    ADM -->|yes| COL["Propose a collapse into a superentity"]:::opt
+    COL --> FADE
+    FADE -->|yes| EXP["Propose an expansion back into its members"]:::opt
+    EXP --> DONE
+  end
+  EX ==> EP

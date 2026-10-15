@@ -5,16 +5,33 @@
 - decisions to M11;
 - transmission to M06.
 
+<!-- toc -->
+**Contents**
+
+- [Purpose](#purpose)
+- [Owns](#owns)
+- [Interface](#interface)
+- [Slots](#slots)
+- [Depends on](#depends-on)
+- [Diagram](#diagram)
+- [Invariants](#invariants)
+- [Planned](#planned)
+- [Done when](#done-when)
+<!-- /toc -->
+
 **Code today:** `inference/task.py`, `isolate.py`, `predict.py`, `couple.py`, `unify.py`, `groups.py`.
 
 ## Purpose
 
-How the model answers a what-if question. A thesis runs the shared read on a **branch** that is never merged. Inference then:
-1. **isolates** the networks the shock reaches;
-2. predicts each network alone (**isolated prediction**);
-3. couples the networks (**distributed prediction**);
-4. **unifies** the rival scenarios into one forecast;
-5. reads it out by order and transmission path, at any granularity.
+How the model answers a what-if question. A thesis runs the shared read on a **branch** that is never merged. Inference then runs stages 2–5 of the seven, which are mutually exclusive and each answer one question:
+
+1. Pose a thesis (M13): what is asked?
+2. **Isolate:** what can the shock reach?
+3. **Isolated prediction:** how does each network respond alone?
+4. **Distributed prediction:** how do the networks move together? Scenarios (rival choices × open hypotheses) are formed and weighed once, and the heaviest are coupled.
+5. **Unify:** one forecast, the scenarios mixed by weight.
+6. Read out (M06): what moves, when, and by which path.
+7. Evaluate (M11): did it come true?
 
 ## Owns
 
@@ -51,37 +68,9 @@ ForecastUnifier.combine(thesis, scenarios, coupled, baseline, local, networks, c
 
 ## Diagram
 
-The six stages are in [architecture.md §4](../architecture.md#4-inference-six-stages). As a sequence:
+The seven stages are in [architecture.md](../architecture.md#inference-seven-stages). As a sequence:
 
-```mermaid
-%% style: begin (scripts/docs/style_mermaid.py)
-%%{init: {"theme": "base", "themeVariables": {"fontSize": "14px", "primaryColor": "#FFFDF8", "primaryBorderColor": "#C9BFAF", "primaryTextColor": "#2F2A25", "lineColor": "#857C70", "textColor": "#2F2A25", "actorBkg": "#DAD0F4", "actorBorder": "#7C64C4", "actorLineColor": "#C9BFAF", "signalColor": "#857C70", "labelBoxBkgColor": "#F5EAC6", "labelBoxBorderColor": "#D2BB72", "noteBkgColor": "#F5EAC6", "noteBorderColor": "#D2BB72", "activationBkgColor": "#E1ECDF", "sequenceNumberColor": "#FFFDF8"}}}%%
-%% style: end
-sequenceDiagram
-  autonumber
-  actor A as Asker (Predict)
-  participant TS as ThesisService (M13)
-  participant RF as Refiner (M05)
-  participant R as Repo (M04)
-  participant IT as InferenceTask (M12)
-  participant SR as Shared read (M06)
-  participant INF as Inference slots (M10)
-  participant EX as Explainer (M06)
-
-  A->>TS: pose(question, version=latest, watch)
-  TS->>RF: refine(thesis.event)
-  alt an end is not one value
-    RF-->>A: candidates (nothing runs)
-  end
-  TS->>R: branch(version) — read-only overlay
-  TS->>IT: forecast(thesis, branch, watch)
-  IT->>SR: read(event, txn=None)
-  IT->>INF: isolate → predict each network → plan scenarios → couple (± shock) → weigh → combine
-  IT->>EX: explain_forecast (ablation, top paths)
-  IT-->>TS: Forecast + Explanation
-  TS->>R: ledger THESIS, FORECAST (no version bump)
-  TS-->>A: forecast, transmission grid, brief
-```
+![Pose a thesis, as a sequence](../diagrams/thesis-sequence.svg)
 
 ## Invariants
 

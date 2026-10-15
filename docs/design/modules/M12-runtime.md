@@ -2,6 +2,18 @@
 
 **Layer** 4 · **Package** `runtime/` · **Status** split. Today `engine/` is both the kernel that everything imports and the composition root that imports everything.
 
+<!-- toc -->
+**Contents**
+
+- [Purpose](#purpose)
+- [Owns](#owns)
+- [Interface](#interface)
+- [Depends on](#depends-on)
+- [Diagram](#diagram)
+- [Invariants](#invariants)
+- [Done when](#done-when)
+<!-- /toc -->
+
 **Code today:**
 - `engine/engine.py`, `config.py`, `context.py`, `defaults.py`, `initialize.py`;
 - `learning/task.py`, `inference/task.py`;
@@ -48,7 +60,7 @@ The engines ([M05](M05-intake.md)–[M11](M11-evaluation.md)) and [M04](M04-repo
 
 ## Diagram
 
-The day loop is in [architecture.md §5](../architecture.md#5-the-day-loop).
+The day loop is in [architecture.md §5](../architecture.md#the-day-loop).
 
 ## Invariants
 

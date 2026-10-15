@@ -2,6 +2,15 @@
 
 The code is close to the design: the slots, contracts, flowcharts, one writer, and staged review already exist. What is missing is clean boundaries. This page lists what is wrong today and gives ordered tasks to fix it. Each task is small enough for one pull request, keeps every test passing, and changes no behavior unless it says so.
 
+<!-- toc -->
+**Contents**
+
+- [Where the code is today](#where-the-code-is-today)
+- [Current cycles](#current-cycles)
+- [Tasks, in order](#tasks-in-order)
+- [How to hand a task to a coding agent](#how-to-hand-a-task-to-a-coding-agent)
+<!-- /toc -->
+
 ## Where the code is today
 
 About 28.7k lines of Python and 13.8k of JavaScript. Each module spec's header lists the files it holds today and what moves in or out.
@@ -20,35 +29,7 @@ Package-level cycles at module scope:
 
 With lazy imports counted, there are also api ↔ control, engine ↔ learning, inference, and shared; inference ↔ learning; and intake ↔ sim. Python tolerates these only because `engine/__init__.py` imports nothing eagerly.
 
-```mermaid
-%% style: begin (scripts/docs/style_mermaid.py)
-%%{init: {"theme": "base", "themeVariables": {"fontSize": "14px", "primaryColor": "#FFFDF8", "primaryBorderColor": "#C9BFAF", "primaryTextColor": "#2F2A25", "lineColor": "#857C70", "textColor": "#2F2A25", "secondaryColor": "#F7F2EA", "tertiaryColor": "#FBF8F2", "edgeLabelBackground": "#F7F2EA", "clusterBkg": "#F7F2EA", "clusterBorder": "#E4DACB", "titleColor": "#665E54"}}}%%
-%% style: end
-flowchart LR
-  engine["engine"]:::check <--> dynamics["dynamics"]:::step
-  engine <--> memory["memory"]:::store
-  engine <--> repo["repo"]:::store
-  engine <--> intake["intake"]:::step
-  engine <--> evaluation["evaluation"]:::step
-  dynamics <--> memory
-  memory <--> inference["inference"]:::both
-  repo <--> intake
-  inference <--> shared["shared"]:::step
-  shared <--> memory
-  intake <--> shared
-  control["control"]:::check -.->|lazy| api["api"]:::step
-  api --> sim["sim"]:::ext
-  intake -.->|lazy| sim
-  shared -.->|lazy| inference
-  %% style: classes and happy path
-  classDef step fill:#FFFDF8,stroke:#C9BFAF,stroke-width:1.3px,color:#2F2A25
-  classDef check fill:#F5EAC6,stroke:#D2BB72,stroke-width:1.3px,color:#2F2A25,font-weight:600
-  classDef store fill:#F7E1D3,stroke:#E0B092,stroke-width:1.3px,color:#2F2A25
-  classDef both fill:#F5E4E9,stroke:#D9A9B8,stroke-width:1.3px,color:#93465F
-  classDef ext fill:#FBF8F2,stroke:#7C64C4,stroke-width:1.3px,stroke-dasharray:2 3,color:#2F2A25
-  linkStyle 0,1,2,3,4,5,6,7,8,9,10 stroke:#C0605A,stroke-width:1.8px
-  %% style: end
-```
+![Import cycles in the code today](diagrams/current-cycles.svg)
 
 The back edges that cause them, and the task that cuts each one:
 

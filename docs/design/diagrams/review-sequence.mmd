@@ -1,0 +1,27 @@
+sequenceDiagram
+  autonumber
+  actor P as Reviewer
+  participant W as Web (M16)
+  participant RS as ReviewService (M13)
+  participant SB as Sandbox (M12)
+  participant LT as LearningTask (M12)
+  participant V as Views (M14)
+  participant R as Repo (M04)
+
+  P->>W: open Review
+  W->>RS: stage(proposal, keep=all, confidence)
+  RS->>SB: branch(current version) — copy-on-write, throwaway ledger
+  SB->>LT: open_day · review effects · run(event) · close_day
+  LT-->>SB: staged change sets
+  SB-->>RS: StagedChange (ops, ripple by order, lessons, hedges, recall)
+  RS->>V: staged_review_view(StagedChange)
+  V-->>W: grouped by stage: Intake · WM · LTM · Your review
+  P->>W: deselect a change / weigh a ripple / set confidence
+  W->>RS: stage(proposal, keep=subset, ripple weights)
+  Note over RS,SB: re-staged on a fresh copy
+  P->>W: Approve
+  W->>RS: approve(proposal, keep, confidence, ripple, by)
+  RS->>R: commit review effects · REVIEW_DECISION
+  RS->>LT: run(selection) on live state
+  LT->>R: commits learn.working, learn.long_term
+  R-->>W: /ws state.version

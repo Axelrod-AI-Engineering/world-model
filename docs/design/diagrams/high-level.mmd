@@ -1,0 +1,8 @@
+flowchart LR
+  W["The world<br/>news · data · research"]:::ext ==> L["Learn<br/>read events in"]:::wm
+  L ==> R{"A person<br/>reviews"}:::check
+  R ==>|approved| M[("World model<br/>causal graph,<br/>versioned")]:::store
+  M ==> P["Predict<br/>what-if, on a copy"]:::inf
+  P ==> U["PMs and agents"]:::done
+  U -.->|questions| P
+  U -.->|outcomes| M

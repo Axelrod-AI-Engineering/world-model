@@ -2,6 +2,15 @@
 
 Every command runs through uv: `uv run axelrod <command>`. `uv run axelrod --help` lists them all, and `--help` after a command lists its options.
 
+<!-- toc -->
+**Contents**
+
+- [Demos](#demos)
+- [The model without the browser](#the-model-without-the-browser)
+- [Configuration](#configuration)
+- [Environment variables](#environment-variables)
+<!-- /toc -->
+
 ## Demos
 
 ```bash

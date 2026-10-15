@@ -2,6 +2,19 @@
 
 **Layer** 3 · **Package** `dynamics/` · **Status** exists. It receives `PosteriorUpdater`, and stops importing `memory.working` at module scope.
 
+<!-- toc -->
+**Contents**
+
+- [Purpose](#purpose)
+- [Owns](#owns)
+- [Interface](#interface)
+- [Slots](#slots)
+- [Depends on](#depends-on)
+- [Invariants](#invariants)
+- [Planned (ml-stack §3, §6)](#planned-ml-stack-3-6)
+- [Done when](#done-when)
+<!-- /toc -->
+
 **Code today:** `dynamics/kernels.py`, `propagation.py`, `daily.py`, `regressors.py`; `model/distributions.py:PosteriorUpdater`.
 
 ## Purpose

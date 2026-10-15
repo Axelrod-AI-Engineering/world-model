@@ -1,0 +1,11 @@
+stateDiagram-v2
+  [*] --> open: proposed by intake, the frontier, or a person
+  open --> open: rescored when its entities are touched (VOI, 14-day half-life)
+  open --> branched: valuable and undecided in a thesis → scenarios with and without it
+  branched --> open
+  open --> supported: marked, or evidence passes the bound
+  open --> refuted
+  open --> expired
+  supported --> [*]
+  refuted --> [*]
+  expired --> [*]

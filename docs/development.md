@@ -1,5 +1,14 @@
 # Development
 
+<!-- toc -->
+**Contents**
+
+- [Tests](#tests)
+- [Layout](#layout)
+- [Conventions](#conventions)
+- [Demo videos](#demo-videos)
+<!-- /toc -->
+
 ## Tests
 
 ```bash
@@ -42,7 +51,8 @@ var/              runtime data: init caches, sessions, snapshots, ledger, traces
 - **Decisions.** Where [archive/plan.md](archive/plan.md) was silent, the simplest option was chosen and marked `# DECISION:`. `grep -rn DECISION src configs data web` lists them.
 - **§ references** in the code point to sections of [archive/plan.md](archive/plan.md), the original specification. The code has moved past it in places; where they differ, the code and these docs are current.
 - **The flowchart picture is checked.** After changing `flows/`, run `uv run axelrod flows --svg docs/flowchart.svg`; a test fails while it is stale.
-- **Diagrams.** Mermaid in `docs/` is styled like the app's flowcharts by `scripts/docs/style_mermaid.py`: mark nodes with classes (`:::start`, `:::check`, `:::store`, `:::wm`, `:::ltm`, `:::opt`) and the happy path with `==>`, declared first, then run the script. `--check` fails while any diagram is stale.
+- **Diagrams.** The design's diagrams are SVGs rendered from Mermaid sources in `docs/design/diagrams/*.mmd`, in the app's palette: mark nodes with classes (`:::start`, `:::check`, `:::store`, `:::wm`, `:::ltm`, `:::inf`, `:::opt`) and the happy path with `==>`, declared first. Run `uv run --with playwright python scripts/docs/diagrams.py` after editing a source; `--check` fails while an SVG is stale.
+- **Contents.** Every document starts with a table of contents between `<!-- toc -->` markers; `uv run python scripts/docs/toc.py` writes them and `--check` fails while one is stale.
 - **Data stays synthetic.** Real names make the graph concrete, but no headline reports a real event and nothing is a claim about any company.
 
 ## Demo videos

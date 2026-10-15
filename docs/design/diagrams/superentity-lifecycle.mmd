@@ -1,0 +1,8 @@
+stateDiagram-v2
+  [*] --> candidate: a group of interactions fires together
+  candidate --> candidate: support grows (+1 per spaced day) or decays
+  candidate --> admitted: support > admission threshold and the collapse is approved
+  [*] --> admitted: a backend user groups items (approved)
+  admitted --> admitted: bound as instances; gains track record from forecasts
+  admitted --> dissolved: support < floor and the expansion is approved, or the user dissolves it
+  dissolved --> [*]

@@ -1,0 +1,10 @@
+flowchart TD
+  Q["A what-if question, asked in Predict"]:::start ==> P1["1 · Pose a thesis<br/>What is asked? → a hypothetical event"]:::step
+  P1 ==> P2["2 · Isolate<br/>What can the shock reach? → networks"]:::inf
+  P2 ==> P3["3 · Isolated prediction<br/>How does each network respond alone? → its effect"]:::inf
+  P3 ==> P4["4 · Distributed prediction<br/>How do they move together? → weighted scenarios, coupled"]:::inf
+  P4 ==> P5["5 · Unify<br/>One answer from rival stories → one forecast"]:::inf
+  P5 ==> P6["6 · Read out<br/>What moves, when, by which path? → readout + brief"]:::step
+  P6 ==> A{"A decision recorded on it?"}:::check
+  A ==>|no| D["The forecast and its brief; nothing is learned"]:::done
+  A -.->|yes, after the horizon| P7["7 · Evaluate<br/>Did it come true? → score + track records"]:::opt

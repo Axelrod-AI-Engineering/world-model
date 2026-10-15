@@ -2,6 +2,34 @@
 
 This page states, in mathematical terms, what the code computes today: every model, update, test, and constant, with the file that implements it. It describes the implementation, not the intent. Where the implementation is a heuristic, or where it is unsound, the page says so; [ml-roadmap.md](ml-roadmap.md) proposes what replaces it. Paths are relative to `src/axelrod_wm/`.
 
+<!-- toc -->
+**Contents**
+
+- [1. Objects and notation](#1-objects-and-notation)
+- [2. An interaction](#2-an-interaction)
+- [3. The state-space model of working memory](#3-the-state-space-model-of-working-memory)
+- [4. Learning in working memory (one vetted event)](#4-learning-in-working-memory-one-vetted-event)
+  - [4.1 The fold: a joint Kalman update (`learning/fold.py:89-247`)](#41-the-fold-a-joint-kalman-update-learningfoldpy89-247)
+  - [4.2 Existence: a likelihood-ratio pseudo-count (heuristic, and unsound)](#42-existence-a-likelihood-ratio-pseudo-count-heuristic-and-unsound)
+  - [4.3 Kernel learning: a three-point grid with a likelihood gate (`learning/kernel_learning.py:77-149`)](#43-kernel-learning-a-three-point-grid-with-a-likelihood-gate-learningkernellearningpy77-149)
+  - [4.4 Level noise (`learning/consolidate.py:195-240`)](#44-level-noise-learningconsolidatepy195-240)
+- [5. Intake: from article to operations](#5-intake-from-article-to-operations)
+- [6. Propagation: the Monte Carlo impulse model (`dynamics/propagation.py:219-464`)](#6-propagation-the-monte-carlo-impulse-model-dynamicspropagationpy219-464)
+- [7. Transmission orders and ripple judgments (`inference/transmission.py:53-114`)](#7-transmission-orders-and-ripple-judgments-inferencetransmissionpy53-114)
+- [8. Learning in long-term memory](#8-learning-in-long-term-memory)
+  - [8.1 Taxonomies: signature descent (not Cobweb)](#81-taxonomies-signature-descent-not-cobweb)
+  - [8.2 The correlation frontier (`learning/frontier_test.py`, `memory/frontier.py`)](#82-the-correlation-frontier-learningfrontiertestpy-memoryfrontierpy)
+  - [8.3 Superentities: co-activation induction (`learning/abduction.py:149-597`)](#83-superentities-co-activation-induction-learningabductionpy149-597)
+  - [8.4 Recall and analogy (`shared/recall.py`)](#84-recall-and-analogy-sharedrecallpy)
+- [9. Inference: answering a what-if (`inference/task.py:95-192`)](#9-inference-answering-a-what-if-inferencetaskpy95-192)
+- [10. Evaluation (`evaluation/`)](#10-evaluation-evaluation)
+- [11. Open-world measures (`memory/open_world.py`): display only](#11-open-world-measures-memoryopenworldpy-display-only)
+- [12. Constants](#12-constants)
+- [13. Adversarial review](#13-adversarial-review)
+  - [What changed on this page](#what-changed-on-this-page)
+  - [What the review found wrong with the model](#what-the-review-found-wrong-with-the-model)
+<!-- /toc -->
+
 This page went through an adversarial review on fidelity, statistics, and finance (§13). Its corrections are folded in; the review's verdict, summarized there, is that **the forecasting core is a defensible linear-Gaussian design, but the stack is not yet sound for its stated purpose**: its evaluation is circular, two learners partly confirm themselves, several components count the same data more than once, and the design has no layer for what markets have already priced in.
 
 **Scope.** Synthetic data only. Nothing here has been fit to, or validated on, real market data. Every number is a design default, not an estimate.

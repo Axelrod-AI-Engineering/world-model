@@ -3,6 +3,18 @@
 **Layer** 1 · **Package** `model/` · **Status** exists; `events/` and `Forecast` merge into it, and `PosteriorUpdater` moves out to M07.
 **Code today:** `model/` (about 1.9k lines), `events/`, `inference/records.py`.
 
+<!-- toc -->
+**Contents**
+
+- [Purpose](#purpose)
+- [Owns](#owns)
+- [Additions this design makes](#additions-this-design-makes)
+- [Depends on](#depends-on)
+- [Invariants](#invariants)
+- [Planned](#planned)
+- [Done when](#done-when)
+<!-- /toc -->
+
 ## Purpose
 
 The data model: pure pydantic types with indexes and no inference. Everything the system knows is one of these types, and everything it writes is a change to one of them. Terms follow the [glossary](../glossary.md).
@@ -24,7 +36,7 @@ The data model: pure pydantic types with indexes and no inference. Everything th
 | `Thesis` | question, mode, event (hypothetical), horizon_days (182), targets, target_groups, posed_by, pinned |
 | Records | `Evidence`, `Explanation`, `Forecast` (based_on_version, seed, config_hash, scenarios, densities, paths), `ForecastScenario` |
 
-The data model as a diagram: [architecture.md §7](../architecture.md#7-data-model).
+The data model as a diagram: [architecture.md §7](../data-model.md).
 
 ## Additions this design makes
 
