@@ -35,6 +35,8 @@ export function initThesis({ toast }) {
   let question = ECONOMY_EXAMPLES[0];
   let horizon = 270;
   let adding = false;
+  let startWeeks = 12;
+  let editing = null;        // the thesis reopened by Edit: {id, forecast_id}
   let ready = [];            // the scenario's ready-made questions (a design partner's), posed whole
   let readyFor = null;
   const loadReady = () => api.scenarioTheses().then((l) => { ready = l.filter((t) => !t.scripted); render(); }).catch(() => {});
@@ -116,6 +118,8 @@ export function initThesis({ toast }) {
     el.innerHTML = `
       <div class="group-label">Ask a what-if</div>
       <h3>Pose a thesis</h3>
+      ${editing ? `<div class="th-editing small"><span>Editing <b>${esc(editing.id)}</b>, as posed. Change anything, then <b>Run</b> (the shocks below) or <b>Ask</b> (reads the question again). The earlier forecast stays.</span>
+        <button class="ghost x" id="th-noedit" aria-label="Stop editing" title="Start a new thesis instead">✕</button></div>` : ""}
       <p class="lede">Describe something that has not happened. The model treats it like news, runs it through the graph and
         the superentities it recalls, and forecasts how the economy would respond.</p>
       <div class="ask-row"><input id="th-q" type="text" value="${esc(question)}" aria-label="Question">
@@ -145,7 +149,7 @@ export function initThesis({ toast }) {
             <select data-f="persistence" aria-label="Persistence">${["step", "pulse"].map((m) => `<option ${m === s.persistence ? "selected" : ""}>${m}</option>`).join("")}</select>
             <button class="ghost" data-del="${i}" aria-label="Remove shock">✕</button></div>`).join("")}
           <div class="ask-row"><button id="th-add">+ shock</button>
-            <label class="small">starts in <input id="th-start" type="number" value="12" style="width:56px"> weeks</label></div></div>
+            <label class="small">starts in <input id="th-start" type="number" value="${startWeeks}" style="width:56px"> weeks</label></div></div>
         <div class="section"><h4>Interventions</h4>
           ${interventions.map((v, i) => `<div class="shock-row" data-v="${i}">
             <select data-f="sid" aria-label="Decision variable" class="grow">${decisions.map((d) => `<option value="${esc(d.id)}" ${d.id === v.sid ? "selected" : ""}>${esc(names(view()).value(d.id))}</option>`).join("")}</select>
@@ -157,6 +161,8 @@ export function initThesis({ toast }) {
         <div class="ask-row"><button class="hyp" id="th-run">${busy ? "Running…" : "Run"}</button></div>
       </details>`;
     el.querySelector("#th-adv").addEventListener("toggle", (ev) => { advanced = ev.target.open; });
+    el.querySelector("#th-noedit")?.addEventListener("click", () => { editing = null; render(); });
+    el.querySelector("#th-start").addEventListener("change", (ev) => { startWeeks = +ev.target.value || 0; });
     el.querySelector("#th-q").addEventListener("input", (ev) => { question = ev.target.value; });
     el.querySelector("#th-q").addEventListener("keydown", (ev) => { if (ev.key === "Enter") ask(); });
     el.querySelector("#th-h").addEventListener("change", (ev) => { horizon = +ev.target.value || 182; });
@@ -245,6 +251,7 @@ export function initThesis({ toast }) {
       const fv = await api.poseThesis(thesis);
       emit("asked", fv);
       emit("show-forecast", fv);     // the forecast opens itself: no toast
+      editing = null;
     } catch (e) {
       err.textContent = errorText(e);
     } finally {
@@ -265,6 +272,7 @@ export function initThesis({ toast }) {
       const fv = await api.poseThesis({ question, horizon_days: horizon || 182, ...targetsOf() });
       emit("asked", fv);
       emit("show-forecast", fv);
+      editing = null;
     } catch (e) {
       err.textContent = `${errorText(e)}\nTry one of the examples, or build the shock yourself below.`;
     } finally {
@@ -328,5 +336,31 @@ export function initThesis({ toast }) {
     el.querySelector("#th-q")?.focus({ preventScroll: true });
   }
 
-  return { render, prefill, forecastFor, setQuestion };
+  // Edit (Oct 14): the thesis as it was posed, back in the composer: its question, its shocks and interventions (with
+  // when they start), what it forecasts, and its horizon. Nothing is recomputed here; Run or Ask poses a new thesis.
+  function prefillThesis(th) {
+    if (!th) return;
+    const ops = (th.event?.ops ?? []).filter((o) => o.op === "change_value" && o.target?.kind === "concrete");
+    question = th.question ?? question;
+    horizon = th.horizon_days ?? horizon;
+    shocks = ops.filter((o) => !o.intervention).map((o) => ({ sid: o.target.subentity_id, delta: o.delta, mode: o.mode ?? "relative",
+                                                              persistence: o.persistence ?? "step" }));
+    interventions = ops.filter((o) => o.intervention).map((o) => ({ sid: o.target.subentity_id, kind: Math.abs(o.delta ?? 0) < 1e-12 ? "hold" : "change",
+                                                                    delta: o.delta ?? 0, window: o.window_days ?? 90 }));
+    const first = ops.find((o) => !o.intervention && o.at);
+    if (first) startWeeks = Math.max(0, Math.round((new Date(first.at) - new Date(nowIso())) / (7 * 86400000)));
+    const v = view();
+    const ents = new Map((v?.entities ?? []).map((e) => [e.id, e]));
+    picks = [...(th.targets ?? []).map((ref) => ({ kind: "sub", ref })),
+      ...(th.target_groups ?? []).map((g) => ({ ref: g.ref, kind: g.kind === "entity"
+        ? (ACTOR_KINDS.has(ents.get(g.ref)?.kind) || ents.get(g.ref)?.features?.sector ? "actor" : "idea") : g.kind }))];
+    editing = { id: th.id };
+    advanced = shocks.length + interventions.length > 0;
+    adding = false;
+    query = "";
+    render();
+    el.querySelector("#th-q")?.focus({ preventScroll: true });
+  }
+
+  return { render, prefill, forecastFor, setQuestion, prefillThesis };
 }

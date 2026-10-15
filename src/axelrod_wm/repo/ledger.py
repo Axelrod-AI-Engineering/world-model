@@ -25,6 +25,7 @@ class LedgerKind(StrEnum):
     DECISION = "decision"
     OUTCOME = "outcome"
     CONSOLIDATION = "consolidation"
+    ANNOTATION = "annotation"          # a reader's note on a forecast brief: logged, never state (Oct 14)
 
 
 class LedgerEntry(BaseModel):

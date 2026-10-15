@@ -25,6 +25,7 @@ async function request(method, path, body) {
 const get = (p) => request("GET", p);
 const post = (p, b = {}) => request("POST", p, b);
 const patch = (p, b = {}) => request("PATCH", p, b);
+const del = (p) => request("DELETE", p);
 const q = (s) => encodeURIComponent(s);
 
 export const api = {
@@ -105,6 +106,12 @@ export const api = {
   step: () => post("/sim/step"),
   script: () => get("/sim/script"),
   brief: (id) => get(`/forecasts/${q(id)}/brief`),
+  // readers' notes on a brief (Oct 14): logged, never learned; and posing a forecast's thesis again
+  annotations: (id) => get(`/forecasts/${q(id)}/annotations`),
+  annotate: (id, anchor, text) => post(`/forecasts/${q(id)}/annotations`, { anchor, text }),
+  removeAnnotation: (id, aid) => del(`/forecasts/${q(id)}/annotations/${q(aid)}`),
+  rerun: (id) => post(`/forecasts/${q(id)}/rerun`, {}),
+  thesis: (id) => get(`/theses/${q(id)}`),
   play: (until_step) => post("/sim/play", until_step == null ? {} : { until_step }),
   pause: () => post("/sim/pause"),
   reset: () => post("/sim/reset"),

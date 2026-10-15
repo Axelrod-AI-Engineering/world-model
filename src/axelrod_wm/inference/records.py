@@ -100,6 +100,7 @@ class ForecastGroup(BaseModel):
     effect_summary: list[DistSummary]              # per day, in standard deviations
     effect_density: list[list[float]] = []         # at the horizon: (effect, density / peak)
     top: list[list[Any]] = []                      # [subentity, median effect at the horizon], largest first
+    split: dict = {}                               # at the horizon: the baseline and the forecast, apart (Oct 14)
 
 
 class Forecast(BaseModel):
@@ -132,3 +133,4 @@ class Forecast(BaseModel):
     shocked: list[str] = []                        # the subentities the thesis changes directly
     constraints_binding: dict[str, float] = {}     # subentity -> weighted share of samples a soft bound bent
     paths: dict | None = None                      # the transmission grid's source (inference/paths.py, Oct 11)
+    split: dict[str, dict] = {}                    # each target at the horizon: the baseline and the forecast (Oct 14)
