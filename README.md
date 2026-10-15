@@ -41,7 +41,7 @@ The full demo runs on Railway's `dev` environment at **https://world-model-dev.u
 | Read | For |
 |---|---|
 | [docs/design/README.md](docs/design/README.md) | **The design**: the architecture, 17 modules with specs, diagrams, the cognitive framings, Cognee vs Semantica, decisions, and the migration plan |
-| [docs/demos.md](docs/demos.md) | The four demos, the 24 examples, and how the review works |
+| [docs/demos.md](docs/demos.md) | The five demos, the 24 examples, and how the review works |
 | [docs/interface.md](docs/interface.md) | A tour of the interface: the top bar, the canvas, the panels, and every shortcut |
 | [docs/cli.md](docs/cli.md) | The command line and configuration |
 | [docs/ml-stack.md](docs/ml-stack.md) | The ML stack as built, stated formally, with its adversarial review |

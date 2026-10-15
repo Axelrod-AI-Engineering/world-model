@@ -17,7 +17,10 @@ const TUTORIAL_EXAMPLES = ["What if oil rose by 30% next quarter?", "What if oil
 // an imported model (emily_demo): a PM's questions about policy, the yen, and the names
 const BOOK_EXAMPLES = ["What if the BoJ hiked by 0.5 next quarter?", "What if the Fed cut rates by 0.75 next quarter?",
   "What if the yen rose by 5% next month?", "What if oil prices spiked next quarter?"];
-const examples = () => (store.status?.imports ? BOOK_EXAMPLES : store.status?.examples ? TUTORIAL_EXAMPLES : ECONOMY_EXAMPLES);
+// Sally's book (sally_demo): banks, insurers, and Japan's exporters across the US, Europe, China, and Japan
+const SALLY_EXAMPLES = ["What if the PBoC cut rates by 0.25 next quarter?", "What if the ECB cut rates by 0.5 next quarter?",
+  "What if the yen rose by 5% next month?", "What if the BoJ hiked by 0.25 next quarter?", "What if deal activity fell by 20% next quarter?"];
+const examples = () => (store.status?.scenario_id === "sally_demo" ? SALLY_EXAMPLES : store.status?.imports ? BOOK_EXAMPLES : store.status?.examples ? TUTORIAL_EXAMPLES : ECONOMY_EXAMPLES);
 const KIND_LABEL = { sub: "value", actor: "actor", idea: "idea", superentity: "superentity", sector: "sector", category: "category" };
 const ACTOR_KINDS = new Set(["agency", "company", "person"]);
 

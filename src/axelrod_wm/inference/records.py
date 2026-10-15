@@ -134,3 +134,4 @@ class Forecast(BaseModel):
     constraints_binding: dict[str, float] = {}     # subentity -> weighted share of samples a soft bound bent
     paths: dict | None = None                      # the transmission grid's source (inference/paths.py, Oct 11)
     split: dict[str, dict] = {}                    # each target at the horizon: the baseline and the forecast (Oct 14)
+    scenario_table: dict = {}                      # bull, base, and bear bands of the draws, for the book (Oct 15)

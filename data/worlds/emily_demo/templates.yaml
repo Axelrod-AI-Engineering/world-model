@@ -15,7 +15,8 @@ subjects:
   - {pattern: "yen carry(?: trade)?|carry trade|carry positions?", subentity: dollar_yen.carry_positioning}
   - {pattern: "(?:the )?boj|bank of japan|japan(?:ese)? (?:policy )?rates?", subentity: boj.policy_rate}
   - {pattern: "(?:the )?ecb|euro(?:pean)? rates?", subentity: ecb.policy_rate}
-  - {pattern: "dollar-yen|usd/jpy|usdjpy|(?:the )?yen", subentity: dollar_yen.usd_jpy}
+  - {pattern: "dollar-yen|usd/jpy|usdjpy", subentity: dollar_yen.usd_jpy}
+  - {pattern: "(?:the )?(?:japanese )?yen", subentity: dollar_yen.usd_jpy, invert: true}
   - {pattern: "(?:30|thirty)[- ]year jgbs?|super-long jgbs?", subentity: jgbs.yield_30y}
   - {pattern: "jgbs?|jgb yields|japanese yields", subentity: jgbs.yield_10y}
   - {pattern: "(?:2|two)[- ]year (?:treasur(?:y|ies)|yields?)", subentity: us_treasuries.yield_2y}

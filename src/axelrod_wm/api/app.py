@@ -38,6 +38,7 @@ DEMOS: list[tuple[str, str, str]] = [
     ("prod_demo", "Production demo", "The same examples after three years of synthetic history"),
     ("oil_shock_demo", "Full demo", "The oil-shock scenario: 53 actors and ideas, 18 scripted steps"),
     ("emily_demo", "Emily's demo", "A PM's model brought up to date by importing research"),
+    ("sally_demo", "Sally's demo", "Eleven names from daily research, with forecasts as context for agents"),
 ]
 DEMO_IDS = {d[0] for d in DEMOS}
 

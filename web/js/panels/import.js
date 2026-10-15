@@ -19,7 +19,8 @@ export function initImport({ toast, onProposal }) {
   pane.setAttribute("role", "dialog");
   pane.setAttribute("aria-label", "Import research");
   document.getElementById("stage").appendChild(pane);
-  const st = { bundle: null, preview: null, local: [], picked: new Set(), open: null, busy: false, filter: "all", error: null };
+  const st = { bundle: null, preview: null, local: [], picked: new Set(), open: null, busy: false, filter: "all", error: null,
+              name: null, done: new Set() };
 
   const day = (iso) => new Date(iso).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
   const clock = (iso) => new Date(iso).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", timeZone: "UTC" });
@@ -37,15 +38,43 @@ export function initImport({ toast, onProposal }) {
     st.fresh = false;
   }
 
-  async function readFile(file) {
-    try { await use(JSON.parse(await file.text())); } catch (err) { st.error = `${file.name}: ${errorText(err)}`; render(); }
+  async function pick(name) {
+    try { st.name = name; await use(await api.importLocal(name)); } catch (err) { st.error = errorText(err); render(); }
+  }
+
+  // one bundle, or several (a run of daily files) merged into one
+  async function readFiles(files) {
+    st.name = null;
+    const bundles = [];
+    for (const f of files) {
+      try { bundles.push(JSON.parse(await f.text())); } catch (err) { st.error = `${f.name}: ${errorText(err)}`; render(); return; }
+    }
+    if (bundles.length === 1) { await use(bundles[0]); return; }
+    const first = bundles[0];
+    await use({ ...first, title: `${String(first.title ?? "Research").split(",")[0]}, ${bundles.length} days`,
+                description: `${bundles.length} bundles merged`, items: bundles.flatMap((b) => b.items ?? []) });
+  }
+
+  // bundles sorted into one file per day (Oct 15): the next day after the model's, and a picker for any day
+  const DAILY = /^(\d{4}-\d{2}-\d{2})\.json$/;
+  function nextDay() {
+    // a day is still to come when it ends after the model's clock (a day already processed ends at or before it)
+    const at = String(store.status?.sim_time ?? "").replace("Z", "").slice(0, 19);
+    return st.local.find((b) => DAILY.test(b.name) && !st.done.has(b.name) && `${b.name.slice(0, 10)}T23:59:59` > at) ?? null;
   }
 
   function chooser() {
+    const daily = st.local.length > 6 && st.local.every((b) => DAILY.test(b.name));
+    const next = daily ? nextDay() : null;
+    const local = daily
+      ? `${next ? `<button class="small" data-local="${esc(next.name)}" title="The first day after your model's date">Next day: ${day(next.name.slice(0, 10) + "T12:00:00Z")} <span class="muted">· ${next.items}</span></button>` : ""}
+         <select class="small" data-day aria-label="A day's research"><option value="">Any day…</option>${st.local.map((b) =>
+           `<option value="${esc(b.name)}">${day(b.name.slice(0, 10) + "T12:00:00Z")} · ${b.items} item${b.items === 1 ? "" : "s"}${st.done.has(b.name) ? " ✓" : ""}</option>`).join("")}</select>`
+      : st.local.map((b) => `<button class="small" data-local="${esc(b.name)}" title="${esc(b.collected_by)}">${esc(b.title)} <span class="muted">· ${b.items}</span></button>`).join("");
     return `<div class="imp-src">
-      <label class="primary small imp-file">Choose a bundle…<input type="file" accept=".json,application/json" hidden></label>
-      ${st.local.map((b) => `<button class="small" data-local="${esc(b.name)}" title="${esc(b.collected_by)}">${esc(b.title)} <span class="muted">· ${b.items}</span></button>`).join("")}
-      <span class="muted small">${st.local.length ? "or one from this server's imports folder" : "a JSON bundle from your research agent"}</span>
+      <label class="primary small imp-file">Choose a bundle…<input type="file" accept=".json,application/json" multiple hidden></label>
+      ${local}
+      <span class="muted small">${daily ? `or a day from this server's imports folder (${st.local.length} days)` : st.local.length ? "or one from this server's imports folder" : "a JSON bundle from your research agent"}</span>
     </div>`;
   }
 
@@ -107,8 +136,10 @@ export function initImport({ toast, onProposal }) {
   }
 
   pane.addEventListener("change", (ev) => {
+    const sel = ev.target.closest?.("[data-day]");
+    if (sel?.value) { pick(sel.value); return; }
     const f = ev.target.closest?.(".imp-file input");
-    if (f?.files?.[0]) { readFile(f.files[0]); return; }
+    if (f?.files?.length) { readFiles([...f.files]); return; }
     const box = ev.target.closest?.("[data-pick]");
     if (box) { box.checked ? st.picked.add(box.dataset.pick) : st.picked.delete(box.dataset.pick); render(); }
   });
@@ -119,10 +150,7 @@ export function initImport({ toast, onProposal }) {
     if (t.dataset.max != null) { pane.classList.toggle("win-max"); return; }
     if (t.dataset.toggle) { st.open = st.open === t.dataset.toggle ? null : t.dataset.toggle; render(); return; }
     if (t.dataset.filter) { st.filter = t.dataset.filter; render(); return; }
-    if (t.dataset.local) {
-      try { await use(await api.importLocal(t.dataset.local)); } catch (err) { st.error = errorText(err); render(); }
-      return;
-    }
+    if (t.dataset.local) { pick(t.dataset.local); return; }
     const usable = (st.preview?.items ?? []).filter((x) => x.status !== "imported" && x.changes > 0
       && (st.filter === "all" || x.category === st.filter));
     if (t.dataset.all != null) { usable.forEach((x) => st.picked.add(x.id)); render(); return; }
@@ -131,6 +159,7 @@ export function initImport({ toast, onProposal }) {
       st.busy = true; render();
       try {
         const res = await api.importRun(st.bundle, [...st.picked]);
+        if (st.name) st.done.add(st.name);
         toast(`Imported ${res.imported.length} item${res.imported.length === 1 ? "" : "s"}: each waits for your review, oldest first.`);
         close();
         if (res.waiting_on) onProposal?.(res.waiting_on);
