@@ -1,6 +1,8 @@
 /* Layout (§13.1) and components. One linen sheet, a faint grid on the canvas, pastel roles. */
 * { box-sizing: border-box; }
-html, body { height: 100%; margin: 0; overflow: hidden; }
+/* the page never scrolls (Oct 14): `hidden` still lets scrollIntoView scroll the document when something (a closed drawer)
+   reaches below the window, which pushed the top bar and the panels up out of view; `clip` stops that too */
+html, body { height: 100%; margin: 0; overflow: hidden; overflow: clip; }
 body {
   background: var(--linen);
   color: var(--ink);

@@ -50,7 +50,10 @@ export function initBriefs({ openLeft, onWalk, onChat, focusNode, openForecast, 
   async function refresh() {
     try { list = (await api.forecasts()).slice().reverse(); } catch { return; }
     for (const c of counters) if (c) c.textContent = String(list.length);
-    if (!panel.hidden && panel.dataset.tab === "briefs") render();
+    // an open brief already on screen is left as it is (Oct 14): redrawing it for news about other forecasts replaced the
+    // text a person was reading or selecting, which dropped the selection
+    const shown = openId && body.querySelector(`.brief[data-brief="${CSS.escape(openId)}"]`);
+    if (!panel.hidden && panel.dataset.tab === "briefs" && !shown) render();
   }
 
   function render() {
