@@ -80,6 +80,22 @@ class EffectMixture:
             z = np.pad(z, ((0, 0), (0, self.H + 1 - z.shape[1])), mode="edge")
         return z[:, : self.H + 1]
 
+    def levels(self, sid: str) -> tuple[np.ndarray, np.ndarray]:
+        """Each subentity's standardized level paths with the shock and without it (the baseline), [samples, H + 1],
+        from the same samples as `effect`. A value outside a scenario's networks sits at zero in both."""
+        on_all, off_all = [], []
+        for on, off, n in self.parts:
+            a = self._paths(on, sid, n)
+            b = self._paths(off, sid, n)
+            if a is None or b is None:
+                a = b = np.zeros((n, self.H + 1))
+            on_all.append(a)
+            off_all.append(b)
+        if not on_all:
+            z = np.zeros((1, self.H + 1))
+            return z, z
+        return np.concatenate(on_all, axis=0), np.concatenate(off_all, axis=0)
+
     def effect(self, sid: str) -> np.ndarray:
         out = []
         for on, off, n in self.parts:
@@ -92,11 +108,38 @@ class EffectMixture:
         return np.concatenate(out, axis=0) if out else np.zeros((1, self.H + 1))
 
 
+def split_at_horizon(on: np.ndarray, off: np.ndarray) -> dict:
+    """The forecast beside its baseline at the horizon (Oct 14): two distributions of the standardized level, one
+    without the shock and one with it, both measured from the baseline's median so they share one axis. The panel
+    draws them one above the other, so the shift reads at a glance instead of hiding in one overlaid picture."""
+    on = np.asarray(on, dtype=float).ravel()
+    off = np.asarray(off, dtype=float).ravel()
+    if on.size < 2 or off.size < 2:
+        return {}
+    ref = float(np.median(off))
+    a, b = off - ref, on - ref
+    qa = np.quantile(a, [0.05, 0.5, 0.95])
+    qb = np.quantile(b, [0.05, 0.5, 0.95])
+
+    def r4(v: float) -> float:
+        return round(float(v), 4)
+
+    return {"baseline": density_of_samples(a), "forecast": density_of_samples(b),
+            "baseline_q": [r4(x) for x in qa], "forecast_q": [r4(x) for x in qb],
+            "shift": r4(qb[1] - qa[1]),
+            "domain": [r4(min(qa[0], qb[0], 0.0)), r4(max(qa[2], qb[2], 0.0))]}
+
+
 def group_forecasts(thesis: Any, targets: list[str], mix: EffectMixture, wm: Any,
-                    ltm: Any) -> tuple[list[ForecastGroup], dict[str, list[list[float]]]]:
-    """The thesis's coarser targets, and a small density of each target's effect at the horizon."""
+                    ltm: Any) -> tuple[list[ForecastGroup], dict[str, list[list[float]]], dict[str, dict]]:
+    """The thesis's coarser targets, a small density of each target's effect at the horizon, and each target's
+    forecast beside its baseline at the horizon (`split_at_horizon`)."""
     H = mix.H
     densities = {sid: density_of_samples(mix.effect(sid)[:, H]) for sid in targets}
+    splits = {}
+    for sid in targets:
+        on, off = mix.levels(sid)
+        splits[sid] = split_at_horizon(on[:, H], off[:, H])
     # DECISION: a group's forecast is its response, so the subentities the thesis itself shocks are left
     # out of the average (a doubled oil price would otherwise dominate any group that holds it)
     shocked = {op.target.subentity_id for op in thesis.event.ops
@@ -109,17 +152,22 @@ def group_forecasts(thesis: Any, targets: list[str], mix: EffectMixture, wm: Any
         name, members = resolved
         members = [m for m in members if m not in shocked] or members
         total = None
+        on_h = off_h = None
         at_h = []
         for sid in members:
             ef = mix.effect(sid)
             total = ef if total is None else total + ef
+            on, off = mix.levels(sid)
+            on_h = on[:, H] if on_h is None else on_h + on[:, H]
+            off_h = off[:, H] if off_h is None else off_h + off[:, H]
             at_h.append((sid, float(np.median(ef[:, H]))))
         mean = total / len(members)
         top = sorted(at_h, key=lambda x: (-abs(x[1]), x[0]))[:5]
         groups.append(ForecastGroup(id=grp.id, kind=grp.kind, ref=grp.ref, name=name, members=members,
                                     effect_summary=summarize_columns(mean), effect_density=density_of_samples(mean[:, H]),
-                                    top=[[sid, round(v, 4)] for sid, v in top]))
-    return groups, densities
+                                    top=[[sid, round(v, 4)] for sid, v in top],
+                                    split=split_at_horizon(on_h / len(members), off_h / len(members))))
+    return groups, densities, splits
 
 
 def movers(mix: EffectMixture, coupled: dict[str, PropagationResult], shocked: set[str],

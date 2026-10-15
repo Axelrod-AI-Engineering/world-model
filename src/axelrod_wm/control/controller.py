@@ -821,6 +821,98 @@ class WorldModelController:
                 return Explanation.model_validate(e.payload["explanation"])
         return None
 
+    # ---------------------------------------------------------------------------------------
+    # a forecast's thesis, re-running it, and readers' annotations (Oct 14)
+    # ---------------------------------------------------------------------------------------
+    def thesis_of(self, thesis_id: str) -> Thesis | None:
+        """The thesis as it was posed (refined), from this session or the ledger."""
+        if thesis_id in self.theses:
+            return self.theses[thesis_id]
+        for e in reversed(self.engine.ledger.of_kind(LedgerKind.THESIS)):
+            if e.payload.get("id") == thesis_id:
+                return Thesis.model_validate(e.payload)
+        return None
+
+    def forecasts_of(self, thesis_id: str) -> list[Forecast]:
+        """Every forecast of one thesis, oldest first: re-running keeps the earlier ones."""
+        seen = {fc.id: fc for fc in self.forecasts.values() if fc.thesis_id == thesis_id}
+        from axelrod_wm.inference.records import Forecast as _F
+
+        for e in self.engine.ledger.of_kind(LedgerKind.FORECAST):
+            f = e.payload["forecast"]
+            if f.get("thesis_id") == thesis_id and f["id"] not in seen:
+                seen[f["id"]] = _F.model_validate(f)
+        return sorted(seen.values(), key=lambda fc: (fc.created_at, fc.id))
+
+    def rerun_forecast(self, forecast_id: str) -> Forecast:
+        """Pose a forecast's thesis again, as written, against the latest committed version. The shock keeps its
+        place relative to when it was asked (a shock "next quarter" stays next quarter), and the earlier forecast
+        stays where it was: re-running adds a forecast, it never replaces one."""
+        with self.lock:
+            fc = self.forecast(forecast_id)
+            if fc is None:
+                raise KeyError(forecast_id)
+            thesis = self.thesis_of(fc.thesis_id)
+            if thesis is None:
+                raise ControllerError(f"the thesis of {forecast_id} is not on record")
+            data = thesis.model_dump(mode="json")
+            shift = self.now - thesis.posed_at if self.now > thesis.posed_at else timedelta(0)
+
+            def moved(iso: str | None) -> str | None:
+                return iso if not iso or not shift else (datetime.fromisoformat(iso) + shift).isoformat()
+
+            ev = data["event"]
+            ev["occurred_at"] = moved(ev.get("occurred_at"))
+            ev["recorded_at"] = self.now.isoformat()
+            for op in ev.get("ops", []):
+                if op.get("at"):
+                    op["at"] = moved(op["at"])
+            data["posed_at"] = self.now.isoformat()
+            return self.pose_thesis(Thesis.model_validate(data))
+
+    def annotations(self, forecast_id: str) -> list[dict]:
+        """A forecast's annotations, oldest first. They are notes for people: logged in the ledger as records that
+        change no state, so inference never learns from them."""
+        cache = self.__dict__.setdefault("_annotations", {})
+        if forecast_id not in cache:
+            notes: dict[str, dict] = {}
+            for e in self.engine.ledger.of_kind(LedgerKind.ANNOTATION):
+                p = e.payload
+                if p.get("forecast_id") != forecast_id:
+                    continue
+                if p.get("action") == "remove":
+                    notes.pop(p.get("id"), None)
+                else:
+                    notes[p["id"]] = {k: v for k, v in p.items() if k != "action"}
+            cache[forecast_id] = list(notes.values())
+        return list(cache[forecast_id])
+
+    def annotate(self, forecast_id: str, anchor: str, text: str, by: str = "reader") -> dict:
+        with self.lock:
+            fc = self.forecast(forecast_id)
+            if fc is None:
+                raise KeyError(forecast_id)
+            text = (text or "").strip()
+            if not text:
+                raise ControllerError("an annotation needs some text")
+            notes = self.annotations(forecast_id)
+            led = self.engine.ledger
+            note = {"id": f"AN-{led.next_seq}", "forecast_id": forecast_id, "thesis_id": fc.thesis_id,
+                    "anchor": (anchor or "brief").strip()[:120], "text": text[:2000], "by": (by or "reader")[:60],
+                    "created_at": self.now.isoformat()}
+            led.append(LedgerKind.ANNOTATION, {"action": "add", **note}, recorded_at=self.now)
+            self._annotations[forecast_id] = [*notes, note]
+            return note
+
+    def remove_annotation(self, forecast_id: str, annotation_id: str) -> None:
+        with self.lock:
+            notes = self.annotations(forecast_id)
+            if not any(n["id"] == annotation_id for n in notes):
+                raise KeyError(annotation_id)
+            self.engine.ledger.append(LedgerKind.ANNOTATION, {"action": "remove", "id": annotation_id,
+                                                              "forecast_id": forecast_id}, recorded_at=self.now)
+            self._annotations[forecast_id] = [n for n in notes if n["id"] != annotation_id]
+
     def record_decision(self, decision: DecisionRecord | dict) -> DecisionRecord:
         with self.lock:
             data = decision.model_dump(mode="json") if isinstance(decision, DecisionRecord) else dict(decision)

@@ -162,26 +162,6 @@ def _score_events(ctl: Any, fc: Any, ex: Any, thesis: Any, graph: Any, sub: Any)
     return [r for r in rows if r["relevance"] >= 0.12]
 
 
-def _timeline(fc: Any, sub: Any, dates: list[str], groups: list[Any]) -> list[dict]:
-    items = []
-    series = [(sid, sub(sid), fc.effect_summary.get(sid, [])) for sid in fc.targets]
-    series += [(g.id, g.name, g.effect_summary) for g in groups]
-    for ref, name, es in series:
-        if not es:
-            continue
-        med = [p.q50 for p in es]
-        k_peak = max(range(len(med)), key=lambda k: abs(med[k]))
-        peak = med[k_peak]
-        if abs(peak) < 0.1:
-            continue
-        onset = next(k for k, v in enumerate(med) if abs(v) >= 0.5 * abs(peak))
-        items.append({"ref": ref, "name": name, "onset": dates[min(onset, len(dates) - 1)],
-                      "peak_date": dates[min(k_peak, len(dates) - 1)], "peak": round(peak, 3),
-                      "direction": "up" if peak > 0 else "down", "onset_day": onset})
-    items.sort(key=lambda x: (x["onset_day"], -abs(x["peak"])))
-    return items
-
-
 def _tracking(ctl: Any, fc: Any, sub: Any) -> list[dict]:
     """How the realized values have tracked the forecast since it was made (standardized units)."""
     dev = ctl.engine.wm.deviations
@@ -231,16 +211,17 @@ def brief_view(ctl: Any, forecast_id: str) -> dict:
     effects.sort(key=lambda x: -abs(x["q50"]))
     scen = sorted(fc.scenarios, key=lambda s: -s.weight)
     lead = scen[0] if scen else None
-    moved = [e for e in effects if abs(e["q50"]) >= 0.05][:3]
+    # DECISION (Oct 14): the bottom line is two sentences at most: the two largest moves with their 90% ranges, and
+    # how much of the forecast rests on its leading scenario (the rest of the scenarios sit in the bar under it)
+    moved = [e for e in effects if abs(e["q50"]) >= 0.05][:2]
     if moved:
-        parts = [f"{e['name']} {'rises' if e['q50'] > 0 else 'falls'} by about {abs(e['q50']):.2f} sd "
+        parts = [f"{e['name']} {'rises' if e['q50'] > 0 else 'falls'} about {abs(e['q50']):.2f} sd "
                  f"(90%: {e['q05']:+.2f} to {e['q95']:+.2f})" for e in moved]
         bottom = f"By {horizon}, " + "; ".join(parts) + "."
     else:
         bottom = f"By {horizon}, no target moves by more than 0.05 sd: the shock does not reach them through the graph."
     if lead is not None and len(scen) > 1:
-        bottom += (f" The leading scenario, {lead.name} ({lead.weight:.0%}), is one of {len(scen)}; "
-                   f"the others are {', '.join(f'{s.name} ({s.weight:.0%})' for s in scen[1:])}.")
+        bottom += f" It leans on {lead.name.split(' · ')[0]} ({lead.weight:.0%} of {len(scen)} scenarios)."
 
     groups = list(fc.groups or [])
     affected = [{"id": gr.id, "kind": gr.kind, "name": gr.name, "effect": round(gr.effect_summary[-1].q50, 3) if gr.effect_summary else 0.0,
@@ -321,35 +302,115 @@ def brief_view(ctl: Any, forecast_id: str) -> dict:
                        "(the Lucas critique).")
     caveats.append("All news and data in this demo are synthetic; real company names make the graph concrete, not "
                    "claims about those companies.")
-    # how it travels (addition): effects by order, the main transmission path, and the watchlist's coverage
+    # the transmission paths, order by order (Oct 14): the grid's relevant view, so the brief and the grid agree
     from axelrod_wm.api.views import transmission_view
 
     tx = transmission_view(fc, eng.wm, ctl.watchlist())
-    vals = tx["values"]
-    pool = [v for v in vals if v["material"]] or vals
-    main = max(pool, key=lambda v: (v["order"], abs(v["peak"]))) if pool else None
-    travels = {"orders": tx["orders"], "path": main,
-               "path_text": (" → ".join([main["path"][0]["source"]] + [f"{h['label']} ({h['delay_days']} d) → {h['target']}"
-                                                                      for h in main["path"]])) if main and main["path"] else "",
-               "watchlist": None}
+    asked = [t for t in (thesis.targets if thesis is not None else []) if t not in set(fc.shocked)]
+    steps, grid_vals = _transmission_steps(fc, tx, asked, dates, sub, ent, ent_of)
+    wl = None
     if tx["watchlist"]:
         counts: dict[str, int] = {}
         for n in tx["watchlist"]["names"]:
             counts[n["status"]] = counts.get(n["status"], 0) + 1
-        travels["watchlist"] = {"name": tx["watchlist"]["name"], "counts": counts,
-                                "moves": [{"name": n["name"], "order": n["best"]["order"], "peak": n["best"]["peak"]}
-                                          for n in tx["watchlist"]["names"] if n["status"] == "moves"]}
+        wl = {"name": tx["watchlist"]["name"], "counts": counts,
+              "moves": [{"name": n["name"], "order": n["best"]["order"], "peak": n["best"]["peak"]}
+                        for n in tx["watchlist"]["names"] if n["status"] == "moves"]}
+    runs = [{"id": f.id, "version": f.based_on_version, "created": f.created_at.isoformat()}
+            for f in (ctl.forecasts_of(fc.thesis_id) if hasattr(ctl, "forecasts_of") else [fc])]
     return {
-        "travels": travels,
+        "transmission": {"steps": steps, "orders": tx["orders"], "watchlist": wl,
+                         "hidden": sum(1 for v in tx["values"] if v["material"]) - sum(1 for s in steps[1:] for _ in s["values"])},
         "forecast_id": fc.id, "thesis_id": fc.thesis_id, "question": fc.question or (thesis.question if thesis else ""),
         "posed_at": start.isoformat(), "horizon": horizon, "horizon_days": fc.horizon_days, "version": fc.based_on_version,
+        "latest_version": int(eng.version), "runs": runs,
         "bottom_line": bottom, "effects": effects[:6],
         "scenarios": [{"name": s.name, "weight": round(s.weight, 3)} for s in scen],
-        "timeline": _timeline(fc, sub, dates, groups)[:8],
+        "timeline": _timeline_rows(fc, sub, ent, ent_of, dates, groups, grid_vals, tx)[:10],
         "affected": affected, "movers": movers, "why": why,
         "shaped_by": [e for e in events if not e["after"]][:5],
         "since": [e for e in events if e["after"]][:5],
         "tracking": _tracking(ctl, fc, sub),
         "watch": watch, "change": change, "caveats": caveats,
+        "annotations": ctl.annotations(fc.id) if hasattr(ctl, "annotations") else [],
         "explanation": ex.text if ex is not None else "",
     }
+
+
+def _onset(days: list[int], q50: list[float], peak: float) -> int:
+    """The first sampled day the median effect reaches half its peak."""
+    for d, v in zip(days, q50):
+        if abs(v) >= 0.5 * abs(peak) and abs(peak) > 0:
+            return int(d)
+    return int(days[-1]) if days else 0
+
+
+def _transmission_steps(fc: Any, tx: dict, asked: list[str], dates: list[str], sub: Any, ent: Any,
+                        ent_of: Any) -> tuple[list[dict], dict]:
+    """The relevant transmission paths as steps a reader can rewind: step 0 is the shock, step k adds the values the
+    shock reaches at order k, each with the interactions that carry it there (label and delay) and the day its effect
+    is half in. Built from the forecast's stored grid source (inference/paths.py), never recomputed."""
+    from axelrod_wm.inference.paths import isolate
+
+    src = fc.paths
+    if not src or not src.get("values"):
+        return [], {}
+    grid = isolate(src, "relevant", asked or None)
+    vals = grid["values"]
+    by_target: dict[str, list[dict]] = {}
+    for e in grid["edges"]:
+        by_target.setdefault(e["target"], []).append(e)
+    labels = {h["interaction_id"]: h["label"] for v in tx["values"] for h in v["path"]}
+    last = len(dates) - 1
+    stages: dict[int, list[dict]] = {}
+    for sid, v in vals.items():
+        onset = 0 if v["order"] == 0 else _onset(v["days"], v["q50"], v["peak"])
+        stages.setdefault(int(v["order"]), []).append({
+            "id": sid, "name": sub(sid), "entity": ent(ent_of(sid)), "peak": v["peak"], "effect": v["effect"],
+            "peak_day": v["peak_day"], "onset_day": onset, "onset": dates[min(onset, last)],
+            "output": v["column"] == "output",
+            "from": [{"id": e["source"], "name": sub(e["source"]), "key": e["key"], "label": labels.get(e["key"], ""),
+                      "delay_days": e["delay_days"]} for e in sorted(by_target.get(sid, []), key=lambda e: -abs(e["effect"]))]})
+    steps = []
+    for k in sorted(stages):
+        items = sorted(stages[k], key=lambda x: (x["onset_day"], -abs(x["peak"])))
+        by_day = max((x["onset_day"] for x in items), default=0)
+        steps.append({"order": k, "values": items, "by_day": by_day, "by": dates[min(by_day, last)]})
+    return steps, vals
+
+
+def _timeline_rows(fc: Any, sub: Any, ent: Any, ent_of: Any, dates: list[str], groups: list[Any], grid_vals: dict,
+                   tx: dict) -> list[dict]:
+    """The brief's timeline as a table (Oct 14): when it moves, what moves, by how much, and through which path. The
+    rows are the transmission's relevant values and the question's coarser targets, earliest first."""
+    last = len(dates) - 1
+    path_of = {v["id"]: v for v in tx["values"]}
+    rows = []
+    for sid, v in grid_vals.items():
+        if v["order"] == 0 or abs(v["peak"]) < 0.05:
+            continue
+        onset = _onset(v["days"], v["q50"], v["peak"])
+        hops = (path_of.get(sid) or {}).get("path") or []
+        es = fc.effect_summary.get(sid) or []
+        rows.append({"ref": sid, "name": sub(sid), "entity": ent(ent_of(sid)), "kind": "value",
+                     "onset": dates[min(onset, last)], "onset_day": onset, "peak_date": dates[min(v["peak_day"], last)],
+                     "peak": round(v["peak"], 3), "effect": round(v["effect"], 3),
+                     "q05": round(es[-1].q05, 3) if es else None, "q95": round(es[-1].q95, 3) if es else None,
+                     "order": int(v["order"]), "path": [hops[0]["source"]] + [h["target"] for h in hops] if hops else [],
+                     "via": [h["label"] for h in hops]})
+    for g in groups:
+        med = [p.q50 for p in g.effect_summary]
+        if not med:
+            continue
+        k_peak = max(range(len(med)), key=lambda k: abs(med[k]))
+        peak = med[k_peak]
+        if abs(peak) < 0.05:
+            continue
+        onset = next(k for k, x in enumerate(med) if abs(x) >= 0.5 * abs(peak))
+        last_q = g.effect_summary[-1]
+        rows.append({"ref": g.id, "name": g.name, "entity": None, "kind": g.kind, "onset": dates[min(onset, last)],
+                     "onset_day": onset, "peak_date": dates[min(k_peak, last)], "peak": round(peak, 3),
+                     "effect": round(last_q.q50, 3), "q05": round(last_q.q05, 3), "q95": round(last_q.q95, 3),
+                     "order": None, "path": [], "via": [], "members": len(g.members)})
+    rows.sort(key=lambda r: (r["onset_day"], -abs(r["peak"])))
+    return rows
