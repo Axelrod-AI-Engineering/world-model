@@ -304,6 +304,7 @@ async function boot() {
   const briefs = initBriefs({
     openLeft, onWalk: (scope) => walk.open(scope), onChat: (x) => chat.open(x), focusNode: (id) => renderer.focusNode(id),
     openForecast: (id) => emit("open-forecast", id),
+    onEdit: (x) => emit("edit-thesis", x), onRerun: (id) => emit("rerun-forecast", id),
   });
   const hyps = initHypotheses({ toast });
   const decisions = initDecisions({ toast });
@@ -1017,6 +1018,7 @@ async function boot() {
         if (!right.hidden && ["forecast", "thesis"].includes(right.dataset.tab)) closeRight();
         if (!left.hidden && left.dataset.tab === "briefs") closeLeft();
         if (paths.isOpen() && gridTarget?.kind === "forecast") paths.close();
+        document.querySelector(".brief-nudge")?.classList.add("hidden");
       }
     }
     store.settings.mode = mode;
@@ -1033,7 +1035,7 @@ async function boot() {
       // Learn's windows belong to Learn: a staged proposal's grid closes, and Predict opens on its own canvas
       if (paths.isOpen() && gridTarget?.kind !== "forecast") paths.close();
       if (store.settings.draw) setDraw(false);
-      if (announce) once("mode-predict", "Predict: pose a thesis against the committed version. Nothing you do here is learned.");
+      // no toast (Oct 14): the blank canvas's card says what Predict is, and a forecast's first view stays uncluttered
     } else if (announce) {
       once("mode-learn", "Learn: update the world model. Every change is vetted and committed; the Console shows each step.");
     }
@@ -1138,17 +1140,77 @@ async function boot() {
   });
   on("ask-started", ({ question }) => {
     store.forecastDismissed = false;
+    hideBriefNudge();
     progress.run = { scope: null, question, phase: "posed", nets: 0, total: 0, current: "" };
     emit("forecasting", progress.run);
     openRight("forecast");
   });
+  // DECISION (Oct 14, review meeting: "too many things pop up when we first do a prediction"): a forecast lands as one
+  // focused view, the transmission path (the grid, with the canvas isolated under it), with the Forecast panel kept on
+  // the right. The brief no longer opens by itself: one small prompt offers it, and goes away on its own.
   on("asked", (fv) => {
     showForecastOnCanvas(fv);
     autoGrid("forecast", fv.forecast?.id, (fv.transmission?.values ?? []).length > 0);
     if (progress.run && progress.run.scope == null) { progress.run = null; emit("forecasting", null); }
-    if (guide.run) briefs.expect(fv.forecast.thesis_id);
-    else setTimeout(() => briefs.open(fv.forecast.id), 300);
+    if (fv.forecast?.id) setTimeout(() => showBriefNudge(fv.forecast.id), 1400);
   });
+  on("walkthrough", (w) => { if (w) hideBriefNudge(); });
+  // rewinding the brief's transmission path: the canvas lights the path as far as the step shown
+  on("brief-path", ({ entities, links }) => {
+    const hot = new Set(links);
+    store.forecastDismissed = false;
+    store.highlight = { entities: new Set(entities), links: new Set(links), hulls: new Set(), hot };
+    renderer.setHighlight(store.highlight);
+    emit("highlight", store.highlight);
+  });
+  // the brief carries the same transmission path (rewindable), so opening it gives the grid's room back when the two
+  // would not both fit; "As a grid" in the brief brings the grid back
+  on("tab-left", (name) => {
+    if (name !== "briefs") return;
+    hideBriefNudge();
+    const c = $("#canvas").getBoundingClientRect();
+    const room = c.width - left.getBoundingClientRect().width - (right.hidden ? 0 : right.getBoundingClientRect().width);
+    if (paths.isOpen() && gridTarget?.kind === "forecast" && room < 900) paths.close();
+  });
+  on("open-brief", (id) => { hideBriefNudge(); briefs.open(id); });
+  // Edit: Ask, filled in with the thesis as it was posed; Re-run: the same thesis at the latest committed version
+  on("edit-thesis", async ({ thesis_id: tid }) => {
+    try {
+      thesis.prefillThesis(await api.thesis(tid));
+      openRight("thesis");
+    } catch (err) { toast(errorText(err), "err"); }
+  });
+  on("rerun-forecast", async (fid) => {
+    emit("ask-started", { question: store.forecast?.forecast?.question ?? "Re-running the forecast" });
+    const reading = !left.hidden && left.dataset.tab === "briefs";
+    try {
+      const fv = await api.rerun(fid);
+      emit("asked", fv);
+      emit("show-forecast", fv);
+      // re-run from a brief: the new run's brief replaces it (the earlier one is a click away, under "runs")
+      briefs.invalidate();
+      if (reading) { await briefs.refresh(); briefs.open(fv.forecast.id); }
+    } catch (err) {
+      if (progress.run && progress.run.scope == null) { progress.run = null; emit("forecasting", null); }
+      toast(errorText(err), "err");
+    }
+  });
+  const nudge = document.createElement("div");
+  nudge.className = "brief-nudge hidden";
+  nudge.setAttribute("role", "status");
+  $("#stage").appendChild(nudge);
+  let nudgeTimer = null;
+  function showBriefNudge(id) {
+    if (store.booting || store.walkthrough || (!left.hidden && left.dataset.tab === "briefs")) return;
+    nudge.innerHTML = `<span class="bn-t"><b>Feel free to view the brief</b> <span class="faint">· a short reading of this forecast</span></span>
+      <button class="small primary" data-bn-open>View the brief</button><button class="ghost x" data-bn-x aria-label="Dismiss">✕</button>`;
+    nudge.querySelector("[data-bn-open]").addEventListener("click", () => emit("open-brief", id));
+    nudge.querySelector("[data-bn-x]").addEventListener("click", hideBriefNudge);
+    nudge.classList.remove("hidden");
+    clearTimeout(nudgeTimer);
+    nudgeTimer = setTimeout(hideBriefNudge, 16000);
+  }
+  function hideBriefNudge() { clearTimeout(nudgeTimer); nudge.classList.add("hidden"); }
   on("walkthrough", (w) => { if (w) guide.stop(); });
   on("open-forecast", () => openRight("forecast"));
 
@@ -1225,7 +1287,7 @@ async function boot() {
     if (!keep.size) {
       predictHint.className = "floating predict-empty";
       predictHint.innerHTML = `<div class="eh-t">Ask about your world</div>
-        <p>Pose a what-if. The forecast brings forward the actors and ideas it reaches, in the order the shock travels.</p>
+        <p>Pose a what-if. The forecast brings forward the actors and ideas it reaches, in the order the shock travels. Nothing you do here is learned.</p>
         <div class="predict-acts"><button class="primary" data-ask>Ask a question</button>
           <button class="ghost small" data-all>Show the whole model</button></div>`;
     } else {

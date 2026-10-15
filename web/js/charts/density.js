@@ -56,3 +56,53 @@ export function densitySvg(points, { width = 120, height = 28, labels = false, u
   }
   return svg.node();
 }
+
+// The forecast beside its baseline (Oct 14): two distributions on one shared axis, the baseline (without the shock)
+// above and the forecast (with it) below, each with its median ticked and its 90% range under it, a dashed line at the
+// baseline's median through both, and the shift between the medians marked under them. The server sends both densities
+// measured from the baseline's median (inference/groups.split_at_horizon); this only draws them.
+export function splitSvg(split, { width = 220, row = 14, labels = true } = {}) {
+  const gut = labels ? 46 : 4;                  // room for the row labels
+  const padR = 6;
+  const gap = 5;
+  const rows = [["baseline", "without", "split-base"], ["forecast", "with", "split-fc"]];
+  const yS = row * 2 + gap + 9;                 // the shift's line
+  const h = yS + 6;
+  const s = split?.shift ?? 0;
+  const said = `${Math.abs(s) < 0.005 ? "≈ 0" : `${s > 0 ? "▲" : "▼"} ${Math.abs(s).toFixed(2)}`} sd`;
+  const svg = d3.create("svg").attr("class", "density split").attr("width", width).attr("height", h)
+    .attr("viewBox", `0 0 ${width} ${h}`).attr("role", "img")
+    .attr("aria-label", `At the horizon, without the shock and with it: the median shifts ${said}`);
+  if (!split?.baseline?.length || !split?.forecast?.length) return svg.node();
+  const xs = [...split.baseline, ...split.forecast].map((p) => p[0]).concat([0, ...(split.domain ?? [])]);
+  const x = d3.scaleLinear().domain(d3.extent(xs)).range([gut, width - padR]);
+  rows.forEach(([key, label, cls], i) => {
+    const y0 = i * (row + gap) + row;           // the row's floor
+    const y = d3.scaleLinear().domain([0, 1]).range([y0, y0 - row + 1]);
+    const g = svg.append("g").attr("class", cls);
+    if (labels) g.append("text").attr("class", "split-lab").attr("x", 0).attr("y", y0 - 2).text(label);
+    g.append("path").attr("class", "split-area")
+      .attr("d", d3.area().curve(SMOOTH).x((p) => x(p[0])).y0(y0).y1((p) => y(p[1]))(split[key]));
+    g.append("path").attr("class", "split-line")
+      .attr("d", d3.line().curve(SMOOTH).x((p) => x(p[0])).y((p) => y(p[1]))(split[key]));
+    g.append("line").attr("class", "split-rule").attr("x1", gut).attr("x2", width - padR).attr("y1", y0).attr("y2", y0);
+    const q = split[`${key}_q`] ?? [];
+    if (q.length === 3) {
+      g.append("line").attr("class", "split-med").attr("x1", x(q[1])).attr("x2", x(q[1])).attr("y1", y0 - row + 1).attr("y2", y0);
+    }
+  });
+  // the baseline's median, through both rows
+  svg.append("line").attr("class", "split-zero").attr("x1", x(0)).attr("x2", x(0)).attr("y1", 1).attr("y2", yS);
+  // the shift: an arrow from the baseline's median to the forecast's
+  const dir = s > 0 ? "up" : "down";
+  if (Math.abs(x(s) - x(0)) >= 3) {
+    svg.append("line").attr("class", `split-shift ${dir}`).attr("x1", x(0)).attr("x2", x(s)).attr("y1", yS).attr("y2", yS);
+    svg.append("path").attr("class", `split-head ${dir}`).attr("d", `M${x(s)},${yS} l${s > 0 ? -4 : 4},-3 l0,6 z`);
+  }
+  const right = x(s) > (gut + width) / 2;
+  svg.append("text").attr("class", `split-txt ${Math.abs(s) < 0.005 ? "" : dir}`)
+    .attr("x", right ? Math.min(x(0), x(s)) - 4 : Math.max(x(0), x(s)) + 5).attr("y", yS + 3.5)
+    .attr("text-anchor", right ? "end" : "start").text(said);
+  if (labels) svg.append("text").attr("class", "split-lab").attr("x", 0).attr("y", yS + 3.5).text("shift");
+  return svg.node();
+}
