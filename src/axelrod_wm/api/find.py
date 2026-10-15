@@ -141,7 +141,7 @@ def find(ctl: WorldModelController, q: str, limit: int = 40) -> dict:
             zs = [s.z for s in subs]
             if not any(_moved(z, flt) for z in zs):
                 continue
-        fields = [("name", e.name, 3.0), ("also called", " ".join(e.aliases), 2.5), ("kind", " ".join(kinds) + " " + e.kind, 2.0),
+        fields = [("name", e.name, 3.0), ("also called", " ".join(e.aliases), 2.5), ("concept", " ".join(kinds) + " " + e.kind, 2.0),
                   ("category", " ".join(CATEGORY_NAMES.get(t, t) for t in e.category_tags), 1.2),
                   ("description", (ent.description if ent else "") or "", 1.0)]
         s, why = score(fields) if query else (1.0, [])
@@ -156,7 +156,7 @@ def find(ctl: WorldModelController, q: str, limit: int = 40) -> dict:
         if not kind_ok(kinds, e.kind) or not open_ok(s.open) or ((flt.get("moved") or flt.get("up") or flt.get("down")) and not _moved(s.z, flt)):
             continue
         fields = [("name", s.name, 3.0), ("entity", e.name + " " + " ".join(e.aliases), 2.0),
-                  ("kind", f"{s.attribute_kind.replace('_', ' ')} {' '.join(kinds)}", 1.5), ("unit", s.unit, 0.8)]
+                  ("concept", f"{s.attribute_kind.replace('_', ' ')} {' '.join(kinds)}", 1.5), ("unit", s.unit, 0.8)]
         sc, why = score(fields) if query else (1.0, [])
         if sc > 0:
             # the screen names it with its entity ("Delta Air Lines · share price", web/js/names.js)
@@ -177,7 +177,7 @@ def find(ctl: WorldModelController, q: str, limit: int = 40) -> dict:
         ea, eb = ent_by.get(a.entity_id), ent_by.get(b.entity_id)
         fields = [("label", link.label, 2.5), ("from", f"{a.name} {ea.name if ea else ''}", 1.5),
                   ("to", f"{b.name} {eb.name if eb else ''}", 1.5),
-                  ("kind", " ".join(path_names(itax, link.generalization_id)), 1.0)]
+                  ("concept", " ".join(path_names(itax, link.generalization_id)), 1.0)]
         sc, why = score(fields) if query else (0.5, [])
         if sc > 0:
             hits.append({"kind": "interaction", "id": link.id, "name": f"{a.name} → {b.name}", "label": link.label,

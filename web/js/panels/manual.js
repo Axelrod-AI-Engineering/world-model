@@ -52,7 +52,7 @@ export function initManual({ toast, onProposal }) {
         <section class="mf-sec"><h4><label><input type="checkbox" data-ent-on ${e ? "checked" : ""}> A new entity</label></h4>
           ${e ? `<div class="mf-grid">
             <label>Name<input data-f="entity.name" value="${esc(e.name)}"></label>
-            <label>Kind<select data-f="entity.kind">${(vocab?.entity_kinds ?? []).map((k) => `<option ${k === e.kind ? "selected" : ""}>${esc(k)}</option>`).join("")}</select></label>
+            <label>Type<select data-f="entity.kind">${(vocab?.entity_kinds ?? []).map((k) => `<option ${k === e.kind ? "selected" : ""}>${esc(k)}</option>`).join("")}</select></label>
             <label>Category<select data-f="entity.tag">${(vocab?.category_tags ?? []).map((t) => `<option ${t === (e.tags ?? [])[0] ? "selected" : ""}>${esc(t)}</option>`).join("")}</select></label>
             <label>Other names<input data-f="entity.aliases" value="${esc((e.aliases ?? []).join(", "))}" placeholder="comma-separated"></label></div>` : ""}</section>
         <section class="mf-sec"><h4>New values <button class="linkish small" data-add-value>+ add a value</button></h4>
@@ -60,7 +60,7 @@ export function initManual({ toast, onProposal }) {
             <label>Name<input data-v="${i}" data-k="name" value="${esc(v.name)}"></label>
             <label>On<select data-v="${i}" data-k="entity">${e ? `<option value="" ${!v.entity ? "selected" : ""}>${esc(e.name || "the new entity")}</option>` : ""}
               ${ents.map((x) => `<option value="${esc(x.id)}" ${x.id === v.entity ? "selected" : ""}>${esc(x.name)}</option>`).join("")}</select></label>
-            <label>Kind<select data-v="${i}" data-k="attribute_kind">${kinds.map((k) => `<option ${k.id === v.attribute_kind ? "selected" : ""}>${esc(k.id)}</option>`).join("")}</select></label>
+            <label>Concept<select data-v="${i}" data-k="attribute_kind">${kinds.map((k) => `<option ${k.id === v.attribute_kind ? "selected" : ""}>${esc(k.id)}</option>`).join("")}</select></label>
             <label>Unit<input data-v="${i}" data-k="unit" value="${esc(v.unit ?? "")}" size="7"></label>
             <label title="Its usual level, in its unit">Typical<input data-v="${i}" data-k="typical" type="number" step="any" value="${v.typical ?? ""}" size="7"></label>
             <label title="How much it varies: a fraction for prices and flows (0.06 = ±6%), units for rates">Spread<input data-v="${i}" data-k="spread" type="number" step="any" value="${v.spread ?? ""}" size="6"></label>

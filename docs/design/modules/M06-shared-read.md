@@ -21,7 +21,7 @@
 
 The read that learning and inference share. Given an event, real or hypothetical, it works out:
 - what the event adds;
-- what kind each new item is;
+- which concept each new item falls under;
 - what it resembles;
 - which patterns it binds;
 - how its moves ripple, order by order.

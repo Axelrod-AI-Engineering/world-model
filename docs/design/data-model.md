@@ -26,7 +26,7 @@ Everything the world model knows is one of the types below, and everything it wr
 | **Superentity** | A recurring configuration of entities and interactions, with roles; superentities nest | "Oil to airlines"; "Semiconductor complex" › "AI chip supply chain" |
 | **Event** | Something that changes or asks about the graph: a market event (learned from) or a thesis (asked, never learned from) | "Brent jumps 20%"; "What if USD/JPY falls 8% in 30 days?" |
 
-Everything else is either **memory** (what the model holds now, and what it has generalized), **kinds** (the taxonomies new items are sorted into), or **records** (proposals, change sets, forecasts) that make it auditable.
+Everything else is either **memory** (what the model holds now, and what it has generalized), **concepts** (the taxonomies new items are sorted into), or **records** (proposals, change sets, forecasts) that make it auditable.
 
 ![Data model](diagrams/data-model.svg)
 
@@ -55,7 +55,7 @@ An interaction's **effect** is in sd of the target per sd of the source. Reports
 | `features`, `description` | Profile used for classification (sector, region, …) |
 | `subentity_ids` | Its values |
 | `internal_interaction_ids` | Interactions between its own values |
-| `generalization_id` | The kind it was sorted into |
+| `generalization_id` | The concept it was sorted into |
 | `origin`, `created_at`, `user_confidence` | Where it came from (seed, article, user, learned) and the reviewer's confidence |
 
 ### Subentity
@@ -63,7 +63,7 @@ An interaction's **effect** is in sd of the target per sd of the source. Reports
 | Field | Meaning |
 |---|---|
 | `id` = `<entity>.<slug>`, `entity_id`, `name`, `aliases` | Identity; always shown with its entity ("Tokio Marine · share price") |
-| `attribute_kind`, `unit`, `features` | What kind of value it is (price, rate, flow, share, decision variable) |
+| `attribute_kind`, `unit`, `features` | Its value concept (price, rate, flow, share, decision variable) |
 | `prior`, `posterior` | Distributions (Gaussian, LogNormal, Beta, Gamma) |
 | `anchor`, `scale`, `obs_noise` | The unit system above |
 | `level_mean`, `level_var`, `level_noise`, `state_cov` | The daily filter's state |
@@ -84,20 +84,20 @@ An interaction's **effect** is in sd of the target per sd of the source. Reports
 | `parameters` | Moderators: `ParameterBinding(name, moderator_id, form, coefficient, threshold)`, multiplicative, threshold, or additive |
 | `evidence`, `evidence_dropped` | What supports it |
 | `time_states` | Its past values |
-| `generalization_id`, `prior_source_id` | Its interaction kind, and where its prior came from |
+| `generalization_id`, `prior_source_id` | Its interaction concept, and where its prior came from |
 | `origin`, `created_at`, `retired_at` | Lifecycle; retired, never deleted |
 
 ### Superentity
 
 | Type | Fields | Meaning |
 |---|---|---|
-| `SuperentityPattern` (long-term memory) | `roles` (name, kind, attribute kinds), `relations` (role → role, interaction kind, polarity, `present`), `sub_pattern_ids`, `support`, `status` (candidate · admitted · dissolved), `rival_ids`, `episode_ids`, `track_record` (hits, misses) | A reusable configuration: who plays which role and how they interact |
+| `SuperentityPattern` (long-term memory) | `roles` (name, kind, value concepts), `relations` (role → role, interaction concept, polarity, `present`), `sub_pattern_ids`, `support`, `status` (candidate · admitted · dissolved), `rival_ids`, `episode_ids`, `track_record` (hits, misses) | A reusable configuration: who plays which role and how they interact |
 | `SuperentityInstance` (working memory) | `pattern_id`, `bindings` (role → entity), `interaction_ids`, `absent_interaction_ids`, `child_instance_ids`, `activation` | A pattern bound to real entities |
 | `SuperInteraction` | `source_instance_id`, `target_instance_id`, `kind` (causal · shares_members), `underlying_interaction_ids`, `shared_entity_ids`, `significance` | The interactions between two instances, abstracted |
 
-### Kinds
+### Concepts
 
-`Taxonomy` → `Generalization` nodes, with `GeneralizationStats` (support, typical levels, effects, kernels) and a `Signature`. There are two taxonomies, objects and interactions. A new item is sorted down one, inherits its kind's priors once the kind's support passes the recall threshold, and updates the statistics along its path. `AttributeVocabulary` lists the attribute kinds (designer-given, not learned).
+`Taxonomy` → `Generalization` nodes, with `GeneralizationStats` (support, typical levels, effects, kernels) and a `Signature`. There are two taxonomies, objects and interactions. A new item is sorted down one, inherits its concept's priors once the concept's support passes the recall threshold, and updates the statistics along its path. `AttributeVocabulary` lists the attribute kinds (designer-given, not learned).
 
 ## Events
 
@@ -111,7 +111,7 @@ An interaction's **effect** is in sd of the target per sd of the source. Reports
 
 | Operation | Changes | In learning | In a thesis |
 |---|---|---|---|
-| `AddEntity`, `AddSubentity` | Structure | Adds it, sorted into a kind | On the branch only |
+| `AddEntity`, `AddSubentity` | Structure | Adds it, sorted into a concept | On the branch only |
 | `AddInteraction` | Structure | Adds it, with existence and dynamics (or as a hedge) | On the branch only |
 | `ReweightInteraction`, `AnnotateInteraction` | An interaction | Changes its belief or evidence | — |
 | `ObserveValue` | A value | A report: folded against the day's prediction | — |
@@ -120,7 +120,7 @@ An interaction's **effect** is in sd of the target per sd of the source. Reports
 | `ProposeSuperentity`, `DissolveSuperentity` | Superentities | Collapse or expand, by review | — |
 | `RetireEntity`, `RetireInteraction` | Structure | Retires it (kept in history) | — |
 
-Every end of an operation is a `ConcreteTarget` (a subentity) or an `AbstractTarget` (a kind, an entity, or a mention still to be narrowed). **Specificity** runs generalization (0) → entity (1) → subentity (2); only concrete ends propagate.
+Every end of an operation is a `ConcreteTarget` (a subentity) or an `AbstractTarget` (a concept, an entity, or a mention still to be narrowed). **Specificity** runs generalization (0) → entity (1) → subentity (2); only concrete ends propagate.
 
 ### Thesis (asked, never learned from)
 
@@ -131,7 +131,7 @@ Every end of an operation is a `ConcreteTarget` (a subentity) or an `AbstractTar
 | Memory | Holds |
 |---|---|
 | **Working memory**: the world now | The graph · daily deviations (z per value per day) · channel states (each interaction's kernel recursion) · the **hypothesis frontier** · pending refinements (hedges) · ripple judgments · the forecast layer (outside the state hash) · activity log, episode buffer, late queue, source cursors, clock |
-| **Long-term memory**: what generalizes | **Object generalizations** (kinds and superentity patterns) · **Interaction generalizations** · **Entity memories** (each actor's `DecisionObservation`s and `DecisionProfile` by context) · **Correlation frontier** (`CoMovement`: earlier → later, lag, sign, support, consistency, status) · **Prior states** (episodes and explanations) |
+| **Long-term memory**: what generalizes | **Object generalizations** (concepts and superentity patterns) · **Interaction generalizations** · **Entity memories** (each actor's `DecisionObservation`s and `DecisionProfile` by context) · **Correlation frontier** (`CoMovement`: earlier → later, lag, sign, support, consistency, status) · **Prior states** (episodes and explanations) |
 
 A **hypothesis** is a claim that an interaction is present or absent, or that an entity will make a decision. It has `probability`, `informational_value`, `half_life_days` (14), and `status` (open · supported · refuted · expired).
 

@@ -65,7 +65,7 @@ export function initMemory({ onSelect } = {}) {
       pats.get(p.generalization_id).push(p);
     }
     // the open node (Oct 9): every kind's reserve for a kind not seen yet, alpha / (support + alpha), as an empty leaf
-    const openLeaf = (n) => (n.open == null ? "" : `<li class="open-leaf" title="The chance that the next ${kind === "object" ? "object" : "interaction"} classified here is of a kind not seen yet">
+    const openLeaf = (n) => (n.open == null ? "" : `<li class="open-leaf" title="The chance that the next ${kind === "object" ? "object" : "interaction"} classified here belongs to a concept not seen yet">
       <span class="toggle"></span><span class="on-dot" aria-hidden="true"></span> <span class="muted">not seen yet · ${Math.round(100 * n.open)}%</span></li>`);
     const li = (id, depth) => {
       const n = nodes.get(id);
@@ -84,7 +84,7 @@ export function initMemory({ onSelect } = {}) {
     body.innerHTML = `<p class="small muted">${kind === "object"
       ? "Every entity and superentity is classified down this tree. Supports count what was classified; the latest classification path is highlighted. Superentities sit at the configuration they generalize to."
       : "Every interaction is classified down this tree, from general to specific relations. New interactions inherit priors from where they land."}
-      Each kind ends in an empty node: the share kept for a kind not seen yet, which shrinks as the kind gathers support.</p>
+      Each concept ends in an empty node: the share kept for a concept not seen yet, which shrinks as the concept gathers support.</p>
       <div class="tree"><ul>${li(t.root_id, 0)}</ul></div>`;
     for (const tg of body.querySelectorAll("[data-tog]")) {
       tg.addEventListener("click", () => {

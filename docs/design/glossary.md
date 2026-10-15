@@ -29,7 +29,7 @@ The full field lists are in [data-model.md](data-model.md).
 | **Channel** | One direction of an interaction, as the dynamics simulate it | |
 | **Superentity** | A recurring configuration of entities and interactions, with roles: a sector, a rivalry, a shock. A *pattern* lives in long-term memory; an *instance* is bound in working memory. Superentities nest. | schema, configuration, cluster |
 | **Super-interaction** | The interactions between two superentity instances, abstracted | |
-| **Kind** | A node of a taxonomy (an object or interaction generalization). Every item is sorted into one and inherits its priors. | category |
+| **Concept** | A node of a taxonomy (an object or interaction generalization). Every item is sorted into one and inherits its priors. | kind, category |
 | **Soft economic constraint** | A bound that bends a value as it nears a limit, rather than clipping it | hard rule |
 | **Standard units (z)** | (link(x) − anchor) / scale: how every value is compared | |
 | **Category tag** | One of eight display labels; no causal meaning | |
@@ -37,7 +37,7 @@ The full field lists are in [data-model.md](data-model.md).
 | **Imported item** | One dated piece of research in an import bundle (`axelrod.import/v1`) | |
 | **Graph update event** | The operations one market event stands for, with their evidence; real or hypothetical | |
 | **Operation** | One change: add or retire an item, change or observe a value, reweight or annotate an interaction, propose a hypothesis, group or dissolve a superentity | op |
-| **Fuzzy end** | An operation's end that names a kind ("an airline") rather than a value | abstract target |
+| **Fuzzy end** | An operation's end that names a concept ("an airline") rather than a value | abstract target |
 | **Refinement levels** | generalization → entity → subentity | "a kind of thing", "one value" |
 | **Hedge** | A fuzzy end held across candidates, with a probability each plus an open share | pending refinement |
 | **Thesis** | A what-if question, posed as a hypothetical graph update event. It is never learned from; with no shocks, it gives a baseline forecast. | |
@@ -49,8 +49,8 @@ The full field lists are in [data-model.md](data-model.md).
 |---|---|---|
 | **Working memory** | The world now: the graph, daily deviations, channel states, the hypothesis frontier, hedges, ripple judgments, the forecast layer | |
 | **Long-term memory** | What generalizes, in five parts: | |
-| · **Object generalizations** | Kinds of objects, and superentity patterns | |
-| · **Interaction generalizations** | Kinds of interactions | |
+| · **Object generalizations** | Concepts of objects, and superentity patterns | |
+| · **Interaction generalizations** | Concepts of interactions | |
 | · **Entity memories** | Each actor's decisions, by context | |
 | · **Correlation frontier** | Co-movements with no interaction; counted, never propagated, promoted only by review | |
 | · **Prior states** | Episodes (distilled days) and explanations | |

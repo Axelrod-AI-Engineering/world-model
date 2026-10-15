@@ -425,6 +425,10 @@ def create_app(config_path: str | None = None, scenario: str = "oil_shock_demo",
     from axelrod_wm.api.auth import BasicAuthMiddleware
 
     app.add_middleware(BasicAuthMiddleware)
+    # forecasts' views are large JSON with repeated keys; compressed, they arrive several times faster (Oct 15)
+    from starlette.middleware.gzip import GZipMiddleware
+
+    app.add_middleware(GZipMiddleware, minimum_size=2048, compresslevel=5)
     app.state.axelrod = state
     app.state.axelrod_by_login = by_login
 

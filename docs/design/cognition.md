@@ -18,14 +18,14 @@ Why the world model organizes memory the way a cognitive architecture does, inst
 | # | Framing | The standard approach | What we do instead | What it buys a PM | Status |
 |---|---|---|---|---|---|
 | F1 | Two memories, consolidated daily | One store: a vector database or a long context | Working memory (the world now) and long-term memory (what generalizes), with a daily distillation | Today's state stays exact; lessons accrue slowly and don't overwrite it | Built |
-| F2 | Incremental concept formation | A flat index, or batch clustering re-run on a schedule | Cobweb trees built one instance at a time, by category utility | New names are understood at once, with no re-indexing and no forgetting of old kinds | Planned (signature descent today) |
-| F3 | Hierarchical retrieval | Top-k cosine over whitened embeddings | Sort down a concept tree; acuity cutoff instead of whitening | Retrieval returns a kind and its members, not a list of near-duplicates | Planned |
+| F2 | Incremental concept formation | A flat index, or batch clustering re-run on a schedule | Cobweb trees built one instance at a time, by category utility | New names are understood at once, with no re-indexing and no forgetting of old concepts | Planned (signature descent today) |
+| F3 | Hierarchical retrieval | Top-k cosine over whitened embeddings | Sort down a concept tree; acuity cutoff instead of whitening | Retrieval returns a concept and its members, not a list of near-duplicates | Planned |
 | F4 | A tree per structure, composed by concepts | One embedding space for everything | Separate trees for subentities, entities, interactions, events, schemas, episodes; composites point to their parts' concepts | A long part list can't swamp a composite; like is compared with like | Planned |
-| F5 | Kinds by how things respond | Text embeddings of descriptions | Structured vectors: profile, factor exposures, responses to standard shocks, graph position | Two firms that react alike to oil are grouped, even if described differently | Planned |
-| F6 | Kinds supply priors | Each new entity starts cold | A new member inherits its kind's values, interactions, and effect sizes | A newly added airline already links to jet fuel and to confidence | Built |
+| F5 | Concepts by how things respond | Text embeddings of descriptions | Structured vectors: profile, factor exposures, responses to standard shocks, graph position | Two firms that react alike to oil are grouped, even if described differently | Planned |
+| F6 | Concepts supply priors | Each new entity starts cold | A new member inherits its concept's values, interactions, and effect sizes | A newly added airline already links to jet fuel and to confidence | Built |
 | F7 | Schemas as chunks | Fixed sector lists, or community detection | Superentities: recurring configurations, induced from co-activation, nested, admitted by review | Groups like "oil to airlines" emerge from data and can be named and reused | Built (heuristic) |
 | F8 | Analogy by structure | Retrieve the most similar text | Two-stage recall: a cheap filter, then alignment of roles and relations | A new shock recalls an old one with the same shape, not the same words | Partial |
-| F9 | Explaining away | Count every co-occurrence as evidence | A move already explained by a kind or an interaction is not evidence for a new link | Fewer spurious links from common drivers | Partial (R2) |
+| F9 | Explaining away | Count every co-occurrence as evidence | A move already explained by a concept or an interaction is not evidence for a new link | Fewer spurious links from common drivers | Partial (R2) |
 | F10 | Structure apart from strength; ask what is worth knowing | Store facts passively | The hypothesis frontier: whether an interaction exists, kept apart from its size, ranked by value of information | The model says which uncertainties matter to the names you watch | Built (heuristic VOI) |
 | F11 | An open world | Closed-world entity linking (top-1) | Hedge vague mentions across candidates plus an open share; commit at a bound | "A US carrier" stays uncertain until evidence settles it; no false precision | Built (counts) |
 | F12 | Local, incremental revision, judged by a person | Re-extract and overwrite in batch | Each event revises a staged copy; a person judges the consequences, ripple included | Every change is small, inspectable, and reversible | Built |
@@ -36,7 +36,7 @@ Why the world model organizes memory the way a cognitive architecture does, inst
 
 ![The standard retrieval stack vs the model memory](diagrams/memory-vs-retrieval.svg)
 
-The standard stack answers "which text is like this text". The world model answers "what kind of thing is this, what does that kind usually do, what past case had the same shape, and what don't we know yet". It is the second question set that a forecast needs.
+The standard stack answers "which text is like this text". The world model answers "what concept does this fall under, what does that concept usually do, what past case had the same shape, and what don't we know yet". It is the second question set that a forecast needs.
 
 ## The framings
 
@@ -44,14 +44,14 @@ The standard stack answers "which text is like this text". The world model answe
 
 - **Idea.** In complementary learning systems theory, specific episodes are stored fast, and structured knowledge is consolidated slowly and interleaved, which avoids catastrophic interference (McClelland et al., 1995).
 - **Instead of** a single store, where every new fact competes with every old one.
-- **In the model.** Working memory folds each vetted event in at once. Long-term memory learns from the day's distillation (`day.distill`): episodes, kinds, schemas, and Entity memories. Learning commits twice per event, once per memory.
+- **In the model.** Working memory folds each vetted event in at once. Long-term memory learns from the day's distillation (`day.distill`): episodes, concepts, schemas, and Entity memories. Learning commits twice per event, once per memory.
 - **Where.** [M03](modules/M03-memory.md), [M08](modules/M08-learning-working.md), [M09](modules/M09-learning-long-term.md).
 
 ### F2 · Incremental concept formation
 
 - **Idea.** Cobweb builds a hierarchy of probabilistic concepts one instance at a time. It sorts each instance by category utility and predicts missing attributes from where sorting stops (Fisher, 1987). Classit extends it to continuous attributes with an acuity that floors a concept's variance (Gennari et al., 1989). Category utility favors the basic level, the level people name first (Corter & Gluck, 1992; Rosch et al., 1976). Cobweb reproduces human category-learning effects (Lian et al., 2024) and learns incrementally with little catastrophic forgetting (Barari et al., 2024, 2026).
 - **Instead of** a flat index, or clustering re-run in batch, which must be rebuilt as the market changes and has no notion of a level.
-- **In the model.** Kinds are the nodes of the object and interaction taxonomies. Each new item is sorted in and updates the statistics along its path.
+- **In the model.** Concepts are the nodes of the object and interaction taxonomies. Each new item is sorted in and updates the statistics along its path.
 - **Status.** The classifier is signature descent today. Cobweb trees are the planned implementation of the same slots, where Cobweb *proposes* structure and a hierarchical likelihood *decides* it ([decisions D-07](decisions.md)).
 
 ### F3 · Hierarchical retrieval with an acuity cutoff
@@ -69,7 +69,7 @@ The standard stack answers "which text is like this text". The world model answe
 - **In the model.** There are six trees: subentities, entities, interactions, events, schemas, and episodes. A composite (an entity, a schema, an episode) refers to its parts by the concepts they were sorted into.
 - **Status.** Planned (R5).
 
-### F5 · Kinds by how things respond
+### F5 · Concepts by how things respond
 
 - **Idea.** Categories carry the causal relations among their features, not just the features (Rehder, 2003). So an object's description should include how it responds.
 - **Instead of** text embeddings of a company's description.
@@ -83,11 +83,11 @@ The standard stack answers "which text is like this text". The world model answe
   The vectors go into Cobweb unwhitened.
 - **Status.** Planned (R5).
 
-### F6 · Kinds supply priors
+### F6 · Concepts supply priors
 
-- **Idea.** People learn causal schemata, categories whose members share mechanisms (Kemp et al., 2010), and generic priors carry over from the kind to the case (Lu et al., 2008).
+- **Idea.** People learn causal schemata, categories whose members share mechanisms (Kemp et al., 2010), and generic priors carry over from the concept to the case (Lu et al., 2008).
 - **Instead of** each new entity starting with no values and no interactions.
-- **In the model.** An entity sorted under Airline inherits a jet fuel cost, passenger traffic, and a market share, linked to oil and to confidence the way other airlines' are. The prior is used once the kind's support passes the recall threshold. Tutorial example 8 shows it.
+- **In the model.** An entity sorted under Airline inherits a jet fuel cost, passenger traffic, and a market share, linked to oil and to confidence the way other airlines' are. The prior is used once the concept's support passes the recall threshold. Tutorial example 8 shows it.
 - **Status.** Built.
 
 ### F7 · Schemas as chunks
@@ -108,7 +108,7 @@ The standard stack answers "which text is like this text". The world model answe
 
 - **Idea.** Evidence for one cause lowers belief in a rival cause. Dayan and Kakade (2001) give a Kalman-filter account of it.
 - **Instead of** counting every co-movement as evidence for a link.
-- **In the model.** A move that an interaction or a kind already predicts is not evidence for a new interaction or a new schema. The correlation frontier pairs only unexplained moves.
+- **In the model.** A move that an interaction or a concept already predicts is not evidence for a new interaction or a new schema. The correlation frontier pairs only unexplained moves.
 - **Status.** Partial. The frontier's slope still absorbs common drivers (ml-stack §8.2). R2 residualizes on the graph and on factors.
 
 ### F10 · Structure apart from strength, and what is worth knowing
@@ -125,7 +125,7 @@ The standard stack answers "which text is like this text". The world model answe
 - **In the model.**
   - A vague mention ("a US carrier") is hedged across its candidates, plus an open share, and drawn as soft interactions.
   - Later events reweigh the candidates, and a resolution comes back for review once one passes the bound.
-  - Every node carries an **open node**: the share of its movement the graph does not explain, or a kind's reserve for a member not seen yet.
+  - Every node carries an **open node**: the share of its movement the graph does not explain, or a concept's reserve for a member not seen yet.
   - Tutorial examples 3, 12, and 13 show hedging and its resolution.
 - **Status.** Built. The weights are counts, not posteriors (S-M8); R18 plans proper responsibilities.
 
@@ -148,7 +148,7 @@ Each framing sits behind a slot, so we can test it by ablation: swap in the stan
 
 | Ablation | Swap | Measure |
 |---|---|---|
-| Kinds vs cold start (F6) | `prefiller: none`; no inherited priors | Forecast CRPS for an entity in its first 30 days; reviewer edits per new entity |
+| Concepts vs cold start (F6) | `prefiller: none`; no inherited priors | Forecast CRPS for an entity in its first 30 days; reviewer edits per new entity |
 | Concept trees vs a flat index (F2–F4) | `recaller`/`classifier` → top-k cosine over one embedding space | Analog hit rate on held-out shocks; CRPS; omission of tracked names |
 | Structure vs surface (F8) | Recall by text similarity of headlines | The same, on shocks with novel wording but a familiar shape |
 | Explaining away (F9) | Frontier on raw co-movement | False interactions proposed per month on a synthetic world with known truth (R16) |

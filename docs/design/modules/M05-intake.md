@@ -25,7 +25,7 @@
 From the outside world to a graph update event, in three steps:
 1. a **source** yields market events;
 2. a **translator** turns each one into operations;
-3. the **refiner** narrows each fuzzy end from kind to entity to subentity.
+3. the **refiner** narrows each fuzzy end from concept to entity to subentity.
 
 An end binds only when the article names it; otherwise it is hedged. Intake returns results. It never proposes and never commits.
 

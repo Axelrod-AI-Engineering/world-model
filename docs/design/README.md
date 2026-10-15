@@ -60,7 +60,7 @@ The principles, in priority order. When two conflict, the higher one wins.
 |---|---|---|---|
 | **P0** | **Interpretability, usability, trust** | Every number can be explained: its path, its evidence, who approved it. A PM sees the answer first and detail on request. | Transmission paths by order; staged review of every change; the ledger; academic terms used consistently; a minimal first view |
 | **P1** | **Determinism, reliability, groundedness** | The same question on the same version gives the same answer. Everything learned traces to evidence a person approved. | Named random substreams; one writer; restore by hash; inference never learns; hedges instead of guesses |
-| **P2** | **Streamability, generalization** | The model takes in events one at a time, as they happen, and what it learns carries over to new names and new shocks. | Incremental learning per event and per day; kinds that pass priors to new members; superentities and analogs ([cognition.md](cognition.md)) |
+| **P2** | **Streamability, generalization** | The model takes in events one at a time, as they happen, and what it learns carries over to new names and new shocks. | Incremental learning per event and per day; concepts that pass priors to new members; superentities and analogs ([cognition.md](cognition.md)) |
 | **P3** | **Scalability, cost, performance** | Fast enough for the current book, and with a path to bigger ones. | Isolating only what a shock reaches; caches; swappable propagators and stores; measured limits ([requirements.md](requirements.md#nonfunctional-requirements)) |
 
 ## 5. Requirements
@@ -87,7 +87,7 @@ Events from the world are read into the model; a person reviews every change; th
 | **Subentity** | One of an entity's values, such as a price, a rate, or a share |
 | **Interaction** | A causal relation between two values: whether it exists, how big, how slow |
 | **Superentity** | A recurring configuration of entities and interactions, such as a sector, a rivalry, or a shock; superentities nest |
-| **Working memory · long-term memory** | The world now · what generalizes (kinds, Entity memories, the correlation frontier, superentity patterns, episodes) |
+| **Working memory · long-term memory** | The world now · what generalizes (concepts, Entity memories, the correlation frontier, superentity patterns, episodes) |
 | **Graph update event · thesis** | What an article is read into (learned from, after review) · a what-if question (asked, never learned from) |
 
 The full data model is in [data-model.md](data-model.md), and every term is in [glossary.md](glossary.md).
@@ -106,7 +106,7 @@ There are 17 modules in six layers. Every arrow points up, to what a module depe
 | · translate and refine | Intake (M05) · `translator`, `refiner`, `entity_resolver` | Turn an article into operations; narrow vague mentions, or hedge them |
 | · read | Shared read (M06) · `parser`, `classifier`, `recaller`, `binder`, `prefiller`, `analyzer` | Apply operations, classify new items, recall similar cases, simulate the ripple by order |
 | · learn working memory | Learning · WM (M08) · `folder`, `daily_propagator` | Fold reports into values and interactions; open and close each day |
-| · learn long-term memory | Learning · LTM (M09) · `generalization_updater`, `frontier`, `inducer`, `consolidator` | Update kinds, Entity memories, the correlation frontier, superentities |
+| · learn long-term memory | Learning · LTM (M09) · `generalization_updater`, `frontier`, `inducer`, `consolidator` | Update concepts, Entity memories, the correlation frontier, superentities |
 | · review | Services (M13) · `review_policy`; Runtime (M12) sandbox | Stage the whole learning on a copy; a person approves all, some, or none |
 | · commit | Repo (M04) · `storage` | One change set per transaction, in the ledger; snapshots; versions |
 | **Predict** · pose a thesis | Services (M13); Intake (M05) `refiner` | Read the question into a hypothetical event with concrete ends |
@@ -153,7 +153,7 @@ The deployment is drawn in [../deployment.md](../deployment.md).
 | 3 | [M06 Shared read](modules/M06-shared-read.md) | `shared/` | Parse, classify, recall, bind, prefill, analyze, transmission, explain |
 | 3 | [M07 Dynamics](modules/M07-dynamics.md) | `dynamics/` | Kernels, Monte Carlo propagation, the daily filter |
 | 3 | [M08 Learning · WM](modules/M08-learning-working.md) | `learning/working/` | Fold, hedges, ripple judgments, kernels, the hypothesis frontier |
-| 3 | [M09 Learning · LTM](modules/M09-learning-long-term.md) | `learning/long_term/` | Kinds, Entity memories, correlation frontier, superentities, distillation |
+| 3 | [M09 Learning · LTM](modules/M09-learning-long-term.md) | `learning/long_term/` | Concepts, Entity memories, correlation frontier, superentities, distillation |
 | 3 | [M10 Inference](modules/M10-inference.md) | `inference/` | Isolate, isolated and distributed prediction, unify |
 | 3 | [M11 Evaluation](modules/M11-evaluation.md) | `evaluation/` | Scores, backtests, track records, decisions |
 | 4 | [M12 Runtime](modules/M12-runtime.md) | `runtime/` | Composition root, orchestrators, the day loop, sandboxes |

@@ -27,10 +27,10 @@ INTAKE = _flow(
         dict(id="ops", label="Any operations?", kind="decision", phase="translate", trace=["translate.result"]),
         dict(id="nothing", label="Nothing to learn (logged as untranslated)", kind="end", phase="translate", side=True),
         dict(id="next_op", label="Take the next operation", phase="refine"),
-        dict(id="fuzzy", label="Does an end name a kind (\"an airline\") rather than a value?", kind="decision",
+        dict(id="fuzzy", label="Does an end name a concept (\"an airline\") rather than a value?", kind="decision",
              phase="refine"),
-        dict(id="narrow", label="Narrow it one level: kind → entity → value, by names, aliases, and the taxonomy",
-             phase="refine", mandatory=False, when="an end names a kind", component="refiner", trace=["refine.step"]),
+        dict(id="narrow", label="Narrow it one level: concept → entity → value, by names, aliases, and the taxonomy",
+             phase="refine", mandatory=False, when="an end names a concept", component="refiner", trace=["refine.step"]),
         dict(id="one", label="Does the article name one candidate outright?", kind="decision", phase="refine"),
         dict(id="pending", label="Hedge the end: each candidate gets a probability, with a share for one not in the "
                                  "graph yet; candidate values get soft interactions, as strong as they are probable",
@@ -52,7 +52,7 @@ INTAKE = _flow(
 
 WORKING = _flow(
     "stage-working", "2 · Learning of working memory: what the world is like now",
-    "The operations are applied to a staged copy of the current graph. New items take their kind's priors; a moved "
+    "The operations are applied to a staged copy of the current graph. New items take their concept's priors; a moved "
     "value is carried through the interactions order by order; a reported value corrects the model where it was "
     "wrong.",
     [dict(id="day", title="The day"), dict(id="read", title="Read the event"), dict(id="ripple", title="The ripple"),
@@ -65,7 +65,7 @@ WORKING = _flow(
                                "becomes an observation", phase="read", component="parser", writes="working",
              trace=["parse.created", "parse.retired"]),
         dict(id="new", label="New entities, values, or interactions?", kind="decision", phase="read"),
-        dict(id="classify", label="Sort each down its taxonomy; it inherits its kind's priors unless the article "
+        dict(id="classify", label="Sort each down its taxonomy; it inherits its concept's priors unless the article "
                                   "gave its own", phase="read", mandatory=False, when="new items",
              component="classifier", writes="working", trace=["classify.path"]),
         dict(id="recall", label="Recall superentities and past days whose signature matches the event's",
@@ -110,7 +110,7 @@ WORKING = _flow(
 
 LONG_TERM = _flow(
     "stage-long_term", "3 · Learning of long-term memory: what the event teaches",
-    "What generalizes across time and entities. Kinds learn their members and pass priors to newcomers; actors' "
+    "What generalizes across time and entities. Concepts learn their members and pass priors to newcomers; actors' "
     "decisions are remembered by context; moves the graph did not explain are paired and, once a pair keeps "
     "holding, proposed as interactions; groups that keep firing together are proposed as superentities.",
     [dict(id="event", title="Per event"), dict(id="day", title="Per day")],
@@ -118,15 +118,15 @@ LONG_TERM = _flow(
         dict(id="in", label="What working memory learned: new or retired items, surprises, decisions",
              kind="start", phase="event"),
         dict(id="retired", label="Did the event retire anything?", kind="decision", phase="event"),
-        dict(id="leave", label="Retired items leave their kinds; frontier entries about them decay", phase="event",
+        dict(id="leave", label="Retired items leave their concepts; frontier entries about them decay", phase="event",
              mandatory=False, when="something was retired"),
-        dict(id="join", label="New items join their kinds; statistics update along each classification path",
+        dict(id="join", label="New items join their concepts; statistics update along each classification path",
              phase="event", component="generalization_updater", writes="long_term",
              trace=["generalize.updated"]),
-        dict(id="crowded", label="Do enough members of a kind share a feature its other children lack?",
+        dict(id="crowded", label="Do enough members of a concept share a feature its other children lack?",
              kind="decision", phase="event"),
-        dict(id="split", label="Split: a new child kind for them, which they now inherit from", phase="event",
-             mandatory=False, when="a kind is crowded", component="taxonomy_grower", trace=["generalize.split"]),
+        dict(id="split", label="Split: a new child concept for them, which they now inherit from", phase="event",
+             mandatory=False, when="a concept is crowded", component="taxonomy_grower", trace=["generalize.split"]),
         dict(id="decided", label="Did an actor's decision show (a decision variable moved or held)?",
              kind="decision", phase="event"),
         dict(id="memory", label="Record it in the actor's entity memory, by context (what it did when inflation "

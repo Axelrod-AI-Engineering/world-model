@@ -108,15 +108,15 @@ Jev is trained by *reinforcement learning for calibrated decisions* (RLCD), whic
 | **Market-event triage and relevance** | Deduplication by address, or site and title (`intake/scrapers.py`, `dedup_keys`). An import item's `relevance` is the upstream agent's own number. No triage model. | A decision model's Noul, "will this item yield an approved change?" (or, before there are labels, logistic regression over TF-IDF and small-embedder features). It orders the queue; it never drops an event. | Proposals approved or rejected; events logged as untranslated (`translate.missing`); item relevance against outcome | Translate everything, in arrival order |
 | **Entity and value resolution** | `alias_fuzzy`: best `SequenceMatcher` ratio + 0.3 × word Jaccard + 0.2 × constraint fraction (`intake/resolver.py`). The refiner binds only a named mention; otherwise it hedges over up to 4 candidates. | A bi-encoder (about 100M) finetuned contrastively on (mention in context → entity or subentity id) retrieves candidates; a decision model's Choice over the top 4 (plus "none of these") gives calibrated hedge weights $w_i$ (§5); binding still needs a named mention. | Approved bindings; approved resolutions of hedged ends (`REFINEMENT` proposals); reviewer edits (`Proposal.edited_from`); bundle `entities` and `value_of` ids | `alias_fuzzy`; then an LLM choosing among the candidate ids or "open" |
 | **Signal extraction** (observe, move, link, support, contradict) | Reviewed fixtures (`hand_drawn`); regular-expression templates at confidence 0.6 (`template`); signals written by the upstream agent (`structured`). The `llm` translator is a stub. | A decision model's Choice for the signal type, direction, and size bucket, and a CRF or small token tagger for the spans (subject, direction, magnitude, unit, timeframe). Spans are assembled into operations deterministically, by the code that already maps signals to operations (`intake/bundle.py`, `signal_ops`). Then P2's small seq2seq model (§14). | Hand-drawn translations (gold operations with phrase spans); template spans; bundle signals with quotes; approved and edited proposals | `llm`, constrained to the schema |
-| **Interaction typing** | A link's label goes to a family by a keyword table (`model/taxonomy.py`, `label_family`; unmatched → "other"), then signature descent on the interaction's features (`taxonomy_descent`) | A classifier over the label's embedding and the two ends' attribute kinds, giving the interaction generalization | Approved `add_interaction` operations and the kinds they were sorted into | Keyword table and signature descent |
+| **Interaction typing** | A link's label goes to a family by a keyword table (`model/taxonomy.py`, `label_family`; unmatched → "other"), then signature descent on the interaction's features (`taxonomy_descent`) | A classifier over the label's embedding and the two ends' value concepts, giving the interaction generalization | Approved `add_interaction` operations and the kinds they were sorted into | Keyword table and signature descent |
 | **Quote alignment** | Exact substring match (`text.find(quote)` in `translate_item`); an unmatched quote gets no highlight | Rules first: normalize whitespace, case, and punctuation, then fuzzy character alignment. A small embedder matches a paraphrased quote to its sentence. | Bundle quotes that matched exactly (free positives) | Flag "quote not found" in review |
 | **Conflict detection** (planned, M05) | Not built; rules are specified (opposite sign on an existing interaction, a value outside a soft bound, a retired item reused) | The rules, plus a decision model's Choice (supports, contradicts, does not bear) on the new quote against the evidence already behind the interaction | `support` and `contradict` signals; review decisions on flagged items | `llm_pairwise` (M05's planned alternative) |
-| **Interaction proposal** | The correlation frontier (`residual_comovement`, `threshold`, §8.2) and missing relations from bound patterns | A gradient-boosted link ranker over graph features (kind priors, path distance, co-movement statistics) that orders the candidates the frontier tests; the JEPA prior of P3 later. The statistical test (R2) and review still decide. | Approved and rejected `FRONTIER_PROMOTION` and `MISSING_RELATION` proposals | The frontier alone |
+| **Interaction proposal** | The correlation frontier (`residual_comovement`, `threshold`, §8.2) and missing relations from bound patterns | A gradient-boosted link ranker over graph features (concept priors, path distance, co-movement statistics) that orders the candidates the frontier tests; the JEPA prior of P3 later. The statistical test (R2) and review still decide. | Approved and rejected `FRONTIER_PROMOTION` and `MISSING_RELATION` proposals | The frontier alone |
 | **Hypothesis ranking** (the hypothesis frontier) | `forecast_sensitivity_voi`: sensitivity × 4p(1 − p) from on/off Monte Carlo runs (§9) | A gradient-boosted surrogate predicting the value of information, used only to choose which hypotheses to simulate. The simulation stays the score. | Every VOI the engine has computed (cheap, exact labels); hypotheses people marked | Simulate all |
 | **Actor decisions** (Entity memories) | `DecisionProfile`: empirical action frequencies per bucket (`memory/entity_memory.py`) | An ordered probit or multinomial logistic reaction function on the actor's own inputs (R19) | Decision observations already in each Entity memory | The empirical profile |
-| **Superentity and analog recall** | `overlap_attention`: Jaccard of kind signatures, proximity, and support (`shared/recall.py`, §8.4) | Structured vectors (F5) sorted down Cobweb trees (F3); later the P3 state embedding for analogs | Admitted configurations; episodes and their realized responses | Signature Jaccard |
+| **Superentity and analog recall** | `overlap_attention`: Jaccard of concept signatures, proximity, and support (`shared/recall.py`, §8.4) | Structured vectors (F5) sorted down Cobweb trees (F3); later the P3 state embedding for analogs | Admitted configurations; episodes and their realized responses | Signature Jaccard |
 | **Thesis parsing** ("what if…", Pose a thesis) | `thesis_from_question` runs the template parser; with no match it raises "could not translate the question" | The tagger of signal extraction plus the encoder of resolution, for the subject | Posed theses and their operations; scaffolded theses that people edited | An LLM proposes operations, shown to the person before posing |
-| **Find** | Lexical: stemming, a hand-written synonym table, kinds and their ancestors, filters (`api/find.py`) | Hybrid: BM25 plus a small embedder over names, aliases, and descriptions, grouped by concept-tree node | Aliases and kinds today; logged queries and the hits opened (planned: find does not log) | Lexical |
+| **Find** | Lexical: stemming, a hand-written synonym table, concepts and their ancestors, filters (`api/find.py`) | Hybrid: BM25 plus a small embedder over names, aliases, and descriptions, grouped by concept-tree node | Aliases and concepts today; logged queries and the hits opened (planned: find does not log) | Lexical |
 | **Brief writing** | Templates over the forecast, its explanation, the folds, and the deviations (`api/brief.py`); no language model | Stays templated. Optionally a small instruction model (≤ 8B) rewrites the prose only, under a check that every number and name it writes appears in the template's facts. | Reader notes on briefs (`ANNOTATION` ledger entries) | The template text |
 | **Agent-context export** | Deterministic mapping into a client's format (`context/v4.py`) | No model. A new client format is a new mapping, written and reviewed once. | None needed | None |
 | **Review confidence and auto-apply** | `DefaultReviewPolicy` rules: structure, deletions, text translations, large reweightings, and confidence below 0.8 go to a person (`repo/review.py`). Confidence is fixed per translator (template 0.6, data feed 1.0) or is the agent's own. | A decision model's Noul, "would a reviewer keep this operation unchanged?", recalibrated by isotonic regression (gradient-boosted trees as the baseline). It orders the queue and preselects operations in staging. It does not widen what applies without review; that stays a policy decision ([decisions.md](design/decisions.md)). | `REVIEW_DECISION` ledger entries; per-operation keep and confidence from staging; edits | The rules |
@@ -144,7 +144,7 @@ Jev is trained by *reinforcement learning for calibrated decisions* (RLCD), whic
 | $`H`$ | the forecast horizon in days (182 by default) | `configs/default.yaml` |
 | $`S`$ | Monte Carlo samples (400 by default) | |
 
-Everything the dynamics touch is in $`z`$ units. **The scale $`s_j`$ is set once**, when the value is created (from its kind's or its peers' mean scale, else 1.0 in link units; `shared/classify.py:194-212`), and never re-estimated from the value's own series. "One sd" is therefore a designer's unit, not a volatility: a 0.05 sd threshold is 0.4% for a share price with an 8% scale but 1.5 bp for CPI with a 0.3 pp scale. Every threshold below inherits this (review S-M9, F-C3).
+Everything the dynamics touch is in $`z`$ units. **The scale $`s_j`$ is set once**, when the value is created (from its concept's or its peers' mean scale, else 1.0 in link units; `shared/classify.py:194-212`), and never re-estimated from the value's own series. "One sd" is therefore a designer's unit, not a volatility: a 0.05 sd threshold is 0.4% for a share price with an 8% scale but 1.5 bp for CPI with a 0.3 pp scale. Every threshold below inherits this (review S-M9, F-C3).
 
 Every processed day has a point for every value, observed or predicted. $`z`$ reads as 0 only before a value's history starts, or for days pruned below its first kept day.
 
@@ -157,7 +157,7 @@ Every processed day has a point for every value, observed or predicted. $`z`$ re
 | $`\mathrm{Beta}(\alpha,\beta)`$ | logit | delta method: $`m = \mathrm{logit}(p)`$, $`v = \mathrm{Var}/(p(1-p))^2`$ | concentration $`\kappa = p(1-p)/\mathrm{Var} - 1`$, clipped to $`[0.5, 10^7]`$ |
 | $`\mathrm{Gamma}(k,\theta)`$ | log | **approximate**: $`m = \log(k\theta)`$, $`v = 1/k`$ (the exact moments are $`\psi(k) + \log\theta`$ and $`\psi'(k)`$; the error is large for $`k \le 2`$) | $`k = 1/v`$, capped at $`10^9`$ |
 
-Default observation noise $`r`$ (`model/taxonomy.py:457-467`): 0.02 for decision variables, 0.05 for rates and prices, 0.25 for sentiment indices, 0.15 otherwise. It is fixed by kind and never estimated.
+Default observation noise $`r`$ (`model/taxonomy.py:457-467`): 0.02 for decision variables, 0.05 for rates and prices, 0.25 for sentiment indices, 0.15 otherwise. It is fixed by value concept and never estimated.
 
 ## 2. An interaction
 
@@ -353,20 +353,20 @@ All five read the same simulated effects.
 
 ### 8.1 Taxonomies: signature descent (not Cobweb)
 
-**Kinds and classification.** Each kind (object generalization, interaction generalization, superentity configuration) is a node with a **signature** (required and any-of feature values) and statistics. Classification (`shared/classify.py:62-80`) descends to the child with the highest fraction of signature keys satisfied (ties go to support) and stops below 0.5. A node **supplies priors** once its support exceeds the recall threshold (4).
+**Concepts and classification.** Each concept (object generalization, interaction generalization, superentity configuration) is a node with a **signature** (required and any-of feature values) and statistics. Classification (`shared/classify.py:62-80`) descends to the child with the highest fraction of signature keys satisfied (ties go to support) and stops below 0.5. A node **supplies priors** once its support exceeds the recall threshold (4).
 
 **Splits.** A node with at least 5 direct instances may split on a feature value shared by at least 4 of them. A first split also needs a second disjoint group of 4, so in practice at least 8. **Only support is divided between the children**, in proportion to their share; the effect, level, scale, and kernel statistics and the existence pseudo-counts are copied unchanged (`classify.py`, `maybe_split`).
 
-**Priors from a kind.** A new value's link-space prior is $`\mathcal{N}(\bar m, \bar v + \bar s^2)`$, from the node's Welford statistics. A new interaction gets:
+**Priors from a concept.** A new value's link-space prior is $`\mathcal{N}(\bar m, \bar v + \bar s^2)`$, from the node's Welford statistics. A new interaction gets:
 - an effect prior $`\mathcal{N}(\bar\mu, \bar v + 0.15^2)`$;
-- the kind's mean kernel;
-- the kind's existence Beta.
+- the concept's mean kernel;
+- the concept's existence Beta.
 
 **Statistics are pushed per touch, and the priors collapse** (`learning/generalize.py:57-129`; review S-C4). Every event that touches an item, including a routine data release, pushes that item's *current posterior mean* into every node on its classification path, and adds $`0.1p`$ and $`0.1(1-p)`$ to the node's existence Beta. The consequences:
 - The same items repeat, so the between-member variance shrinks toward zero, and an effect prior's sd ends near the 0.15 floor whatever the real heterogeneity.
 - The mean is weighted by activity.
 - After 1,000 touches, a brand-new edge starts with an existence concentration near 100, which the fold barely moves.
-- The kind prior feeds new edges, whose posteriors are pushed back into the kind: a feedback loop.
+- The concept prior feeds new edges, whose posteriors are pushed back into the concept: a feedback loop.
 
 ### 8.2 The correlation frontier (`learning/frontier_test.py`, `memory/frontier.py`)
 
@@ -411,7 +411,7 @@ Promotion only proposes: a person must approve.
 
 ### 8.4 Recall and analogy (`shared/recall.py`)
 
-**Signatures and scores.** An event's signature is the set of kinds on its classification paths.
+**Signatures and scores.** An event's signature is the set of concepts on its classification paths.
 - A configuration scores $`0.5\,J + 0.3\,\text{prox} + 0.2\,\log(1+\text{support})/\log(1+\max\text{support})`$, with $`J`$ the Jaccard index of signatures.
 - An episode scores $`0.5^{\text{age}/365}(0.4J + 0.3\,\text{tags} + 0.3\,\mathbb{1}[\text{type}])`$, boosted by its stored explanations.
 - Attention is a softmax with temperature 0.5 over the top $`k`$, dropping weights below 0.02.
@@ -420,7 +420,7 @@ Promotion only proposes: a person must approve.
 - Recalled episodes carry per-channel response estimates $`(b_E, w_E)`$.
 - These pool into a pseudo-observation $`\bar b = \sum a_E w_E b_E / \sum a_E w_E`$, with variance $`\bar v = r^2/\sum a_E w_E + 0.1^2`$.
 - The pseudo-observation is combined with the channel's posterior by precision weighting. This feeds the analysis only; it is not committed.
-- When the episode lacks the channel, the code pools over same-kind siblings, but only siblings whose effect has the same sign.
+- When the episode lacks the channel, the code pools over sibling values of the same concept, but only siblings whose effect has the same sign.
 
 **This counts the same data twice or more** (review S-C3):
 - $`(b_E, w_E)`$ come from the fold accumulators of observations the posterior has already absorbed.
@@ -494,7 +494,7 @@ These feed the canvas's open nodes; inference and learning do not read them.
 | A value | $`(\sum_d (z_d - \sum_c \mu_c\varphi_c(d))^2 + 1)/(\sum_d z_d^2 + 1)`$ over 28 days, clipped to $`[0, 1]`$. It uses levels, not changes, and ignores moderators. |
 | An entity | the mean over its values |
 | An instance | the same ratio pooled over its members, counting only its own channels |
-| A kind | $`\alpha/(\text{support} + \alpha)`$ with $`\alpha = 1`$ |
+| A concept | $`\alpha/(\text{support} + \alpha)`$ with $`\alpha = 1`$ |
 | A configuration | $`\alpha/(\text{support} + \text{rivals' support} + \alpha)`$ |
 | A fuzzy end | its Dirichlet open share |
 
@@ -503,7 +503,7 @@ These feed the canvas's open nodes; inference and learning do not read them.
 | Constant | Value | Where |
 |---|---|---|
 | Kernel CV | 0.3; learning step 0.5, gate 2.0, CV shrink 0.9 to a floor of 0.15 | `model/temporal.py:18`, `learning/kernel_learning.py` |
-| Default kernel for a new edge | delay 14, lag 30, permanent; effect N(0, 1) when no kind applies | `shared/parse.py:250` |
+| Default kernel for a new edge | delay 14, lag 30, permanent; effect N(0, 1) when no concept applies | `shared/parse.py:250` |
 | Effect prior floor | sd 0.15 | `model/taxonomy.py:28` |
 | Effect random walk | 0.0075² per day | `dynamics/daily.py` |
 | Existence learning rate | 0.5 | `learning.existence_learning_rate` |
@@ -559,7 +559,7 @@ Each finding has a roadmap item.
 | S-C1 | Evaluation, kernel learning, and scenario fit score against the model's own filtered values | critical | R0 |
 | S-C2 | Superentity induction passes its own sign test on unobserved targets; no null rate | critical | R2, R16 |
 | S-C3 | Analog prefill counts the same observations two or more times; sign-filtered siblings | critical | R18 |
-| S-C4 | Kind statistics pushed per touch: priors collapse; new edges get near-dogmatic existence priors | critical | R5, R18 |
+| S-C4 | Concept statistics pushed per touch: priors collapse; new edges get near-dogmatic existence priors | critical | R5, R18 |
 | F-C1 | No expectations or pricing-in layer: traded prices react late to realized changes, so forecasts claim large post-news drift | critical | R13 |
 | F-C2 | No market factor or cross-correlation; group readouts mix signs and units | critical | R9, R14 |
 | F-C3, S-M9 | "sd" is a designer's unit: scales never estimated, so every threshold means something different per value | critical | R3 |
@@ -594,7 +594,7 @@ Each finding has a roadmap item.
 
 | Structure | Where it lives | What it teaches |
 |---|---|---|
-| The typed graph: entities, subentities, interactions with existence, effect sizes, and kernels | `model/`, committed versions | Our ids, kinds, units, and which values can move which |
+| The typed graph: entities, subentities, interactions with existence, effect sizes, and kernels | `model/`, committed versions | Our ids, concepts, units, and which values can move which |
 | Superentity patterns, with roles and rivals | long-term memory (`object_generalizations`) | Recurring configurations, by name |
 | The review ledger: each proposal, the reviewer's decision, per-operation keep and confidence, and edits (`edited_from`) | `repo/ledger.py`, `repo/review.py` | What a person accepts, and how they correct a machine reading |
 | Bundle signals with quotes (`axelrod.import/v1`) and hand-drawn translations with phrase spans | `intake/bundle.py`, `data/scenarios/*/translations/` | Text aligned to operations, span by span |
@@ -635,12 +635,12 @@ The thresholds are starting bars, to be revisited once D1–D4 hold a few thousa
 
 The open counterpart of a hosted System One model, trained on structure only we hold.
 
-- **Shape.** One encoder reads the state (the item, its sentence, the candidate ids with their names and kinds) once; a head per question answers it: a softmax over a Choice's options, an ordinal head for a Score, a sigmoid for a Noul. Every question of an item is answered in the same pass, as Jev does. Choices over ids are scored against the candidates' own encodings, so a new entity needs no retraining.
+- **Shape.** One encoder reads the state (the item, its sentence, the candidate ids with their names and concepts) once; a head per question answers it: a softmax over a Choice's options, an ordinal head for a Score, a sigmoid for a Noul. Every question of an item is answered in the same pass, as Jev does. Choices over ids are scored against the candidates' own encodings, so a new entity needs no retraining.
 - **Objective.** Proper scoring rules (log loss for Choices and Nouls, ranked probability score for Scores), which reward honest probabilities. That is the aim RLCD names; a proper scoring rule reaches it by supervised training, with recalibration on the validation window to finish.
 - **Labels.** Reviewers' decisions (D1, D3, D4). Before there are enough, soft labels from a large model or a hosted decision model on synthetic and public items start the heads, and reviewed items replace them as they accrue.
-- **Retrieval.** A bi-encoder trained contrastively (each mention against its approved id, hard negatives of the same kind) supplies the top candidates the Choice decides among.
+- **Retrieval.** A bi-encoder trained contrastively (each mention against its approved id, hard negatives of the same concept) supplies the top candidates the Choice decides among.
 - **Spans.** A CRF or token tagger marks the subject, magnitude, unit, and timeframe (D2); the decision model reads the marked sentence.
-- **Interaction typing.** A classifier from a link's label and its ends' attribute kinds to the interaction generalization, replacing `label_family`'s keyword table.
+- **Interaction typing.** A classifier from a link's label and its ends' value concepts to the interaction generalization, replacing `label_family`'s keyword table.
 - **Audit.** The protocol [above](#decision-models-jev-type), per question, on the held-out window, beside a hosted decision model and the large-LLM fallback on the same items where the data allows.
 
 ### P2 · A small model that emits our schema
@@ -654,7 +654,7 @@ The open counterpart of a hosted System One model, trained on structure only we 
 ### P3 · A JEPA-style predictor of world-model state
 
 - **Idea.** A joint-embedding predictive architecture predicts the *representation* of a target from the representation of its context, rather than reconstructing the target (LeCun, 2022; Assran et al., 2023). Here the context is the state at $t$ and the target is the state at $t + h$.
-- **Input.** Each value's standardized level and recent changes, its kind, and its place in the graph; masked values and masked horizons serve as targets.
+- **Input.** Each value's standardized level and recent changes, its concept, and its place in the graph; masked values and masked horizons serve as targets.
 - **Training data.** Raw observations, never the filter's points, and the true state in synthetic worlds (ground rule 1 of the roadmap). Trained on filtered values, it would learn the engine's own predictions back.
 - **Uses**, each a ranking or a proposal, never a forecast:
   - **analog recall**: nearby states retrieve past episodes (F8);

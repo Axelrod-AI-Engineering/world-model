@@ -57,7 +57,7 @@ function foldRow(x) {
 
 // a lesson, under the long-term store it lands in, said plainly (control/stage.py writes them)
 const STORES = [
-  { re: /^A new kind|^Kind “|^Statistics update along/, name: "Object and interaction generalizations", what: "the kinds of things it has seen" },
+  { re: /^A new (?:concept|kind)|^(?:Concept|Kind) “|^Statistics update along/, name: "Object and interaction generalizations", what: "the concepts it has formed from what it has seen" },
   { re: /^Superentity/, name: "Superentities", what: "patterns of entities that recur together" },
   { re: /entity memory/, name: "Entity memories", what: "each actor's decisions, by the context they were made in" },
   { re: /co-movement|correlation frontier/, name: "Correlation frontier", what: "co-movements with no interaction to explain them yet" },
@@ -66,7 +66,7 @@ const STORES = [
 function lessonText(x) {
   const m = /^Statistics update along (.*)$/.exec(x);
   if (m) {
-    return `Refines how often, and how far, these kinds move: ${m[1].split(", ").map((k) => `<span class="rv-kind">${esc(k)}</span>`).join(" ")}`;
+    return `Refines how often, and how far, these concepts move: ${m[1].split(", ").map((k) => `<span class="rv-kind">${esc(k)}</span>`).join(" ")}`;
   }
   if (/^The explanation of what was learned is stored with the prior states$/.test(x)) {
     return "Keeps today as a prior state, with an explanation of what changed and why, so recall can bring it back when a similar article arrives";
@@ -507,7 +507,7 @@ export function initReview({ openModal, toast, onFocusGraph }) {
         "The model as it stands today: each entity's values, and the interactions between them with how strongly each is believed. This is what the article would change in it."),
       group(r, "long_term", longTerm.join(""), "Nothing new for long-term memory.",
         r.lessons?.length ? `${r.lessons.length} lesson${r.lessons.length === 1 ? "" : "s"}${r.raises?.length ? `; raises ${r.raises.length} proposal(s)` : ""}` : "",
-        "What the model keeps across articles: the kinds of entities and interactions it has seen, the superentities they form, each actor's record of decisions, co-movements it cannot explain yet, and past days it can recall. It shaped how this article was read, and it learns from it."),
+        "What the model keeps across articles: the concepts of entities and interactions it has formed, the superentities they form, each actor's record of decisions, co-movements it cannot explain yet, and past days it can recall. It shaped how this article was read, and it learns from it."),
       decision].join("");
   }
 

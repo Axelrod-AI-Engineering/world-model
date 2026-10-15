@@ -14,6 +14,7 @@ import { kinKey } from "./graph/model.js";
 import { SvgRenderer } from "./graph/renderer.js";
 import { initZoomSlider } from "./graph/zoom-slider.js";
 import { isolationSet } from "./graph/isolate.js";
+import { TxPathLayer } from "./graph/txpath.js";
 import { initAdmin } from "./panels/admin.js";
 import { initBriefs } from "./panels/briefs.js";
 import { initCaption } from "./panels/caption.js";
@@ -57,7 +58,7 @@ const REDO_KEY = IS_MAC ? "⇧⌘Z" : "Ctrl-Y";
 const SHORTCUTS = [
   ["Canvas", [[`${MOD}Z`, "Undo a view change (open, close, move, layout)"], [`${REDO_KEY}`, "Redo"],
               ["1 · 2 · 3", "Superentities · entities · subentities"], ["0", "Auto: detail follows zoom"], ["K", "Color: what pills are colored by, and the key"], ["[ · ]", "Up a level · down into the first part (superentities within superentities)"], ["+ · − · F", "Zoom in · zoom out · fit"],
-              [`/ · ${MOD}K`, "Find or filter: words, kinds, “moved”, “open>0.8”, “learned”; widen to neighborhoods"], ["D", "Draw a proposed edge"], ["Esc", "Close the top thing"]]],
+              [`/ · ${MOD}K`, "Find or filter: words, concepts, “moved”, “open>0.8”, “learned”; widen to neighborhoods"], ["D", "Draw a proposed edge"], ["Esc", "Close the top thing"]]],
   ["Demo", [["E", "Tutorial"], ["I", "Import research (imported models)"], ["→", "Next scripted step"], ["Space", "Play or pause"],
             ["⇧← · ⇧→", "Step through the timeline"], ["U", "Request an update"]]],
   ["Walkthrough", [["W", "How it learned (the latest news) or how it inferred (the latest question)"], ["← · →", "Previous · next step (while open)"]]],
@@ -143,6 +144,8 @@ async function boot() {
     onLayoutMode: (mode) => { store.settings.layout = mode; },
     isDrawMode: () => store.settings.draw,
   });
+  // a forecast's transmission path, drawn on the canvas in place of the model while it is shown (Oct 15)
+  const txLayer = new TxPathLayer(renderer, { onSelect: (sel) => select(sel) });
   window.axelrod = { store, renderer, api };     // handy for debugging in the console
 
   // -- side panels -------------------------------------------------------------------------------
@@ -1269,9 +1272,11 @@ async function boot() {
     isoBanner.querySelector("[data-show-all]").addEventListener("click", () => unisolate());
   }
   function unisolate() {
+    // leaving the transmission path means asking to see the whole model, as leaving the forecast's view does
+    if (txLayer.active) { predict.all = true; predictCanvas(); return true; }
     if (!renderer.isolated) return false;
     // in Predict, leaving the forecast's view means asking to see the whole model
-    if (renderer.isolated.way === "predict" || renderer.isolated.way === "path") { predict.all = true; predictCanvas(); return true; }
+    if (renderer.isolated.way === "predict") { predict.all = true; predictCanvas(); return true; }
     const wasGrid = renderer.isolated.way === "grid";
     renderer.setIsolation(null);
     isoBanner.classList.add("hidden");
@@ -1295,7 +1300,7 @@ async function boot() {
   function predictCanvas() {
     const on = store.settings.mode === "predict" && !store.walkthrough && !!store.view?.entities?.length;
     if (!on) {
-      if (renderer.isolated?.way === "path") clearPath();
+      clearPath();
       renderer.setRowOverride(null);
       document.body.classList.remove("predict-blank");
       if (renderer.isolated?.way === "predict") renderer.setIsolation(null);
@@ -1307,7 +1312,7 @@ async function boot() {
     if (renderer.isolated?.way === "grid") { predictHint.classList.add("hidden"); return; }   // the grid shows it
     const total = store.view.entities.length;
     if (!predict.all && predict.path) { applyPath(); return; }
-    if (renderer.isolated?.way === "path") clearPath();
+    clearPath();
     if (predict.all) {
       renderer.setRowOverride(null);
       if (renderer.isolated?.way === "predict") { renderer.setIsolation(null); setTimeout(() => renderer.frameAll(420), 60); }
@@ -1350,6 +1355,7 @@ async function boot() {
     predict.keep = keep;
     predict.all = false;
     predict.question = fv?.forecast?.question ?? fv?.thesis?.question ?? "";
+    predict.path = null;          // the new forecast's path replaces the last one's once it is read (pathOnCanvas)
     predictCanvas();
   }
   // -- the transmission path on the canvas (Oct 15) ------------------------------------------------------------------
@@ -1368,94 +1374,30 @@ async function boot() {
     }
     if (!Object.keys(g.values ?? {}).length) return;
     let question = predict.question;
-    try { question = (await api.forecast(fid)).forecast?.question ?? question; } catch { /* keep the last question */ }
+    try { question = (await api.forecasts()).find((f) => f.id === fid)?.question ?? question; } catch { /* keep the last question */ }
     predict.path = { id: fid, grid: g, question };
     predict.all = false;
     if (store.settings.mode !== "predict") setMode("predict", false);
     else predictCanvas();
   }
-  function pathLayout(g) {
-    const known = new Set((store.view?.entities ?? []).map((e) => e.id));
-    const vals = g.values;
-    const cols = g.columns ?? ["input", "1", "2", "3", "output"];
-    const ix = (c) => cols.indexOf(c);
-    const first = new Map();
-    for (const v of Object.values(vals)) {
-      if (!known.has(v.entity_id)) continue;
-      const k = ix(v.column);
-      if (!first.has(v.entity_id) || k < first.get(v.entity_id)) first.set(v.entity_id, k);
-    }
-    const outs = new Set(g.outputs ?? []);
-    const key = (e) => String(e.key).split(":")[0];
-    const chain = new Set();
-    const fedBy = new Map();
-    const ents = new Map();             // entity -> the entities that feed it on the path
-    for (const e of g.edges ?? []) {
-      const a = vals[e.source]?.entity_id;
-      const b = vals[e.target]?.entity_id;
-      if (!a || !b || a === b) continue;
-      if (!ents.has(b)) ents.set(b, new Set());
-      ents.get(b).add(a);
-      if (outs.has(e.source) && outs.has(e.target)) {
-        if (!fedBy.has(b)) fedBy.set(b, new Set());
-        fedBy.get(b).add(a);
-      }
-    }
-    // an output fed by another output in the Output column moves one column on; the link between them is the chain
-    const outIx = ix("output");
-    const downstream = new Set([...first].filter(([e, k]) => k === outIx && [...(fedBy.get(e) ?? [])].some((a) => first.get(a) === outIx))
-      .map(([e]) => e));
-    for (const e of g.edges ?? []) {
-      const a = vals[e.source]?.entity_id;
-      const b = vals[e.target]?.entity_id;
-      if (outs.has(e.source) && outs.has(e.target) && downstream.has(b) && first.get(a) === outIx) chain.add(key(e));
-    }
-    const colKey = (e) => (downstream.has(e) ? "downstream" : cols[first.get(e)]);
-    // within a column, each entity sits near the entities that feed it (the barycenter of their places)
-    const order = [];
-    const keys = [...cols, "downstream"];
-    const pos = new Map();
-    for (const c of keys) {
-      const ids = [...first.keys()].filter((e) => colKey(e) === c);
-      const peak = (e) => Math.max(0, ...Object.values(vals).filter((v) => v.entity_id === e).map((v) => Math.abs(v.peak)));
-      ids.sort((a, b) => {
-        const bary = (e) => { const ps = [...(ents.get(e) ?? [])].filter((x) => pos.has(x)).map((x) => pos.get(x)); return ps.length ? ps.reduce((t, x) => t + x, 0) / ps.length : 1e3; };
-        return bary(a) - bary(b) || peak(b) - peak(a);
-      });
-      ids.forEach((e, i) => pos.set(e, i));
-      if (ids.length) {
-        const meta = c === "downstream" ? { word: "Downstream outputs", cls: "out" } : colOf(c);
-        order.push({ key: c, label: meta.word, cls: meta.cls, ids });
-      }
-    }
-    return { cols: order, keep: new Set(first.keys()), chain, links: new Set((g.edges ?? []).map(key)) };
-  }
   function applyPath() {
     const { grid: g, id, question } = predict.path;
-    const lay = pathLayout(g);
-    if (!lay.keep.size) return;
-    const same = renderer.isolated?.way === "path" && renderer.isolated.fid === id;
-    if (!same) {
-      renderer.setIsolation({ ids: [...lay.keep], keep: lay.keep, way: "path", fid: id, hops: 0, hulls: false, expand: lay.keep,
-                              subs: new Set(Object.keys(g.values)), links: lay.links });
-      renderer.setLane({ title: "Transmission path", cols: lay.cols });
-    }
-    renderer.setRowOverride(new Map(Object.entries(g.values).map(([sid, v]) => [sid, v.peak])));
-    store.isolatedHighlight = { entities: lay.keep, links: lay.links, hulls: new Set(), hot: lay.links, chain: lay.chain };
-    renderer.setHighlight(store.isolatedHighlight);
+    if (!Object.keys(g.values ?? {}).length) return;
+    const fresh = !txLayer.active || txLayer.shown !== id;
+    const bounds = txLayer.show(g, id);
+    renderer.setRowOverride(null);
     document.body.classList.remove("predict-blank");
     isoBanner.classList.add("hidden");
+    const n = Object.keys(g.values).length;
     const q = question && question.length > 64 ? `${question.slice(0, 62).trimEnd()}…` : question;
     predictHint.className = "floating predict-bar";
-    predictHint.innerHTML = `<span><b>Transmission path</b> <span class="muted">· ${lay.keep.size} entities, shock to outputs${q ? ` · <span title="${esc(question)}">${esc(q)}</span>` : ""}</span></span>
-      ${lay.chain.size ? `<span class="small chain-key" title="An output that drives another output">— output to output</span>` : ""}
+    predictHint.innerHTML = `<span><b>Transmission path</b> <span class="muted">· ${n} values, shock to outputs${q ? ` · <span title="${esc(question)}">${esc(q)}</span>` : ""}</span></span>
       <button class="small ghost" data-path-grid>As a grid</button><button class="small" data-all>Show the whole model</button>`;
+    if (fresh) setTimeout(() => renderer.zoom.fit(bounds, store.settings?.reducedMotion ? 0 : 420,
+      { maxK: 1.15, pad: renderer.freePad({ top: 76, right: 24, bottom: 64, left: 24 }) }), 40);
   }
   function clearPath() {
-    renderer.setLane(null);
-    renderer.setIsolation(null);
-    store.isolatedHighlight = null;
-    renderer.setHighlight(store.highlight);
+    if (txLayer.active) txLayer.hide();
   }
   const GRID_DX = 330;      // world units between the grid's columns on the canvas
   const GRID_DY = 84;       // and between its rows
@@ -1463,7 +1405,7 @@ async function boot() {
     const known = new Set((store.view?.entities ?? []).map((e) => e.id));
     const keep = new Set(Object.values(g.values ?? {}).map((v) => v.entity_id).filter((e) => known.has(e)));
     if (!keep.size) return;
-    if (renderer.isolated?.way === "path") renderer.setLane(null);      // the grid replaces the canvas path while open
+    clearPath();                                                          // the grid replaces the canvas path while open
     const same = renderer.isolated?.way === "grid" && renderer.isolated.keep.size === keep.size
       && [...keep].every((e) => renderer.isolated.keep.has(e));
     // the grid itself says what is isolated and switches it off, so no banner over the canvas

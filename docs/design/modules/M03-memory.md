@@ -35,7 +35,7 @@ class WorkingMemory(BaseModel):
     activity_log; episode_buffer; late_queue; source_cursors; ids
 
 class LongTermMemory(BaseModel):            # the UI's five tabs, in this order
-    object_generalizations                  # kinds + superentity patterns
+    object_generalizations                  # concepts + superentity patterns
     interaction_generalizations
     entity_memories: dict[str, EntityMemory]   # decisions by context
     correlation_frontier                    # co-movements with no interaction

@@ -8,10 +8,10 @@ flowchart LR
   subgraph OURS["The world model's memory"]
     direction TB
     D2["Event"]:::start ==> S2["Sort each part into its own tree<br/>subentity · entity · interaction · episode"]:::ltm
-    S2 ==> P2["Inherit the kind's priors"]:::ltm
+    S2 ==> P2["Inherit the concept's priors"]:::ltm
     S2 ==> R2["Recall: filter, then align structure"]:::ltm
     P2 & R2 ==> W2["Working memory<br/>the exact state now"]:::wm
-    W2 ==>|daily distillation| L2["Long-term memory<br/>kinds · schemas · Entity memories · frontier"]:::ltm
+    W2 ==>|daily distillation| L2["Long-term memory<br/>concepts · schemas · Entity memories · frontier"]:::ltm
     L2 -->|priors · analogs · schemas| W2
     W2 ==> H2["Hypothesis frontier<br/>what is worth learning next"]:::done
   end

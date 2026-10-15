@@ -23,7 +23,7 @@ export function openNode(g, x, y, share, { min = 2, max = 5.5, stub = 3 } = {}) 
 
 export function openWords(share, what = "value") {
   const p = Math.round(100 * (share ?? 1));
-  if (what === "kind") return `${p}% reserved for a kind not seen yet`;
+  if (what === "kind") return `${p}% reserved for a concept not seen yet`;
   if (what === "pattern") return `${p}% reserved for a group not seen yet`;
   return `${p}% of its movement is not explained by the graph yet`;
 }

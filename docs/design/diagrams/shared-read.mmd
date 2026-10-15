@@ -1,3 +1,3 @@
 flowchart LR
-  E["Graph update event"]:::start ==> P["parse"]:::step ==> C["classify<br/>kind, priors"]:::step ==> R["recall<br/>superentities, episodes"]:::step
+  E["Graph update event"]:::start ==> P["parse"]:::step ==> C["classify<br/>concept, priors"]:::step ==> R["recall<br/>superentities, episodes"]:::step
   R ==> B["bind"]:::step ==> F["prefill"]:::step ==> A["analyze<br/>± shock, same draws"]:::step ==> T["transmission<br/>order, path, peak"]:::step ==> O["SharedResult"]:::done

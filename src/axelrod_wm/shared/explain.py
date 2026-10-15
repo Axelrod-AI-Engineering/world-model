@@ -40,6 +40,11 @@ class Explainer(ABC):
 registry("explainer", Explainer)
 
 
+
+# DECISION (Oct 15, speed): the channels carrying the most effect are ablated to rank the key interactions; each costs
+# two coupled runs, so 8 (was 15) keeps the ranking of what matters at about half the cost of a forecast's explanation
+ABLATE_CANDIDATES = 8
+
 def _sig(ch: Channel) -> float:
     from axelrod_wm.model.interaction import abs_mean
 
@@ -214,7 +219,7 @@ class PathAttributionExplainer(Explainer):
             # DECISION: only channels that can reach a target are candidates, so a graph with many firm-level
             # values (each firm's defaults) cannot crowd the paths to the targets out of the shortlist
             reach = _ancestors(graph, set(targets))
-            cands = sorted((k for k in means if _reaches(graph, k, reach)), key=lambda k: (-means[k], k))[:15]
+            cands = sorted((k for k in means if _reaches(graph, k, reach)), key=lambda k: (-means[k], k))[:ABLATE_CANDIDATES]
             ablate = ctx.notes.get("ablate")
             if ablate is not None and cands and ranked_targets:
                 base_med = ablate(top, None)

@@ -331,7 +331,6 @@ class McImpulsePropagator(Propagator):
         rows = np.array([row_of[int(i)] for i in src], dtype=np.int64)
         hist_rev = np.zeros((max(len(src_ids), 1), 1))
         if C:
-            dl_max = int(np.max(P.d + P.l))
             hist_ = system.history
             today = int(system.today)
             if hist_ is not None:
@@ -349,33 +348,61 @@ class McImpulsePropagator(Propagator):
                 hist_rev[r, 0] = z[0, i, 0]                              # today's value as given
             S_sum, T_sum = warm_start_batch(P.d, P.l, P.lam, hist_rev, rows)
         else:
-            dl_max = 0
             S_sum = np.zeros((S, 0))
             T_sum = np.zeros((S, 0))
         Kh = hist_rev.shape[1]
-        s_idx = np.arange(S)[:, None]
-        src_b = np.broadcast_to(src[None, :], (S, C)) if C else np.zeros((S, 0), dtype=np.int64)
         rows_b = np.broadcast_to(rows[None, :], (S, C)) if C else np.zeros((S, 0), dtype=np.int64)
         lf = P.l.astype(float)
         one_minus_lam = 1.0 - P.lam
 
+        # each source's whole series in one array (Oct 15, speed): column 0 is zero (days older than the kept history),
+        # columns 1..Kh the history from oldest to today, then the simulated days 1..H, written as the loop runs; day u
+        # is column u + Kh. Indexing it replaces the per-call history/simulation split, with identical values.
+        n_rows = hist_rev.shape[0]
+        ext = np.zeros((S, n_rows, Kh + H + 1))
+        ext[:, :, 1:Kh + 1] = hist_rev[None, :, ::-1]
+        if src_ids:
+            src_ids_arr = np.array(src_ids, dtype=np.int64)
+            ext[:, :, Kh] = z[:, src_ids_arr, 0]
+        else:
+            src_ids_arr = np.zeros(0, dtype=np.int64)
+
+        L = Kh + H + 1
+        ext_1d = ext.reshape(-1)                          # a view: writes to ext show here
+        base = np.arange(S)[:, None] * (n_rows * L) + rows_b * L
+
         def z_src(u: np.ndarray) -> np.ndarray:
             """z of each channel's source on day u ([S, C]); history for u <= 0, simulated otherwise."""
-            pos = u >= 0
-            if pos.all():
-                return z[s_idx, src_b, u]
-            k = np.clip(-u, 0, Kh - 1)
-            past = np.where(-u < Kh, hist_rev[rows_b, k], 0.0)
-            if not pos.any():
-                return past
-            now = z[s_idx, src_b, np.clip(u, 0, H)]
-            return np.where(pos, now, past)
+            col = u + Kh
+            if col.min() < 1:
+                col = np.where(col < 1, 0, col)
+            return np.take(ext_1d, base + col)
+
+        # adding each channel's contribution to its target (Oct 15, speed): in rounds, the k-th channel into each target
+        # in round k, which keeps np.add.at's order of addition (so the sums are bit-identical) without its overhead
+        rounds: list[tuple[np.ndarray, np.ndarray]] = []
+        seen_t: dict[int, int] = {}
+        by_round: dict[int, list[int]] = {}
+        for c in range(C):
+            k = seen_t.get(int(tgt[c]), 0)
+            seen_t[int(tgt[c])] = k + 1
+            by_round.setdefault(k, []).append(c)
+        for k in sorted(by_round):
+            cs = np.array(by_round[k], dtype=np.int64)
+            rounds.append((cs, tgt[cs]))
+
+        def add_to_targets(arr: np.ndarray, vals: np.ndarray, sign: float = 1.0) -> None:
+            for cs, ts in rounds:
+                if sign > 0:
+                    arr[:, ts] += vals[:, cs]
+                else:
+                    arr[:, ts] -= vals[:, cs]
 
         m0, add0 = self._multipliers(P, z[:, :, 0], S, C)
         contrib0 = P.exists * P.beta * m0 * (S_sum / lf + T_sum) if C else np.zeros((S, 0))
         a = z[:, :, 0].copy()
         if C:
-            np.add.at(a, (slice(None), tgt), -contrib0)
+            add_to_targets(a, contrib0, -1.0)
         for c, val in add0:
             a[:, tgt[c]] -= val
 
@@ -432,7 +459,7 @@ class McImpulsePropagator(Propagator):
             if C:
                 # advance every channel's running sums from day t - 1 to day t
                 va = z_src(t - P.d)
-                vb = z_src(t - P.d - P.l) if t <= dl_max + H else z[s_idx, src_b, t - P.d - P.l]
+                vb = z_src(t - P.d - P.l)
                 S_sum = S_sum + va - vb
                 T_sum = P.lam * T_sum - one_minus_lam * vb
             a = a + drift[None, :] * (damp ** t)
@@ -444,7 +471,7 @@ class McImpulsePropagator(Propagator):
             if C:
                 m, add = self._multipliers(P, z[:, :, t - 1], S, C)
                 contrib = P.exists * P.beta * m * (S_sum / lf + T_sum)
-                np.add.at(zt, (slice(None), tgt), contrib)
+                add_to_targets(zt, contrib)
                 for c, val in add:
                     zt[:, tgt[c]] += val
                 if contrib_rec is not None:
@@ -458,6 +485,8 @@ class McImpulsePropagator(Propagator):
                 held = hold[:, t]
                 zt[:, held] = z_now[:, held] + hold_val[:, held, t]
             z[:, :, t] = zt
+            if src_ids:
+                ext[:, :, Kh + t] = zt[:, src_ids_arr]
         cindex = {ch.channel_key: c for c, ch in enumerate(system.channels)}
         res = PropagationResult(idx, cindex, z, contrib_rec, list(system.channels))
         res.bound_hits = {subs[i]: float(hit[:, i].mean()) for i, _lo, _hi in bounded}

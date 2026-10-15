@@ -18,7 +18,7 @@
 ## Ground rules
 
 1. **Truth is observed, never filtered.** Every score, fit, and test compares against raw observations (with the forecast's spread widened by observation noise) or, in synthetic worlds, against the world's true state. Nothing is ever scored against the model's own filtered values.
-2. **Each observation is used once per posterior.** Every derived statistic records the observations it consumed. A later step may not add those observations again: analogs, kind priors, hedge shares, scenario weights, and track records all obey this rule.
+2. **Each observation is used once per posterior.** Every derived statistic records the observations it consumed. A later step may not add those observations again: analogs, concept priors, hedge shares, scenario weights, and track records all obey this rule.
 3. **Misspecified and null worlds, then real vintages.** A method is judged first by recovery and calibration on synthetic worlds built *differently* from the model (R16), including worlds with no edges at all. Only then is it judged on real, point-in-time data (R15), against simple baselines, with proper scores (R10).
 4. **Prices and fundamentals are different things.** Traded values (prices, yields, spreads, volatility) respond to surprises at once. Fundamentals (margins, CPI, capex) respond to realized changes with lags. The model treats them differently (R13).
 5. **People stay in the loop.** Every structural change remains a proposal a person reviews. Better statistics change what is proposed and how it is described. They also change how much the proposal's numbers can be trusted; they do not change who decides.
@@ -42,13 +42,13 @@
 
 **Problem.** Several steps count the same data more than once:
 - analog prefill pools a channel's own history with its own posterior, enters a day once per overlapping episode, and keeps only same-sign siblings (S-C3);
-- kind statistics are pushed per touch (S-C4);
+- concept statistics are pushed per touch (S-C4);
 - fuzzy-end shares count article volume and count a co-movement both in the share and in the fold (S-M8);
 - scenario weights multiply support, in-sample fit, and backtest track records (S-M5).
 
 **Method.**
 - **Analogs** come only from other channels or entities, or from held-out periods. Each day is assigned to at most one episode. Sign heterogeneity is modeled hierarchically, not filtered.
-- **Kind statistics** keep one sufficient-statistic entry per item, replaced and never appended (see R5).
+- **Concept statistics** keep one sufficient-statistic entry per item, replaced and never appended (see R5).
 - **Fuzzy ends** get likelihood-based responsibilities: one Kalman predictive per candidate, so a co-movement's weight depends on its size and on the other drivers. Distinct sources are counted, not articles. The candidates are sampled as one categorical draw over the candidates and the open reserve, on one substream, so two never act at once.
 - **Track records** are kept strictly out of sample (R7).
 
@@ -61,7 +61,7 @@
 **Problem.** Scales are set once at creation and never estimated, so "1 sd" means different things for different values, and every threshold inherits the inconsistency (F-C3, S-M9).
 
 **Method.**
-- **Transforms.** Make each value's transform explicit in its kind:
+- **Transforms.** Make each value's transform explicit in its concept:
   - log-returns for prices and indices;
   - changes for yields;
   - levels for spreads;
@@ -206,7 +206,7 @@ Each interaction records its evidence type, which the review and the forecast sh
 
 ### R17. Hyperparameters by marginal likelihood
 
-Observation noise, level noise, the effect random walk, and the scales are fixed by kind today, so only their ratios are identified, and wrongly (S, minor). Estimate them per value by maximizing the prediction-error-decomposition likelihood, or by EM for state-space models (Shumway and Stoffer, 1982). Re-estimate on a schedule, with provenance (R18).
+Observation noise, level noise, the effect random walk, and the scales are fixed by value concept today, so only their ratios are identified, and wrongly (S, minor). Estimate them per value by maximizing the prediction-error-decomposition likelihood, or by EM for state-space models (Shumway and Stoffer, 1982). Re-estimate on a schedule, with provenance (R18).
 
 ### R4. Kernels: a posterior, not a three-point grid
 
@@ -236,10 +236,10 @@ In order:
 
 ## Phase 4: structure and inference
 
-### R5. Kinds as a hierarchical model
+### R5. Concepts as a hierarchical model
 
 **Method.**
-- A kind's members' effects follow a measurement-error hierarchy: $`\hat b_i \sim \mathcal{N}(\theta_i, se_i^2)`$, $`\theta_i \sim \mathcal{N}(\mu, \tau^2)`$, with $`\tau^2`$ estimated. A new member's prior is the posterior predictive, so its width reflects how much members truly differ.
+- A concept's members' effects follow a measurement-error hierarchy: $`\hat b_i \sim \mathcal{N}(\theta_i, se_i^2)`$, $`\theta_i \sim \mathcal{N}(\mu, \tau^2)`$, with $`\tau^2`$ estimated. A new member's prior is the posterior predictive, so its width reflects how much members truly differ.
 - One entry per item (R18).
 - A new edge's existence prior has a bounded concentration, for example $`\alpha + \beta \le 2`$.
 - The tree's shape can still grow by Cobweb-style operators (Fisher, 1987), with Classit's acuity floor for numeric attributes (Gennari, Langley and Fisher, 1989). But category utility is a heuristic and order-dependent, and restructuring changes members' priors after the fact. So it proposes structure, and the hierarchical likelihood decides.
