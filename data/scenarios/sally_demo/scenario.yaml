@@ -1,0 +1,19 @@
+# Sally's demo (Oct 15): the Emily-style demo for a second PM, Sally, whose book is eleven names on the rates, yen, and
+# global-yields thesis. The world model starts with her view of the chain and is brought up to date by importing the
+# week's research one day at a time (each day is one import bundle). Predict forecasts her names and turns each forecast
+# into the context her agents read (Emily's v4 world-model format), with a scenario table. The research bundles are
+# the client's and are never committed (data/sally_data, gitignored); on the hosted demo, import them with the file
+# picker.
+id: sally_demo
+title: "Sally's demo: eleven names, from daily research to forecasts and agent context"
+canvas: seeded
+imports: true
+imports_dir: data/sally_data/days
+start: 2026-08-03
+seed: 17
+initialization:
+  construction_dir: data/worlds/sally_demo
+  taxonomy_dir: data/worlds/sally_demo/taxonomy
+  seeds: data/scenarios/sally_demo/superentity_seeds.yaml
+config_overrides: configs/sally_demo.yaml
+steps: []

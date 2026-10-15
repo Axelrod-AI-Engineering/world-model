@@ -65,7 +65,7 @@ function meter(level, from = null) {
 function zList(pairs, nm, unit = "sd") {
   if (!pairs.length) return "";
   const m = Math.max(0.5, ...pairs.map(([, z]) => Math.abs(z)));
-  return `<div class="zlist">${pairs.map(([id, z]) => `<span class="nm" title="${esc(id)}">${esc(nm.node(id))}</span>
+  return `<div class="zlist">${pairs.map(([id, z]) => `<span class="nm" title="${esc(id)}">${(nm.valueHtml(id))}</span>
     <span class="zbar"><i class="${z >= 0 ? "up" : "down"}" style="width:${((Math.abs(z) / m) * 50).toFixed(1)}%"></i></span>
     <span class="mono ${z > 0 ? "z-up" : "z-down"}">${signed(z)} ${unit}</span>`).join("")}</div>`;
 }
@@ -74,7 +74,7 @@ function zList(pairs, nm, unit = "sd") {
 function attnList(pats, nm) {
   if (!pats.length) return "<p class='muted'>Nothing recalled.</p>";
   const m = Math.max(...pats.map((x) => x.attention), 1e-9);
-  return `<div class="zlist attn">${pats.map((x) => `<span class="nm">${esc(nm.node(x.id))}</span>
+  return `<div class="zlist attn">${pats.map((x) => `<span class="nm">${(nm.valueHtml(x.id))}</span>
     <span class="zbar one"><i class="up" style="width:${((x.attention / m) * 100).toFixed(1)}%"></i></span>
     <span class="mono faint">${fmt(x.attention)}</span>`).join("")}</div>`;
 }
@@ -93,7 +93,7 @@ function learnSteps(evs, nm) {
     (e.level === "generalization" ? (e.candidates ?? []).slice(0, 4).map((c) => (Array.isArray(c) ? c[0] : c)) : [e.ref])));
   const opList = () => [...ops.values()].map((o) => `<li>${chip(OP_WORDS[o.op] ?? (o.op ? o.op.replace(/_/g, " ") : "op"))} ${esc(nm.text(o.label))}
       ${Object.entries(o.ends).map(([end, x]) => `<div class="end"><span class="small muted">${esc(end)}</span> ${meter(x.level)}
-        <span class="small">${x.ref ? esc(nm.node(x.ref)) : ""}</span></div>`).join("")}</li>`).join("");
+        <span class="small">${x.ref ? (nm.valueHtml(x.ref)) : ""}</span></div>`).join("")}</li>`).join("");
 
   const rec = of("market_event.received")[0];
   if (rec) {
@@ -130,16 +130,16 @@ function learnSteps(evs, nm) {
     o.ends[p.end] = { level: to, ref: p.node_id, candidates: p.candidates ?? [] };
     const cands = (p.candidates ?? []).slice(0, 4);
     const endsNow = Object.entries(o.ends).map(([end, x]) => `<div class="end ${end === p.end ? "changed" : ""}"><span class="small muted">${esc(end)}</span>
-      ${meter(x.level, end === p.end ? from : null)} <span class="small">${esc(nm.node(x.ref))}</span></div>`).join("");
+      ${meter(x.level, end === p.end ? from : null)} <span class="small">${(nm.valueHtml(x.ref))}</span></div>`).join("");
     steps.push({ phase: "refined", title: `Fuzzy → real: the ${p.end} end narrows`,
       body: `<ul class="wlist ops"><li>${chip(OP_WORDS[o.op] ?? (o.op ? o.op.replace(/_/g, " ") : "op"))} ${esc(nm.text(o.label ?? ""))}${endsNow}</li></ul>
-        <p>The ${esc(p.end)} end becomes <b>${esc(nm.node(p.node_id))}</b>${p.created ? " (new, created for this news)" : ""}.</p>
-        ${cands.length ? `<p class="small">The refiner scored ${cands.map(([c, s]) => `${chip(nm.node(c))}<span class="mono faint">${fmt(s)}</span>`).join(" ")}</p>` : ""}
+        <p>The ${esc(p.end)} end becomes <b>${(nm.valueHtml(p.node_id))}</b>${p.created ? " (new, created for this news)" : ""}.</p>
+        ${cands.length ? `<p class="small">The refiner scored ${cands.map(([c, s]) => `${chip(nm.value(c))}<span class="mono faint">${fmt(s)}</span>`).join(" ")}</p>` : ""}
         ${p.reason ? `<p class="small muted">${esc(p.reason)}</p>` : ""}`,
       visual: { ribbons: ribbons(), peek: concrete(), candidates: p.candidates ?? [], pulse: [p.node_id] },
       focus: [p.node_id, ...cands.map(([c]) => c)] });
   }
-  const candName = (c) => (c === "__open__" ? "one not in the graph yet" : c.split("|").map((x) => nm.node(x)).join(" → "));
+  const candName = (c) => (c === "__open__" ? "one not in the graph yet" : c.split("|").map((x) => nm.value(x)).join(" → "));
   for (const r of of("refine.pending")) {
     const p = r.payload;
     const cands = (p.candidates ?? []).slice(0, 5);
@@ -157,13 +157,13 @@ function learnSteps(evs, nm) {
     const p = parsed[0].payload;
     const made = [...(p.entities ?? []), ...(p.subentities ?? []), ...(p.interactions ?? [])];
     steps.push({ phase: "parsed", title: made.length ? "Proposes new structure" : "Proposes no new structure",
-      body: made.length ? `<p>On a staged copy, it proposes adding ${made.map((m) => chip(nm.node(m), "new")).join(" ")}. They are proposals until a person approves them (dashed on the canvas while they wait).</p>`
+      body: made.length ? `<p>On a staged copy, it proposes adding ${made.map((m) => chip(nm.value(m), "new")).join(" ")}. They are proposals until a person approves them (dashed on the canvas while they wait).</p>`
         : "<p>Everything it mentions already exists, so it proposes nothing new.</p>",
       visual: { peek: p.subentities ?? [], pulse: made }, focus: made.length ? made : concrete() });
   }
   const cls = of("classify.path");
   if (cls.length) {
-    const rows = cls.slice(0, 5).map((e) => `<li>${chip(nm.node(e.payload.item_id))} → ${(e.payload.path ?? []).slice(1).map((g) => esc(prettyNode(g))).join(" → ") || "<span class='muted'>root</span>"}${e.payload.is_new ? " <span class='badge ltm'>new</span>" : ""}</li>`);
+    const rows = cls.slice(0, 5).map((e) => `<li>${chip(nm.value(e.payload.item_id))} → ${(e.payload.path ?? []).slice(1).map((g) => esc(prettyNode(g))).join(" → ") || "<span class='muted'>root</span>"}${e.payload.is_new ? " <span class='badge ltm'>new</span>" : ""}</li>`);
     steps.push({ phase: "classified", title: "Proposes where each item belongs",
       body: `<p>Each touched item is sorted down the taxonomies of objects and interactions. Where it would land decides which priors it would inherit.</p>
         <ul class="wlist">${rows.slice(0, 3).join("")}${rows.length > 3 ? `<details class="more"><summary>+ ${cls.length - 3} more</summary>${rows.slice(3).join("")}</details>` : ""}</ul>`,
@@ -184,9 +184,9 @@ function learnSteps(evs, nm) {
   if (pre.length || bound.length) {
     const linkEnds = pre.flatMap((e) => { const l = nm.links.get(e.payload.interaction_id); return l ? [l.source, l.target] : []; });
     steps.push({ phase: "prefilled", title: "Proposes adjusted expectations from what it recalled",
-      body: `${bound.length ? `<p>A recalled pattern binds to today's entities: ${bound.map((e) => chip(nm.node(e.payload.pattern_id))).join(" ")}.</p>` : ""}
+      body: `${bound.length ? `<p>A recalled pattern binds to today's entities: ${bound.map((e) => chip(nm.value(e.payload.pattern_id))).join(" ")}.</p>` : ""}
         ${pre.length ? `<p>Before reading the numbers, it proposes new expectations for ${pre.length} link${pre.length === 1 ? "" : "s"}:</p>
-          <ul class="wlist">${pre.slice(0, 3).map((e) => `<li>${chip(nm.node(e.payload.interaction_id))} effect ${fmt(e.payload.effect_before)} → <b>${fmt(e.payload.effect_after)}</b></li>`).join("")}</ul>` : ""}`,
+          <ul class="wlist">${pre.slice(0, 3).map((e) => `<li>${chip(nm.value(e.payload.interaction_id))} effect ${fmt(e.payload.effect_before)} → <b>${fmt(e.payload.effect_after)}</b></li>`).join("")}</ul>` : ""}`,
       visual: { highlight: hl({ links: pre.map((e) => e.payload.interaction_id), hot: pre.map((e) => e.payload.interaction_id) }) },
       focus: linkEnds.length ? linkEnds : bound.map((e) => e.payload.instance_id ?? e.payload.pattern_id) });
   }
@@ -200,7 +200,7 @@ function learnSteps(evs, nm) {
     for (const o of orders) { if (!byOrder.has(o.order)) byOrder.set(o.order, []); byOrder.get(o.order).push(o); }
     const ordWord = (n) => (n === 1 ? "First-order" : n === 2 ? "Second-order" : n === 3 ? "Third-order" : `${n}th-order`);
     const orderHtml = byOrder.size ? `<div class="small" style="margin-top:6px">${[...byOrder.entries()].sort((a, b) => a[0] - b[0]).map(([k, l]) =>
-      `<div><span class="ord">${esc(ordWord(k))}</span> ${l.slice(0, 4).map((o) => `${esc(nm.node(o.id))} <span class="mono ${o.peak > 0 ? "z-up" : "z-down"}">${signed(o.peak)} sd</span>`).join(", ")}${l.length > 4 ? ` <span class="faint">+${l.length - 4} more</span>` : ""}</div>`).join("")}</div>` : "";
+      `<div><span class="ord">${esc(ordWord(k))}</span> ${l.slice(0, 4).map((o) => `${(nm.valueHtml(o.id))} <span class="mono ${o.peak > 0 ? "z-up" : "z-down"}">${signed(o.peak)} sd</span>`).join(", ")}${l.length > 4 ? ` <span class="faint">+${l.length - 4} more</span>` : ""}</div>`).join("")}</div>` : "";
     steps.push({ phase: "analyzed", title: "Simulates the ripple it would set off",
       body: `<p>On the staged copy, the model runs the news through the graph to see where it would show up, and when: first, second, and third order. Press ▶ to watch the days.</p>
         ${zList(moves, nm)}${orderHtml}`,
@@ -211,10 +211,10 @@ function learnSteps(evs, nm) {
   if (post.length || edges.length) {
     const rows = post.slice(0, 4).map((e) => {
       const p = e.payload;
-      return `<li>${chip(nm.node(p.subentity_id))} ${fmt(p.before?.q50)} → <b>${fmt(p.after?.q50)}</b>
+      return `<li>${chip(nm.value(p.subentity_id))} ${fmt(p.before?.q50)} → <b>${fmt(p.after?.q50)}</b>
         <span class="small muted">(now ${signed(p.z)} sd from normal)</span></li>`;
     }).join("");
-    const erows = edges.slice(0, 3).map((e) => `<li>${chip(nm.node(e.payload.interaction_id))} effect ${fmt(e.payload.effect_before)} → <b>${fmt(e.payload.effect_after)}</b>, exists ${fmt(e.payload.existence_before)} → <b>${fmt(e.payload.existence_after)}</b></li>`).join("");
+    const erows = edges.slice(0, 3).map((e) => `<li>${chip(nm.value(e.payload.interaction_id))} effect ${fmt(e.payload.effect_before)} → <b>${fmt(e.payload.effect_after)}</b>, exists ${fmt(e.payload.existence_before)} → <b>${fmt(e.payload.existence_after)}</b></li>`).join("");
     const subs = post.map((e) => e.payload.subentity_id);
     steps.push({ phase: "folded", title: "Proposes updated beliefs",
       body: `<p>The observation is weighed against what the model expected. It proposes moving each value as far as the evidence warrants, and updating the links that carried the move:</p>
@@ -304,7 +304,7 @@ function predictSteps(evs, nm) {
       body: `<p><b>${esc(p.question)}</b></p><p>It becomes a hypothetical event the model treats like news that has not happened:</p>
         <ul class="wlist ops">${[...ops.values()].map((o) => `<li>${chip(nm.text(o.label), "hyp")}${Object.entries(o.ends).map(([end, x]) =>
           `<div class="end"><span class="small muted">${esc(end)}</span> ${meter(x.level)}</div>`).join("")}</li>`).join("") || "<li>no shocks: a baseline</li>"}</ul>
-        <p class="small muted">Horizon ${p.horizon_days} days${(p.target_groups ?? []).length ? `; also forecast for ${p.target_groups.map((g) => esc(nm.node(g.split(":")[1]))).join(", ")}` : ""}.</p>`,
+        <p class="small muted">Horizon ${p.horizon_days} days${(p.target_groups ?? []).length ? `; also forecast for ${p.target_groups.map((g) => (nm.valueHtml(g.split(":")[1]))).join(", ")}` : ""}.</p>`,
       visual: { ribbons: ribbons() }, focus: shocked() });
   }
   for (const r of of("refine.step")) {
@@ -316,7 +316,7 @@ function predictSteps(evs, nm) {
     const to = LEVELS[p.to_level] ?? "entity";
     o.ends[p.end] = { level: to, ref: p.node_id, candidates: p.candidates ?? [] };
     steps.push({ phase: "refined", title: `Fuzzy → real: the ${p.end} end narrows`,
-      body: `<p>${meter(to, from)}</p><p>To <b>${esc(nm.node(p.node_id))}</b>.</p>`,
+      body: `<p>${meter(to, from)}</p><p>To <b>${(nm.valueHtml(p.node_id))}</b>.</p>`,
       visual: { ribbons: ribbons(), candidates: p.candidates ?? [], pulse: [p.node_id] }, focus: [p.node_id] });
   }
   const parsed = of("parse.created")[0];
@@ -340,7 +340,7 @@ function predictSteps(evs, nm) {
     const groups = nets.map((n, i) => ({ key: `net:${n.id}`, members: n.members ?? [], color: NET_COLORS[i % NET_COLORS.length], label: netLabel(n) }));
     steps.push({ phase: "isolated", title: "The relevant networks are isolated",
       body: `<p>Rather than run the whole graph at once, the model picks the superentities this question touches and treats each as a network, plus a residual of the other links that matter:</p>
-        <p>${nets.map((n, i) => `<span class="wchip" style="border-color:${NET_COLORS[i % NET_COLORS.length]};border-width:2px">${esc(n.kind === "residual" ? "residual" : nm.node(n.pattern_id ?? n.name))}</span><span class="mono faint">${fmt(n.relevance)}</span>`).join(" ")}</p>`,
+        <p>${nets.map((n, i) => `<span class="wchip" style="border-color:${NET_COLORS[i % NET_COLORS.length]};border-width:2px">${esc(n.kind === "residual" ? "residual" : nm.value(n.pattern_id ?? n.name))}</span><span class="mono faint">${fmt(n.relevance)}</span>`).join(" ")}</p>`,
       visual: { networks: groups, highlight: hl({ entities: nets.flatMap((n) => n.members ?? []), links: nets.flatMap((n) => n.channels ?? []) }) },
       focus: nets.flatMap((n) => n.members ?? []) });
   }
@@ -351,7 +351,7 @@ function predictSteps(evs, nm) {
     const i = Math.max(0, nets.indexOf(n));
     const frames = evs.filter((e) => e.kind === "propagation.frame" && e.payload.run_id === `predict:${p.network_id}`).map((e) => e.payload);
     const moves = top(p.summaries, 4);
-    steps.push({ phase: "predicted", title: `Predicted within ${n?.kind === "residual" ? "the residual" : nm.node(n?.pattern_id ?? p.name)}`,
+    steps.push({ phase: "predicted", title: `Predicted within ${n?.kind === "residual" ? "the residual" : nm.value(n?.pattern_id ?? p.name)}`,
       body: `<p>The shock propagates through this network alone, day by day, along each link's delay and lag. Press ▶ or scrub the days to watch it spread.</p>
         ${moves.length ? `<p class="small muted">At the horizon:</p>${zList(moves, nm)}` : ""}`,
       frames, visual: { networks: n ? [{ key: `net:${n.id}`, members: n.members ?? [], color: NET_COLORS[i % NET_COLORS.length], label: netLabel(n) }] : [],
@@ -388,7 +388,7 @@ function predictSteps(evs, nm) {
     const hot = paths.flatMap((p) => p.interaction_ids ?? []);
     steps.push({ phase: "explained", title: "Why: the paths that carry the effect",
       body: `<p>${esc(ex.payload.text ?? "")}</p>
-        <ul class="wlist">${paths.slice(0, 3).map((p) => `<li>${esc(nm.node(p.shock_id))} → ${(p.interaction_ids ?? []).map((i) => esc(nm.node(i))).join(" → ")} → <b>${esc(nm.node(p.target_id))}</b> <span class="muted small">${fmt((p.share ?? 0) * 100, 0)}%</span></li>`).join("")}</ul>`,
+        <ul class="wlist">${paths.slice(0, 3).map((p) => `<li>${(nm.valueHtml(p.shock_id))} → ${(p.interaction_ids ?? []).map((i) => (nm.valueHtml(i))).join(" → ")} → <b>${(nm.valueHtml(p.target_id))}</b> <span class="muted small">${fmt((p.share ?? 0) * 100, 0)}%</span></li>`).join("")}</ul>`,
       visual: { highlight: hl({ links: hot, hot, entities: paths.flatMap((p) => [p.shock_id, p.target_id].map(nm.entityOf)) }) },
       focus: paths.slice(0, 3).flatMap((p) => [p.shock_id, p.target_id]) });
   }

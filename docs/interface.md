@@ -20,15 +20,18 @@ The first screen is the graph, a caption, and one row of controls. Everything el
 - **Learn** is for backend users, who update the model. Every change is staged, reviewed, and committed.
 - **Predict** is for everyone else. It hides everything that learns, and **Ask** becomes the main action. Nothing done in Predict is learned. Predict opens on a blank canvas: a forecast brings forward the actors and ideas it reaches, each value showing the forecast's effect (in italics), and **Show the whole model** shows the rest. Going back to Learn closes Predict's windows.
 
+**When a forecast lands** (Predict), one thing takes the stage: the transmission path, as the [transmission grid](#panels), with the canvas isolated under it, and the **Forecast** panel on the right. Nothing else opens by itself. One small prompt, **Feel free to view the brief**, offers the brief and goes away on its own after a few seconds. The guide stays out of forecasts in Predict, where it would compete with the grid; it still walks a first forecast in Learn.
+
 ## The top bar
 
 The bar shows only what the moment needs. Left to right:
 
 | Control | What it does |
 |---|---|
+| **Demo menu** (beside the name) | Switch the running server to the small, production, full, Emily's, or Sally's demo. A demo comes back as you left it, and the first open of a demo shows its progress ([demos.md](demos.md#switching-demos)). |
 | **Learn / Predict** | Switch views |
 | Date and `v` number | The simulated date and the state version. The version goes up by one with each commit. |
-| **Import** (`I`) | In a model fed by imports (Emily's demo): bring in a bundle of research, each item reviewed on its date ([demos.md](demos.md#emilys-demo)) |
+| **Import** (`I`) | In a model fed by imports (Emily's and Sally's demos): bring in a bundle of research, each item reviewed on its date. When the bundles are one per day, **Next day** and **Any day…** pick them; the file picker takes several days at once ([demos.md](demos.md#sallys-demo)) |
 | **Tutorial** (`E`) | In the small and production demos: the chain of examples, each with its articles and **More like this** ([demos.md](demos.md)). In Emily's demo it opens the small demo, with **Back to your model** |
 | **Update** (`U`), **Step ▸** (`→`), **Play** (`Space`) | In the full demo: read news and data up to a date, or follow the scripted story |
 | **How it works** (`H`) | Learning and inference, each stage with its flowchart; the literature review; the implementation and every component's contract |
@@ -40,11 +43,11 @@ The bar shows only what the moment needs. Left to right:
 
 In Predict, the caption shows only when it is about a question; a Learn example's caption stays in Learn.
 
-**Notifications.** A toast appears for an error, for work that finished out of sight (an update, with its **Report**), or for a result nothing else on screen shows. Tips that explain a view or a shortcut show once per browser. A toast that repeats one still on screen is dropped, and at most two show at once. The first-visit hint sits above the canvas controls, never over them, and goes after the first click, zoom, or pan, or after 20 seconds.
+**Notifications.** A toast appears for an error, for work that finished out of sight (an update, with its **Report**), or for a result nothing else on screen shows. A forecast makes no toast (see [when a forecast lands](#two-views)). Tips that explain a view or a shortcut show once per browser. A toast that repeats one still on screen is dropped, and at most two show at once. The first-visit hint sits above the canvas controls, never over them, and goes after the first click, zoom, or pan, or after 20 seconds.
 
 ## The canvas
 
-**Nodes.** An entity is a pill. Open it (double-click) to see its subentities as rows, each with a distribution glyph and its latest move. Superentities are outlines around their members, with a tab naming them. Closed, they become cards.
+**Nodes.** An entity is a pill. Open it (double-click) to see its subentities as rows, each with a distribution glyph and its latest move. Anywhere a subentity appears away from its entity (a tooltip, the review, find, checks, a forecast), it is named with its entity, as in "Tokio Marine · share price". Superentities are outlines around their members, with a tab naming them. Closed, they become cards.
 
 **Interacting with nodes.** Hover to see what something is, click to inspect it, double-click to open it, and right-click for every option. In Learn, right-click offers **Group into a superentity**, **Dissolve it**, and **Retire** for entities and interactions. Each is staged and waits for review. **Draw** (`D`) proposes an edge: drag from one node to another. A subentity gives a concrete end; an entity or a superentity gives an abstract end that intake refines.
 
@@ -80,9 +83,10 @@ In Predict, the caption shows only when it is about a question; a Learn example'
 |---|---|---|
 | **Review** | Review, top bar | The staged review of each waiting change: approve all, some, or none (`A` and `R` approve or reject the focused proposal) |
 | **News** | ☰ or `N` | The news and data the model has read |
-| **Briefs** | ☰ or `B` | A written reading of each forecast |
+| **Briefs** | ☰, `B`, or the prompt after a forecast | A short reading of each forecast, in what a PM needs: the bottom line (the two largest moves with their 90% ranges, and the scenario weights: how sure); the **transmission path**, which can be rewound or replayed order by order (◀ ▶, or a dot per order), with the canvas lighting the path so far; the **timeline** as a table (when → what moves → by how much → order and path); who is affected; what to watch and what would change the view; and the news behind it, folded. **✎ Note** adds a note to any section or timeline line. Notes are kept with the forecast on the server and logged in the ledger as records that change no state, so inference never learns from them. **Edit** reopens Ask with the thesis filled in; **Re-run** poses it again at the latest committed version. Every run of a thesis stays one click away (**runs #1 #2**). Opening a brief closes the grid when the two would not fit (**As a grid** brings it back). |
 | **Inspect** | Click a node | The node's values, evidence, and history |
-| **Ask, Forecast** | `Q` | Pose a thesis; forecast values, actors, sectors, superentities, or categories, by order and path |
+| **Ask, Forecast** | `Q` | Pose a thesis; forecast values, actors, sectors, superentities, or categories, by order and path. Each forecast card draws the outcome at the horizon twice on one axis: **without** the shock (the baseline) above, **with** it below, medians ticked and the shift between them marked, beside the effect's fan over time. **Brief**, **Edit**, **Re-run**, and **Agent context** sit under the question. With a watchlist, the panel opens on **Scenarios for the book**: bull, base, and bear bands of the forecast's draws, with the names each favors and hurts, its mechanism, and what would change the read ([demos.md](demos.md#sallys-demo)). |
+| **Agent context** | **Agent context**, on a forecast | The world model as context for a client's agents, in their own world-model format: the card it fills (Scenarios & conviction) beside the pack (manifest, domain pack, baseline, decision context), which card reads which part, and **Download** |
 | **Hypotheses** | Right panel tab | The hypothesis frontier: hypotheses about interactions and about entities' decisions, sorted by informational value. Each can be marked supported or refuted, and decision hypotheses can be posed as theses. |
 | **Decisions** | Right panel tab | Recorded decisions with the forecasts they cite. **Resolve** scores a decision once its review date passes. |
 | **Checks** | ☰ or `C` | What the model is testing now (fuzzy ends, co-movements, candidate superentities), each with its progress toward its bound; and when each kind of check runs, how it works, and exactly what it updates |
@@ -93,6 +97,10 @@ In Predict, the caption shows only when it is about a question; a Learn example'
 | **Admin and settings** | ☰ or `,` | Story (every scripted step), Map (the categories, superentities, actors, and the key of symbols), View, and Settings |
 
 Side panels can be enlarged to full screen (⤢) and closed (✕).
+
+**Motion.** Movement is quick, between 150 and 350 ms. Side panels slide in from their own side and fade, and so do menus and windows. Toasts rise in and fall away, and a count that changes bumps once. Items new to a list (review sections, news, examples, find results, checks) come in one after another, and a list redrawn with the same items doesn't animate again. Switching between Learn and Predict crossfades the bar's controls and the canvas. On the canvas, nodes and interactions draw in as they appear. Nothing animates while the view moves. The system's reduced-motion setting, or Admin › Settings › Reduced motion, turns all of this off.
+
+**The guide** is a small red panda. The first time the model forecasts or reads news, it hops to whatever the model is working on and says what it does ([Admin › Settings](#panels) turns it off).
 
 ## Shortcuts
 

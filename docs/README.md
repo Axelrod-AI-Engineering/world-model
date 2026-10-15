@@ -22,7 +22,7 @@ Read as deep as you need. Start with the design's front page; each level links t
 
 | Page | For |
 |---|---|
-| [demos.md](demos.md) | The four demos, the 24 examples, and how the review works |
+| [demos.md](demos.md) | The five demos, the 24 examples, and how the review works |
 | [interface.md](interface.md) | A tour of the interface and every shortcut |
 | [cli.md](cli.md) | The command line, configuration, and environment variables |
 | [development.md](development.md) | Tests, the repository layout, and conventions |

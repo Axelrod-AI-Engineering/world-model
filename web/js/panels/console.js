@@ -3,8 +3,12 @@
 // commit, compares two versions, or opens an old version read-only. (Vetting itself happens in Review, at the
 // end of learning, on a staged copy: panels/review.js.)
 import { api } from "../api.js";
+import { names } from "../names.js";
 import { emit, on } from "../store.js";
 import { esc, errorText } from "../util.js";
+
+// a changed value reads "Entity · subentity" (names.js); anything else as the log names it
+const changeName = (ch) => (/^subentit/.test(ch.kind) && ch.id ? names().valueHtml(ch.id) : esc(ch.name));
 
 const PROCESS_GROUPS = [
   ["all", "All", []],
@@ -98,7 +102,7 @@ export function initConsole({ toast, onFocus }) {
         <label>to <input type="number" data-to min="0" value="${c.version}"></label><button data-diff>Diff</button>
         <button data-checkout title="See the graph as it was at this version (read-only)">Open this version</button></div></div>`;
     steps.innerHTML = `<h4>Structure it changed</h4>${st.commit.changes.length ? `<ul class="cchanges">${st.commit.changes.map((ch) =>
-      `<li><span class="act ${esc(ch.action)}">${esc(ch.action)}</span> ${esc(ch.kind)}: ${esc(ch.name)}${ch.fields?.length ? ` <span class="small muted">(${ch.fields.slice(0, 6).map(esc).join(", ")})</span>` : ""}</li>`).join("")}</ul>`
+      `<li><span class="act ${esc(ch.action)}">${esc(ch.action)}</span> ${esc(ch.kind)}: ${changeName(ch)}${ch.fields?.length ? ` <span class="small muted">(${ch.fields.slice(0, 6).map(esc).join(", ")})</span>` : ""}</li>`).join("")}</ul>`
       : `<p class="small muted">No structural change: values, statistics, or bookkeeping only.</p>`}`;
     wireDiff();
     flow.querySelector("[data-checkout]")?.addEventListener("click", () => { close(); emit("open-version", version); });
@@ -113,7 +117,7 @@ export function initConsole({ toast, onFocus }) {
         steps.innerHTML = `<h4>v${d.from_version} → v${d.to_version}: ${d.commits} commits</h4>
           <p class="small">${Object.entries(d.by_process).map(([k, n]) => `${esc(k)} ${n}`).join(" · ")}</p>
           <h4>Net structural changes</h4>${d.changes.length ? `<ul class="cchanges">${d.changes.map((ch) =>
-            `<li><span class="act ${esc(ch.action)}">${esc(ch.action)}</span> ${esc(ch.kind)}: ${esc(ch.name)}</li>`).join("")}</ul>`
+            `<li><span class="act ${esc(ch.action)}">${esc(ch.action)}</span> ${esc(ch.kind)}: ${changeName(ch)}</li>`).join("")}</ul>`
             : `<p class="small muted">None.</p>`}`;
       } catch (err) { toast(errorText(err), "err"); }
     });

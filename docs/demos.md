@@ -1,6 +1,6 @@
 # The demos
 
-There are four demos. All four serve the same interface ([interface.md](interface.md)) over the same engine.
+There are five demos. All five serve the same interface ([interface.md](interface.md)) over the same engine.
 
 <!-- toc -->
 **Contents**
@@ -17,8 +17,20 @@ There are four demos. All four serve the same interface ([interface.md](interfac
 | **Production demo** | `uv run axelrod prod_demo` | The same 24 examples in the oil-shock world, after three years of synthetic history, with a deeper hierarchy: superentities of superentities, three levels deep (Global tightening › Stagflation squeeze › Energy price shock; Tech decoupling › Semiconductor complex › AI chip supply chain; Oil to airlines) |
 | **Full demo** | `uv run axelrod demo` | The oil-shock scenario: 53 real actors and ideas and 18 scripted steps. The [hosted demo](deployment.md) runs this one. |
 | **Emily's demo** | `uv run axelrod demo --scenario emily_demo` | The ordinary use case: a PM's world model brought up to date by importing research, then forecasts of her book. See [below](#emilys-demo). |
+| **Sally's demo** | `uv run axelrod demo --scenario sally_demo` | Eleven names across banks, insurers, and Japan's exporters, brought up to date one day of research at a time; each forecast reads as a scenario table, and the model exports as context for a client's agents. See [below](#sallys-demo). |
 
 The small and production demos serve http://127.0.0.1:8765. The full demo serves http://127.0.0.1:8000 unless you pass `--port`.
+
+## Switching demos
+
+You don't need to restart the server to change demos. The **demo menu** beside the name in the top bar lists all five. Choosing one switches the running server to it, and the page reloads into the new demo.
+
+- **A demo opened before comes back as you left it**, with its reviews, examples, and versions. Each demo keeps its own storage (next to the first one's, for example `var/axelrod/demo-prod_demo`) and its own trace stream. To start a demo over, use **Reset**, or Admin › Scenario.
+- **A demo opened for the first time is built in the background.** The demo you're on keeps working, and a card under the menu shows the progress. The production and full demos replay three years of synthetic history the first time they open on a machine, which takes about two and a half minutes. The card counts the days as they're replayed, and the menu marks those demos *First open replays its history: a few minutes*. After that the history is cached in `var/oil_shock_demo/` (the two demos share it), and opening either one takes seconds.
+- **On the hosted demo, each login switches only its own engine.** Switching under Emily's login never changes what the main login sees, and the other way round. `WORLD_MODEL_SCENARIO` and `WORLD_MODEL_LOGINS` still choose the demo each login opens on ([deployment.md](deployment.md)).
+- **In Emily's demo, Tutorial** switches to the small demo and opens its examples. **Back to your model** switches back, and her model is as she left it.
+
+The API behind the menu: `GET /api/demos` returns the demos, the current one, and the switch under way (its phase and, during the history replay, the days done). `POST /api/demos/{id}` switches. Every page on the same engine receives a `switched` message on `/ws` and reloads. `POST /api/sim/load` still reloads a demo from its start.
 
 ## Emily's demo
 
@@ -26,10 +38,52 @@ What an ordinary week with the product looks like for a cross-asset PM. The mode
 
 1. **Import** (`I`, Learn) opens a bundle: research a collection agent has read and categorized, as dated items. Choose a JSON file, or one from the server's imports folder when it has one. The dialog shows the items as a timeline by day, with each item's source, category, relevance, and what it would change (a level, a move, a new link, or evidence for or against one), and what does not map onto the model.
 2. **Importing** folds the chosen items in on their own dates through one update, which stops at each item for review, oldest first. The review highlights the phrases each change comes from. When the last one is decided, the caption says the model is up to date.
-3. **Predict** opens on a blank canvas. Ask a question, or pick one of her four ready-made scenarios (from her Fed-versus-BoJ table and her yen simulator). The forecast brings forward only what it reaches, with the forecast's effect on each value; **Show the whole model** shows everything, as of the version the forecast used.
+3. **Predict** opens on a blank canvas. Ask a question, or pick one of her four ready-made scenarios (from her Fed-versus-BoJ table and her yen simulator). The forecast brings forward only what it reaches, with the forecast's effect on each value; **Show the whole model** shows everything, as of the version the forecast used. Its transmission path opens first, as the grid; the brief is one click away, and takes notes, an **Edit**, and a **Re-run** ([interface.md](interface.md#panels)).
 4. **Tutorial** opens the small demo in place of the model, and **Back to your model** returns.
 
 The bundle format (`axelrod.import/v1`) is in `src/axelrod_wm/intake/bundle.py`; a synthetic sample is `tests/fixtures/import_bundle_sample.json`. Emily's own bundle is built from client research and lives in `data/emily_data/`, which is never committed or uploaded: on the hosted demo, import it with the file picker.
+
+## Sally's demo
+
+The world model as the **context layer** for a client's agents. The client's agents (a decision engine, a disruption-propagation agent, an execution and monetization agent) already load a "world model" of their own before they reason: a domain pack of companies, clusters, and qualitative edges, and a dated baseline, in their v4.1.4 format. Theirs has no effect sizes, lags, or forecasts. Sally's demo shows ours filling that slot: it learns from the same research, and exports what it holds in their format.
+
+**The book.** Eleven names, each seeded with its drivers and links, in three groups that nest the smaller superentities:
+
+| Group (superentity) | Names | Inside it |
+|---|---|---|
+| Banks and capital markets | JPMorgan Chase, Morgan Stanley, Citigroup, China Construction Bank, UniCredit, AIB Group | US capital-markets banks; Euro and Irish banks; China banks and property |
+| Insurers on Japanese and global yields | Tokio Marine, MS&AD | Japanese insurers' reinvestment |
+| Japan rates, growth, the yen, and overseas earnings | Toyota, Komatsu, SoftBank Corp | Rate gap and the yen; yen exporters; Japan rates and domestic growth |
+
+Policy divergence and oil and inflation sit above all three. Other names in the research (Zurich, Munich Re, NN, Duke Energy, National Grid) are sector context only: they inform the drivers, and have no entities. AIB and MS&AD have no research yet, so they move only through their drivers.
+
+1. **Import** (`I`). The research is sorted into **one bundle per day** (`data/sally_data/days/YYYY-MM-DD.json`). The dialog offers **Next day** (the first day after the model's date) and **Any day…**; on the hosted demo, choose one or several days' files with the file picker, and they are merged. Each item is reviewed on its date, as in Emily's demo.
+2. **Predict.** Five ready-made theses: the BoJ to 1.5%, the Fed cutting 100 bp, a carry unwind (USD/JPY −8%), the PBoC cutting the LPR with property recovering, and the ECB cutting 50 bp. Or ask your own ("What if deal activity fell by 20% next quarter?").
+3. **Scenarios for the book.** Each forecast's panel opens with its scenario table, the form of the client's Decision Engine card "Scenarios & conviction". The forecast's joint draws are sorted by how the book moves (the average effect on the eleven names' share prices, or their earnings line where a name has no price). **Bear** is the worst quarter of the draws, **Base** the middle half, **Bull** the best quarter. For each band: the names it favors and hurts (median moves, in percent), the drivers that differ most between bear and bull (the mechanism), and what would change the read (the open hypothesis on the book worth most to learn). The chances of the book ending up or down at all are the model's own, and sit above the table. Nothing in it is learned or written by a language model (`inference/scenario_table.py`).
+4. **Agent context.** **Agent context** on a forecast opens the context pack beside the card it fills. The pack has four parts: the **manifest** (the client's load order, a registry row, and which of their agents' cards reads which part), the **domain pack** (companies, clusters and memberships, metric families, edges with our sizes, existence probabilities, timing, and evidence, transmission paths, cross-validation assertions, and caveats from the hypothesis frontier), the **baseline** (every value as of the version, with the open questions), and the forecast's **decision context**, kept outside the pack as their contract asks. **Download** saves it as one JSON file. It grounds the agent's judgment and never concludes it: no ratings, no sizing.
+
+How it maps onto the client's format:
+
+| Their v4.1.4 key | Ours |
+|---|---|
+| `companies` | Each company entity, with its ticker, sector, and whether it is in the book |
+| `clusters`, `cluster_memberships`, `sector_packs` | Superentity patterns, their bound instances' roles, and the top-level groups |
+| `company_edge_relationships` | Each interaction: direction from the effect's sign, `confidence_prior` from the existence probability (high at 0.75 or more, medium from 0.5), `time_horizon` from the kernel, and an `axelrod` block with the numbers their schema has no room for |
+| `transmission_paths` | Each superentity's interactions, causes first |
+| `cross_validation_assertions` | Names moved by the same driver, which should move together (or apart) |
+| `industry_caveat_definitions` | Soft economic bounds, and the top open hypotheses |
+| `_19_current_baseline` | Posteriors at the committed version, with its state hash |
+| decision context | The forecast: targets with ranges, transmission by order and path, key interactions, and the scenario table |
+
+The research is client material and stays local, like Emily's: `data/sally_data/` is gitignored and never in the Docker image. Research agents write dated items into `data/sally_data/_bundle_parts/`, and `scripts/imports/bundles.py` gives them the model's ids, checks each part against the model, and writes the daily bundles:
+
+```bash
+uv run python scripts/imports/bundles.py ids sally_demo > data/sally_data/_bundle_parts/model_ids.txt
+uv run python scripts/imports/bundles.py check sally_demo data/sally_data/_bundle_parts/<group>.json
+uv run python scripts/imports/bundles.py days sally_demo data/sally_data/_bundle_parts data/sally_data/days --title "Sally's research"
+```
+
+The API: `GET /api/context/v4` returns the pack (domain pack and baseline); `?forecast=<id>` adds that forecast's decision context. The exporter is `src/axelrod_wm/context/v4.py`.
 
 ## The tutorial (small and production demos)
 

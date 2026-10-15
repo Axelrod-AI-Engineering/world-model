@@ -215,7 +215,9 @@ const EFFECTS = {
   async "thesis.posed"([ev], ctx) {
     const p = ev.payload;
     const shocked = [...new Set((p.ops ?? []).flatMap((o) => (o.ends ?? []).map((e) => e.ref)).filter(Boolean))];
-    const guided = ctx.guide?.begin("forecast", ev.scope) ?? false;
+    // DECISION (Oct 14): in Predict the guide stays out of a forecast. Its first view is the transmission grid, and a
+    // narrator hopping over the canvas at the same time competes with it. The guide still walks a first forecast in Learn.
+    const guided = store.settings.mode !== "predict" && (ctx.guide?.begin("forecast", ev.scope) ?? false);
     runs.set(ev.scope, { scope: ev.scope, question: p.question, shocked, guided, nets: [], byId: new Map(), done: 0, label: "" });
     ctx.renderer.clearHalos();
     ctx.renderer.setFlows({});
@@ -344,7 +346,7 @@ const EFFECTS = {
     await sleep(duration(ev.kind, ctx));
     if (run) {
       if (run.guided) {
-        await ctx.guide.end("Ready: fan charts on the right, and a written brief with the news behind it on the left.",
+        await ctx.guide.end("Ready: the forecast is on the right, and its brief is under Briefs (B).",
           el('#right-tabs [data-tab="forecast"]'));
       }
       setTimeout(() => ctx.renderer.setOverlayGroups([]), 400);

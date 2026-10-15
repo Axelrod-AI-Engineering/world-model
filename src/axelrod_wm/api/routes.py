@@ -625,6 +625,96 @@ async def get_forecast_brief(request: Request, forecast_id: str) -> dict:
     return await st.call(lambda: brief_view(st.controller, forecast_id))
 
 
+@router.get("/context/v4")
+async def get_context_v4(request: Request, forecast: str | None = None) -> dict:
+    """The world model as context for a client's agents, in their v4.1.4 world-model format (Oct 15): a domain
+    pack, the current baseline, and (with ?forecast=) the forecast's decision context, with a manifest of load order."""
+    from axelrod_wm.context.v4 import context_pack
+
+    st = S(request)
+
+    def run() -> dict:
+        ctl = st.controller
+        fc = ctl.forecast(forecast) if forecast else None
+        if forecast and fc is None:
+            raise KeyError(forecast)
+        script = st.runner.script
+        watch = ctl.watchlist() or {}
+        eng = ctl.engine
+        return context_pack(eng.wm, eng.ltm, scenario_id=script.id, title=script.title.split(":")[0],
+                            book=list(watch.get("entities", [])), version=eng.version, state_hash=eng.state_hash,
+                            forecast=fc, explanation=ctl.explanation(fc.explanation_id) if fc else None)
+
+    return await st.call(run)
+
+
+class AnnotationBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    anchor: str = "brief"               # what the note is on: "section:<name>" or "row:<ref>"
+    text: str
+    by: str = "reader"
+
+
+@router.get("/forecasts/{forecast_id}/annotations")
+async def get_annotations(request: Request, forecast_id: str) -> list:
+    """Readers' notes on a forecast's brief (Oct 14), oldest first."""
+    st = S(request)
+
+    def run() -> list:
+        if st.controller.forecast(forecast_id) is None:
+            raise KeyError(forecast_id)
+        return st.controller.annotations(forecast_id)
+
+    return await st.call(run)
+
+
+@router.post("/forecasts/{forecast_id}/annotations")
+async def post_annotation(request: Request, forecast_id: str, body: AnnotationBody) -> dict:
+    """Add a note to a brief. It is logged in the ledger as a record that changes no state: the version does not move,
+    and inference never reads it."""
+    st = S(request)
+    return await st.call(lambda: st.controller.annotate(forecast_id, body.anchor, body.text, by=body.by))
+
+
+@router.delete("/forecasts/{forecast_id}/annotations/{annotation_id}")
+async def delete_annotation(request: Request, forecast_id: str, annotation_id: str) -> dict:
+    st = S(request)
+    await st.call(lambda: st.controller.remove_annotation(forecast_id, annotation_id))
+    return {"ok": True, "id": annotation_id}
+
+
+@router.post("/forecasts/{forecast_id}/rerun")
+async def rerun_forecast(request: Request, forecast_id: str) -> dict:
+    """Pose the same thesis again at the latest committed version (Oct 14). The earlier forecast stays reachable."""
+    st = S(request)
+
+    def run() -> dict:
+        ctl = st.controller
+        fc = ctl.rerun_forecast(forecast_id)
+        return {**forecast_view(fc, ctl.explanation(fc.explanation_id), ctl.engine.wm, ctl.watchlist()),
+                "rerun_of": forecast_id}
+
+    return await st.call(run)
+
+
+@router.get("/theses/{thesis_id}")
+async def get_thesis(request: Request, thesis_id: str) -> dict:
+    """A thesis as it was posed, so Ask can reopen it prefilled (Edit), with the forecasts made from it."""
+    st = S(request)
+
+    def run() -> dict:
+        ctl = st.controller
+        th = ctl.thesis_of(thesis_id)
+        if th is None:
+            raise KeyError(thesis_id)
+        return {**th.model_dump(mode="json"),
+                "forecasts": [{"id": fc.id, "version": fc.based_on_version, "created": fc.created_at.isoformat()}
+                              for fc in ctl.forecasts_of(thesis_id)]}
+
+    return await st.call(run)
+
+
 def _grid_view(ctl, src: dict | None, method: str, outputs: list[str] | None, title: str) -> dict:
     """The transmission grid (Oct 11): one way of isolating a shock's relevant paths, with names and entities."""
     from axelrod_wm.inference.paths import METHODS, isolate
@@ -850,6 +940,21 @@ async def resolve_decision(request: Request, decision_id: str) -> dict:
 @router.get("/scenarios")
 async def get_scenarios() -> list:
     return list_scenarios()
+
+
+@router.get("/demos")
+async def get_demos(request: Request) -> dict:
+    """The demos the top bar's menu offers: which one this login's engine serves, which are open, which must replay
+    their history first, and the switch under way with its progress."""
+    return S(request).demos()
+
+
+@router.post("/demos/{demo_id}")
+async def switch_demo(request: Request, demo_id: str) -> dict:
+    """Switch this login's engine to another demo. A demo opened before comes back as it was left; a new one is built
+    in the background (GET /api/demos follows it) while the current one keeps serving. Every page on this engine is
+    told to reload once it swaps in."""
+    return await S(request).switch(demo_id)
 
 
 @router.get("/layouts/figure1")

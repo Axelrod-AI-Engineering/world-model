@@ -2,6 +2,7 @@
 // day by day; it is the only way the world enters the model. The strip shows the stages and the
 // current day, pauses on "awaiting review", and the report lands in the inspector.
 import { api } from "../api.js";
+import { names } from "../names.js";
 import { on, store } from "../store.js";
 import { errorText, esc, fmtDate } from "../util.js";
 
@@ -140,7 +141,7 @@ export function initUpdate({ openModal, toast, startDraw, openReview, showReport
     const r = run.report ?? {};
     const n = Object.values(r.collected ?? {}).reduce((a, b) => a + b, 0);
     const top = (r.biggest_moves ?? [])[0];
-    const move = top ? ` · biggest move: ${subLabel(top[0]).split(" · ")[0]} ${top[1] > 0 ? "▲" : "▼"} ${Math.abs(top[1]).toFixed(1)} sd` : "";
+    const move = top ? ` · biggest move: ${subLabel(top[0])} ${top[1] > 0 ? "▲" : "▼"} ${Math.abs(top[1]).toFixed(1)} sd` : "";
     // the tutorial says what each example did in its review; an update toast there is noise
     if (!store.status?.examples) toast(`Updated to ${fmtDay(run.last_day)}: ${n} new${move}`, "real", { label: "Report", run: () => showReport(run) });
   });
@@ -165,11 +166,7 @@ function fmtDay(iso) {
   return d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
 }
 
-function subLabel(sid) {
-  const s = store.view?.subentities.find((x) => x.id === sid);
-  const e = s && store.view.entities.find((x) => x.id === s.entity_id);
-  return s ? `${s.name}${e ? ` · ${e.name}` : ""}` : sid;
-}
+const subLabel = (sid) => names().value(sid);
 
 // The update report (§7.8) for the inspector.
 export function reportView(run) {
@@ -193,7 +190,7 @@ export function reportView(run) {
     <div class="section"><h4>Collected</h4>${collected.length ? collected.map(([s, n]) => `<div class="small">${esc(s.replace(/_/g, " "))}: ${n}</div>`).join("") : `<div class="small muted">nothing new</div>`}
       ${r.late_collected ? `<div class="small muted">${r.late_collected} published before the window, folded in on its first day</div>` : ""}</div>
     ${r.model_edits_proposed?.length ? `<div class="section"><h4>Model edits proposed</h4><div class="small mono">${r.model_edits_proposed.map(esc).join(", ")}</div></div>` : ""}
-    <div class="section"><h4>Biggest moves</h4>${(r.biggest_moves ?? []).map(([sid, dz]) => `<div class="subrow"><span class="nm">${esc(subLabel(sid))}</span>
+    <div class="section"><h4>Biggest moves</h4>${(r.biggest_moves ?? []).map(([sid, dz]) => `<div class="subrow"><span class="nm">${names().valueHtml(sid)}</span>
       <span class="val ${dz > 0 ? "z-up" : "z-down"}">${dz > 0 ? "▲" : "▼"} ${Math.abs(dz).toFixed(2)} sd</span></div>`).join("") || `<div class="small muted">no moves</div>`}</div>
     ${r.reposed_theses?.length ? `<div class="section"><h4>Theses re-posed</h4><div class="small">${r.reposed_theses.map(esc).join(", ")}</div></div>` : ""}
     ${r.not_translated?.length ? `<div class="section"><h4>Not translated</h4><div class="small mono">${r.not_translated.map(esc).join(", ")}</div></div>` : ""}`;

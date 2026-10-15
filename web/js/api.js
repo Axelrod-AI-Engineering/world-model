@@ -25,6 +25,7 @@ async function request(method, path, body) {
 const get = (p) => request("GET", p);
 const post = (p, b = {}) => request("POST", p, b);
 const patch = (p, b = {}) => request("PATCH", p, b);
+const del = (p) => request("DELETE", p);
 const q = (s) => encodeURIComponent(s);
 
 export const api = {
@@ -99,9 +100,20 @@ export const api = {
   scenarios: () => get("/scenarios"),
   layout: () => get("/layouts/figure1"),
   load: (scenario, interactive = true) => post("/sim/load", { scenario, interactive }),
+  // the top bar's demo menu: the demos, and a switch to one (built in the background on first use)
+  demos: () => get("/demos"),
+  switchDemo: (id) => post(`/demos/${q(id)}`),
   step: () => post("/sim/step"),
   script: () => get("/sim/script"),
   brief: (id) => get(`/forecasts/${q(id)}/brief`),
+  // the world model as context for a client's agents, in their v4.1.4 format (Oct 15)
+  contextV4: (forecastId) => get(`/context/v4${forecastId ? `?forecast=${q(forecastId)}` : ""}`),
+  // readers' notes on a brief (Oct 14): logged, never learned; and posing a forecast's thesis again
+  annotations: (id) => get(`/forecasts/${q(id)}/annotations`),
+  annotate: (id, anchor, text) => post(`/forecasts/${q(id)}/annotations`, { anchor, text }),
+  removeAnnotation: (id, aid) => del(`/forecasts/${q(id)}/annotations/${q(aid)}`),
+  rerun: (id) => post(`/forecasts/${q(id)}/rerun`, {}),
+  thesis: (id) => get(`/theses/${q(id)}`),
   play: (until_step) => post("/sim/play", until_step == null ? {} : { until_step }),
   pause: () => post("/sim/pause"),
   reset: () => post("/sim/reset"),
@@ -138,8 +150,9 @@ export const api = {
 
 // The /ws stream (§12.3): {"type": "hello", "since_seq": n}, then trace and status messages.
 export class Stream {
-  constructor({ onTrace, onStatus, onOpen, onClose, sinceSeq }) {
+  constructor({ onTrace, onStatus, onOpen, onClose, onSwitched, sinceSeq }) {
     this.onTrace = onTrace;
+    this.onSwitched = onSwitched;      // this engine now serves another demo: the page reloads into it
     this.onStatus = onStatus;
     this.onOpen = onOpen;
     this.onClose = onClose;
@@ -163,6 +176,7 @@ export class Stream {
       try { msg = JSON.parse(m.data); } catch { return; }
       if (msg.type === "trace") this.onTrace(msg.event);
       else if (msg.type === "status") this.onStatus(msg.status);
+      else if (msg.type === "switched") this.onSwitched?.(msg.scenario);
     };
     ws.onclose = () => {
       this.onClose?.();
