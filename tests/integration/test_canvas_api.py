@@ -52,7 +52,7 @@ def test_find_filters_nodes_and_edges_by_meaning(client):
 
     airline = hits("airline")
     ents = {h["id"] for h in airline["hits"] if h["kind"] == "entity"}
-    assert {"delta", "skybridge"} <= ents and all("kind" in h["why"] for h in airline["hits"] if h["id"] in ("delta", "skybridge"))
+    assert {"delta", "skybridge"} <= ents and all("concept" in h["why"] for h in airline["hits"] if h["id"] in ("delta", "skybridge"))
     rates = hits("rates")
     assert any(h["id"] == "federal_reserve.policy_rate" for h in rates["hits"])
     assert any(h["kind"] == "interaction" for h in rates["hits"])

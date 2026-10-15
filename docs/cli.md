@@ -43,7 +43,7 @@ uv run axelrod export-trace ...                            # copy a recorded tra
 
 - `configs/default.yaml` picks one component per slot. To swap one in, copy the file, edit `components:`, and pass `--config`.
 - `configs/demo.yaml` and `configs/small_demo.yaml` hold each scenario's overrides. Both demos review every change (`review_all`).
-- `data/worlds/<world>/` holds a world's construction files. `data/taxonomy/objects.yaml` gives each kind of firm its default values and links.
+- `data/worlds/<world>/` holds a world's construction files. `data/taxonomy/objects.yaml` gives each firm concept (Airline, Chipmaker, …) its default values and links.
 - `data/scenarios/<scenario>/` holds a script, seeds, a layout, market events and their reviewed translations, and the synthetic world's truth. The small demo is a blank canvas (`canvas: blank`). The production demo builds on `oil_shock_demo` (`base:`).
 
 ## Environment variables

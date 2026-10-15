@@ -42,6 +42,9 @@ class EntityNode(_V):
     demo_addition: bool = False
     description: str = ""
     kind_name: str | None = None      # its object generalization's name ("Airline")
+    concept_branch: str | None = None  # the top concept above it under the root ("Actor"), for its outline (Oct 15)
+    concept_path: list[str] = []      # its concepts, from the top branch down to its own
+    concept_branch_name: str | None = None
     user_confidence: float | None = None   # the reviewer's confidence when it was added (Oct 8)
     open: float = 1.0                 # its open node (Oct 9): the share of its values' movement not explained yet
 
@@ -244,6 +247,13 @@ def build_graph_view(wm: WorkingMemory, ltm: LongTermMemory, controller: WorldMo
     instance_members = {iid: g.members(iid) for iid in g.instances}
     otax = ltm.object_generalizations.taxonomy
     kind_name = lambda gid: otax.nodes[gid].name if gid in otax.nodes else None  # noqa: E731
+
+    def concepts(gid: str | None) -> list[str]:
+        """The entity's concepts below the root, top first (empty when it has none)."""
+        if not gid or gid not in otax.nodes:
+            return []
+        path = otax.path_from_root(gid)
+        return [n for n in path if n != otax.root_id]
     entities = []
     for eid, e in sorted(g.entities.items()):
         insts = sorted(i for i, m in instance_members.items() if eid in m and not g.instances[i].transient)
@@ -258,6 +268,9 @@ def build_graph_view(wm: WorkingMemory, ltm: LongTermMemory, controller: WorldMo
                                    # actors added to Figure 1's ideas: agencies, companies, people, sectors
                                    demo_addition=str(e.kind) in ("agency", "company", "person") or "sector" in e.features,
                                    description=e.description, kind_name=kind_name(e.generalization_id),
+                                   concept_branch=(concepts(e.generalization_id) or [None])[0],
+                                   concept_path=concepts(e.generalization_id),
+                                   concept_branch_name=kind_name((concepts(e.generalization_id) or [None])[0]),
                                    user_confidence=e.user_confidence, open=ent_open.get(eid, 1.0)))
     subs = []
     for sid, s in sorted(g.subentities.items()):
@@ -764,6 +777,13 @@ def transmission_view(fc: Any, wm: WorkingMemory, watchlist: dict | None = None)
                           "names": names} if watchlist else None}
 
 
+def _series(xs: list, digits: int | None = 4, sig: int | None = None) -> list[dict]:
+    """A per-day distribution summary, rounded to what a chart can show (Oct 15, speed: a forecast's view was 1.5 MB)."""
+    def r(v: float) -> float:
+        return float(f"{v:.{sig}g}") if sig is not None else round(v, digits)
+    return [{k: r(v) for k, v in x.model_dump().items()} for x in xs]
+
+
 def forecast_view(fc: Any, explanation: Any, wm: WorkingMemory, watchlist: dict | None = None) -> dict:
     g = wm.graph
     dev = wm.deviations
@@ -777,16 +797,16 @@ def forecast_view(fc: Any, explanation: Any, wm: WorkingMemory, watchlist: dict 
         e = g.entities.get(s.entity_id) if s else None
         targets.append({"id": sid, "name": s.name if s else sid, "unit": s.unit if s else "",
                         "entity": e.name if e else None,
-                        "levels": [x.model_dump() for x in fc.summary.get(sid, [])],
-                        "effects": [x.model_dump() for x in fc.effect_summary.get(sid, [])],
-                        "z_levels": [x.model_dump() for x in fc.z_summary.get(sid, [])],
+                        "levels": _series(fc.summary.get(sid, []), sig=6),
+                        "effects": _series(fc.effect_summary.get(sid, [])),
+                        "z_levels": _series(fc.z_summary.get(sid, [])),
                         "decomposition": fc.decomposition.get(sid, {}),
                         "effect_density": fc.effect_density.get(sid, []),
                         "split": fc.split.get(sid, {})})
     groups = []
     for grp in fc.groups:
         groups.append({"id": grp.id, "kind": grp.kind, "ref": grp.ref, "name": grp.name,
-                       "members": len(grp.members), "effects": [x.model_dump() for x in grp.effect_summary],
+                       "members": len(grp.members), "effects": _series(grp.effect_summary),
                        "effect_density": grp.effect_density, "split": grp.split,
                        "top": [{"id": sid, "name": g.subentities[sid].name if sid in g.subentities else sid, "effect": v}
                                for sid, v in grp.top]})
@@ -795,14 +815,13 @@ def forecast_view(fc: Any, explanation: Any, wm: WorkingMemory, watchlist: dict 
               for sid, v in (fc.movers or {}).items()]
     return {"forecast": fc.model_dump(mode="json", exclude={"summary", "effect_summary", "z_summary", "groups",
                                                             "effect_density", "movers", "transmission", "paths",
-                                                            "split"}),
+                                                            "split", "scenarios"}),
             "movers": movers, "transmission": transmission_view(fc, wm, watchlist),
             "dates": dates, "targets": targets, "groups": groups,
             "scenarios": [{"id": s.id, "name": s.name, "weight": s.weight, "network_ids": s.network_ids,
                            "forced_existence": s.forced_existence, "branched": s.branched_hypothesis_ids,
                            "effects_at_horizon": {k: v[-1].q50 for k, v in s.effect_summary.items()},
-                           "days": list(s.summary_days),
-                           "levels": {k: [x.model_dump() for x in v] for k, v in s.summary.items()}}
+                           "days": list(s.summary_days)}
                           for s in fc.scenarios],
             "networks": [n.model_dump(mode="json") for n in fc.networks],
             "isolated": {nid: {t: d.model_dump() for t, d in v.items()} for nid, v in fc.isolated.items()},
@@ -900,8 +919,8 @@ def learning_tasks_view(controller: Any) -> list[dict]:
     # 6. generalizations and kind defaults
     defaults = sum(1 for s in g.subentities.values() if s.slot_of)
     tasks.append({"id": "generalize", "phase": "generalize", "name": "Generalizations",
-                  "what": "Sorts every object into a kind; a kind's members inherit its priors and its default subentities.",
-                  "count": f"{len(og.taxonomy.nodes)} object and {len(ltm.interaction_generalizations.taxonomy.nodes)} interaction generalizations; {defaults} subentities from kinds",
+                  "what": "Sorts every object into a concept; a concept's members inherit its priors and its default subentities.",
+                  "count": f"{len(og.taxonomy.nodes)} object and {len(ltm.interaction_generalizations.taxonomy.nodes)} interaction generalizations; {defaults} subentities from concepts",
                   "target": {"kind": "memory", "id": "object"}, "target_label": "Open the object generalizations"})
     # 7. daily propagation: the unobserved value that moved most
     day = int(wm.last_processed_day)

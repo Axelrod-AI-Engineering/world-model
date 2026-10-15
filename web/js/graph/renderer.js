@@ -1,6 +1,7 @@
 // The canvas (§13.3). Drawing sits behind the GraphRenderer interface, so a canvas or WebGL renderer
 // can replace SVG if the node count passes about 2,000.
 /* global d3 */
+import { conceptStyles } from "./concepts.js";
 import { densityCurve } from "../charts/density.js";
 import { createSimulation, resolveCollisions, staticLayout } from "./forces.js";
 import { drawRibbons, prettyNode } from "./fuzzy.js";
@@ -1216,6 +1217,16 @@ export class SvgRenderer extends GraphRenderer {
       .classed("fresh", (d) => d.entity.origin !== "construction")
       .attr("aria-label", (d) => `${d.entity.name}, ${(d.entity.category_tags ?? []).join(" ")}${d.open ? ", open" : ""}`)
       .attr("aria-expanded", (d) => String(d.open));
+    // its outline: the concept in long-term memory it belongs to (Oct 15)
+    const concepts = conceptStyles(this.fullView ?? this.view);
+    this.concepts = concepts;
+    all.each((d, i, els) => {
+      const c = concepts.get(d.entity.generalization_id);
+      const el = els[i];
+      el.style.setProperty("--concept", c ? c.color : null);
+      el.style.setProperty("--concept-w", c ? `${c.width}px` : null);
+      el.dataset.concept = c ? c.name : "";
+    });
     // an entity opening or closing grows and shrinks rather than jumping
     all.select("rect.body").attr("y", -GEOM.HEAD_H / 2)
       .each((d, i, els) => {

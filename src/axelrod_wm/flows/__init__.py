@@ -112,21 +112,21 @@ WORLD_MODEL = _flow(
              output="A graph update event: operations with concrete ends",
              detail="A translator turns the event into operations: add or retire an entity, subentity, or "
                     "interaction; change or observe a value; group or dissolve a superentity. An end that names a "
-                    "kind rather than a value is refined, step by step, until it names one.",
+                    "concept rather than a value is refined, step by step, until it names one.",
              examples=["refine", "pending"]),
         dict(id="working", title="Learning · working memory",
              input="The graph update event",
              output="The staged current state: new or retired structure, the event's moves, the ripple by order, "
                     "and updated values and effects",
-             detail="What the world is like now. New items are classified and inherit their kind's priors; the "
+             detail="What the world is like now. New items are classified and inherit their concept's priors; the "
                     "ripple is simulated order by order; observed values update themselves and the interactions "
                     "that feed them.",
              examples=["create", "links", "ripple", "fold", "analog", "weaken"]),
         dict(id="long_term", title="Learning · long-term memory",
              input="What working memory learned: classified items, unexplained moves, observed decisions",
-             output="Staged lessons: kinds and their statistics, entity memories, the frontier, superentity "
+             output="Staged lessons: concepts and their statistics, entity memories, the frontier, superentity "
                     "support, and any proposals they raise",
-             detail="What the event teaches across time and entities. Kinds learn their members; a pairing that "
+             detail="What the event teaches across time and entities. Concepts learn their members; a pairing that "
                     "keeps holding becomes a proposed interaction; a recurring group of entities becomes a proposed "
                     "superentity, and a faded one is proposed for dissolution.",
              examples=["inherit", "memory", "resolve", "superentity", "frontier", "split", "collapse", "expand"]),
@@ -152,14 +152,14 @@ WORLD_MODEL = _flow(
                                 "edit", kind="start", phase="intake", trace=["market_event.received"]),
         dict(id="translate", label="Translate it into operations: one graph update event", phase="intake",
              component="translator", trace=["translate.result"]),
-        dict(id="q_fuzzy", label="Does an end name a kind, not a value?", kind="decision", phase="intake"),
-        dict(id="refine", label="Refine the fuzzy end: kind → entity → subentity, or hedge across the candidates",
+        dict(id="q_fuzzy", label="Does an end name a concept, not a value?", kind="decision", phase="intake"),
+        dict(id="refine", label="Refine the fuzzy end: concept → entity → subentity, or hedge across the candidates",
              phase="intake", component="refiner", side=True, trace=["refine.step", "refine.pending"]),
         # working memory
         dict(id="parse", label="Apply the operations: add or retire items; collect the event's moves", phase="working",
              component="parser", writes="working", trace=["parse.created", "parse.retired"]),
         dict(id="q_new", label="Does it add items?", kind="decision", phase="working"),
-        dict(id="classify", label="Classify each new item into a kind; it inherits the kind's priors", phase="working",
+        dict(id="classify", label="Classify each new item into a concept; it inherits the concept's priors", phase="working",
              component="classifier", writes="working", side=True, trace=["classify.path"]),
         dict(id="recall", label="Recall similar superentities and past days", phase="working", component="recaller",
              trace=["recall.result"]),
@@ -173,7 +173,7 @@ WORLD_MODEL = _flow(
         dict(id="hedges", label="Weigh the hedges; propose a resolution once one passes the bound", phase="working",
              component="refiner", writes="working", side=True, trace=["refine.weighed", "refine.resolution_proposed"]),
         # long-term memory
-        dict(id="kinds", label="Kinds learn their new members and statistics", phase="long_term",
+        dict(id="kinds", label="Concepts learn their new members and statistics", phase="long_term",
              component="generalization_updater", writes="long_term", trace=["generalize.updated", "generalize.split"]),
         dict(id="q_actor", label="Does an actor decide?", kind="decision", phase="long_term"),
         dict(id="memory", label="Entity memory records the actor's decision", phase="long_term",
@@ -224,7 +224,7 @@ WORLD_MODEL = _flow(
         ("Graph update event", "The operations one market event stands for, with the evidence behind them."),
         ("Item", "Anything in the graph: an entity (an actor or an idea), a subentity (one of its values), an "
                  "interaction (a causal link), or a superentity (a recurring group)."),
-        ("Kind", "A node of the taxonomy. Every item is classified into one and inherits its priors; kinds learn "
+        ("Concept", "A node of the taxonomy. Every item is classified into one and inherits its priors; concepts learn "
                  "from their members."),
         ("Ripple", "The moves a change sets off downstream, order by order."),
         ("Proposal", "The staged changes from one event, waiting for a person's review."),

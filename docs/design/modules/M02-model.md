@@ -27,7 +27,7 @@ The data model: pure pydantic types with indexes and no inference. Everything th
 | `Subentity` | id = `<entity>.<slug>`, attribute_kind, unit, scale, anchor, link, prior, posterior, level_mean/var/noise, observed, constraint (soft economic bound), user_confidence, history |
 | `Interaction` | source_id, target_id (subentities), label, edge_type, existence (Beta), forward and reverse `EdgeDynamics(effect, KernelSpec(delay, lag, duration))`, parameters (moderators: multiplicative, threshold, additive), evidence, time_states, retired_at |
 | `SuperentityPattern` / `SuperentityInstance` / `SuperInteraction` | roles, relations, sub_pattern_ids, support, status, rival_ids, track_record / bindings, interaction_ids, child_instance_ids / kind (causal, shares_members) |
-| `Taxonomy`, `Generalization`, `Signature` | kinds, for objects and for interactions |
+| `Taxonomy`, `Generalization`, `Signature` | concepts, for objects and for interactions |
 | `Hypothesis` | kind, statement, interaction or decision (subentity, change, window), probability, informational_value, half_life_days (14), status (open, supported, refuted, expired) |
 | `CausalGraph` | the indexes over all of the above |
 | `MarketEvent` | kind, channel (scraper, data_feed, user), published_at, occurred_at, headline, body, url |
@@ -64,7 +64,7 @@ These are additive fields with defaults, so old snapshots still load.
 
 ## Planned
 
-- Units are set once and never re-estimated (F-C3). R3 plans per-kind transforms and realized-volatility scales.
+- Units are set once and never re-estimated (F-C3). R3 plans per-concept transforms and realized-volatility scales.
 - Existence cannot learn absence (S-M1). R1 replaces it with inclusion log-odds.
 
 ## Done when

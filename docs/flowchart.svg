@@ -83,12 +83,12 @@
 <text class="fl-cap" x="234.0" y="402.5" text-anchor="middle">values and effects</text>
 </g>
 <path class="fl-edge happy" d="M234.0,414 L234.0,443"/><polygon class="fl-arrow happy" points="229.875,438.5 238.125,438.5 234.0,444"/>
-<g class="fl-node step ltm"><title>Learning · long-term memory: Staged lessons: kinds and their statistics, entity memories, the frontier, superentity support, and any proposals they raise</title>
+<g class="fl-node step ltm"><title>Learning · long-term memory: Staged lessons: concepts and their statistics, entity memories, the frontier, superentity support, and any proposals they raise</title>
 <rect class="fl-box" x="48" y="444" width="372" height="76" rx="8"/>
 <text class="ov-stage" x="234.0" y="465.5" text-anchor="middle">Learning · long-term memory</text>
-<text class="fl-cap" x="234.0" y="480.5" text-anchor="middle">Staged lessons: kinds and their statistics, entity</text>
-<text class="fl-cap" x="234.0" y="494.5" text-anchor="middle">memories, the frontier, superentity support, and</text>
-<text class="fl-cap" x="234.0" y="508.5" text-anchor="middle">any proposals they raise</text>
+<text class="fl-cap" x="234.0" y="480.5" text-anchor="middle">Staged lessons: concepts and their statistics,</text>
+<text class="fl-cap" x="234.0" y="494.5" text-anchor="middle">entity memories, the frontier, superentity support,</text>
+<text class="fl-cap" x="234.0" y="508.5" text-anchor="middle">and any proposals they raise</text>
 </g>
 <path class="fl-edge happy" d="M234.0,520 L234.0,549"/><polygon class="fl-arrow happy" points="229.875,544.5 238.125,544.5 234.0,550"/>
 <g class="fl-node decision decision"><title>Human review: An approved selection of the changes, or a rejection</title>

@@ -9,7 +9,7 @@ flowchart TD
   MV ==>|no| RP{"Does the event report a value?"}:::check
   RP ==>|no| HG{"Hedged ends waiting?"}:::check
   HG ==>|no| OUT["Staged working memory: structure, moves,<br/>ripple by order, values, effects, hedges"]:::done
-  NEW -->|yes| CL["Sort each into its kind;<br/>inherit its priors · classifier"]:::opt
+  NEW -->|yes| CL["Sort each into its concept;<br/>inherit its priors · classifier"]:::opt
   CL --> RC
   FIT -->|yes| BD["Bind it as an instance · binder"]:::opt
   BD --> PF

@@ -89,3 +89,20 @@ def test_the_yen_is_read_as_the_reciprocal_of_dollar_yen(client):
     op = th["event"]["ops"][0]
     assert op["target"]["subentity_id"] == "dollar_yen.usd_jpy"
     assert op["delta"] == pytest.approx(1 / 1.05 - 1)
+
+
+def test_entities_carry_their_concepts_for_outlines(client):
+    ents = {e["id"]: e for e in client.get("/api/state").json()["entities"]}
+    jpm, boj, jgbs = ents["jpmorgan"], ents["boj"], ents["jgbs"]
+    assert jpm["kind_name"] == "Bank" and jpm["concept_branch"] == "gen:obj:actor" and jpm["concept_branch_name"] == "Actor"
+    assert jpm["concept_path"][0] == "gen:obj:actor" and jpm["concept_path"][-1] == "gen:obj:bank"
+    assert boj["kind_name"] == "Central bank" and boj["concept_branch"] == "gen:obj:actor"
+    assert jgbs["concept_branch"] == "gen:obj:financial_condition"
+
+
+def test_forecast_views_are_compact(client, posed):
+    # the per-day series are rounded and each scenario's series is not sent twice (Oct 15, speed)
+    assert "scenarios" not in posed["forecast"]
+    assert all("levels" not in s for s in posed["scenarios"])
+    e = posed["targets"][0]["effects"][-1]
+    assert all(len(repr(v)) <= 9 for v in e.values())

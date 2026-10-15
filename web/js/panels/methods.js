@@ -28,9 +28,9 @@ const WORDS = [
   ["Fuzzy end (hedge)", "An end the article describes but does not name (“a US carrier”). It keeps a probability for each candidate and a share for one not in the graph yet; its soft interactions are as strong as they are probable, until evidence carries one past the bound and a person approves."],
   ["Your confidence", "How far you trust what you approve, for an article or one change. It shrinks an interaction's existence prior, weakens a report, and scales a move's expected size; 100% takes the article as stated."],
   ["Working memory", "The current graph and its values: what the world is like now."],
-  ["Long-term memory", "What generalizes: kinds (object and interaction generalizations), superentity patterns, entity memories, the correlation frontier, prior states."],
+  ["Long-term memory", "What generalizes: concepts (object and interaction generalizations), superentity patterns, entity memories, the correlation frontier, prior states."],
   ["The ripple", "How one move travels: first order is direct; second order passes through one value; third order through two. In review, each value's ripple can be deselected or given the probability that it arrives."],
-  ["Open node", "The empty node every node carries: the mass the graph does not account for yet. For a value, the share of its movement no interaction explains; for a kind, the chance the next item is of a kind not seen yet. Larger rings are blind spots."],
+  ["Open node", "The empty node every node carries: the mass the graph does not account for yet. For a value, the share of its movement no interaction explains; for a concept, the chance the next item belongs to a concept not seen yet. Larger rings are blind spots."],
   ["Check", "One test of one belief: a fuzzy end weighed by an article, a co-movement checked again after a spaced interval, a group of interactions counted on a day. Enough checks past a bound raise a proposal; the Checks pane (C) shows what is being tested now."],
   ["Composite superentity", "A superentity made of superentities. The path above the canvas names each level; [ and ] move up and down."],
   ["Thesis", "A what-if question. It runs on a branch of a committed version and never changes the model."],
@@ -47,7 +47,7 @@ function words(overview) {
 }
 
 const FILLS = [
-  ["Construction files", "entities, values, interactions, each kind's defaults", "by whoever writes them", "both memories (construction)"],
+  ["Construction files", "entities, values, interactions, each concept's defaults", "by whoever writes them", "both memories (construction)"],
   ["News, filings, analyst notes", "a graph update event: new or retired structure, moved values", "yes: a staged review", "working, then long-term memory"],
   ["Data releases", "observed values", "yes in the tutorial; routine releases may be signed off by policy", "working, then long-term memory"],
   ["A backend user's edit", "a collapse, an expansion, an addition, a retirement", "yes", "one structural commit"],

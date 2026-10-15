@@ -24,7 +24,7 @@
 
 What an event teaches across time and entities:
 
-- **Kinds** learn from their members and pass priors to newcomers.
+- **Concepts** learn from their members and pass priors to newcomers.
 - **Entity memories** remember each actor's decisions by context.
 - The **correlation frontier** pairs unexplained moves, and proposes an interaction once a pair keeps holding.
 - **Superentity induction** proposes a collapse when a group of interactions keeps firing together, and an expansion when one fades.
@@ -35,7 +35,7 @@ What an event teaches across time and entities:
 ## Interface
 
 ```python
-LongTermLearning.register(wm_result, ctx, txn) -> LTMResult      # learn.long_term: incorporate → kinds → decisions → frontier → explain
+LongTermLearning.register(wm_result, ctx, txn) -> LTMResult      # learn.long_term: incorporate → concepts → decisions → frontier → explain
 LongTermLearning.distill(day, ctx, txn) -> ConsolidationReport   # day.distill: episode → analogs → induction → entity memories → decay → splits
 StructuralApplier.apply(event, ctx, txn)                         # structural: approved collapse, expand, retire, drawn edits
 GeneralizationUpdater.update(classifications, ltm, ctx, txn)
@@ -73,14 +73,14 @@ A superentity's lifecycle:
 ## Invariants
 
 - **One commit per event** (`learn.long_term`) and one per day (`day.distill`).
-- **Structure changes only through review.** Promotion, collapse, and expansion are all proposals. Splitting a kind changes only the taxonomy, and is logged.
+- **Structure changes only through review.** Promotion, collapse, and expansion are all proposals. Splitting a concept changes only the taxonomy, and is logged.
 - **Thresholds.** Support > 3 to admit or promote; support > 4 to supply priors or analogs.
 - **The frontier is never propagated.** It runs on live vetted events only.
 - **Forecasts don't enter long-term memory.** Today `consolidate.py` keeps forecast explanations; task T-12 removes that.
 
 ## Planned
 
-- S-C4: kinds' priors collapse → R5.
+- S-C4: concepts' priors collapse → R5.
 - S-C2: induction confirms itself → R2.
 - S-M6: the frontier has no valid inference → R2.
 - Analog over-counting → R18.
@@ -88,5 +88,5 @@ A superentity's lifecycle:
 
 ## Done when
 
-- Unit tests pass for kinds, splits, promotion after spaced checks, admission and dissolution, and decision profiles.
+- Unit tests pass for concepts, splits, promotion after spaced checks, admission and dissolution, and decision profiles.
 - Tutorial examples 8, 10, 11, and 15–22 pass.

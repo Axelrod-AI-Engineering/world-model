@@ -1,14 +1,14 @@
 flowchart TD
   subgraph PE["Per event · learn.long_term"]
     I["What working memory learned"]:::start ==> RT{"Retired anything?"}:::check
-    RT ==>|no| GU["New items join their kinds;<br/>statistics update along the path"]:::ltm
-    GU ==> CR{"Is a kind crowded?"}:::check
+    RT ==>|no| GU["New items join their concepts;<br/>statistics update along the path"]:::ltm
+    GU ==> CR{"Is a concept crowded?"}:::check
     CR ==>|no| DC{"Did an actor decide?"}:::check
     DC ==>|no| UX{"A move the graph did not explain?"}:::check
     UX ==>|no| EX["Explain what was learned; keep it in Prior states"]:::ltm
-    RT -->|yes| FG["Retired items leave their kinds;<br/>frontier entries decay"]:::opt
+    RT -->|yes| FG["Retired items leave their concepts;<br/>frontier entries decay"]:::opt
     FG --> GU
-    CR -->|yes| SP["Split: a new child kind"]:::opt
+    CR -->|yes| SP["Split: a new child concept"]:::opt
     SP --> DC
     DC -->|yes| EM["Record it in the actor's Entity memory"]:::opt
     EM --> UX

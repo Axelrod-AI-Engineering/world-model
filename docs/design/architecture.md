@@ -55,7 +55,7 @@ What each part does with the data, from sources to interfaces. Learning writes; 
 |---|---|---|---|
 | 1 · Intake | A market event, or an analyst's edit | A graph update event with concrete or hedged ends | [M05](modules/M05-intake.md) |
 | 2 · Learning · working memory | The graph update event | The staged current state: structure, moves, the ripple by order, values and effects | [M08](modules/M08-learning-working.md) |
-| 3 · Learning · long-term memory | What working memory learned | Staged lessons: kinds, Entity memories, the frontier, superentity support | [M09](modules/M09-learning-long-term.md) |
+| 3 · Learning · long-term memory | What working memory learned | Staged lessons: concepts, Entity memories, the frontier, superentity support | [M09](modules/M09-learning-long-term.md) |
 | 4 · Human review | Every staged change, ripple included | An approved selection, or a rejection | [M13](modules/M13-services.md) |
 | 5 · Commit | The approved selection | A new version: one commit to each memory | [M04](modules/M04-repo.md) |
 

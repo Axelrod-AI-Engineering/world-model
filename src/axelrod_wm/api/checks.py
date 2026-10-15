@@ -56,16 +56,16 @@ def catalog(cfg: Any) -> list[dict]:
                 "groups; a match counts once for that group. Support decays with a half-life of "
                 f"{int(ab.support_half_life_days)} days.",
          "reads": f"the activity log over {int(ab.window_days)} days",
-         "updates": "the group's support, and the support of every kind along its generalization path",
+         "updates": "the group's support, and the support of every concept along its generalization path",
          "bound": f"a candidate above {rec}: an admission goes to review; an admitted group below "
                   f"{ab.dissolve_below}: a dissolution goes to review", "after_review": ""},
         {"id": "kinds", "name": "Generalization statistics", "memory": "long_term",
          "when": "each article, as long-term memory registers it",
-         "how": "Every item the article touched is classified down its taxonomy; each kind on the path adds the item's "
+         "how": "Every item the article touched is classified down its taxonomy; each concept on the path adds the item's "
                 "statistics.",
          "reads": "the classified items and their values or effects",
-         "updates": "support and pooled statistics of every kind on the path; a crowded kind may split",
-         "bound": f"a kind supplies priors once its support passes {int(cfg.thresholds.recall)}", "after_review": ""},
+         "updates": "support and pooled statistics of every concept on the path; a crowded concept may split",
+         "bound": f"a concept supplies priors once its support passes {int(cfg.thresholds.recall)}", "after_review": ""},
     ]
 
 

@@ -772,14 +772,14 @@ def _lessons(changesets: list[ChangeSet], live_wm: Any, live_ltm: Any, wm: Any, 
                 continue
             if n0 is None:
                 parent = t1.get(n1.parent_id).name if getattr(n1, "parent_id", None) in t1 else "the root"
-                out.append(f"A new kind, “{n1.name}”, splits off under “{parent}”")
+                out.append(f"A new concept, “{n1.name}”, splits off under “{parent}”")
                 continue
             gained = [m for m in n1.instance_ids if m not in n0.instance_ids]
             lost = [m for m in n0.instance_ids if m not in n1.instance_ids]
             if gained:
-                out.append(f"Kind “{n1.name}” gains {', '.join(item_name(m) for m in gained)}")
+                out.append(f"Concept “{n1.name}” gains {', '.join(item_name(m) for m in gained)}")
             if lost:
-                out.append(f"Kind “{n1.name}” loses {', '.join(item_name(m) for m in lost)}")
+                out.append(f"Concept “{n1.name}” loses {', '.join(item_name(m) for m in lost)}")
             if not gained and not lost:
                 stats.append(n1.name)
     if stats:
@@ -857,7 +857,7 @@ def _stages(p: Proposal, kept: list[int], items: list[StagedItem], result: Any, 
     else:
         intake_in = "A backend user's edit" if p.event.produced_by == "human" else f"A proposal from learning ({p.kind})"
     intake_out = f"{len(p.event.ops)} operation(s)" + (
-        f", {len(p.refinement_steps)} refinement step(s) from kinds to values" if p.refinement_steps else "") + (
+        f", {len(p.refinement_steps)} refinement step(s) from concepts to values" if p.refinement_steps else "") + (
         f", {len(p.pending)} fuzzy end(s) hedged across their candidates" if p.pending else "")
 
     def count(what: str, xs: list[StagedItem]) -> int:

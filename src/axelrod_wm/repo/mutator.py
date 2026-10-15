@@ -93,7 +93,7 @@ PROCESSES: dict[str, str] = {
     "history": "History replay: the model reads three years of synthetic history (one long update run)",
     "day.predict": "Working memory: the day opens; yesterday's moves ripple through the interactions",
     "learn.working": "Working memory: one vetted event is read and folded into the current state",
-    "learn.long_term": "Long-term memory: the event's lessons are registered (kinds, frontier, decisions)",
+    "learn.long_term": "Long-term memory: the event's lessons are registered (concepts, frontier, decisions)",
     "day.record": "Working memory: the day is recorded (every value's deviation and posterior)",
     "day.distill": "Long-term memory: the day is distilled (episodes, schemas, entity memories)",
     "day.close": "Working memory: the day closes (timing, hypotheses, pruning, the clock)",

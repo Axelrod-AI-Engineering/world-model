@@ -365,7 +365,7 @@ kbd { font-family: var(--font-mono); font-size: 10.5px; padding: 0 5px; border: 
 /* -- SVG graph --------------------------------------------------------------------------------------- */
 .grid-minor-line { stroke: var(--grid-minor); }
 .grid-major-line { stroke: var(--grid-major); }
-.pill rect.body { fill: var(--sheet); stroke: var(--pill-line); stroke-width: 1; }
+.pill rect.body { fill: var(--sheet); stroke: var(--concept, var(--pill-line)); stroke-width: var(--concept-w, 1px); }
 .pill.loose rect.body { stroke: var(--loose-line); stroke-dasharray: 3 3; }
 .pill.fresh rect.body { stroke: var(--real-line); stroke-dasharray: 4 3; }
 /* in the tutorial every entity came from an event, so "fresh" says nothing; a dashed outline means staged */
@@ -1733,7 +1733,6 @@ body.isolated #caption { display: none; }
 .context .ctx-pack { flex: 1 1 320px; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
 .context .ctx-q { font: 600 15px/1.35 var(--font-head); margin: 4px 0 8px; }
 table.scen td.nowrap { white-space: nowrap; }
-}
 .context .ctx-feeds, .context .ctx-load { margin: 4px 0 0; padding-left: 18px; line-height: 1.5; }
 .context .ctx-json pre { white-space: pre-wrap; word-break: break-word; max-height: 46vh; overflow: auto; background: var(--paper);
   border: 1px solid var(--rule-soft); border-radius: 6px; padding: 8px; margin: 6px 0 0; }
@@ -1756,6 +1755,7 @@ table.scen tr.band-base td:first-child { box-shadow: inset 3px 0 0 var(--rule); 
   table.scen tr.band-bull { box-shadow: inset 3px 0 0 #6E9E72; }
   table.scen tr.band-bear { box-shadow: inset 3px 0 0 #B86A84; }
   table.scen tr.band-base { box-shadow: inset 3px 0 0 var(--rule); }
+}
 .imp-src { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 4px 16px 8px; }
 .imp-file { display: inline-flex; align-items: center; cursor: pointer; border: 1px solid var(--real-line); border-radius: var(--radius);
   padding: 4px 10px; background: var(--real-line); color: #fff; font-weight: 600; }
@@ -1891,3 +1891,45 @@ g.edge.entering text { visibility: hidden; }
 g.edge.exiting, g.frontier.exiting { pointer-events: none; }
 /* arrowheads meet the border, so the line ends square under them */
 .edge path.line, .frontier path.line { stroke-linejoin: round; }
+
+/* the transmission path on the canvas (Oct 15, second pass): value chips under their entities' names, in the grid's
+   columns; the world model is hidden while it is shown */
+body.txpath #canvas .root > g:not(.layer-txpath) { display: none; }
+.layer-txpath .tx-title { font: 700 17px var(--font-head); fill: var(--ink); }
+.layer-txpath .tx-col { font: 600 11.5px var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; fill: var(--ink-2); }
+.layer-txpath .tx-col.o0 { fill: var(--o0-line); } .layer-txpath .tx-col.o1 { fill: #C0835C; }
+.layer-txpath .tx-col.o2 { fill: #A88E3C; } .layer-txpath .tx-col.o3 { fill: #B57A8D; } .layer-txpath .tx-col.out { fill: var(--out-ink); }
+.layer-txpath .tx-colarrow { font: 600 15px var(--font-mono); fill: var(--ink-3); }
+.layer-txpath .tx-entname { font: 600 11px var(--font-ui); fill: var(--ink-2); letter-spacing: 0.01em; }
+.layer-txpath .tx-chip { cursor: pointer; }
+.layer-txpath .tx-box { fill: var(--sheet); stroke: var(--pill-line); stroke-width: 1; filter: drop-shadow(0 1px 1.5px rgba(40, 30, 20, 0.08)); }
+.layer-txpath .tx-chip:hover .tx-box, .layer-txpath .tx-chip:focus .tx-box { stroke: var(--ink-2); stroke-width: 1.5; }
+.layer-txpath .tx-chip.asked .tx-box { stroke: var(--out-line); stroke-width: 1.4; }
+.layer-txpath .tx-bar { fill: var(--rule); }
+.layer-txpath .tx-chip.o0 .tx-bar { fill: var(--o0-line); } .layer-txpath .tx-chip.o1 .tx-bar { fill: #C0835C; }
+.layer-txpath .tx-chip.o2 .tx-bar { fill: #A88E3C; } .layer-txpath .tx-chip.o3 .tx-bar { fill: #B57A8D; }
+.layer-txpath .tx-chip.oout .tx-bar { fill: var(--out-ink); }
+.layer-txpath .tx-name { font: 500 12.5px var(--font-ui); fill: var(--ink); }
+.layer-txpath .tx-num { font: 600 11.5px var(--font-mono); fill: var(--ink-3); }
+.layer-txpath .tx-num.up { fill: var(--up); } .layer-txpath .tx-num.down { fill: var(--down); }
+.layer-txpath .tx-edge { fill: none; stroke-linecap: round; opacity: 0.75; transition: opacity 0.2s, stroke-width 0.2s; }
+.layer-txpath .tx-edge.up { stroke: var(--up); } .layer-txpath .tx-edge.down { stroke: var(--down); }
+.layer-txpath .tx-edge.out { stroke: var(--out-ink); }
+.layer-txpath .tx-edge.chain { stroke-dasharray: 8 4; }
+.layer-txpath .tx-edge.hot { opacity: 1; stroke-width: 3.6px; }
+.layer-txpath .tx-edge.dim { opacity: 0.15; }
+.tx-arrow.up path { fill: var(--up); } .tx-arrow.down path { fill: var(--down); } .tx-arrow.out path { fill: var(--out-ink); }
+/* the path builds left to right once, column by column */
+.layer-txpath .tx-ent, .layer-txpath .tx-edge { opacity: 0; transition: opacity 0.35s ease-out; transition-delay: var(--d, 0ms); }
+.layer-txpath.in .tx-ent { opacity: 1; }
+.layer-txpath.in .tx-edge { opacity: 0.75; }
+.layer-txpath.in .tx-edge.hot { opacity: 1; transition-delay: 0ms; }
+.layer-txpath.in .tx-edge.dim { opacity: 0.15; transition-delay: 0ms; }
+@media (prefers-reduced-motion: reduce) { .layer-txpath .tx-ent, .layer-txpath .tx-edge { transition: none; } }
+
+/* the color key's concept outlines (Oct 15) */
+.cp-concepts { display: flex; flex-direction: column; gap: 4px; margin: 2px 0 8px; }
+.cp-branch { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-size: 12px; }
+.cp-branch > .small { flex-basis: 100%; }
+.cp-concept { display: inline-flex; align-items: center; gap: 5px; }
+.cp-concept i { display: inline-block; width: 18px; height: 11px; border-radius: 4px; border-style: solid; background: var(--sheet); }

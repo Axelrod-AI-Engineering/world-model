@@ -292,10 +292,10 @@ def A(headline: str, body: str = "", quotes: list | None = None, rationale: str 
 
 EXAMPLES: list[Example] = [
     Example(id="create", n=1, title="Grounding: one article, one entity", memory="working", stage="working", feature="creation",
-            isolates="Creation, and classification into a kind",
+            isolates="Creation, and classification into a concept",
             summary="The article introduces oil. Its translation adds one entity and one value, the Brent price. Parsing "
-                    "creates them; the classifier sorts Oil into the Commodity market kind; long-term memory makes it the "
-                    "kind's first member.",
+                    "creates them; the classifier sorts Oil into the Commodity market concept; long-term memory makes it the "
+                    "concept's first member.",
             watch=["Items: a new entity and a new value", "Lessons: “Commodity market” gains Oil"],
             steps=[Step(ops="oil", days=0, article=A(
                 "Brent crude settles near $75 a barrel",
@@ -306,11 +306,11 @@ EXAMPLES: list[Example] = [
                 "near $75).", mentions=["Brent", "oil"], event_type="market_entry"))]),
     Example(id="links", n=2, title="Composition: an actor is made of its values", memory="working", stage="working",
             feature="creation",
-            isolates="Creation with internal interactions, each sorted into a kind of relation",
+            isolates="Creation with internal interactions, each sorted into an interaction concept",
             summary="The article introduces Delta Air Lines with three values and the two links inside it: fuel costs "
-                    "squeeze the margin, and the margin drives the share price. Delta becomes the Airline kind's first "
-                    "member; its links become the first members of their kinds of relation.",
-            watch=["Items: one entity, three values, two interactions", "Lessons: kinds gain their first members"],
+                    "squeeze the margin, and the margin drives the share price. Delta becomes the Airline concept's first "
+                    "member; its links become the first members of their interaction concepts.",
+            watch=["Items: one entity, three values, two interactions", "Lessons: concepts gain their first members"],
             steps=[Step(ops="delta", article=A(
                 "Delta Air Lines: jet fuel is among its largest costs",
                 "Fuel is one of the biggest costs for a large airline such as Delta. When fuel costs rise, its operating "
@@ -323,7 +323,7 @@ EXAMPLES: list[Example] = [
             feature="refinement",
             isolates="Intake: refining a fuzzy end from a generalization toward a subentity, and hedging what is left",
             summary="The article says jet fuel tracks crude, but it names “airlines' jet fuel costs”, a generalization, "
-                    "not a subentity. The refiner narrows the end level by level to the Airline kind, whose only member "
+                    "not a subentity. The refiner narrows the end level by level to the Airline concept, whose only member "
                     "so far is Delta. The article does not name Delta, so the end stays fuzzy: a hedge with Delta's jet "
                     "fuel cost at two thirds and the rest kept for an airline not in the graph yet. A soft interaction "
                     "to Delta carries that weight until later evidence settles it.",
@@ -332,7 +332,7 @@ EXAMPLES: list[Example] = [
                 "Jet fuel prices track crude oil",
                 "Refiners price jet fuel off crude, so airlines' jet fuel costs follow the oil price within weeks.",
                 [("airlines' jet fuel costs follow the oil price", [0])],
-                "One link, from the oil price to “airlines' jet fuel costs”: an end that names a kind, refined to a value.",
+                "One link, from the oil price to “airlines' jet fuel costs”: an end that names a concept, refined to a value.",
                 mentions=["jet fuel", "crude oil", "airlines"], event_type="supply_shock"))]),
     Example(id="ripple", n=4, title="Transmission: a shock ripples order by order", memory="working", stage="working", feature="ripple",
             isolates="The ripple: first-, second-, and third-order effects",
@@ -395,11 +395,11 @@ EXAMPLES: list[Example] = [
                 "Consumer prices rose 3.4% from a year earlier, led by energy.",
                 [("rose 3.4%", [0])], "A reported value: headline CPI at 3.4%.", kind="data",
                 source="Synthetic statistics release", mentions=["CPI", "inflation"], event_type="data_release"))]),
-    Example(id="inherit", n=8, title="Inheritance: a newcomer starts from its kind", memory="long_term",
+    Example(id="inherit", n=8, title="Inheritance: a newcomer starts from its concept", memory="long_term",
             stage="long_term", feature="inheritance",
-            isolates="Long-term memory: kinds pass their priors to new members",
+            isolates="Long-term memory: concepts pass their priors to new members",
             summary="SkyBridge Air (made up for the demo) arrives with the same values and links, but the article gives no "
-                    "effect sizes. Each new link is sorted into its kind and starts from the effect the kind has pooled "
+                    "effect sizes. Each new link is sorted into its concept and starts from the effect the concept has pooled "
                     "from its members so far, such as Delta's.",
             watch=["Items: SkyBridge, its values, three links", "Lessons: “Airline” gains SkyBridge"],
             steps=[Step(ops="skybridge", article=A(
@@ -408,7 +408,7 @@ EXAMPLES: list[Example] = [
                 "up for the demo.",
                 [("SkyBridge Air", [0]), ("buys jet fuel like any airline", [1, 4]), ("its margin", [2, 5]),
                  ("shares", [3, 6])],
-                "A new airline; the article says how it works but not how strongly, so the kinds supply the sizes.",
+                "A new airline; the article says how it works but not how strongly, so the concepts supply the sizes.",
                 mentions=["SkyBridge", "airline"], event_type="market_entry"))]),
     Example(id="expert_link", n=9, title="Practitioner knowledge: connect your idea to the rest", memory="working",
             stage="working", feature="manual", kind="manual",
@@ -559,12 +559,12 @@ EXAMPLES: list[Example] = [
                    Step(ops="fare_up2", days=6, article=A("Delta's average fare rises to $276",
                         "Fares rose again, by more than before.", [("rises to $276", [0])], "A fare report.", kind="data",
                         source="Synthetic statistics release", mentions=["Delta", "fare"], event_type="data_release"))]),
-    Example(id="split", n=18, title="Category growth: a crowded kind splits", memory="long_term", stage="long_term", feature="taxonomy",
-            isolates="Long-term memory: members that share a feature their kind lacks become a kind of their own",
+    Example(id="split", n=18, title="Category growth: a crowded concept splits", memory="long_term", stage="long_term", feature="taxonomy",
+            isolates="Long-term memory: members that share a feature their concept lacks become a concept of their own",
             summary="Two more airlines arrive: Northwind, from the US, then Alpenflug, from Europe (both made up). With "
-                    "three US airlines and one European one, the Airline kind is crowded: the US carriers share a region "
-                    "the kind does not require, so they split off into a kind of their own.",
-            watch=["Lessons: a new kind, “Airline (region=US)”", "Its members: Delta, SkyBridge, Northwind"],
+                    "three US airlines and one European one, the Airline concept is crowded: the US carriers share a region "
+                    "the concept does not require, so they split off into a concept of their own.",
+            watch=["Lessons: a new concept, “Airline (region=US)”", "Its members: Delta, SkyBridge, Northwind"],
             steps=[Step(ops="northwind", article=A(
                 "Northwind Airways adds routes in the Midwest (illustrative)",
                 "Northwind Airways, a US regional carrier made up for the demo, buys jet fuel like its rivals.",
@@ -629,7 +629,7 @@ LIBRARY: list[LibraryEvent] = [
                      "Economists: higher rates cool inflation, with a long lag",
                      "A higher policy rate cools inflation, but only after a year or so.",
                      [("A higher policy rate cools inflation", [0])],
-                     "A link to “inflation”, which names a kind of value; the refiner finds the one value of that kind.",
+                     "A link to “inflation”, which names a value concept; the refiner finds the one value under that concept.",
                      kind="analyst", source="Synthetic research note", mentions=["policy rate", "inflation"],
                      event_type="analysis"))),
     LibraryEvent(id="cargo", feature="inheritance", title="A cargo airline arrives", after="inherit", step=Step(

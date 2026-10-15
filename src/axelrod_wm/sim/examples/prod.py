@@ -227,7 +227,7 @@ def _twin(key: str, **kw: Any) -> Example:
 EXAMPLES: list[Example] = [
     _twin("create", summary="The article introduces Gulf Coast jet fuel as a market of its own. One entity and one value; the "
                      "classifier sorts it among the world's supply factors.",
-          watch=["Items: a new entity and a new value", "Lessons: a kind gains the new market"],
+          watch=["Items: a new entity and a new value", "Lessons: a concept gains the new market"],
           steps=[Step(ops="jet_fuel", article=A(
               "Gulf Coast jet fuel becomes a benchmark of its own",
               "Traders now quote Gulf Coast jet fuel as its own market, near $2.50 a gallon.",
@@ -246,7 +246,7 @@ EXAMPLES: list[Example] = [
               "One entity, its three values, and the two mechanisms inside it.", mentions=["Lumen"],
               event_type="market_entry"))]),
     _twin("refine", title="A fuzzy mention, refined to one value", summary="The article says “cloud platforms' AI spending” lifts AMD's data-center sales. The end starts at a "
-                     "kind, cloud platforms; the refiner narrows it, and because the mention contains “AI spending”, "
+                     "concept, cloud platforms; the refiner narrows it, and because the mention contains “AI spending”, "
                      "a name for Microsoft's AI capital spending (the one cloud platform the model knows), the article "
                      "names that value outright and the end binds instead of hedging.",
           watch=["Intake: the refinement steps, ending at a value the article names",
@@ -303,14 +303,14 @@ EXAMPLES: list[Example] = [
               [("rose 3.6%", [0])], "A reported value: headline CPI at 3.6%.", kind="data",
               source="Synthetic statistics release", mentions=["CPI"], event_type="data_release"))]),
     _twin("inherit", summary="SkyBridge Air (made up) arrives with an airline's values and links but no effect sizes. Its links "
-                     "start from what the kinds pooled from Delta and United, and from three years of history.",
+                     "start from what the concepts pooled from Delta and United, and from three years of history.",
           watch=["Items: SkyBridge, its values, three links", "Lessons: “Airline” gains SkyBridge"],
           steps=[Step(ops="skybridge", article=A(
               "SkyBridge Air, a low-cost carrier, starts US routes (illustrative)",
               "SkyBridge Air buys jet fuel like any airline, and its margin and shares move with it. The airline is made "
               "up for the demo.",
               [("SkyBridge Air", [0]), ("buys jet fuel like any airline", [1, 4]), ("its margin", [2, 5]),
-               ("shares", [3, 6])], "A new airline; the kinds supply the sizes.", mentions=["SkyBridge"],
+               ("shares", [3, 6])], "A new airline; the concepts supply the sizes.", mentions=["SkyBridge"],
               event_type="market_entry"))]),
     _twin("expert_link", summary="Your demand idea is on its own: nothing in the model moves it. From experience, tighter money "
                        "cools discretionary travel within a quarter or two, but you are only half sure. Add one "
@@ -426,9 +426,9 @@ EXAMPLES: list[Example] = [
                   ("fare_down2", 2, "Delta's average fare falls to $208", "Fares fell again, by more than before.", "falls to $208",
                    "A fare report.", "data", "Synthetic statistics release", ["Delta", "fare"], "data_release")]]),
     _twin("split", summary="Northwind (US) and Alpenflug (Europe), both made up, join Delta, United, and SkyBridge. Four US "
-                      "airlines share a region the Airline kind does not require, so they split off into a kind of their "
+                      "airlines share a region the Airline concept does not require, so they split off into a concept of their "
                       "own.",
-          watch=["Lessons: a new kind, “Airline (region=US)”", "Its members: the four US airlines"],
+          watch=["Lessons: a new concept, “Airline (region=US)”", "Its members: the four US airlines"],
           steps=[Step(ops="northwind", article=A(
               "Northwind Airways adds routes in the Midwest (illustrative)",
               "Northwind Airways, a US regional carrier made up for the demo, buys jet fuel like its rivals.",

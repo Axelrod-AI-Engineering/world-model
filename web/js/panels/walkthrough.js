@@ -38,7 +38,7 @@ const PREDICT_ORDER = ["posed", "refined", "parsed", "classified", "recalled", "
 const PHASE_LABEL = {
   learn: {
     received: "Event", translated: "Translate", refined: "Refine", parsed: "Parse", classified: "Classify",
-    recalled: "Recall", prefilled: "Recall: adjust", analyzed: "Ripple", folded: "Fold", weighed: "Fuzzy ends", generalized: "Kinds",
+    recalled: "Recall", prefilled: "Recall: adjust", analyzed: "Ripple", folded: "Fold", weighed: "Fuzzy ends", generalized: "Concepts",
     noticed: "Frontier & support", reviewed: "Review",
   },
   predict: {
@@ -244,8 +244,8 @@ function learnSteps(evs, nm) {
   const gen = of("generalize.updated")[0];
   if (gen) {
     const sup = Object.entries(gen.payload.supports ?? {}).slice(0, 6);
-    steps.push({ phase: "generalized", title: "Proposes lessons for its kinds",
-      body: `<p>Long-term memory proposes that the kinds that classified this news gain support, so the next similar event would be classified with more confidence.</p>
+    steps.push({ phase: "generalized", title: "Proposes lessons for its concepts",
+      body: `<p>Long-term memory proposes that the concepts that classified this news gain support, so the next similar event would be classified with more confidence.</p>
         <p>${sup.map(([g, v]) => `${chip(prettyNode(g))}<span class="mono faint">${fmt(v, 1)}</span>`).join(" ")}</p>`, visual: {} });
   }
   const notice = evs.filter((e) => e.kind.startsWith("frontier.") || e.kind.startsWith("abduce."));
