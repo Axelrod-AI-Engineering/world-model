@@ -293,6 +293,36 @@ export class SvgRenderer extends GraphRenderer {
   }
 
   homeOf(box) {
+    const h = this.layoutHome(box);
+    const dy = this.shifts?.get(box.id);
+    return dy ? { x: h.x, y: h.y + dy } : h;
+  }
+
+  // Oct 14: an entity opens where it is. The layout keeps closed sizes, so an open entity makes room by pushing down the
+  // boxes beneath it whose span overlaps its own (its column, and what lies straight below); nothing else moves.
+  openShifts() {
+    const shifts = new Map();
+    this.shifts = shifts;
+    if (!this.model || this.isolated || this.mode !== "gravity") return;
+    const boxes = this.model.boxes.filter((b) => !this.hasFixedHome(b.id));
+    const at = new Map(boxes.map((b) => [b.id, this.layoutHome(b)]));
+    const opened = boxes.filter((b) => b.kind === "entity" && b.open && b.h > GEOM.HEAD_H)
+      .sort((a, z) => at.get(a.id).y - at.get(z.id).y || at.get(a.id).x - at.get(z.id).x);
+    for (const o of opened) {
+      const ho = at.get(o.id);
+      const extra = o.h - GEOM.HEAD_H + 6;
+      const x0 = ho.x - o.w / 2 - 10;
+      const x1 = ho.x + o.w / 2 + 10;
+      for (const b of boxes) {
+        if (b.id === o.id) continue;
+        const hb = at.get(b.id);
+        if (hb.y <= ho.y + 1 || hb.x + b.w / 2 <= x0 || hb.x - b.w / 2 >= x1) continue;
+        shifts.set(b.id, (shifts.get(b.id) ?? 0) + extra);
+      }
+    }
+  }
+
+  layoutHome(box) {
     if (box.kind === "entity") return this.entityHome(box.id) ?? { x: 600, y: 440 };
     // a folded superentity sits where its region was laid out (graph/layout-hier.js), when it was
     const rh = this.regionHomes?.get(box.group?.key);
@@ -312,6 +342,7 @@ export class SvgRenderer extends GraphRenderer {
     for (const id of [...this.ui.expanded]) if (!this.view.entities.some((e) => e.id === id)) this.ui.expanded.delete(id);
     this.updateHomes();
     this.model = computeModel(this.view, this.groupsInfo, this.ui);
+    this.openShifts();
     // an entity opened or closed by hand also grows over a few frames, so its edges and outline follow its border
     this.easeSizes = reason === "lod" || (reason === "structure" && this.animOK());
     const structural = this.syncNodes();
@@ -325,8 +356,17 @@ export class SvgRenderer extends GraphRenderer {
     // of structure or size (a box that opens or closes, a card that folds, a new entity) re-packs the hierarchy, so blocks
     // stay separate and in order at every zoom. The order is the same every time, so blocks only make room; the entity
     // nearest the middle of the view stays put.
-    if (reason !== "first" && (structural || unplaced) && this.blocks()) this.repack();
+    // Oct 14: the layout is solved at full detail (fullDetail), so a change of detail (lod) moves nothing; only a change of
+    // structure (an entity or superentity added or retired) lays the graph out again
+    if (reason !== "first" && ((structural && reason !== "lod") || unplaced) && this.blocks()) this.repack();
     else if (unplaced || reason === "first" || (structural && reason !== "lod")) this.relayout();
+    // homes may have moved (a layout); the pushes of open entities follow them
+    this.openShifts();
+    for (const n of this.nodes.values()) {
+      if (n.kind === "entity" && n.flow) continue;
+      const h = this.homeOf(n.box);
+      n.hx = h.x; n.hy = h.y;
+    }
     this.draw();
     if (reason === "first") {
       resolveCollisions(nodes, 6);
@@ -336,6 +376,9 @@ export class SvgRenderer extends GraphRenderer {
       setTimeout(() => this.frameAll(0), 30);
     }
     if (reason === "lod") {
+      // before a person has moved the view, the first view keeps framing the whole graph as it folds (only the camera
+      // moves; the boxes keep their places)
+      if (!this.userMoved) this.autoFrame = true;
       this.sim.alpha(Math.max(this.sim.alpha(), 0.22)).restart();
     } else if (structural || reason === "structure") {
       if (structural) this.autoFrame = true;
@@ -411,27 +454,38 @@ export class SvgRenderer extends GraphRenderer {
   // Gravity, solved off-screen (Oct 9): every box gravity places gets a home, and keeps it until the structure
   // changes. Boxes already placed are anchored near their homes, so a change moves what it must and little else;
   // `fresh` lays everything out anew (switching to the Gravity layout, grouping by category).
+  // The layout's input (Oct 14): every superentity open, every entity at its closed size. Where things sit then does not
+  // depend on what detail-follows-zoom has folded or opened, so zooming changes detail and moves almost nothing, like a
+  // map: a card sits at the center of its region, and an entity that opens pushes down only what sits beneath it in
+  // its own column (openShifts). An isolated graph keeps the entities it pins open at their open size.
+  fullDetail() {
+    const open = this.isolated ? new Set(this.ui.expanded) : new Set();
+    const m = computeModel(this.view, this.groupsInfo, { ...this.ui, collapsed: new Set(), expanded: open });
+    const boxes = new Map(m.boxes.filter((b) => b.kind === "entity").map((b) => [b.id, b]));
+    const links = m.edges.filter((e) => boxes.has(e.a.box) && boxes.has(e.b.box) && e.a.box !== e.b.box)
+      .map((e) => ({ source: e.a.box, target: e.b.box, significance: e.sig }));
+    return { boxes, links };
+  }
+
   relayout(fresh = false) {
     const nodes = [...this.nodes.values()];
     if (!nodes.length) return;
-    const movable = (n) => !this.hasFixedHome(n.id) && (n.kind === "entity" ? this.byGravity(n.id)
-      : [...n.box.group.members].every((m) => this.byGravity(m)));
-    const prev = (n) => (n.kind === "entity" ? this.gravHomes.get(n.id)
-      : (() => { const pts = [...n.box.group.members].map((m) => this.gravHomes.get(m)).filter(Boolean);
-        return pts.length ? { x: pts.reduce((t, q) => t + q.x, 0) / pts.length, y: pts.reduce((t, q) => t + q.y, 0) / pts.length } : null; })());
+    const movableId = (id) => !this.hasFixedHome(id) && this.byGravity(id);
     // a transmission lane's entities sit in the lane, not in their blocks: the layout places everything else
     const inLane = (n) => n.kind === "entity" && !!this.lane?.ids.has(n.id);
-    const copies = nodes.filter((n) => !inLane(n)).map((n) => {
-      const was = fresh ? null : prev(n);
-      const fixed = !movable(n);
-      const start = fixed ? this.homeOf(n.box) : was ?? { x: n.x, y: n.y };
-      return { id: n.id, kind: n.kind, w: n.wGoal ?? n.w, h: n.hGoal ?? n.h, oy: n.oy, tags: n.tags, groupKeys: n.groupKeys,
-               x: start.x, y: start.y, fixed, anchor: was };
+    const full = this.fullDetail();
+    const byId = new Map(nodes.map((n) => [n.id, n]));
+    const copies = [...full.boxes.values()].filter((b) => !this.lane?.ids.has(b.id)).map((b) => {
+      const was = fresh ? null : this.gravHomes.get(b.id) ?? null;
+      const fixed = !movableId(b.id);
+      const n = byId.get(b.id);
+      const start = fixed ? (this.fixedHome(b.id) ?? this.homes.get(b.id) ?? { x: 600, y: 440 })
+        : was ?? (n ? { x: n.x, y: n.y } : this.homes.get(b.id) ?? { x: 600, y: 440 });
+      return { id: b.id, kind: "entity", w: b.w, h: b.h, oy: b.oy, tags: b.entity?.category_tags,
+               groupKeys: this.groupsInfo.ofEntity.get(b.id) ?? [], x: start.x, y: start.y, fixed, anchor: was };
     });
     const laneIds = new Set(nodes.filter(inLane).map((n) => n.id));
-    const links = this.sim.force("link").links().map((l) => ({
-      source: typeof l.source === "object" ? l.source.id : l.source, target: typeof l.target === "object" ? l.target.id : l.target,
-      significance: l.significance })).filter((l) => !laneIds.has(l.source) && !laneIds.has(l.target));
+    const links = full.links.filter((l) => !laneIds.has(l.source) && !laneIds.has(l.target));
     // DECISION (Oct 11): a fresh placement follows the hierarchy (graph/layout-hier.js): regions inside regions, causes
     // left of effects, nothing overlapping. Later changes keep boxes near their homes with the gravity physics, so a
     // new entity finds its place without reshuffling the rest.
@@ -442,23 +496,9 @@ export class SvgRenderer extends GraphRenderer {
       : staticLayout(copies, links, { groups, groupByCategory: this.opts.groupByCategory });
     if (placed.regions) this.regionHomes = placed.regions;
     if (placed.primary && (placed.primary.size || !this.homeRegion)) this.homeRegion = placed.primary;
-    for (const n of nodes) {
-      const p = placed.get(n.id);
-      if (!p || !movable(n)) continue;
-      if (n.kind === "entity") {
-        this.gravHomes.set(n.id, p);
-      } else {
-        // a closed superentity: its card goes where the layout put it, and its members move with it
-        if (this.blocks()) {
-          if (!this.regionHomes) this.regionHomes = new Map();
-          this.regionHomes.set(n.box.group.key, p);
-        }
-        const was = this.homeOf(n.box);
-        for (const m of n.box.group.members) {
-          const h = this.gravHomes.get(m) ?? was;
-          this.gravHomes.set(m, { x: h.x + p.x - was.x, y: h.y + p.y - was.y });
-        }
-      }
+    for (const c of copies) {
+      const p = placed.get(c.id);
+      if (p && !c.fixed) this.gravHomes.set(c.id, p);
     }
     this.placeLane(nodes);
     for (const n of nodes) {
