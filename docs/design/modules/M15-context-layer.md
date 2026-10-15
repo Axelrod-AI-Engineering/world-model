@@ -2,6 +2,18 @@
 
 **Layer** 5 · **Package** `context/` · **Status** new. Pieces exist: `find`, briefs, the ledger, the import bundle, and the v4 export (`context/v4.py`).
 
+<!-- toc -->
+**Contents**
+
+- [Purpose](#purpose)
+- [Owns](#owns)
+- [Interface](#interface)
+- [Depends on](#depends-on)
+- [Diagram](#diagram)
+- [Invariants](#invariants)
+- [Done when](#done-when)
+<!-- /toc -->
+
 ## Purpose
 
 How agents and analysts reach the world model, over MCP and REST. Through it they can:
@@ -60,31 +72,7 @@ Each MCP tool is one verb, and its schema is generated from these types.
 
 ## Diagram
 
-```mermaid
-sequenceDiagram
-  autonumber
-  actor AG as Agent (MCP client)
-  participant CX as Context layer (M15)
-  participant V as Views (M14)
-  participant TS as ThesisService (M13)
-  participant RS as ReviewService (M13)
-  participant EV as Evaluation (M11)
-
-  AG->>CX: recall("yen carry exposure of Tokio Marine", as_of)
-  CX->>V: find + entity view + provenance at version
-  V-->>AG: facts with evidence, version, valid time
-  AG->>CX: ask(thesis: "USD/JPY −8% in 30 days", watch)
-  CX->>TS: pose(...)
-  TS-->>AG: forecast by order and path + brief
-  AG->>CX: trace(value or interaction id)
-  CX->>V: lineage: change sets → proposal → evidence → source
-  V-->>AG: PROV chain (entity · activity · agent)
-  AG->>CX: propose(article or claim with quotes)
-  CX->>RS: submit as a market event (never applied directly)
-  RS-->>AG: proposal id, status pending (a person reviews it)
-  AG->>CX: feedback(forecast id, outcome or rating)
-  CX->>EV: record outcome → scored at horizon
-```
+![An agent through the context layer](../diagrams/agent-sequence.svg)
 
 ## Invariants
 

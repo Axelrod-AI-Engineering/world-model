@@ -1,0 +1,6 @@
+flowchart LR
+  EV["Vetted event"]:::start ==>|learn.working| WM["Working memory<br/>the world now"]:::wm
+  EV ==>|learn.long_term| LTM["Long-term memory<br/>what generalizes"]:::ltm
+  WM ==>|"day.distill: episodes, superentity support,<br/>Entity memories, frontier decay"| LTM
+  LTM -->|priors · analogs · patterns to bind| WM
+  WM -.->|day.record · day.close| WM

@@ -180,7 +180,7 @@ def test_the_demo_loads_opens_nodes_and_steps(server):
         page.click('#admin [data-guide="off"]')
         assert page.evaluate("() => window.axelrod.guide.mode") == "off"
         page.click('#admin [data-a="min"]')
-        # how it works, from the top bar: learning (five stages), then inference (six), then the literature
+        # how it works, from the top bar: learning (five stages), then inference (seven, MECE), then the literature
         page.click("#btn-methods")
         page.wait_for_selector("#methods .fc-stage", timeout=20000)
         assert page.locator("#methods .fc-stage").count() == 5
@@ -188,7 +188,7 @@ def test_the_demo_loads_opens_nodes_and_steps(server):
         assert page.locator("#methods figure.stage-flow").count() == 5
         page.click('#methods [data-mtab="inference"]')
         page.wait_for_selector("#methods figure.stage-flow[data-flow='inf-pose'] svg", timeout=20000)
-        assert page.locator("#methods .fc-stage.st-inference").count() == 6
+        assert page.locator("#methods .fc-stage.st-inference").count() == 7
         page.click('#methods [data-mtab="literature"]')
         page.wait_for_selector("#methods .doc ol.refs li", timeout=20000)
         assert page.locator("#methods .doc ol.refs li").count() >= 40

@@ -2,6 +2,18 @@
 
 The full demo is hosted on Railway's `dev` environment at **https://world-model-dev.up.railway.app**, behind Basic Auth. This page covers what runs there, how to release, how to verify a release, and how to run the same container locally.
 
+<!-- toc -->
+**Contents**
+
+- [What runs](#what-runs)
+- [Ownership in the shared project](#ownership-in-the-shared-project)
+- [Releasing](#releasing)
+- [Verifying a release](#verifying-a-release)
+- [Sign-in](#sign-in)
+- [Running the container locally](#running-the-container-locally)
+- [Tests](#tests)
+<!-- /toc -->
+
 ## What runs
 
 | Piece | Where | What it does |
@@ -11,6 +23,8 @@ The full demo is hosted on Railway's `dev` environment at **https://world-model-
 | Infrastructure | `.railway/railway.ts` | The service, its volume, and its settings, as code |
 | Release checks | `scripts/persist-railway-fields.sh`, `scripts/verify-railway-drift.py` | Set the two fields Railway's IaC does not store, then reject any drift except known leftovers |
 | Auth | `src/axelrod_wm/api/auth.py` | Basic Auth on every request except the health check |
+
+![The hosted deployment](design/diagrams/deployment.svg)
 
 The service's settings, from `.railway/railway.ts`:
 

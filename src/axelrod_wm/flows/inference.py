@@ -1,8 +1,10 @@
 """Inference, as data (Oct 8 restructure): how the model answers a question, apart from how it learns.
 
 Learning (WORLD_MODEL) changes the model and stops at a person's review. Inference only reads it: a thesis runs
-on a branch of a committed version that is never merged. The overview has six stages, each with an input and an
-output, and each stage has its own flowchart below, drawn like the learning stages' (every condition a decision
+on a branch of a committed version that is never merged. The overview has seven stages, mutually exclusive and
+together exhaustive: each answers one question with one output, so no step belongs to two stages. They use the
+naming guide's terms: Pose a thesis, Isolate, Isolated prediction, Distributed prediction, Unify, Read out,
+Evaluate. Each stage has its own flowchart below, drawn like the learning stages' (every condition a decision
 with labeled answers, every loop drawn back, optional steps dashed).
 """
 
@@ -12,40 +14,50 @@ from axelrod_wm.flows import Flow, _flow
 
 INFERENCE = _flow(
     "inference", "Inference",
-    "How the model answers a what-if question. A thesis runs on a branch of a committed version and the branch is "
-    "never merged, so asking never changes the model. The forecast is a mixture of rival scenarios, read out value "
-    "by value with the order and path each move travels; once the horizon passes, the outcome scores it.",
+    "How the model answers a what-if question. Seven stages, each answering one question with one output, so no "
+    "step belongs to two stages. A thesis runs on a branch of a committed version that is never merged, so asking "
+    "never changes the model. Only one thing flows back: once a decision's horizon passes, the outcome scores the "
+    "forecast.",
     [
         dict(id="pose", title="Pose a thesis",
              input="A what-if question and the committed version it asks of",
              output="A hypothetical event with concrete ends, and the values to watch",
-             detail="A thesis is a shock (oil up 20%) or a decision held for a window (the Fed holds). It is read "
-                    "into the same operations an article is, and every end must name one value."),
-        dict(id="isolate", title="Isolate the networks",
+             detail="What is asked? A thesis is a shock (oil up 20%) or a decision held for a window (the Fed "
+                    "holds). It is read into the same operations an article is, and every end must name one value."),
+        dict(id="isolate", title="Isolate",
              input="The hypothetical event, applied on a branch",
-             output="The networks the shock reaches: superentities and paths to the targets, rivals marked",
-             detail="Only the part of the graph the shock can reach is simulated. A superentity the shock touches "
-                    "is one network; two that explain the same moves differently are rivals."),
-        dict(id="simulate", title="Simulate and couple",
-             input="The networks, and the scenarios their rivals and open hypotheses make",
-             output="For each scenario: simulated paths with and without the shock, on the same random draws",
-             detail="Each network is simulated alone first, then the networks are coupled through the interactions "
-                    "between them. The difference between the shocked and the baseline run is the thesis's effect."),
-        dict(id="unify", title="Weigh and unify",
-             input="The scenarios' simulated effects",
-             output="One forecast: the scenarios mixed by weight, every value as a distribution",
-             detail="A scenario's weight is its rivals' support, fit, and track record, times the probability of "
-                    "each open hypothesis it assumes."),
-        dict(id="read_out", title="Read out and explain",
+             output="The networks the shock can reach: superentities, a residual network, a context network",
+             detail="What can the shock reach? Only that part of the graph is simulated. A superentity the shock "
+                    "touches is one network; paths outside them form a residual network; values the asker watches "
+                    "form a context network."),
+        dict(id="isolated", title="Isolated prediction",
+             input="The networks",
+             output="Each network's response on its own: its effect, shocked minus baseline",
+             detail="How does each network respond alone? Each is simulated with the shocks that land in it, with "
+                    "and without them, on the same random draws."),
+        dict(id="distributed", title="Distributed prediction",
+             input="The networks and their isolated responses",
+             output="Weighted scenarios, each with the networks coupled: its effect, shocked minus baseline",
+             detail="How do the networks move together? A scenario is one choice among each set of rival networks "
+                    "and one answer to each open hypothesis worth branching on. Each is weighed (support, fit, "
+                    "track record, hypothesis probability), the heaviest are kept, and each kept scenario couples "
+                    "its networks through the interactions between them."),
+        dict(id="unify", title="Unify",
+             input="The weighted scenarios' effects",
+             output="One forecast: every value as a distribution over the horizon",
+             detail="One answer from rival stories. The forecast is the scenarios' mixture by weight, so where "
+                    "they disagree it is wide or has two humps; nothing is averaged away."),
+        dict(id="read_out", title="Read out",
              input="The forecast",
              output="Every value by order and transmission path, groups, binding constraints, and a brief",
-             detail="Order is the fewest interactions between the shock and a value; the path is the most "
-                    "significant one of that length. Ablating one interaction at a time says which ones matter."),
-        dict(id="score", title="Score against outcomes",
-             input="A decision taken on the forecast, once its horizon has passed",
+             detail="What moves, when, and by which path? Order is the fewest interactions between the shock and "
+                    "a value; the path is the most significant one of that length. Ablating one interaction at a "
+                    "time says which ones carry the effect."),
+        dict(id="evaluate", title="Evaluate",
+             input="A decision recorded on the forecast, once its horizon has passed",
              output="A score for the forecast, and the track records of the superentities it used",
-             detail="The realized values score the forecast (CRPS). A superentity whose network called the move "
-                    "gains track record, so the next forecast weighs its scenarios higher."),
+             detail="Did it come true? The realized values score the forecast (CRPS). A superentity whose network "
+                    "called the move gains track record, which weighs the next forecast's scenarios."),
     ],
     [
         dict(id="question", label="A what-if question, asked in Predict", kind="start", phase="pose",
@@ -55,32 +67,31 @@ INFERENCE = _flow(
         dict(id="ask", label="Ask the asker to pick one (nothing runs)", kind="end", phase="pose", side=True),
         dict(id="branch", label="Branch a committed version and apply the event; the branch is never merged",
              phase="isolate"),
-        dict(id="networks", label="Isolate the networks the shock reaches", phase="isolate", component="isolator",
+        dict(id="networks", label="Find the networks the shock can reach", phase="isolate", component="isolator",
              trace=["isolate.networks"]),
-        dict(id="alone", label="Simulate each network alone", phase="simulate", component="network_predictor",
-             trace=["predict.network"]),
-        dict(id="couple", label="Couple the networks, per scenario, with and without the shock", phase="simulate",
+        dict(id="alone", label="Simulate each network alone, ± the shock", phase="isolated",
+             component="network_predictor", trace=["predict.network"]),
+        dict(id="scenarios", label="Form scenarios from rival networks and open hypotheses; weigh them; keep the "
+                                   "heaviest", phase="distributed", component="scenario_weighter",
+             trace=["unify.scenarios"]),
+        dict(id="couple", label="Couple each scenario's networks, ± the shock", phase="distributed",
              component="coupler", trace=["couple.done"]),
-        dict(id="rivals", label="More than one scenario?", kind="decision", phase="unify"),
-        dict(id="weigh", label="Weigh them: support × fit × track record × open hypotheses", phase="unify",
-             mandatory=False, when="rival scenarios", component="scenario_weighter", trace=["unify.scenarios"]),
-        dict(id="mix", label="Mix them into one forecast", phase="unify", component="unifier"),
+        dict(id="mix", label="Mix the scenarios by weight into one forecast", phase="unify", component="unifier"),
         dict(id="paths", label="Each value's order, path, and timing; groups; binding constraints", phase="read_out",
              trace=["forecast.ready"]),
         dict(id="brief", label="Explain it and write the brief", phase="read_out", component="explainer",
              trace=["explain.stored"]),
-        dict(id="decide", label="Does someone act on it?", kind="decision", phase="score"),
-        dict(id="done", label="A forecast and its brief; nothing is learned", kind="end", phase="score", side=True),
-        dict(id="record", label="Record the decision with the version it read", phase="score",
-             mandatory=False, when="someone acts on it", trace=["decision.recorded"]),
-        dict(id="outcome", label="After the horizon: score it against what happened; track records update",
-             kind="end", phase="score", mandatory=False, when="someone acts on it", component="scorer",
-             trace=["decision.resolved"]),
+        dict(id="decide", label="Is a decision recorded on the forecast?", kind="decision", phase="evaluate"),
+        dict(id="done", label="No: the forecast and its brief are the answer; nothing is learned", kind="end",
+             phase="evaluate", side=True),
+        dict(id="outcome", label="Once its horizon passes: score it; track records update",
+             kind="end", phase="evaluate", mandatory=False, when="a decision cites the forecast",
+             component="scorer", trace=["decision.resolved"]),
     ],
     [("question", "translate"), ("translate", "concrete"), ("concrete", "ask", "no"), ("concrete", "branch", "yes"),
-     ("branch", "networks"), ("networks", "alone"), ("alone", "couple"), ("couple", "rivals"),
-     ("rivals", "weigh", "yes"), ("rivals", "mix", "no"), ("weigh", "mix"), ("mix", "paths"), ("paths", "brief"),
-     ("brief", "decide"), ("decide", "done", "no"), ("decide", "record", "yes"), ("record", "outcome")],
+     ("branch", "networks"), ("networks", "alone"), ("alone", "scenarios"), ("scenarios", "couple"),
+     ("couple", "mix"), ("mix", "paths"), ("paths", "brief"), ("brief", "decide"), ("decide", "done", "no"),
+     ("decide", "outcome", "yes")],
 )
 
 POSE = _flow(
@@ -109,10 +120,10 @@ POSE = _flow(
 )
 
 ISOLATE = _flow(
-    "inf-isolate", "2 · Isolate the networks: only what the shock can reach",
+    "inf-isolate", "2 · Isolate: only what the shock can reach",
     "The event is applied to a branch, a copy of the committed version. The networks are the superentities the "
-    "shock touches and the paths from the shock to each target; superentities that explain the same moves "
-    "differently are marked as rivals.",
+    "shock touches, a residual network for paths outside them, and a context network for the values the asker "
+    "watches.",
     [dict(id="branch", title="Branch"), dict(id="find", title="Find networks")],
     [
         dict(id="in", label="The hypothetical event and a committed version", kind="start", phase="branch"),
@@ -126,69 +137,80 @@ ISOLATE = _flow(
         dict(id="watched", label="Does the asker watch values outside them?", kind="decision", phase="find"),
         dict(id="watch", label="Add a context network for the watched values", phase="find",
              mandatory=False, when="the asker watches more values"),
-        dict(id="rival", label="Mark rivals: networks that explain the same moves with a different pattern or sign",
-             phase="find", component="rival_detector"),
-        dict(id="out", label="The networks, rivals marked", kind="end", phase="find"),
+        dict(id="out", label="The networks", kind="end", phase="find"),
     ],
     [("in", "copy"), ("copy", "apply"), ("apply", "supers"), ("supers", "residual"), ("residual", "rest", "yes"),
      ("residual", "watched", "no"), ("rest", "watched"), ("watched", "watch", "yes"),
-     ("watched", "rival", "no"), ("watch", "rival"), ("rival", "out")],
+     ("watched", "out", "no"), ("watch", "out")],
 )
 
-SIMULATE = _flow(
-    "inf-simulate", "3 · Simulate and couple: each network, then all of them",
-    "A scenario is one choice among each set of rivals, and one answer to each open hypothesis worth branching on. "
-    "Each scenario is simulated twice on the same random draws, with and without the shock; the difference is the "
-    "thesis's effect.",
-    [dict(id="alone", title="Alone"), dict(id="scenarios", title="Scenarios"), dict(id="couple", title="Couple")],
+ISOLATED = _flow(
+    "inf-isolated", "3 · Isolated prediction: each network on its own",
+    "Each network is simulated with only the shocks that land in it, twice on the same random draws: with the "
+    "shock and without it. The difference is that network's own response, before any network affects another.",
+    [dict(id="alone", title="Alone")],
     [
-        dict(id="in", label="The networks, rivals marked", kind="start", phase="alone"),
-        dict(id="each", label="Simulate each network alone, with the shocks that land in it", phase="alone",
-             component="network_predictor", trace=["predict.network"]),
-        dict(id="rivals", label="One scenario per choice among rivals", phase="scenarios"),
+        dict(id="in", label="The networks", kind="start", phase="alone"),
+        dict(id="next", label="Take the next network", phase="alone"),
+        dict(id="each", label="Simulate it with the shocks that land in it, and without them, on the same draws",
+             phase="alone", component="network_predictor", trace=["predict.network"]),
+        dict(id="more", label="More networks?", kind="decision", phase="alone"),
+        dict(id="out", label="Each network's effect: shocked minus baseline", kind="end", phase="alone"),
+    ],
+    [("in", "next"), ("next", "each"), ("each", "more"), ("more", "next", "yes: loop"), ("more", "out", "no")],
+)
+
+DISTRIBUTED = _flow(
+    "inf-distributed", "4 · Distributed prediction: the networks together, per scenario",
+    "Rival networks explain the same moves differently, and some open hypotheses are worth branching on, so there "
+    "is more than one way the networks can fit together. Each way is a scenario. Scenarios are weighed once, here; "
+    "the heaviest are kept, and each couples its networks through the interactions between them.",
+    [dict(id="scenarios", title="Scenarios"), dict(id="couple", title="Couple")],
+    [
+        dict(id="in", label="The networks and their isolated responses", kind="start", phase="scenarios"),
+        dict(id="rival", label="Mark rivals: networks that explain the same moves with a different pattern or sign",
+             phase="scenarios", component="rival_detector"),
         dict(id="open", label="An open hypothesis inside the networks, valuable and undecided?", kind="decision",
              phase="scenarios"),
-        dict(id="branch", label="Branch every scenario on it: once with the interaction, once without",
+        dict(id="branch", label="Branch on it: once with the interaction, once without",
              phase="scenarios", mandatory=False, when="such a hypothesis", component="hypothesis_scorer"),
+        dict(id="form", label="One scenario per combination of rival choices and branched hypotheses",
+             phase="scenarios"),
+        dict(id="weigh", label="Weigh each: support × fit × track record × each branched hypothesis's probability; "
+                               "keep the heaviest", phase="scenarios", component="scenario_weighter",
+             trace=["unify.scenarios"]),
         dict(id="next", label="Take the next scenario", phase="couple"),
         dict(id="shocked", label="Couple its networks through the interactions between them, with the shock",
              phase="couple", component="coupler"),
         dict(id="baseline", label="Again without the shock, on the same random draws", phase="couple",
              component="coupler", trace=["couple.done"]),
         dict(id="more", label="More scenarios?", kind="decision", phase="couple"),
-        dict(id="out", label="Each scenario's effect: shocked minus baseline", kind="end", phase="couple"),
+        dict(id="out", label="Weighted scenarios, each with its effect: shocked minus baseline", kind="end",
+             phase="couple"),
     ],
-    [("in", "each"), ("each", "rivals"), ("rivals", "open"), ("open", "branch", "yes"), ("open", "next", "no"),
-     ("branch", "open", "another?"), ("next", "shocked"), ("shocked", "baseline"), ("baseline", "more"),
-     ("more", "next", "yes: loop"), ("more", "out", "no")],
+    [("in", "rival"), ("rival", "open"), ("open", "branch", "yes"), ("open", "form", "no"),
+     ("branch", "open", "another?"), ("form", "weigh"), ("weigh", "next"), ("next", "shocked"),
+     ("shocked", "baseline"), ("baseline", "more"), ("more", "next", "yes: loop"), ("more", "out", "no")],
 )
 
 UNIFY = _flow(
-    "inf-unify", "4 · Weigh and unify: one forecast from rival scenarios",
-    "Rival scenarios are not averaged away: the forecast is their mixture, so where they disagree the forecast is "
-    "wide or has two humps. A scenario's weight comes from the evidence for each choice it makes.",
-    [dict(id="weigh", title="Weigh"), dict(id="mix", title="Mix")],
+    "inf-unify", "5 · Unify: one forecast from rival scenarios",
+    "Rival scenarios are not averaged away: the forecast is their mixture by the weights distributed prediction "
+    "gave them, so where they disagree the forecast is wide or has two humps.",
+    [dict(id="mix", title="Mix")],
     [
-        dict(id="in", label="The scenarios' effects", kind="start", phase="weigh"),
-        dict(id="one", label="More than one scenario?", kind="decision", phase="weigh"),
-        dict(id="terms", label="For each rival chosen: support (how often it held) × fit (to recent days) × "
-                               "track record (how its forecasts scored)", phase="weigh", mandatory=False,
-             when="rival scenarios", component="scenario_weighter"),
-        dict(id="hyp", label="For each branched hypothesis: its probability, or one minus it", phase="weigh",
-             mandatory=False, when="rival scenarios"),
-        dict(id="keep", label="Keep the heaviest scenarios; report the weight dropped", phase="weigh",
-             mandatory=False, when="rival scenarios", trace=["unify.scenarios"]),
+        dict(id="in", label="The weighted scenarios' effects", kind="start", phase="mix"),
+        dict(id="one", label="More than one scenario?", kind="decision", phase="mix"),
         dict(id="draws", label="Give each scenario draws in proportion to its weight", phase="mix",
-             component="unifier"),
+             mandatory=False, when="rival scenarios", component="unifier"),
         dict(id="out", label="One forecast: every value as a distribution over the horizon", kind="end",
              phase="mix"),
     ],
-    [("in", "one"), ("one", "terms", "yes"), ("one", "draws", "no"), ("terms", "hyp"), ("hyp", "keep"),
-     ("keep", "draws"), ("draws", "out")],
+    [("in", "one"), ("one", "draws", "yes"), ("one", "out", "no"), ("draws", "out")],
 )
 
 READ_OUT = _flow(
-    "inf-read_out", "5 · Read out and explain: how each value moves, and why",
+    "inf-read_out", "6 · Read out: what moves, when, by which path, and why",
     "The forecast is read value by value: how far it moves, when, and by which path. A coarser target (an entity, "
     "a sector) is the average of its values, draw by draw, so its uncertainty is honest.",
     [dict(id="values", title="Values"), dict(id="why", title="Why")],
@@ -211,18 +233,14 @@ READ_OUT = _flow(
      ("bounds", "ablate"), ("ablate", "explain"), ("explain", "out")],
 )
 
-SCORE = _flow(
-    "inf-score", "6 · Score against outcomes: how inference earns trust",
+EVALUATE = _flow(
+    "inf-evaluate", "7 · Evaluate: how inference earns trust",
     "A forecast that someone acts on is recorded with the version it read, so it can be traced later. Once its "
     "horizon passes, what happened scores it; superentities whose networks called the move gain track record.",
     [dict(id="record", title="Record"), dict(id="score", title="Score")],
     [
-        dict(id="in", label="A forecast and its brief", kind="start", phase="record"),
-        dict(id="act", label="Does someone act on it?", kind="decision", phase="record"),
-        dict(id="none", label="Nothing more happens; the forecast stays in its layer", kind="end", phase="record",
-             side=True),
-        dict(id="record", label="Record the decision: the forecasts, the version, and when to check",
-             phase="record", mandatory=False, when="someone acts on it", trace=["decision.recorded"]),
+        dict(id="in", label="A decision recorded on the forecast, with the version it read", kind="start",
+             phase="record", trace=["decision.recorded"]),
         dict(id="due", label="Has the horizon passed?", kind="decision", phase="score"),
         dict(id="wait", label="Wait a day; learning goes on meanwhile", phase="score", mandatory=False,
              when="the horizon has not passed"),
@@ -233,11 +251,11 @@ SCORE = _flow(
         dict(id="out", label="A score, and track records that weigh the next forecast's scenarios", kind="end",
              phase="score"),
     ],
-    [("in", "act"), ("act", "none", "no"), ("act", "record", "yes"), ("record", "due"), ("due", "wait", "not yet"),
-     ("wait", "due", "check again"), ("due", "crps", "yes"), ("crps", "track"), ("track", "out")],
+    [("in", "due"), ("due", "wait", "not yet"), ("wait", "due", "check again"), ("due", "crps", "yes"),
+     ("crps", "track"), ("track", "out")],
 )
 
-INFERENCE_FLOWS: tuple[Flow, ...] = (POSE, ISOLATE, SIMULATE, UNIFY, READ_OUT, SCORE)
+INFERENCE_FLOWS: tuple[Flow, ...] = (POSE, ISOLATE, ISOLATED, DISTRIBUTED, UNIFY, READ_OUT, EVALUATE)
 
 for _p, _f in zip(INFERENCE.phases, INFERENCE_FLOWS):
     _p.flow = _f.id

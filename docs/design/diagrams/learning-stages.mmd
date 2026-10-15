@@ -1,0 +1,10 @@
+flowchart TD
+  A["Market event, or a backend user's edit"]:::start ==> I["1 · Intake<br/>translate → refine"]:::step
+  I ==> W["2 · Learning · working memory<br/>apply → classify → recall → ripple → fold → hedges"]:::wm
+  W ==> L["3 · Learning · long-term memory<br/>kinds → Entity memories → frontier → superentities"]:::ltm
+  L ==> R{"4 · Human review<br/>does every change make sense?"}:::check
+  R ==>|approve selection| C[("5 · Commit<br/>learn.working · learn.long_term")]:::store
+  C ==> V["New version<br/>inference reads committed versions only"]:::done
+  R -->|deselect some: re-stage| W
+  R -.->|defer| Q["Folds in late, once approved"]:::opt
+  R -->|reject| X["Nothing changes (logged)"]:::done

@@ -2,6 +2,19 @@
 
 [ml-stack.md](ml-stack.md) states what the code computes today and what an adversarial review found wrong with it (§13 there). This page is the plan: for each problem, the method that replaces it, why it is sound, what it assumes, and the test that says it works. It was revised after the same review, which corrected several of its first claims; those corrections are noted where they apply. Nothing here is in the front end yet.
 
+<!-- toc -->
+**Contents**
+
+- [Ground rules](#ground-rules)
+- [Phase 0: stop the model confirming itself](#phase-0-stop-the-model-confirming-itself)
+- [Phase 1: measure and model markets properly](#phase-1-measure-and-model-markets-properly)
+- [Phase 2: discovery with error control](#phase-2-discovery-with-error-control)
+- [Phase 3: one model, with honest uncertainty](#phase-3-one-model-with-honest-uncertainty)
+- [Phase 4: structure and inference](#phase-4-structure-and-inference)
+- [Phases](#phases)
+- [How this was reviewed](#how-this-was-reviewed)
+<!-- /toc -->
+
 ## Ground rules
 
 1. **Truth is observed, never filtered.** Every score, fit, and test compares against raw observations (with the forecast's spread widened by observation noise) or, in synthetic worlds, against the world's true state. Nothing is ever scored against the model's own filtered values.
@@ -53,8 +66,8 @@
   - changes for yields;
   - levels for spreads;
   - discrete step processes for policy rates.
-- **Scales.** Estimate each value's scale from its own series as the horizon-specific realized volatility (EWMA, with a regime-aware option). Store the scale with its vintage, and rescale effects when scales change: $\beta_{\text{new}} = \beta \cdot (s_{a,\text{new}}/s_{a,\text{old}}) \cdot (s_{b,\text{old}}/s_{b,\text{new}})$.
-- **Reporting.** Report every effect in native units (bp, %, $) next to the horizon volatility, as effect$/\sigma_H$.
+- **Scales.** Estimate each value's scale from its own series as the horizon-specific realized volatility (EWMA, with a regime-aware option). Store the scale with its vintage, and rescale effects when scales change: $`\beta_{\text{new}} = \beta \cdot (s_{a,\text{new}}/s_{a,\text{old}}) \cdot (s_{b,\text{old}}/s_{b,\text{new}})`$.
+- **Reporting.** Report every effect in native units (bp, %, dollars) next to the horizon volatility, as $`\text{effect}/\sigma_H`$.
 - **Thresholds.** Every threshold becomes a statement in volatility units at the relevant horizon.
 - **Kernel shapes.** Derive them from the transforms, so stocks and flows stay consistent: a level-to-rate link needs a differencing (transient) kernel, and a rate-to-level link needs an integrating one.
 - **Cointegration.** Where levels share a long-run relation, use an error-correction form rather than differencing it away. Unit-root pretests (ADF with KPSS) have low power, so they inform the choice; they do not make it.
@@ -66,7 +79,7 @@
 **Problem.** There is no market factor: a market shock moves no stock in the book, level shocks are independent across names, and a 50-name book's risk is understated several-fold. Group forecasts average values of different signs and units (F-C2).
 
 **Method.**
-- **Factors.** Model traded values in returns with a contemporaneous factor structure: market, sector, rates, the dollar, and oil. The covariance is $\Sigma = BB^\top + D$, with loadings estimated from returns on rolling windows. The factor shocks are drawn per Monte Carlo sample, on shared substreams.
+- **Factors.** Model traded values in returns with a contemporaneous factor structure: market, sector, rates, the dollar, and oil. The covariance is $`\Sigma = BB^\top + D`$, with loadings estimated from returns on rolling windows. The factor shocks are drawn per Monte Carlo sample, on shared substreams.
 - **Groups.** A group's financial readout is the value-weighted or portfolio-weighted return of its share prices only. Fundamentals groups are reported separately, with an explicit sign convention ("good or bad for holders").
 
 **Test.** On backtests, portfolio-level interval coverage, and VaR and expected-shortfall backtests (Kupiec; Christoffersen).
@@ -101,7 +114,7 @@
 **Problem.** The synthetic world uses the model's own kernel family, its linear structure, and true effects centered on the model's priors. Recovering them proves self-consistency only (F-C4, S-E6).
 
 **Method.** A suite of worlds, each with a known truth:
-1. random-walk log prices with Student-$t$ GARCH noise and a factor structure;
+1. random-walk log prices with Student-$`t`$ GARCH noise and a factor structure;
 2. latent common drivers (no causal sufficiency);
 3. anticipation: announced events move prices before they happen;
 4. publication lags and revisions;
@@ -116,7 +129,7 @@ Every learner reports its false-discovery and recovery rates on each.
 
 **Method.**
 - **Rolling-origin backtests** on point-in-time vintages (R15), scored against raw observations (R0).
-- **Proper scores from samples.** Use CRPS with the unbiased estimator $\frac{1}{n(n-1)}\sum|X_i - X_j|$ for its spread term, plus the log score. Report PIT histograms and coverage by horizon, with coverage intervals that account for autocorrelated days.
+- **Proper scores from samples.** Use CRPS with the unbiased estimator $`\frac{1}{n(n-1)}\sum|X_i - X_j|`$ for its spread term, plus the log score. Report PIT histograms and coverage by horizon, with coverage intervals that account for autocorrelated days.
 - **Baselines**:
   - a random walk in returns;
   - futures- and consensus-implied paths;
@@ -160,7 +173,7 @@ Every learner reports its false-discovery and recovery rates on each.
    - a null from sign- or block-permuted contributions;
    - online FDR across the components scanned.
 
-**Test.** On null and latent-confounder worlds (R16), the realized false-discovery proportion is at most about the target level $q$. Recall of planted edges is reported as a function of history length.
+**Test.** On null and latent-confounder worlds (R16), the realized false-discovery proportion is at most about the target level $`q`$. Recall of planted edges is reported as a function of history length.
 
 ### R11. Evidence types
 
@@ -182,10 +195,10 @@ Each interaction records its evidence type, which the review and the forecast sh
 - Reported changes train the in-channels (S-M7).
 
 **Method.**
-1. **Filter with the mixture.** A channel contributes $\mathbb{E}[p]\mu$, with variance $p(1-p)\mu^2 + p\sigma^2$. Better: use a Gaussian-sum or interacting-multiple-model filter over the channels' on/off states.
+1. **Filter with the mixture.** A channel contributes $`\mathbb{E}[p]\mu`$, with variance $`p(1-p)\mu^2 + p\sigma^2`$. Better: use a Gaussian-sum or interacting-multiple-model filter over the channels' on/off states.
 2. **Track inclusion by sequential model comparison.** Each channel's log-odds accumulate the log ratio of one-step-ahead predictive densities of filters with and without it.
    - *Corrected from the first draft*, which called this exact. It is the exact marginal-likelihood ratio only when the hyperparameters (level noise, observation noise, the effect random walk, the kernel) are fixed and not learned from the same data; when the regressor is a known exogenous series (here it is built from a filtered source, so it is a generated regressor); and when both filters run from the channel's inception.
-   - With several channels, conditioning the others on their current means is an approximation, and it fails for collinear sources. Exact enumeration of $2^n$ filters is feasible for $n \le 4$; its cost is $O(2^n n^3)$ per target-day, not "as now".
+   - With several channels, conditioning the others on their current means is an approximation, and it fails for collinear sources. Exact enumeration of $`2^n`$ filters is feasible for $`n \le 4`$; its cost is $`O(2^n n^3)`$ per target-day, not "as now".
    - Inclusion probabilities are sensitive to the slab width (the Lindley–Bartlett effect) and to the effect random walk, which penalizes the "on" model each step. Both need priors or calibration.
 3. **Reported changes enter as shocks**, updating only the level, never the effects.
 
@@ -203,20 +216,20 @@ Keep a discretized posterior over (delay, lag) on a log grid of about 8×8 per c
 
 ### R6. Ripple judgments as a mixture that learns
 
-Represent each judged ripple as a two-component mixture (it arrives, or it does not), with prior weight $w$ applied to the *mean* path, not a median that already integrates existence. Run a Gaussian-sum filter that updates $w$ as the target is observed. Apply the same switch in the Monte Carlo, on a shared substream, so forecasts carry the judgment too (today they ignore it).
+Represent each judged ripple as a two-component mixture (it arrives, or it does not), with prior weight $`w`$ applied to the *mean* path, not a median that already integrates existence. Run a Gaussian-sum filter that updates $`w`$ as the target is observed. Apply the same switch in the Monte Carlo, on a shared substream, so forecasts carry the judgment too (today they ignore it).
 
-**Test.** With $w = 0.5$ in a world where the ripple arrives half the time, forecast coverage holds and $w$ converges toward the truth.
+**Test.** With $`w = 0.5`$ in a world where the ripple arrives half the time, forecast coverage holds and $`w`$ converges toward the truth.
 
 ### R9. Market-realistic noise
 
 In order:
-1. **Joint parameter draws.** Draw $[a, \beta]$ per target from $\mathcal{N}(\theta, P)$, and start from the posterior of today's state, not from a fixed point.
+1. **Joint parameter draws.** Draw $`[a, \beta]`$ per target from $`\mathcal{N}(\theta, P)`$, and start from the posterior of today's state, not from a fixed point.
 2. **Common factors** in level shocks (R14).
 3. **Volatility clustering.** A GARCH(1,1) scale, for daily-observed values only; it is meaningless for monthly releases.
-4. **Heavy tails.** Student-$t$ innovations.
+4. **Heavy tails.** Student-$`t`$ innovations.
    - Unconditional daily single-stock returns have tail indices of about 3 to 5 (Cont, 2001). GARCH-standardized residuals are lighter, with degrees of freedom around 5 to 10.
-   - Combining $t$(3–6) with GARCH would double-count tails.
-   - Over a 182-day horizon, daily $t$ shocks aggregate toward Gaussian, so long-horizon tails come from volatility persistence, event-day jumps, and regimes.
+   - Combining $`t`$(3–6) with GARCH would double-count tails.
+   - Over a 182-day horizon, daily $`t`$ shocks aggregate toward Gaussian, so long-horizon tails come from volatility persistence, event-day jumps, and regimes.
 5. **Regimes** (Hamilton, 1989), with stress-dependent correlation. Crisis-correlation estimates conditioned on high volatility are biased upward (Forbes and Rigobon, 2002).
 
 **Test.** PIT and tail coverage on R16 worlds and backtests.
@@ -226,9 +239,9 @@ In order:
 ### R5. Kinds as a hierarchical model
 
 **Method.**
-- A kind's members' effects follow a measurement-error hierarchy: $\hat b_i \sim \mathcal{N}(\theta_i, se_i^2)$, $\theta_i \sim \mathcal{N}(\mu, \tau^2)$, with $\tau^2$ estimated. A new member's prior is the posterior predictive, so its width reflects how much members truly differ.
+- A kind's members' effects follow a measurement-error hierarchy: $`\hat b_i \sim \mathcal{N}(\theta_i, se_i^2)`$, $`\theta_i \sim \mathcal{N}(\mu, \tau^2)`$, with $`\tau^2`$ estimated. A new member's prior is the posterior predictive, so its width reflects how much members truly differ.
 - One entry per item (R18).
-- A new edge's existence prior has a bounded concentration, for example $\alpha + \beta \le 2$.
+- A new edge's existence prior has a bounded concentration, for example $`\alpha + \beta \le 2`$.
 - The tree's shape can still grow by Cobweb-style operators (Fisher, 1987), with Classit's acuity floor for numeric attributes (Gennari, Langley and Fisher, 1989). But category utility is a heuristic and order-dependent, and restructuring changes members' priors after the fact. So it proposes structure, and the hierarchical likelihood decides.
 
 **Test.** Held-out prior predictive log score for new members.
@@ -246,9 +259,9 @@ In order:
 
 ### R8. Value of information for the forecast's loss
 
-For a hypothesis $h$ and a proper score $S$ with generalized entropy $H(F) = \mathbb{E}_F S(F, Y)$, the value of resolving $h$ is $H(F_{\text{mix}}) - \sum_h p_h H(F_h) \ge 0$ (Gneiting and Raftery, 2007; Dawid, 2007). It is computed from the on/off Monte Carlo runs, with the unbiased estimator of $\mathbb{E}|X - X'|$ for CRPS.
+For a hypothesis $`h`$ and a proper score $`S`$ with generalized entropy $`H(F) = \mathbb{E}_F S(F, Y)`$, the value of resolving $`h`$ is $`H(F_{\text{mix}}) - \sum_h p_h H(F_h) \ge 0`$ (Gneiting and Raftery, 2007; Dawid, 2007). It is computed from the on/off Monte Carlo runs, with the unbiased estimator of $`\mathbb{E}|X - X'|`$ for CRPS.
 
-*Corrected from the first draft:* this is the expected value of *perfect* information for a CRPS-scored forecast. It is an information gain only under the log score, where it equals the mutual information $I(h; Y)$.
+*Corrected from the first draft:* this is the expected value of *perfect* information for a CRPS-scored forecast. It is an information gain only under the log score, where it equals the mutual information $`I(h; Y)`$.
 
 Two refinements follow:
 - Resolution usually comes from noisy data, so the target is the expected value of sample information.
@@ -261,12 +274,12 @@ Two refinements follow:
   - *Corrected from the first draft*, which proposed Shapley values over edge ablations. Those are not path-specific effects (Pearl, 2001; Avin, Shpitser and Pearl, 2005), so they are kept only for the nonlinear parts: moderators and bounds.
 - **Readouts.** Report each value with:
   - its **mean** effect;
-  - $P(|\Delta| \ge$ threshold$)$, so that low-probability large effects show;
-  - effect$/\sigma_H$ (R3);
+  - $`P(\lvert\Delta\rvert \ge \text{threshold})`$, so that low-probability large effects show;
+  - $`\text{effect}/\sigma_H`$ (R3);
   - the probability that the realized move has the predicted sign, *including outcome noise*;
   - time to 50% of peak in place of the sum of delays.
 
-The transmission grid's "strongest paths" view already ranks paths by linear gain ($\prod \mathbb{E}[p]\mu$, without the kernels). It is the first step of this item.
+The transmission grid's "strongest paths" view already ranks paths by linear gain ($`\prod \mathbb{E}[p]\mu`$, without the kernels). It is the first step of this item.
 
 ### R19. Economic structure
 

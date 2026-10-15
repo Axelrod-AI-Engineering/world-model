@@ -1,0 +1,13 @@
+stateDiagram-v2
+  [*] --> abstract: an end names a kind
+  abstract --> entity: narrowed one level
+  entity --> bound: the article names one candidate
+  abstract --> hedged: no candidate named
+  entity --> hedged: no candidate named
+  hedged --> hedged: later events reweigh candidates × confidence
+  hedged --> resolution_proposed: one candidate passes the bound with enough checks
+  resolution_proposed --> bound: approved (rivals' soft interactions retired)
+  resolution_proposed --> hedged: rejected
+  hedged --> expired: too old
+  bound --> [*]
+  expired --> [*]

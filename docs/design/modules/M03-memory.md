@@ -5,6 +5,18 @@
 - the frontier ABCs → M01;
 - `open_world.py` → M14.
 
+<!-- toc -->
+**Contents**
+
+- [Purpose](#purpose)
+- [Owns](#owns)
+- [Depends on](#depends-on)
+- [Diagram](#diagram)
+- [Invariants](#invariants)
+- [Planned](#planned)
+- [Done when](#done-when)
+<!-- /toc -->
+
 ## Purpose
 
 The two memories, as state only. **Working memory** is what the world is like now. **Long-term memory** is what generalizes across time and entities. Algorithms write to them only through a `MutationTxn` ([M04](M04-repo.md)). [cognition.md F1](../cognition.md#f1--two-memories-consolidated-daily) explains why there are two.
@@ -38,14 +50,7 @@ dump_state(wm, ltm) -> bytes; load_state(blob) -> (wm, ltm)
 
 ## Diagram
 
-```mermaid
-flowchart LR
-  EV[/"Vetted event"/] -- "learn.working" --> WM["Working memory"]
-  EV -- "learn.long_term" --> LTM["Long-term memory"]
-  WM -- "day.distill: episodes, superentity support,<br/>Entity memories, frontier decay" --> LTM
-  LTM -- "priors for new members · analogs · patterns to bind" --> WM
-  WM -- "day.record · day.close" --> WM
-```
+![The two memories and their commits](../diagrams/memory-commits.svg)
 
 ## Invariants
 

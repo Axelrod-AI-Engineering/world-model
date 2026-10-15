@@ -5,6 +5,19 @@
 - the imports of `sim/` go;
 - conflict detection is added.
 
+<!-- toc -->
+**Contents**
+
+- [Purpose](#purpose)
+- [Owns](#owns)
+- [Interface](#interface)
+- [Slots](#slots)
+- [Depends on](#depends-on)
+- [Diagrams](#diagrams)
+- [Invariants](#invariants)
+- [Done when](#done-when)
+<!-- /toc -->
+
 **Code today:** `intake/sources.py`, `scrapers.py`, `translators.py`, `bundle.py`, `resolver.py`, `refiner.py`, `pipeline.py`; `sim/imports.py`.
 
 ## Purpose
@@ -58,47 +71,11 @@ Most of what intake asks of text is a choice among options the graph supplies (w
 
 From an article to a graph update event:
 
-```mermaid
-flowchart TD
-  A[/"Article, data release, filing, or imported item"/] --> D{"Seen before?<br/>same address, or same site and title"}
-  D -- yes --> DROP[/"Drop the duplicate (logged)"/]
-  D -- no --> T{"A reviewed translation exists?"}
-  T -- yes --> F["Use the reviewed fixture<br/>(translator: hand_drawn)"]
-  T -- no --> TR["Translate<br/>template · data_feed · structured · llm<br/>(slot: translator)"]
-  F & TR --> OPS{"Any operations?"}
-  OPS -- no --> UN[/"Nothing to learn (logged as untranslated)"/]
-  OPS -- yes --> NEXT["Take the next operation"]
-  NEXT --> K{"Does an end name a kind<br/>(an airline) rather than a value?"}
-  K -- no --> MORE
-  K -- yes --> N["Narrow one level: kind → entity → subentity<br/>names, aliases, taxonomy (slot: refiner, entity_resolver)"]
-  N --> NAMED{"Does the article name<br/>one candidate outright?"}
-  NAMED -- yes --> BIND["Bind the end"]
-  NAMED -- no --> HEDGE["Hedge: a probability per candidate<br/>+ an open share; soft interactions as strong as they are probable"]
-  BIND --> VAL{"Is the end a value now?"}
-  VAL -- no --> N
-  VAL -- yes --> MORE{"More operations?"}
-  HEDGE --> MORE
-  MORE -- yes --> NEXT
-  MORE -- no --> OUT[/"Graph update event<br/>operations whose ends are values, plus hedged ends"/]
-```
+![Intake, step by step](../diagrams/intake-flow.svg)
 
 A fuzzy end's lifecycle ([cognition.md F11](../cognition.md#f11--an-open-world)):
 
-```mermaid
-stateDiagram-v2
-  [*] --> abstract: an end names a kind
-  abstract --> entity: narrowed one level
-  entity --> bound: the article names one candidate
-  abstract --> hedged: no candidate named
-  entity --> hedged: no candidate named
-  hedged --> hedged: later events reweigh candidates × confidence
-  hedged --> resolution_proposed: one candidate passes the bound with enough checks
-  resolution_proposed --> bound: approved (rivals' soft interactions retired)
-  resolution_proposed --> hedged: rejected
-  hedged --> expired: too old
-  bound --> [*]
-  expired --> [*]
-```
+![A fuzzy end lifecycle](../diagrams/hedge-lifecycle.svg)
 
 ## Invariants
 

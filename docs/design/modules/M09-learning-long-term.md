@@ -2,6 +2,19 @@
 
 **Layer** 3 · **Package** `learning/long_term/` · **Status** exists; this gathers pieces now scattered across `learning/`, `memory/`, and `shared/`.
 
+<!-- toc -->
+**Contents**
+
+- [Purpose](#purpose)
+- [Interface](#interface)
+- [Slots](#slots)
+- [Depends on](#depends-on)
+- [Diagrams](#diagrams)
+- [Invariants](#invariants)
+- [Planned](#planned)
+- [Done when](#done-when)
+<!-- /toc -->
+
 **Code today:**
 - `learning/long_term.py`, `generalize.py`, `frontier_test.py`, `consolidate.py`, `abduction.py:count`, `structural.py`;
 - `memory/long_term.py:SuperInteractionBuilder`;
@@ -51,55 +64,11 @@ Consolidator.run(day, ctx) -> ConsolidationReport
 
 Per event and per day:
 
-```mermaid
-flowchart TD
-  subgraph PE["Per event"]
-    I[/"What working memory learned"/] --> RT{"Retired anything?"}
-    RT -- yes --> FG["Retired items leave their kinds; frontier entries decay"]
-    RT -- no --> GU
-    FG --> GU["New items join their kinds; statistics update along the path<br/>(slot: generalization_updater)"]
-    GU --> CR{"Is a kind crowded?"}
-    CR -- yes --> SP["Split: a new child kind (slot: taxonomy_grower)"]
-    CR -- no --> DC
-    SP --> DC{"Did an actor decide?"}
-    DC -- yes --> EM["Record it in the actor's Entity memory, by context"]
-    DC -- no --> UX
-    EM --> UX{"A move the graph did not explain?"}
-    UX -- yes --> FR["Pair it with earlier unexplained moves,<br/>after removing known drivers (slot: frontier)"]
-    UX -- no --> EX
-    FR --> HOLD{"Has a pair held at enough spaced checks?<br/>(slot: promotion_test)"}
-    HOLD -- yes --> PP["Propose the pair as an interaction (waits for review)"]
-    HOLD -- no --> EX
-    PP --> EX["Explain what was learned; keep it in Prior states (slot: explainer)"]
-  end
-  subgraph PD["Per day (distillation)"]
-    EP["Summarize the day as an episode (slot: consolidator)"] --> CT["Count which interactions were active together (slot: inducer)"]
-    CT --> KN{"Matches a known superentity?"}
-    KN -- yes --> SUP["It gains support"]
-    KN -- no --> CAND["Record a candidate"]
-    SUP & CAND --> ADM{"Candidate above the admission threshold?"}
-    ADM -- yes --> COL["Propose a collapse into a superentity"]
-    ADM -- no --> FADE
-    COL --> FADE{"Admitted superentity below its floor?"}
-    FADE -- yes --> EXP["Propose an expansion back into its members"]
-    FADE -- no --> DONE
-    EXP --> DONE[/"Staged lessons and the proposals they raise"/]
-  end
-  EX --> EP
-```
+![Learning of long-term memory, per event and per day](../diagrams/ltm-learning-flow.svg)
 
 A superentity's lifecycle:
 
-```mermaid
-stateDiagram-v2
-  [*] --> candidate: a group of interactions fires together
-  candidate --> candidate: support grows (+1 per spaced day) or decays
-  candidate --> admitted: support > admission threshold and the collapse is approved
-  [*] --> admitted: a backend user groups items (approved)
-  admitted --> admitted: bound as instances; gains track record from forecasts
-  admitted --> dissolved: support < floor and the expansion is approved, or the user dissolves it
-  dissolved --> [*]
-```
+![A superentity lifecycle](../diagrams/superentity-lifecycle.svg)
 
 ## Invariants
 

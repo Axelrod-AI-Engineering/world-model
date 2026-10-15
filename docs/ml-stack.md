@@ -2,6 +2,34 @@
 
 This page states, in mathematical terms, what the code computes today: every model, update, test, and constant, with the file that implements it. It describes the implementation, not the intent. Where the implementation is a heuristic, or where it is unsound, the page says so; [ml-roadmap.md](ml-roadmap.md) proposes what replaces it. Paths are relative to `src/axelrod_wm/`. Two sections are plans rather than descriptions: [Small models first](#small-models-first), on which model each step should use, and [§14](#14-fine-tuning-to-own-the-structure), on fine-tuning models on the structure we own.
 
+<!-- toc -->
+**Contents**
+
+- [1. Objects and notation](#1-objects-and-notation)
+- [2. An interaction](#2-an-interaction)
+- [3. The state-space model of working memory](#3-the-state-space-model-of-working-memory)
+- [4. Learning in working memory (one vetted event)](#4-learning-in-working-memory-one-vetted-event)
+  - [4.1 The fold: a joint Kalman update (`learning/fold.py:89-247`)](#41-the-fold-a-joint-kalman-update-learningfoldpy89-247)
+  - [4.2 Existence: a likelihood-ratio pseudo-count (heuristic, and unsound)](#42-existence-a-likelihood-ratio-pseudo-count-heuristic-and-unsound)
+  - [4.3 Kernel learning: a three-point grid with a likelihood gate (`learning/kernel_learning.py:77-149`)](#43-kernel-learning-a-three-point-grid-with-a-likelihood-gate-learningkernellearningpy77-149)
+  - [4.4 Level noise (`learning/consolidate.py:195-240`)](#44-level-noise-learningconsolidatepy195-240)
+- [5. Intake: from article to operations](#5-intake-from-article-to-operations)
+- [6. Propagation: the Monte Carlo impulse model (`dynamics/propagation.py:219-464`)](#6-propagation-the-monte-carlo-impulse-model-dynamicspropagationpy219-464)
+- [7. Transmission orders and ripple judgments (`inference/transmission.py:53-114`)](#7-transmission-orders-and-ripple-judgments-inferencetransmissionpy53-114)
+- [8. Learning in long-term memory](#8-learning-in-long-term-memory)
+  - [8.1 Taxonomies: signature descent (not Cobweb)](#81-taxonomies-signature-descent-not-cobweb)
+  - [8.2 The correlation frontier (`learning/frontier_test.py`, `memory/frontier.py`)](#82-the-correlation-frontier-learningfrontiertestpy-memoryfrontierpy)
+  - [8.3 Superentities: co-activation induction (`learning/abduction.py:149-597`)](#83-superentities-co-activation-induction-learningabductionpy149-597)
+  - [8.4 Recall and analogy (`shared/recall.py`)](#84-recall-and-analogy-sharedrecallpy)
+- [9. Inference: answering a what-if (`inference/task.py:95-192`)](#9-inference-answering-a-what-if-inferencetaskpy95-192)
+- [10. Evaluation (`evaluation/`)](#10-evaluation-evaluation)
+- [11. Open-world measures (`memory/open_world.py`): display only](#11-open-world-measures-memoryopenworldpy-display-only)
+- [12. Constants](#12-constants)
+- [13. Adversarial review](#13-adversarial-review)
+  - [What changed on this page](#what-changed-on-this-page)
+  - [What the review found wrong with the model](#what-the-review-found-wrong-with-the-model)
+<!-- /toc -->
+
 This page went through an adversarial review on fidelity, statistics, and finance (§13). Its corrections are folded in; the review's verdict, summarized there, is that **the forecasting core is a defensible linear-Gaussian design, but the stack is not yet sound for its stated purpose**: its evaluation is circular, two learners partly confirm themselves, several components count the same data more than once, and the design has no layer for what markets have already priced in.
 
 **Scope.** Synthetic data only. Nothing here has been fit to, or validated on, real market data. Every number is a design default, not an estimate.
@@ -105,86 +133,86 @@ Jev is trained by *reinforcement learning for calibrated decisions* (RLCD), whic
 
 | Symbol | Meaning | Code |
 |---|---|---|
-| $e$ | an entity (a company, agency, or economic idea) | `model/entity.py` |
-| $j$ | a subentity: one value an entity holds (a price, a margin, a rate) | `Subentity` |
-| $c = (a \to b)$ | an interaction (a channel) from source value $a$ to target value $b$; a bidirectional interaction has a forward channel and a reverse one (`:rev`) | `model/interaction.py` |
-| $t$ | the day, an integer on a daily grid; day 0 is the world's origin date (UTC) | `memory/working.py:62-140` |
-| $x_j(t)$ | the value in native units | |
-| $\ell_j(\cdot)$ | the value's link: identity, log, or logit | `model/distributions.py:102-137` |
-| $z_j(t)$ | the standardized deviation, $z_j = (\ell_j(x_j) - m_j)/s_j$, with anchor $m_j$ and scale $s_j$ | |
-| $r_j$ | the value's observation noise, **an sd** in $z$ units; its variance is $r_j^2$ | `model/taxonomy.py:457-467` |
-| $H$ | the forecast horizon in days (182 by default) | `configs/default.yaml` |
-| $S$ | Monte Carlo samples (400 by default) | |
+| $`e`$ | an entity (a company, agency, or economic idea) | `model/entity.py` |
+| $`j`$ | a subentity: one value an entity holds (a price, a margin, a rate) | `Subentity` |
+| $`c = (a \to b)`$ | an interaction (a channel) from source value $`a`$ to target value $`b`$; a bidirectional interaction has a forward channel and a reverse one (`:rev`) | `model/interaction.py` |
+| $`t`$ | the day, an integer on a daily grid; day 0 is the world's origin date (UTC) | `memory/working.py:62-140` |
+| $`x_j(t)`$ | the value in native units | |
+| $`\ell_j(\cdot)`$ | the value's link: identity, log, or logit | `model/distributions.py:102-137` |
+| $`z_j(t)`$ | the standardized deviation, $`z_j = (\ell_j(x_j) - m_j)/s_j`$, with anchor $`m_j`$ and scale $`s_j`$ | |
+| $`r_j`$ | the value's observation noise, **an sd** in $`z`$ units; its variance is $`r_j^2`$ | `model/taxonomy.py:457-467` |
+| $`H`$ | the forecast horizon in days (182 by default) | `configs/default.yaml` |
+| $`S`$ | Monte Carlo samples (400 by default) | |
 
-Everything the dynamics touch is in $z$ units. **The scale $s_j$ is set once**, when the value is created (from its kind's or its peers' mean scale, else 1.0 in link units; `shared/classify.py:194-212`), and never re-estimated from the value's own series. "One sd" is therefore a designer's unit, not a volatility: a 0.05 sd threshold is 0.4% for a share price with an 8% scale but 1.5 bp for CPI with a 0.3 pp scale. Every threshold below inherits this (review S-M9, F-C3).
+Everything the dynamics touch is in $`z`$ units. **The scale $`s_j`$ is set once**, when the value is created (from its kind's or its peers' mean scale, else 1.0 in link units; `shared/classify.py:194-212`), and never re-estimated from the value's own series. "One sd" is therefore a designer's unit, not a volatility: a 0.05 sd threshold is 0.4% for a share price with an 8% scale but 1.5 bp for CPI with a 0.3 pp scale. Every threshold below inherits this (review S-M9, F-C3).
 
-Every processed day has a point for every value, observed or predicted. $z$ reads as 0 only before a value's history starts, or for days pruned below its first kept day.
+Every processed day has a point for every value, observed or predicted. $`z`$ reads as 0 only before a value's history starts, or for days pruned below its first kept day.
 
 **Distribution families** (link-space moments):
 
 | Family | Link | Link mean, variance | Refit from moments |
 |---|---|---|---|
-| Gaussian$(\mu,\sigma)$ | identity | exact | exact |
-| LogNormal$(\mu,\sigma)$ | log | exact | exact |
-| Beta$(\alpha,\beta)$ | logit | delta method: $m = \mathrm{logit}(p)$, $v = \mathrm{Var}/(p(1-p))^2$ | concentration $\kappa = p(1-p)/\mathrm{Var} - 1$, clipped to $[0.5, 10^7]$ |
-| Gamma$(k,\theta)$ | log | **approximate**: $m = \log(k\theta)$, $v = 1/k$ (the exact moments are $\psi(k) + \log\theta$ and $\psi'(k)$; the error is large for $k \le 2$) | $k = 1/v$, capped at $10^9$ |
+| $`\mathrm{Gaussian}(\mu,\sigma)`$ | identity | exact | exact |
+| $`\mathrm{LogNormal}(\mu,\sigma)`$ | log | exact | exact |
+| $`\mathrm{Beta}(\alpha,\beta)`$ | logit | delta method: $`m = \mathrm{logit}(p)`$, $`v = \mathrm{Var}/(p(1-p))^2`$ | concentration $`\kappa = p(1-p)/\mathrm{Var} - 1`$, clipped to $`[0.5, 10^7]`$ |
+| $`\mathrm{Gamma}(k,\theta)`$ | log | **approximate**: $`m = \log(k\theta)`$, $`v = 1/k`$ (the exact moments are $`\psi(k) + \log\theta`$ and $`\psi'(k)`$; the error is large for $`k \le 2`$) | $`k = 1/v`$, capped at $`10^9`$ |
 
-Default observation noise $r$ (`model/taxonomy.py:457-467`): 0.02 for decision variables, 0.05 for rates and prices, 0.25 for sentiment indices, 0.15 otherwise. It is fixed by kind and never estimated.
+Default observation noise $`r`$ (`model/taxonomy.py:457-467`): 0.02 for decision variables, 0.05 for rates and prices, 0.25 for sentiment indices, 0.15 otherwise. It is fixed by kind and never estimated.
 
 ## 2. An interaction
 
-Each channel $c = (a \to b)$ carries:
+Each channel $`c = (a \to b)`$ carries:
 
-- **existence** $p_c \sim \mathrm{Beta}(\alpha_c, \beta_c)$, read as the probability that the channel is real (§4.2 explains why the Beta adds no meaning beyond its mean);
-- **effect** $\beta_c \sim \mathcal{N}(\mu_c, \sigma_c^2)$, in sd of $b$ per sd of $a$;
-- **a kernel**: delay $d_c$, lag $l_c$, and duration $D_c$, each Gamma with coefficient of variation 0.3 (`model/temporal.py:18`);
-- **moderators**, optional: a third value $q$ that scales or gates the channel.
+- **existence** $`p_c \sim \mathrm{Beta}(\alpha_c, \beta_c)`$, read as the probability that the channel is real (§4.2 explains why the Beta adds no meaning beyond its mean);
+- **effect** $`\beta_c \sim \mathcal{N}(\mu_c, \sigma_c^2)`$, in sd of $`b`$ per sd of $`a`$;
+- **a kernel**: delay $`d_c`$, lag $`l_c`$, and duration $`D_c`$, each Gamma with coefficient of variation 0.3 (`model/temporal.py:18`);
+- **moderators**, optional: a third value $`q`$ that scales or gates the channel.
 
-**The kernel.** On the daily grid, $d = \max(1, \mathrm{round}(\text{delay}))$, $l = \max(1, \mathrm{round}(\text{lag}))$, $\lambda = e^{-3/D}$ ($\lambda = 1$ for a permanent effect). The step response is
+**The kernel.** On the daily grid, $`d = \max(1, \mathrm{round}(\text{delay}))`$, $`l = \max(1, \mathrm{round}(\text{lag}))`$, $`\lambda = e^{-3/D}`$ ($`\lambda = 1`$ for a permanent effect). The step response is
 
 $$
-g(\tau) = \begin{cases} 0 & \tau < d \\ (\tau - d + 1)/l & d \le \tau \le d + l - 1 \\ \lambda^{\tau - (d + l - 1)} & \tau \ge d + l \end{cases}
+g(\tau) = \begin{cases} 0 & \tau < d \cr (\tau - d + 1)/l & d \le \tau \le d + l - 1 \cr \lambda^{\tau - (d + l - 1)} & \tau \ge d + l \end{cases}
 $$
 
-and the channel's regressor is $\varphi_c(t) = \sum_{\tau \ge 1} g(\tau)\, \Delta z_a(t - \tau)$, computed in $O(1)$ per day by summation by parts (`dynamics/kernels.py:1-90`): $\varphi = S/l + T$ with $S(t+1) = S + z_a(t+1-d) - z_a(t+1-d-l)$ and $T(t+1) = \lambda T - (1-\lambda) z_a(t+1-d-l)$. For a permanent kernel, $\varphi$ is the $l$-day moving average of $z_a$, lagged $d$ days. (The review verified the recursion numerically against the direct sum.)
+and the channel's regressor is $`\varphi_c(t) = \sum_{\tau \ge 1} g(\tau)\, \Delta z_a(t - \tau)`$, computed in $`O(1)`$ per day by summation by parts (`dynamics/kernels.py:1-90`): $`\varphi = S/l + T`$ with $`S(t+1) = S + z_a(t+1-d) - z_a(t+1-d-l)`$ and $`T(t+1) = \lambda T - (1-\lambda) z_a(t+1-d-l)`$. For a permanent kernel, $`\varphi`$ is the $`l`$-day moving average of $`z_a`$, lagged $`d`$ days. (The review verified the recursion numerically against the direct sum.)
 
 **Every channel has a delay of at least one day.** No value responds on the day of its source's move. For traded prices this is the wrong default (§13, F-C1).
 
-**Moderators** read $z_q(t-1)$: multiplicative, $m_c \mathrel{*}= \mathrm{clip}(1 + \gamma z_q, 0, 3)$; threshold, $m_c \mathrel{*}= \mathbb{1}[z_q > \theta]$; additive, the target gains $\gamma z_q$ (`dynamics/regressors.py:30-43`).
+**Moderators** read $`z_q(t-1)`$: multiplicative, $`m_c \mathrel{*}= \mathrm{clip}(1 + \gamma z_q, 0, 3)`$; threshold, $`m_c \mathrel{*}= \mathbb{1}[z_q > \theta]`$; additive, the target gains $`\gamma z_q`$ (`dynamics/regressors.py:30-43`).
 
 ## 3. The state-space model of working memory
 
-For each value $b$, the state is $\theta_b = [a_b, \beta_{c_1}, \dots, \beta_{c_n}]$ over its in-channels, with covariance $P_b$ (`dynamics/daily.py`). The measurement equation is
+For each value $`b`$, the state is $`\theta_b = [a_b, \beta_{c_1}, \dots, \beta_{c_n}]`$ over its in-channels, with covariance $`P_b`$ (`dynamics/daily.py`). The measurement equation is
 
 $$
-z_b(t) = a_b(t) + \sum_c m_c(t)\, \varphi_c(t)\, \beta_c + u_b(t) + \epsilon_t, \qquad \epsilon_t \sim \mathcal{N}(0, r_b^2)
+z_b(t) = a_b(t) + \sum_c m_c(t)\thinspace  \varphi_c(t)\thinspace  \beta_c + u_b(t) + \epsilon_t, \qquad \epsilon_t \sim \mathcal{N}(0, r_b^2)
 $$
 
-where $a_b$ is a local level (a random walk, $\mathrm{Var}(\Delta a) = \sigma^2_{\text{level},b}$) and $u_b$ is the additive moderator inputs plus the reviewers' ripple correction (§7). There is no shock term in the filter: a reported change enters as an observation (§4.1).
+where $`a_b`$ is a local level (a random walk, $`\mathrm{Var}(\Delta a) = \sigma^2_{\text{level},b}`$) and $`u_b`$ is the additive moderator inputs plus the reviewers' ripple correction (§7). There is no shock term in the filter: a reported change enters as an observation (§4.1).
 
-**Existence is not in the filter at all.** `predict_state` (`dynamics/daily.py:174-181`) puts every channel of every non-retired interaction into $h$ at its full mean effect, and the fold's offset uses effect means only. A channel with existence 0.2 (a fuzzy end's soft interaction, or a just-promoted frontier edge) moves its target's daily state as much as one with existence 0.99. The Monte Carlo forecast, by contrast, switches channels off with probability $1 - \mathbb{E}[p_c]$ (§6). **The filter and the forecast are therefore different models** (review S-M2): the innovations the frontier reads, and the filtered values the evaluation scores against, come from a predictive the forecast does not use.
+**Existence is not in the filter at all.** `predict_state` (`dynamics/daily.py:174-181`) puts every channel of every non-retired interaction into $`h`$ at its full mean effect, and the fold's offset uses effect means only. A channel with existence 0.2 (a fuzzy end's soft interaction, or a just-promoted frontier edge) moves its target's daily state as much as one with existence 0.99. The Monte Carlo forecast, by contrast, switches channels off with probability $`1 - \mathbb{E}[p_c]`$ (§6). **The filter and the forecast are therefore different models** (review S-M2): the innovations the frontier reads, and the filtered values the evaluation scores against, come from a predictive the forecast does not use.
 
-**Predict** (`daily.py:298-325`): $\mathrm{Var}(\beta_c) \mathrel{+}= 0.0075^2$ per day for every channel (a slow random walk on effects, whether or not the target is observed); $P_{aa} \mathrel{+}= \sigma^2_{\text{level}}$. The provisional point is $\hat z = h^\top\theta + u$ with $h = [1, m_c\varphi_c, \dots]$ and variance $h^\top P h$.
+**Predict** (`daily.py:298-325`): $`\mathrm{Var}(\beta_c) \mathrel{+}= 0.0075^2`$ per day for every channel (a slow random walk on effects, whether or not the target is observed); $`P_{aa} \mathrel{+}= \sigma^2_{\text{level}}`$. The provisional point is $`\hat z = h^\top\theta + u`$ with $`h = [1, m_c\varphi_c, \dots]`$ and variance $`h^\top P h`$.
 
-**Record** (`daily.py:328-377`): a value not observed today has its posterior refit to $(m_j + s_j \hat z, s_j^2\, h^\top P h)$. Off-diagonal covariances persist in `Subentity.state_cov`, clipped to $0.999\sqrt{P_{aa}P_{bb}}$.
+**Record** (`daily.py:328-377`): a value not observed today has its posterior refit to $`(m_j + s_j \hat z, s_j^2\, h^\top P h)`$. Off-diagonal covariances persist in `Subentity.state_cov`, clipped to $`0.999\sqrt{P_{aa}P_{bb}}`$.
 
 ## 4. Learning in working memory (one vetted event)
 
 ### 4.1 The fold: a joint Kalman update (`learning/fold.py:89-247`)
 
-Each observation item gives $y$:
-- for `observe_value`, $y = (\ell(x) - m)/s$ with variance $r^2$;
-- for a reported change, $y = z_{\text{now}} + \text{size}$ with variance $\max(\text{size}_{sd}, 0.05)^2$, where $z_{\text{now}}$ is today's point (predicted, or already filtered if the value was observed earlier that day).
+Each observation item gives $`y`$:
+- for `observe_value`, $`y = (\ell(x) - m)/s`$ with variance $`r^2`$;
+- for a reported change, $`y = z_{\text{now}} + \text{size}`$ with variance $`\max(\text{size}_{sd}, 0.05)^2`$, where $`z_{\text{now}}`$ is today's point (predicted, or already filtered if the value was observed earlier that day).
 
-Channels with $|m_c\varphi_c| < 0.05$ leave the state and enter an offset $o = u + \sum \mu_c m_c \varphi_c$, where $u$ is the additive term of §3. Then
+Channels with $`|m_c\varphi_c| < 0.05`$ leave the state and enter an offset $`o = u + \sum \mu_c m_c \varphi_c`$, where $`u`$ is the additive term of §3. Then
 
 $$
-s = h^\top P h + r^2, \quad k = P h / s, \quad \theta^+ = \theta + k\,(y - o - h^\top\theta), \quad P^+ = P - k\, (P h)^\top
+s = h^\top P h + r^2, \quad k = P h / s, \quad \theta^+ = \theta + k\thinspace (y - o - h^\top\theta), \quad P^+ = P - k\thinspace  (P h)^\top
 $$
 
-symmetrized. The normalized innovation $e = (y - o - h^\top\theta)/\sqrt{s}$ feeds the correlation frontier.
+symmetrized. The normalized innovation $`e = (y - o - h^\top\theta)/\sqrt{s}`$ feeds the correlation frontier.
 
-**A reported change trains the effects.** Its innovation is set to 0 for the frontier, but the same update moves the in-channels' effects (gain $\propto P_{cc} h_c$), their existence, and the analog accumulators. Part of an exogenous, reported jump is thus attributed to the channels into that value (review S-M7).
+**A reported change trains the effects.** Its innovation is set to 0 for the frontier, but the same update moves the in-channels' effects (gain $`\propto P_{cc} h_c`$), their existence, and the analog accumulators. Part of an exogenous, reported jump is thus attributed to the channels into that value (review S-M7).
 
 ### 4.2 Existence: a likelihood-ratio pseudo-count (heuristic, and unsound)
 
@@ -194,37 +222,37 @@ $$
 L_1 = \mathcal{N}(y'; h^\top\theta, s), \qquad L_0 = \mathcal{N}\big(y'; h_{-c}^\top \tilde\theta_{-c}, h_{-c}^\top \tilde P_{-c} h_{-c} + r^2\big)
 $$
 
-where $L_0$ conditions the other states on $\beta_c = 0$ ($\tilde\theta_{-c} = \theta_{-c} - P_{-c,c}\mu_c / P_{cc}$, and so on). With $p = \mathbb{E}[p_c]$, the responsibility is $r_c = pL_1/(pL_1 + (1-p)L_0)$ and
+where $`L_0`$ conditions the other states on $`\beta_c = 0`$ ($`\tilde\theta_{-c} = \theta_{-c} - P_{-c,c}\mu_c / P_{cc}`$, and so on). With $`p = \mathbb{E}[p_c]`$, the responsibility is $`r_c = pL_1/(pL_1 + (1-p)L_0)`$ and
 
 $$
-\alpha_c \mathrel{+}= w\, r_c, \qquad \beta_c \mathrel{+}= w(1 - r_c), \qquad w = \eta\,\min(1, |m_c\varphi_c|), \quad \eta = 0.5 \ (\texttt{learning.existence\_learning\_rate}).
+\alpha_c \mathrel{+}= w\thinspace  r_c, \qquad \beta_c \mathrel{+}= w(1 - r_c), \qquad w = \eta\thinspace \min(1, |m_c\varphi_c|), \quad \eta = 0.5.
 $$
 
-The update runs once per observation item per channel, and both channels of a bidirectional interaction update the same Beta, so there is no daily cap. A fuzzy end's soft interactions have their Beta overwritten at each hedge check (§5), which discards these counts.
+Here $`\eta`$ is `learning.existence_learning_rate`. The update runs once per observation item per channel, and both channels of a bidirectional interaction update the same Beta, so there is no daily cap. A fuzzy end's soft interactions have their Beta overwritten at each hedge check (§5), which discards these counts.
 
 **Why it is unsound** (review S-M1):
-- $r_c$ already contains the prior $p$, so prior information re-enters as data every time, and when $L_1 \approx L_0$ the Beta's concentration grows with no evidence.
-- A channel exists or it does not: the right object is one inclusion probability with sequential odds, not a per-day Bernoulli rate. Under the right model, the odds move geometrically; here the mean moves at most about $\eta/(\alpha + \beta)$ per update.
-- Once the effect posterior shrinks toward 0 for a channel that is not real, $L_1 \approx L_0$, so $r_c \to p$: **the model cannot learn absence**.
-- Conditioning on $\beta_c = 0$ today is not "$\beta_c \equiv 0$" under the effect random walk.
+- $`r_c`$ already contains the prior $`p`$, so prior information re-enters as data every time, and when $`L_1 \approx L_0`$ the Beta's concentration grows with no evidence.
+- A channel exists or it does not: the right object is one inclusion probability with sequential odds, not a per-day Bernoulli rate. Under the right model, the odds move geometrically; here the mean moves at most about $`\eta/(\alpha + \beta)`$ per update.
+- Once the effect posterior shrinks toward 0 for a channel that is not real, $`L_1 \approx L_0`$, so $`r_c \to p`$: **the model cannot learn absence**.
+- Conditioning on $`\beta_c = 0`$ today is not "$`\beta_c \equiv 0`$" under the effect random walk.
 
-In the Monte Carlo, existence is drawn as $p \sim \mathrm{Beta}$ then $u < p$ (`propagation.py:248-250`), which is marginally Bernoulli($\mathbb{E}[p]$): only the mean matters there. The Beta's spread acts only as a learning rate.
+In the Monte Carlo, existence is drawn as $`p \sim \mathrm{Beta}`$ then $`u < p`$ (`propagation.py:248-250`), which is marginally Bernoulli($`\mathbb{E}[p]`$): only the mean matters there. The Beta's spread acts only as a learning rate.
 
 ### 4.3 Kernel learning: a three-point grid with a likelihood gate (`learning/kernel_learning.py:77-149`)
 
-Weekly, for each target with at least 8 observed days in the last 182, and each channel with at least 8 informative days ($|\varphi| \ge 0.05$): for $\rho \in \{0.5, 1, 2\}$, scale delay, lag, and duration together by $\rho$ and score first differences between consecutive observed days,
+Weekly, for each target with at least 8 observed days in the last 182, and each channel with at least 8 informative days ($`|\varphi| \ge 0.05`$): for $`\rho \in \lbrace 0.5, 1, 2\rbrace`$, scale delay, lag, and duration together by $`\rho`$ and score first differences between consecutive observed days,
 
 $$
 \ell(\rho) = \sum_{(a,b)} -\tfrac12 \frac{(\Delta z - \widehat{\Delta z}_\rho)^2}{v} - \tfrac12\log 2\pi v, \qquad v = \sigma^2_{\text{level}}(b-a) + 2r^2,
 $$
 
-with $r$ the target's default noise (not the tempered noise of §5). If $\ell(\rho^\*) - \ell(1) < 2$, nothing moves; otherwise the kernel's means are multiplied by $\sqrt{\rho^\*}$. **The CV shrinks by 10% on every eligible run** ($\mathrm{cv} \leftarrow \max(0.15, 0.9\,\mathrm{cv})$), whether or not the data moved the kernel, so confidence grows with time rather than with evidence.
+with $`r`$ the target's default noise (not the tempered noise of §5). If $`\ell(\rho^{*}) - \ell(1) < 2`$, nothing moves; otherwise the kernel's means are multiplied by $`\sqrt{\rho^{*}}`$. **The CV shrinks by 10% on every eligible run** ($`\mathrm{cv} \leftarrow \max(0.15, 0.9\,\mathrm{cv})`$), whether or not the data moved the kernel, so confidence grows with time rather than with evidence.
 
-Three biases (review S, minor): the $\Delta z$ are differences of *filtered* values computed with the current kernel, which favors $\rho = 1$; consecutive differences of noisy observations are MA(1), not independent; and the effect is held fixed while the kernel rescales, although the two are confounded.
+Three biases (review S, minor): the $`\Delta z`$ are differences of *filtered* values computed with the current kernel, which favors $`\rho = 1`$; consecutive differences of noisy observations are MA(1), not independent; and the effect is held fixed while the kernel rescales, although the two are confounded.
 
 ### 4.4 Level noise (`learning/consolidate.py:195-240`)
 
-Every 7 days, $\sigma_{\text{level}} = \mathrm{sd}(\text{weekly level changes over} \le 52 \text{ weeks})/\sqrt 7$ (population sd), clipped to $[0.02, 1]$, with at least 8 weeks of data, floored at 0.04 for decision variables. On unobserved days the level stays at its prior mean, which biases the estimate down. Because $r$ is fixed by kind and never estimated, only the ratio $\sigma^2_{\text{level}}/r^2$ is identified, and it is identified wrongly whenever $r$ is wrong.
+Every 7 days, $`\sigma_{\text{level}} = \mathrm{sd}(\text{weekly level changes over} \le 52 \text{ weeks})/\sqrt 7`$ (population sd), clipped to $`[0.02, 1]`$, with at least 8 weeks of data, floored at 0.04 for decision variables. On unobserved days the level stays at its prior mean, which biases the estimate down. Because $`r`$ is fixed by kind and never estimated, only the ratio $`\sigma^2_{\text{level}}/r^2`$ is identified, and it is identified wrongly whenever $`r`$ is wrong.
 
 ## 5. Intake: from article to operations
 
@@ -233,10 +261,10 @@ Every 7 days, $\sigma_{\text{level}} = \mathrm{sd}(\text{weekly level changes ov
 **Binding** (`intake/refiner.py:271-359`). An entity binds only when the article names it (its name, an alias, or a subentity's name of three or more characters). Otherwise the end stays fuzzy.
 
 **Fuzzy ends: a Dirichlet over candidates with an open reserve** (`refiner.py:496-544`, `memory/working.py:210-219`).
-- Up to 4 candidates per end, with resolver weights $w_i$. Then $\alpha_i = 1.0\, w_i$ and an open mass $\alpha_\varnothing = 0.5$. A candidate's share is $p_i = \alpha_i / (\sum\alpha + \alpha_\varnothing)$.
-- Each candidate is drawn as a soft interaction with existence $\mathrm{Beta}(\kappa p_i c, \kappa(1 - p_i c))$, where $\kappa = 2 + \text{support}$ and $c$ is the reviewer's confidence.
-- Later articles add $1.5c$ for a mention, and $1.0c$ for a co-movement of the right sign. A co-movement counts at most once per 14 days per candidate; one of the wrong sign spreads that mass over the rivals and the open reserve.
-- A resolution is proposed when $\max_i p_i \ge 0.75$ and support $\ge 3$.
+- Up to 4 candidates per end, with resolver weights $`w_i`$. Then $`\alpha_i = 1.0\, w_i`$ and an open mass $`\alpha_\varnothing = 0.5`$. A candidate's share is $`p_i = \alpha_i / (\sum\alpha + \alpha_\varnothing)`$.
+- Each candidate is drawn as a soft interaction with existence $`\mathrm{Beta}(\kappa p_i c, \kappa(1 - p_i c))`$, where $`\kappa = 2 + \text{support}`$ and $`c`$ is the reviewer's confidence.
+- Later articles add $`1.5c`$ for a mention, and $`1.0c`$ for a co-movement of the right sign. A co-movement counts at most once per 14 days per candidate; one of the wrong sign spreads that mass over the rivals and the open reserve.
+- A resolution is proposed when $`\max_i p_i \ge 0.75`$ and support $`\ge 3`$.
 
 **These shares are counts, not posteriors** (review S-M8):
 - Mentions count news volume, and syndicated articles are not independent.
@@ -244,33 +272,33 @@ Every 7 days, $\sigma_{\text{level}} = \mathrm{sd}(\text{weekly level changes ov
 - The same move also updates the soft interaction through the fold, so it is counted twice.
 - The candidates are mutually exclusive, but they are sampled as independent Bernoulli interactions. The forecast therefore includes configurations where two candidates are both on.
 
-**Reviewer confidence $c$** (`shared/parse.py:191-339`):
-- An observation's noise sd is divided by $\sqrt{\max(c, 0.02)}$. This is a power likelihood (tempering).
-- A reported move of size $\delta$ becomes $c\delta$, with sd $\sqrt{c\sigma^2 + c(1-c)\delta^2}$. These are the moments of a $c$-mixture of the move and no move, collapsed to one Gaussian, so "maybe happened" becomes "partly happened".
-- A new interaction's Beta pseudo-counts are shrunk toward Beta(1,1) by $c$.
+**Reviewer confidence $`c`$** (`shared/parse.py:191-339`):
+- An observation's noise sd is divided by $`\sqrt{\max(c, 0.02)}`$. This is a power likelihood (tempering).
+- A reported move of size $`\delta`$ becomes $`c\delta`$, with sd $`\sqrt{c\sigma^2 + c(1-c)\delta^2}`$. These are the moments of a $`c`$-mixture of the move and no move, collapsed to one Gaussian, so "maybe happened" becomes "partly happened".
+- A new interaction's Beta pseudo-counts are shrunk toward Beta(1,1) by $`c`$.
 
-None of these is Jeffrey conditioning in the strict sense, and $c$ is not calibrated.
+None of these is Jeffrey conditioning in the strict sense, and $`c`$ is not calibrated.
 
 ## 6. Propagation: the Monte Carlo impulse model (`dynamics/propagation.py:219-464`)
 
-**Per-sample parameters.** For each sample $s = 1..S$, parameters are drawn once and held over the horizon:
-- existence: $\mathbb{1}^{(s)}_c$, as $p \sim \mathrm{Beta}$ then $u < p$, unless forced;
-- $\beta^{(s)}_c$, $d^{(s)}_c$, $l^{(s)}_c$, $D^{(s)}_c$, and the moderator coefficients, each drawn from its marginal.
+**Per-sample parameters.** For each sample $`s = 1..S`$, parameters are drawn once and held over the horizon:
+- existence: $`\mathbb{1}^{(s)}_c`$, as $`p \sim \mathrm{Beta}`$ then $`u < p`$, unless forced;
+- $`\beta^{(s)}_c`$, $`d^{(s)}_c`$, $`l^{(s)}_c`$, $`D^{(s)}_c`$, and the moderator coefficients, each drawn from its marginal.
 
 **Effects and kernels are drawn independently**, ignoring the posterior covariance the filter keeps (`state_cov`). Collinear in-channels have negatively correlated posteriors, so independent draws inflate the spread of their sum (review S-M3).
 
-Every sample starts exactly at today's $z$, with the level set to $z_{\text{now}}$ minus the channels' contributions. **There is no initial-state uncertainty**, so short-horizon intervals are too narrow.
+Every sample starts exactly at today's $`z`$, with the level set to $`z_{\text{now}}`$ minus the channels' contributions. **There is no initial-state uncertainty**, so short-horizon intervals are too narrow.
 
-**Each day.** For $t = 1..H$:
+**Each day.** For $`t = 1..H`$:
 
 $$
-a^{(s)}(t) = a^{(s)}(t-1) + \delta_b\, 0.985^t + \sigma_{\text{level},b}\,\varepsilon, \qquad
-z^{(s)}_b(t) = a^{(s)}(t) + u_b(t) + \sum_c \mathbb{1}^{(s)}_c \beta^{(s)}_c m^{(s)}_c(t)\, \varphi^{(s)}_c(t)
+a^{(s)}(t) = a^{(s)}(t-1) + \delta_b\thinspace  0.985^t + \sigma_{\text{level},b}\thinspace \varepsilon, \qquad
+z^{(s)}_b(t) = a^{(s)}(t) + u_b(t) + \sum_c \mathbb{1}^{(s)}_c \beta^{(s)}_c m^{(s)}_c(t)\thinspace  \varphi^{(s)}_c(t)
 $$
 
-- $\delta_b$ is the 28-day level trend, clipped to $\pm 0.03$/day and damped by $0.985^t$. The damped sum over 182 days is about 61.5, so the **drift can move a median by up to about 1.85 sd**. Under the model's own random-walk level, the expected drift is 0, so this injects about 0.47 sd of estimation noise at the horizon. For share prices, which tend to reverse over a month rather than continue, it is spurious expected return (review S-M4, F-M4).
-- **Shocks**: a STEP shock holds from its start day, a PULSE lasts one day, and each has size $\sim \mathcal{N}(\text{size}, \text{size}_{sd})$ per sample. A do()-intervention holds $z_{\text{now}} + \text{size}$ and overrides the value's channels and level noise.
-- **Soft bounds**: every value, every day, in both runs, passes through $z \mapsto hi - w\log(1 + e^{(hi - z)/w})$ (and the mirror for $lo$), with $w = 0.25$. This applies to all values, not only those past a bound: a value exactly at the bound is pulled $w\ln 2 \approx 0.17$ sd below it, and the bend starts about 1 sd before it. The bound acts on the output only; the level state is unbounded.
+- $`\delta_b`$ is the 28-day level trend, clipped to $`\pm 0.03`$/day and damped by $`0.985^t`$. The damped sum over 182 days is about 61.5, so the **drift can move a median by up to about 1.85 sd**. Under the model's own random-walk level, the expected drift is 0, so this injects about 0.47 sd of estimation noise at the horizon. For share prices, which tend to reverse over a month rather than continue, it is spurious expected return (review S-M4, F-M4).
+- **Shocks**: a STEP shock holds from its start day, a PULSE lasts one day, and each has size $`\sim \mathcal{N}(\text{size}, \text{size}_{sd})`$ per sample. A do()-intervention holds $`z_{\text{now}} + \text{size}`$ and overrides the value's channels and level noise.
+- **Soft bounds**: every value, every day, in both runs, passes through $`z \mapsto hi - w\log(1 + e^{(hi - z)/w})`$ (and the mirror for $`lo`$), with $`w = 0.25`$. This applies to all values, not only those past a bound: a value exactly at the bound is pulled $`w\ln 2 \approx 0.17`$ sd below it, and the bend starts about 1 sd before it. The bound acts on the output only; the level state is unbounded.
 - **Ripple judgments are not used here** (§7).
 
 **Common random numbers.** Every draw comes from a named substream (`engine/rng.py`):
@@ -280,7 +308,7 @@ $$
 
 Runs with and without a shock, or with different channel sets, share the draws of every channel they have in common, so differences are not Monte Carlo noise. Seeds include the state version, so a forecast is reproducible from (seed, version).
 
-**An effect** is the per-sample difference of two runs on the same draws: $\Delta^{(s)}_b(t) = z^{(s),\text{shocked}}_b(t) - z^{(s),\text{base}}_b(t)$. Level noise cancels in it, so **an effect's band shows parameter uncertainty only, not the spread of the outcome**: a reader must not take it as the distribution of the realized move (review F-M7).
+**An effect** is the per-sample difference of two runs on the same draws: $`\Delta^{(s)}_b(t) = z^{(s),\text{shocked}}_b(t) - z^{(s),\text{base}}_b(t)`$. Level noise cancels in it, so **an effect's band shows parameter uncertainty only, not the spread of the outcome**: a reader must not take it as the distribution of the realized move (review F-M7).
 
 **What the model leaves out.**
 - Observation noise in forecasts.
@@ -292,32 +320,32 @@ Runs with and without a shock, or with different channel sets, share the draws o
 
 ## 7. Transmission orders and ripple judgments (`inference/transmission.py:53-114`)
 
-**Orders and paths.** For a set of shocked values, each pair $(a, b)$ keeps its most significant channel, $\mathrm{sig}_c = \mathbb{E}[p_c]\,\mathbb{E}|\beta_c|$ (channels forced off are excluded). A value's **order** is its breadth-first hop distance from the nearest shocked value (at most 6). Its **path** is, among the shortest paths only, the one with the largest $\prod \mathrm{sig}$.
+**Orders and paths.** For a set of shocked values, each pair $`(a, b)`$ keeps its most significant channel, $`\mathrm{sig}_c = \mathbb{E}[p_c]\,\mathbb{E}|\beta_c|`$ (channels forced off are excluded). A value's **order** is its breadth-first hop distance from the nearest shocked value (at most 6). Its **path** is, among the shortest paths only, the one with the largest $`\prod \mathrm{sig}`$.
 
-**Sizes.** Size comes from simulation, not from the path: peak $= \mathrm{med}_s \Delta(t^\*)$ at $t^\* = \arg\max_t |\mathrm{med}_s\Delta(t)|$. A value is **material** when $\max(|\text{peak}|, |\text{effect at } H|) \ge 0.05$ sd. Its arrival day is the sum of the path's integer mean delays (the lag ramps are ignored).
+**Sizes.** Size comes from simulation, not from the path: peak $`= \mathrm{med}_s \Delta(t^{*})`$ at $`t^{*} = \arg\max_t |\mathrm{med}_s\Delta(t)|`$. A value is **material** when $`\max(|\text{peak}|, |\text{effect at } H|) \ge 0.05`$ sd. Its arrival day is the sum of the path's integer mean delays (the lag ramps are ignored).
 
 **In a forecast**, orders and paths come from the top-weighted scenario's channels, while sizes come from the scenario mixture. The list is capped at 240 values; the review shows the material ones, at most 24.
 
 **Caveats** (review S-M10, F-M7):
 - An order is a hop count, not an expected effect, and a value reached by two routes is listed once.
-- Medians hide low-probability large effects: with $\mathbb{E}[p] < 0.5$, the median effect is 0 even when the mean or the 90th percentile is large.
-- $\prod \mathrm{sig}$ discards sign and is not the path's expected effect.
+- Medians hide low-probability large effects: with $`\mathbb{E}[p] < 0.5`$, the median effect is 0 even when the mean or the 90th percentile is large.
+- $`\prod \mathrm{sig}`$ discards sign and is not the path's expected effect.
 - "Material" is in designer units (§1).
 
-**Ripple judgments.** A reviewer may say a value's ripple arrives with probability $w < 1$. The approval stores the median ripple path times the upstream weights. From the processing day until the path ends, the **daily filter** adds $(w - 1)\cdot\text{path}(t)$ to the value's additive term (`memory/working.py:245-251`).
+**Ripple judgments.** A reviewer may say a value's ripple arrives with probability $`w < 1`$. The approval stores the median ripple path times the upstream weights. From the processing day until the path ends, the **daily filter** adds $`(w - 1)\cdot\text{path}(t)`$ to the value's additive term (`memory/working.py:245-251`).
 
 **Limits of ripple judgments:**
 - It is a mean shift: variance is not added and the arrive-or-not mixture is not represented.
-- $w$ multiplies a median that already integrates existence uncertainty, so doubt is counted on top of $p$.
-- Observing the target never updates $w$.
-- **The Monte Carlo forecast ignores judgments.** It replays the channels in full, so a reviewer's $w$ reaches forecasts only through the recorded history.
+- $`w`$ multiplies a median that already integrates existence uncertainty, so doubt is counted on top of $`p`$.
+- Observing the target never updates $`w`$.
+- **The Monte Carlo forecast ignores judgments.** It replays the channels in full, so a reviewer's $`w`$ reaches forecasts only through the recorded history.
 
 **The transmission grid** (`inference/paths.py`, in the app) lays a ripple or a forecast out as input, first, second, third order, and output. It offers four ways of choosing what is relevant:
 - by order;
 - the largest effects;
 - only what lies between the inputs and the outputs;
-- the strongest paths by linear path gain $\prod \mathbb{E}[p]\,\mu$;
-- **relevant** (the default): a value is kept when $|\text{peak}| \cdot 0.6^{\,\text{order} - 1}$ is at least 12% of the largest such score, so each further order counts 40% less but a strong distant effect still shows; orders go as deep as six.
+- the strongest paths by linear path gain $`\prod \mathbb{E}[p]\,\mu`$;
+- **relevant** (the default): a value is kept when $`|\text{peak}| \cdot 0.6^{\,\text{order} - 1}`$ is at least 12% of the largest such score, so each further order counts 40% less but a strong distant effect still shows; orders go as deep as six.
 
 All five read the same simulated effects.
 
@@ -329,12 +357,12 @@ All five read the same simulated effects.
 
 **Splits.** A node with at least 5 direct instances may split on a feature value shared by at least 4 of them. A first split also needs a second disjoint group of 4, so in practice at least 8. **Only support is divided between the children**, in proportion to their share; the effect, level, scale, and kernel statistics and the existence pseudo-counts are copied unchanged (`classify.py`, `maybe_split`).
 
-**Priors from a kind.** A new value's link-space prior is $\mathcal{N}(\bar m, \bar v + \bar s^2)$, from the node's Welford statistics. A new interaction gets:
-- an effect prior $\mathcal{N}(\bar\mu, \bar v + 0.15^2)$;
+**Priors from a kind.** A new value's link-space prior is $`\mathcal{N}(\bar m, \bar v + \bar s^2)`$, from the node's Welford statistics. A new interaction gets:
+- an effect prior $`\mathcal{N}(\bar\mu, \bar v + 0.15^2)`$;
 - the kind's mean kernel;
 - the kind's existence Beta.
 
-**Statistics are pushed per touch, and the priors collapse** (`learning/generalize.py:57-129`; review S-C4). Every event that touches an item, including a routine data release, pushes that item's *current posterior mean* into every node on its classification path, and adds $0.1p$ and $0.1(1-p)$ to the node's existence Beta. The consequences:
+**Statistics are pushed per touch, and the priors collapse** (`learning/generalize.py:57-129`; review S-C4). Every event that touches an item, including a routine data release, pushes that item's *current posterior mean* into every node on its classification path, and adds $`0.1p`$ and $`0.1(1-p)`$ to the node's existence Beta. The consequences:
 - The same items repeat, so the between-member variance shrinks toward zero, and an effect prior's sd ends near the 0.15 floor whatever the real heterogeneity.
 - The mean is weighted by activity.
 - After 1,000 touches, a brand-new edge starts with an existence concentration near 100, which the fold barely moves.
@@ -342,24 +370,24 @@ All five read the same simulated effects.
 
 ### 8.2 The correlation frontier (`learning/frontier_test.py`, `memory/frontier.py`)
 
-**Finding candidates.** A **mover** $b$ has a 14-day window innovation $|\sum e/\sqrt n| \ge 1.5$. Candidate sources $a$ moved $|\Delta z_a| \ge 0.5$ at one of the lags $\{0, 1, 2, 3, 5, 7, 10, 14, 21, 28\}$, with no existing channel between them. The score is $|\Delta a \cdot \text{innov}_b|$; the best lag is kept per source, and the top 5 sources per mover.
+**Finding candidates.** A **mover** $`b`$ has a 14-day window innovation $`|\sum e/\sqrt n| \ge 1.5`$. Candidate sources $`a`$ moved $`|\Delta z_a| \ge 0.5`$ at one of the lags $`\lbrace 0, 1, 2, 3, 5, 7, 10, 14, 21, 28\rbrace`$, with no existing channel between them. The score is $`|\Delta a \cdot \text{innov}_b|`$; the best lag is kept per source, and the top 5 sources per mover.
 
 **Statistics.** A held pair's history is backfilled from non-overlapping 14-day windows over 182 days, including the window that selected it:
-- a running Pearson $r$ of the source's window change against the target's window innovation;
+- a running Pearson $`r`$ of the source's window change against the target's window innovation;
 - an OLS slope of the target's *raw window change* on the source's change.
 
 **Re-checks.** A pair is re-checked at most every 14 days. A consistent sign adds one to support, an inconsistent one subtracts one. The hypothesis probability is support/(support + 4).
 
 **Decay.** A pair unseen for more than 14 days decays with a half-life of 30 days and is dropped below 0.5. A rejected pair is blocked for 60 days.
 
-**Promotion** proposes an edge when support $> 3$, $|r| \ge 0.3$, and at least 75% of checks were consistent. The proposed edge has:
-- effect = the slope, with sd $\max(0.2, 2\,\mathrm{SE})$ (0.5 when the SE is undefined);
-- existence $\mathrm{Beta}(1, 3)$;
-- a permanent kernel with delay $\max(1, \text{lag})$ and lag 14 days.
+**Promotion** proposes an edge when support $`> 3`$, $`|r| \ge 0.3`$, and at least 75% of checks were consistent. The proposed edge has:
+- effect = the slope, with sd $`\max(0.2, 2\,\mathrm{SE})`$ (0.5 when the SE is undefined);
+- existence $`\mathrm{Beta}(1, 3)`$;
+- a permanent kernel with delay $`\max(1, \text{lag})`$ and lag 14 days.
 
 **There is no valid inference here** (review S-M6):
-- **Selection on the outcome.** The thresholds select extreme windows, which inflates $r$ and the slope. The lag and sign are chosen by maximizing over 10 lags and every source, and the backfill reuses the selecting window.
-- **The bar is low.** Under the null, three consistent re-checks with none inconsistent happen with probability 1/8 per selected pair. With about 13 windows, $|r| \ge 0.3$ corresponds to $p \approx 0.3$; the 5% critical value is about 0.55.
+- **Selection on the outcome.** The thresholds select extreme windows, which inflates $`r`$ and the slope. The lag and sign are chosen by maximizing over 10 lags and every source, and the backfill reuses the selecting window.
+- **The bar is low.** Under the null, three consistent re-checks with none inconsistent happen with probability 1/8 per selected pair. With about 13 windows, $`|r| \ge 0.3`$ corresponds to $`p \approx 0.3`$; the 5% critical value is about 0.55.
 - **The slope is biased.** It is fit on the raw change, not the innovation, so it absorbs common drivers and existing parents.
 - **A lag-0 pair becomes a one-day lagged edge**, and non-synchronous closes create one-day lead-lags that are not real.
 
@@ -384,18 +412,18 @@ Promotion only proposes: a person must approve.
 ### 8.4 Recall and analogy (`shared/recall.py`)
 
 **Signatures and scores.** An event's signature is the set of kinds on its classification paths.
-- A configuration scores $0.5\,J + 0.3\,\text{prox} + 0.2\,\log(1+\text{support})/\log(1+\max\text{support})$, with $J$ the Jaccard index of signatures.
-- An episode scores $0.5^{\text{age}/365}(0.4J + 0.3\,\text{tags} + 0.3\,\mathbb{1}[\text{type}])$, boosted by its stored explanations.
-- Attention is a softmax with temperature 0.5 over the top $k$, dropping weights below 0.02.
+- A configuration scores $`0.5\,J + 0.3\,\text{prox} + 0.2\,\log(1+\text{support})/\log(1+\max\text{support})`$, with $`J`$ the Jaccard index of signatures.
+- An episode scores $`0.5^{\text{age}/365}(0.4J + 0.3\,\text{tags} + 0.3\,\mathbb{1}[\text{type}])`$, boosted by its stored explanations.
+- Attention is a softmax with temperature 0.5 over the top $`k`$, dropping weights below 0.02.
 
 **Empirical-Bayes prefill** (`shared/prefill.py`, `engine/interfaces.py:131-162`).
-- Recalled episodes carry per-channel response estimates $(b_E, w_E)$.
-- These pool into a pseudo-observation $\bar b = \sum a_E w_E b_E / \sum a_E w_E$, with variance $\bar v = r^2/\sum a_E w_E + 0.1^2$.
+- Recalled episodes carry per-channel response estimates $`(b_E, w_E)`$.
+- These pool into a pseudo-observation $`\bar b = \sum a_E w_E b_E / \sum a_E w_E`$, with variance $`\bar v = r^2/\sum a_E w_E + 0.1^2`$.
 - The pseudo-observation is combined with the channel's posterior by precision weighting. This feeds the analysis only; it is not committed.
 - When the episode lacks the channel, the code pools over same-kind siblings, but only siblings whose effect has the same sign.
 
 **This counts the same data twice or more** (review S-C3):
-- $(b_E, w_E)$ come from the fold accumulators of observations the posterior has already absorbed.
+- $`(b_E, w_E)`$ come from the fold accumulators of observations the posterior has already absorbed.
 - A day is pooled into every non-routine episode within 42 days, so one day enters once per overlapping episode.
 - The same-sign filter biases the pooled mean away from zero.
 
@@ -403,36 +431,36 @@ Promotion only proposes: a person must approve.
 
 A thesis runs on a copy-on-write overlay that is never committed.
 
-1. **Isolate** (`inference/isolate.py:167-282`). Candidate networks are the recalled configurations' instances. Relevance $= 0.5\,\text{attention} + 0.5\,\text{reach}$, with reach $= \max \exp(-\text{dist})$ over a path cost of $-\log \mathrm{sig}$. The analysis keeps:
-   - networks with relevance $\ge 0.05$, at most 8 (the yaml's `isolation.max_networks`);
-   - rivals of kept networks with relevance $\ge 0.025$;
+1. **Isolate** (`inference/isolate.py:167-282`). Candidate networks are the recalled configurations' instances. Relevance $`= 0.5\,\text{attention} + 0.5\,\text{reach}`$, with reach $`= \max \exp(-\text{dist})`$ over a path cost of $`-\log \mathrm{sig}`$. The analysis keeps:
+   - networks with relevance $`\ge 0.05`$, at most 8 (the yaml's `isolation.max_networks`);
+   - rivals of kept networks with relevance $`\ge 0.025`$;
    - a residual network of significant channels the others miss;
    - when there are shocks, a watch network of paths to the watched entities and targets.
 2. **Predict** each network: two Monte Carlo runs, shocked and base, on the same draws.
 3. **Unify.** Rival networks become scenarios.
    - Within a scenario, the chosen rival's present relations are **forced on** and its absent ones **forced off**. Branched hypotheses are forced on or off.
-   - A rival's weight within its group is prior (support + 1, normalized) × fit (a softmax of log-fit) × track record $(h+1)/(h+m+2)$.
-   - Each branched open hypothesis contributes $p$ or $1-p$. A hypothesis is branched when its value of information is $\ge 0.15$ and $p \in [0.15, 0.85]$.
+   - A rival's weight within its group is prior (support + 1, normalized) × fit (a softmax of log-fit) × track record $`(h+1)/(h+m+2)`$.
+   - Each branched open hypothesis contributes $`p`$ or $`1-p`$. A hypothesis is branched when its value of information is $`\ge 0.15`$ and $`p \in [0.15, 0.85]`$.
    - The top 8 scenarios are kept and renormalized; the dropped mass is reported.
    - **The weights reuse overlapping evidence and are near winner-take-all** (review S-M5):
-     - fit is $-\tfrac12\sum(\Delta z - \widehat{\Delta z})^2/v$ over the last 56 days of filtered values, in sample, with no Occam penalty, and over each network's own targets, so networks with different targets are not compared on equal terms;
+     - fit is $`-\tfrac12\sum(\Delta z - \widehat{\Delta z})^2/v`$ over the last 56 days of filtered values, in sample, with no Occam penalty, and over each network's own targets, so networks with different targets are not compared on equal terms;
      - support comes from the self-confirming induction (§8.3);
      - track records come from backtests on the same history;
      - frontier hypothesis probabilities are count heuristics.
 4. **Couple**: the union of a scenario's networks, simulated jointly on shared draws.
 5. **Read out.**
-   - Samples are split across scenarios by weight (largest remainder; scenarios under about $1/(2S)$ get none).
+   - Samples are split across scenarios by weight (largest remainder; scenarios under about $`1/(2S)`$ get none).
    - Every value's effect is given by order and path (§7).
    - A group forecast is the per-sample mean effect over all its members' values. This mixes signs and units (fuel cost up, margin down, shares down), so it is **not** an investable number (F-C2).
 
-**Value of information** (`inference/voi.py:101-286`): $\mathrm{VOI} = \text{sens} \times 4p(1-p)$.
-- sens $= \sum_{\text{watch}} w_j\, |\mathrm{med}_{\text{on}}(H) - \mathrm{med}_{\text{off}}(H)|$, where "on" and "off" force the hypothesis's interaction.
+**Value of information** (`inference/voi.py:101-286`): $`\mathrm{VOI} = \text{sens} \times 4p(1-p)`$.
+- sens $`= \sum_{\text{watch}} w_j\, |\mathrm{med}_{\text{on}}(H) - \mathrm{med}_{\text{off}}(H)|`$, where "on" and "off" force the hypothesis's interaction.
 - It is averaged over up to 3 reference theses, using 100 draws, and recomputed at most weekly.
 - It decays with a half-life of 14 days.
 - It is a heuristic proxy, not an information measure.
 
 **Explanation** (`shared/explain.py`):
-- paths ranked by $\prod \mathbb{E}[p]\,\mathbb{E}|\beta|$ along simple paths of at most 5 edges, three per shock and target;
+- paths ranked by $`\prod \mathbb{E}[p]\,\mathbb{E}|\beta|`$ along simple paths of at most 5 edges, three per shock and target;
 - channel importance by ablation (existence forced off, 100 samples).
 
 ## 10. Evaluation (`evaluation/`)
@@ -445,7 +473,7 @@ The scorer compares a forecast with what the synthetic world then did.
 - Interval **coverage** at 50/80/90%.
 - **CRPS**, approximated as twice the mean pinball loss over seven quantiles. That is proper for the seven-quantile vector, but it overweights the tails and is not comparable with a sample CRPS.
 
-A significant move is a change $|\Delta z| \ge 0.5$ from the freeze day to the last observed day within $H$. A prediction needs $|\text{median level change}| \ge 0.5$ and $P(\text{sign}) \ge 0.7$. A backtest freezes the state, replays the later reported changes as a thesis, and updates configurations' track records.
+A significant move is a change $`|\Delta z| \ge 0.5`$ from the freeze day to the last observed day within $`H`$. A prediction needs $`|\text{median level change}| \ge 0.5`$ and $`P(\text{sign}) \ge 0.7`$. A backtest freezes the state, replays the later reported changes as a thesis, and updates configurations' track records.
 
 **The evaluation is circular** (review S-C1). The "realized" values are the live engine's *filtered* points (`backtest.py:122-130`), which are pulled toward the model's own predictions. At steady state, the Kalman gain is about 0.15 for sentiment series, 0.23 for the default noise, and 0.54 for prices and rates. The synthetic world holds the true values and its releases carry no measurement noise, so this is unnecessary.
 
@@ -463,11 +491,11 @@ These feed the canvas's open nodes; inference and learning do not read them.
 
 | What | Measure |
 |---|---|
-| A value | $(\sum_d (z_d - \sum_c \mu_c\varphi_c(d))^2 + 1)/(\sum_d z_d^2 + 1)$ over 28 days, clipped to $[0, 1]$. It uses levels, not changes, and ignores moderators. |
+| A value | $`(\sum_d (z_d - \sum_c \mu_c\varphi_c(d))^2 + 1)/(\sum_d z_d^2 + 1)`$ over 28 days, clipped to $`[0, 1]`$. It uses levels, not changes, and ignores moderators. |
 | An entity | the mean over its values |
 | An instance | the same ratio pooled over its members, counting only its own channels |
-| A kind | $\alpha/(\text{support} + \alpha)$ with $\alpha = 1$ |
-| A configuration | $\alpha/(\text{support} + \text{rivals' support} + \alpha)$ |
+| A kind | $`\alpha/(\text{support} + \alpha)`$ with $`\alpha = 1`$ |
+| A configuration | $`\alpha/(\text{support} + \text{rivals' support} + \alpha)`$ |
 | A fuzzy end | its Dirichlet open share |
 
 ## 12. Constants
@@ -486,10 +514,10 @@ These feed the canvas's open nodes; inference and learning do not read them.
 | Material effect | 0.05 sd; max order 6; 24 shown at review, 240 per forecast | `inference/transmission.py:20, 54` |
 | Soft bound width | 0.25 sd; a bound "hit" bends a value by more than 0.1 | `dynamics/propagation.py:79, 455` |
 | Recognition / recall thresholds | support > 3 / > 4 | `engine/context.py:115-120` |
-| Frontier | mover 1.5; source move 0.5; 10 lags; top 5; spacing 14 d; $\lvert r\rvert \ge 0.3$; consistency 0.75; decay half-life 30 d after 14 d unseen; drop below 0.5; block 60 d | `learning/frontier_test.py` |
+| Frontier | mover 1.5; source move 0.5; 10 lags; top 5; spacing 14 d; $`\lvert r\rvert \ge 0.3`$; consistency 0.75; decay half-life 30 d after 14 d unseen; drop below 0.5; block 60 d | `learning/frontier_test.py` |
 | Hedge | prior 1.0; open 0.5; mention 1.5; move 1.0; commit 0.75; soft-edge concentration 2.0 | `engine/config.py:136-142` |
 | Superentity induction | contribution ≥ 0.2; −0.05 per edge; +1 per 14 d at most; half-life 90 d; admit > 3; dissolve < 1 | `learning/abduction.py` |
-| VOI | 100 draws; recomputed weekly; half-life 14 d; branch at VOI ≥ 0.15, $p \in [0.15, 0.85]$ | `inference/voi.py`, `engine/config.py:96` |
+| VOI | 100 draws; recomputed weekly; half-life 14 d; branch at VOI ≥ 0.15, $`p \in [0.15, 0.85]`$ | `inference/voi.py`, `engine/config.py:96` |
 | Samples, horizon | 400, 182 d | `configs/default.yaml` |
 
 **Mismatches and unused settings.**

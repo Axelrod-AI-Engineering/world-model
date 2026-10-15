@@ -1,0 +1,23 @@
+sequenceDiagram
+  autonumber
+  actor AG as Agent (MCP client)
+  participant CX as Context layer (M15)
+  participant V as Views (M14)
+  participant TS as ThesisService (M13)
+  participant RS as ReviewService (M13)
+  participant EV as Evaluation (M11)
+
+  AG->>CX: recall("yen carry exposure of Tokio Marine", as_of)
+  CX->>V: find + entity view + provenance at version
+  V-->>AG: facts with evidence, version, valid time
+  AG->>CX: ask(thesis: "USD/JPY −8% in 30 days", watch)
+  CX->>TS: pose(...)
+  TS-->>AG: forecast by order and path + brief
+  AG->>CX: trace(value or interaction id)
+  CX->>V: lineage: change sets → proposal → evidence → source
+  V-->>AG: PROV chain (entity · activity · agent)
+  AG->>CX: propose(article or claim with quotes)
+  CX->>RS: submit as a market event (never applied directly)
+  RS-->>AG: proposal id, status pending (a person reviews it)
+  AG->>CX: feedback(forecast id, outcome or rating)
+  CX->>EV: record outcome → scored at horizon

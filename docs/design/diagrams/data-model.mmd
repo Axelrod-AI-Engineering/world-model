@@ -1,0 +1,98 @@
+classDiagram
+  direction LR
+  class Entity {
+    id
+    name
+    kind: company|agency|market|macro_factor|...
+    aliases
+    subentity_ids
+    generalization_id
+    origin
+  }
+  class Subentity {
+    id = entity.slug
+    attribute_kind
+    unit · scale · anchor · link
+    prior · posterior
+    constraints (soft bounds)
+  }
+  class Interaction {
+    id
+    source_id → Subentity
+    target_id → Subentity
+    label · edge_type
+    existence: Beta
+    forward/reverse: EdgeDynamics(effect, kernel)
+    parameters (moderators)
+    evidence
+    time_states (bitemporal)
+  }
+  class KernelSpec {
+    delay · lag · duration
+  }
+  class SuperentityPattern {
+    roles · relations
+    sub_pattern_ids
+    support · status
+    rival_ids · track_record
+  }
+  class SuperentityInstance {
+    pattern_id
+    bindings role → entity
+    interaction_ids
+    child_instance_ids
+  }
+  class Evidence {
+    source_type · source_ref
+    excerpt · observed_at
+    strength · market_event_id
+  }
+  class MarketEvent {
+    id · kind · channel
+    published_at · occurred_at
+    headline · body · url
+  }
+  class GraphUpdateEvent {
+    id · kind: real|hypothetical
+    ops: AddEntity|AddSubentity|ObserveValue|ChangeValue|
+    AddInteraction|Reweight|Annotate|ProposeHypothesis|
+    ProposeSuperentity|DissolveSuperentity|RetireEntity|RetireInteraction
+    specificity
+  }
+  class Thesis {
+    question · mode · horizon_days
+    event: GraphUpdateEvent
+    targets · target_groups
+  }
+  class Proposal {
+    kind · status
+    event · refinement steps
+    review requirement
+  }
+  class ChangeSet {
+    process · memory
+    changes
+    proposal_id · vetted_by
+  }
+  class Forecast {
+    based_on_version · seed · config_hash
+    scenarios · densities
+    transmission paths
+  }
+  class Hypothesis {
+    claim · probability · voi
+  }
+  Entity "1" *-- "many" Subentity
+  Interaction --> Subentity : source
+  Interaction --> Subentity : target
+  Interaction *-- KernelSpec
+  Interaction o-- Evidence
+  SuperentityInstance --> SuperentityPattern
+  SuperentityInstance --> Entity : binds
+  SuperentityPattern --> SuperentityPattern : sub-patterns
+  MarketEvent --> GraphUpdateEvent : translated into
+  GraphUpdateEvent --> Proposal : wrapped by
+  Proposal --> ChangeSet : approved into
+  Thesis --> GraphUpdateEvent : hypothetical
+  Thesis --> Forecast : answered by
+  Hypothesis --> Interaction : about

@@ -2,6 +2,15 @@
 
 There are five demos. All five serve the same interface ([interface.md](interface.md)) over the same engine.
 
+<!-- toc -->
+**Contents**
+
+- [Emily's demo](#emilys-demo)
+- [The tutorial (small and production demos)](#the-tutorial-small-and-production-demos)
+- [The full demo](#the-full-demo)
+- [The review](#the-review)
+<!-- /toc -->
+
 | Demo | Command | What it is |
 |---|---|---|
 | **Small demo** | `uv run axelrod small_demo` | A blank canvas. The 24 examples build a world model from nothing, one feature at a time. Start here. |

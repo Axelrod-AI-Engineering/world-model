@@ -2,6 +2,104 @@
 
 > **Historical.** This is the specification the repository was first built from; the code's § references point here. The code has moved on since, for example to two demos with examples, a staged review at the end of learning, and a hosted deployment with auth (which §1.3 lists as non-goals). Where they differ, the code and the other pages in `docs/` are current: start at [../README.md](../README.md); the design of record is [../design/README.md](../design/README.md).
 
+<!-- toc -->
+**Contents**
+
+- [0. Instructions for the coding agent](#0-instructions-for-the-coding-agent)
+- [1. Scope](#1-scope)
+  - [1.1 Vision](#11-vision)
+  - [1.2 Goals for v0](#12-goals-for-v0)
+  - [1.3 Non-goals for v0](#13-non-goals-for-v0)
+- [2. Design decisions](#2-design-decisions)
+- [3. Terms and their classes](#3-terms-and-their-classes)
+- [4. Architecture](#4-architecture)
+  - [4.1 Flow](#41-flow)
+  - [4.2 Main diagram (Figure 1) mapped to code](#42-main-diagram-figure-1-mapped-to-code)
+  - [4.3 Other figures mapped to code](#43-other-figures-mapped-to-code)
+  - [4.4 Oct 4 notes mapped to code](#44-oct-4-notes-mapped-to-code)
+- [5. Repository layout](#5-repository-layout)
+- [6. Domain model (`axelrod_wm/core`)](#6-domain-model-axelrodwmcore)
+  - [6.1 IDs](#61-ids)
+  - [6.2 Category tags](#62-category-tags)
+  - [6.3 Distributions, links, and posterior updates](#63-distributions-links-and-posterior-updates)
+  - [6.4 Time, kernels, and time states](#64-time-kernels-and-time-states)
+  - [6.5 Provenance and evidence](#65-provenance-and-evidence)
+  - [6.6 Entities, subentities, and entity memory](#66-entities-subentities-and-entity-memory)
+  - [6.7 Interactions](#67-interactions)
+  - [6.8 Superentities](#68-superentities)
+  - [6.9 Taxonomies and generalizations](#69-taxonomies-and-generalizations)
+  - [6.10 Hypotheses](#610-hypotheses)
+  - [6.11 The causal graph](#611-the-causal-graph)
+  - [6.12 Working memory](#612-working-memory)
+  - [6.13 Long-term memory (D15)](#613-long-term-memory-d15)
+- [7. Events, ingestion, and review](#7-events-ingestion-and-review)
+  - [7.1 Market events](#71-market-events)
+  - [7.2 Graph update events and ops](#72-graph-update-events-and-ops)
+  - [7.3 Fuzzy targets](#73-fuzzy-targets)
+  - [7.4 Translators: the agentic interface](#74-translators-the-agentic-interface)
+  - [7.5 Refiner: from broad to concrete (D3)](#75-refiner-from-broad-to-concrete-d3)
+  - [7.6 Review and the control plane (D12)](#76-review-and-the-control-plane-d12)
+  - [7.7 The mutator and change sets](#77-the-mutator-and-change-sets)
+  - [7.8 The update loop (D14)](#78-the-update-loop-d14)
+- [8. Inference engine](#8-inference-engine)
+  - [8.1 Registry and wiring](#81-registry-and-wiring)
+  - [8.2 Configuration](#82-configuration)
+  - [8.3 Context and engine](#83-context-and-engine)
+  - [8.4 Shared process](#84-shared-process)
+  - [8.5 Propagation (D6, D7)](#85-propagation-d6-d7)
+  - [8.6 Learning task](#86-learning-task)
+  - [8.7 Correlation frontier (Figure 3)](#87-correlation-frontier-figure-3)
+  - [8.8 Superentities: binding and abduction (D9)](#88-superentities-binding-and-abduction-d9)
+  - [8.9 Performance task](#89-performance-task)
+  - [8.10 Explanation](#810-explanation)
+  - [8.11 Hypotheses and value of information (D4)](#811-hypotheses-and-value-of-information-d4)
+  - [8.12 Consolidation (default `daily`)](#812-consolidation-default-daily)
+  - [8.13 Initialization (Figure 6, "executed once")](#813-initialization-figure-6-executed-once)
+  - [8.14 Evaluation (Figure 6, "against history")](#814-evaluation-figure-6-against-history)
+  - [8.15 Decisions and the learning loop (G5)](#815-decisions-and-the-learning-loop-g5)
+  - [8.16 Slots and alternatives](#816-slots-and-alternatives)
+- [9. Persistence, versions, and determinism (D8)](#9-persistence-versions-and-determinism-d8)
+- [10. Tracing (feeds the animator)](#10-tracing-feeds-the-animator)
+- [11. Simulator](#11-simulator)
+  - [11.1 The synthetic world](#111-the-synthetic-world)
+  - [11.2 Scenario scripts](#112-scenario-scripts)
+  - [11.3 Runner and CLI](#113-runner-and-cli)
+- [12. API](#12-api)
+  - [12.1 Endpoints](#121-endpoints)
+  - [12.2 View models](#122-view-models)
+  - [12.3 WebSocket](#123-websocket)
+  - [12.4 Concurrency](#124-concurrency)
+- [13. Browser demo](#13-browser-demo)
+  - [13.1 Layout](#131-layout)
+  - [13.2 Visual language](#132-visual-language)
+  - [13.3 Canvas: gravity and zoom](#133-canvas-gravity-and-zoom)
+  - [13.4 Fuzzy to real](#134-fuzzy-to-real)
+  - [13.5 Draw tool (hand-drawn proposals)](#135-draw-tool-hand-drawn-proposals)
+  - [13.6 Panels](#136-panels)
+  - [13.7 Animator](#137-animator)
+  - [13.8 Keyboard](#138-keyboard)
+  - [13.9 Front-end files](#139-front-end-files)
+- [14. Demo content: `oil_shock_demo`](#14-demo-content-oilshockdemo)
+  - [14.1 Construction spec format](#141-construction-spec-format)
+  - [14.2 Entities and subentities](#142-entities-and-subentities)
+  - [14.3 Interactions](#143-interactions)
+  - [14.4 Superentity seeds and super-interactions](#144-superentity-seeds-and-super-interactions)
+  - [14.5 Taxonomy seeds](#145-taxonomy-seeds)
+  - [14.6 The scenario script](#146-the-scenario-script)
+  - [14.7 Hand-drawn translations](#147-hand-drawn-translations)
+  - [14.8 Theses, hypotheses, and decisions](#148-theses-hypotheses-and-decisions)
+  - [14.9 The synthetic world's truth and history](#149-the-synthetic-worlds-truth-and-history)
+  - [14.10 Figure 1 layout](#1410-figure-1-layout)
+- [15. Tests and acceptance](#15-tests-and-acceptance)
+  - [15.1 Unit tests](#151-unit-tests)
+  - [15.2 Integration tests](#152-integration-tests)
+  - [15.3 Scenario checklist](#153-scenario-checklist)
+  - [15.4 UI checks](#154-ui-checks)
+- [16. Milestones](#16-milestones)
+- [17. Open questions (current defaults in parentheses)](#17-open-questions-current-defaults-in-parentheses)
+- [Oct 9: checks, known over-counting](#oct-9-checks-known-over-counting)
+<!-- /toc -->
+
 **For:** a coding agent (Claude Code) that will build the repository from scratch, and Manav and Karthik reviewing it.
 **Sources:** the "World Model" architecture page (Figures 1–6 and its definitions), the Oct 4, 2026 Manav/Karthik notes, the Axelrod vision, and the design answers recorded in §2.
 **Deliverables:** a Python package, `axelrod_wm`, whose algorithms plug in behind interfaces, and a locally hosted browser demo. The demo shows market events turning into graph update events and landing in the graph, with a human approving changes.
@@ -3984,34 +4082,34 @@ Each subentity is written as `slug`: family, prior mean and unit, scale, attribu
 | `credit_availability` | Credit availability | macro_factor | MF | S1 | `us_bank_funding_cost`: gaussian, 4.60 %, 0.25, bank_funding_cost · `euro_bank_funding_cost`: gaussian, 2.40 %, 0.25, bank_funding_cost · `lending_standards`: gaussian, 5 net %, 10, condition_index · `credit_growth`: gaussian, 4.0 % y/y, 1.0, growth_rate |
 | `debt_cycle` | Debt, fin. cycle | macro_factor | MF | S1, S3 | `household_debt`: gaussian, 95 % of income, 2, structural_level · `credit_gap`: gaussian, 0 pp, 2, condition_index · `debt_service_ratio`: beta, 0.10, 0.05, share |
 | `dollar_fx` | Dollar, FX rates | market | MF | S3 | `dollar_index`: lognormal, 100, 0.03, fx_rate · `em_fx_volatility`: gamma, 9 vol pts, 0.15, volatility |
-| `capital_flows` | Capital flows | macro_factor | MF | S3 | `us_inflows`: gaussian, 80 $bn/mo, 30, capital_flow · `em_portfolio_flows`: gaussian, 10 $bn/mo, 15, capital_flow |
+| `capital_flows` | Capital flows | macro_factor | MF | S3 | `us_inflows`: gaussian, 80 \$bn/mo, 30, capital_flow · `em_portfolio_flows`: gaussian, 10 \$bn/mo, 15, capital_flow |
 | `inflation` | Inflation | macro_factor | MF | S2, S8, S9 | `headline_cpi`: gaussian, 2.8 % y/y, 0.3, inflation_rate · `core_cpi`: gaussian, 3.0 % y/y, 0.2, inflation_rate |
-| `consumer_spending` | Consumer spending | macro_factor | SD | S1 | `durable_goods_spending`: lognormal, 180 $bn/mo, 0.03, spending_flow · `household_saving_rate`: beta, 0.045, 0.08, share · `credit_financed_purchases`: gamma, 40 $bn/mo, 0.05, spending_flow |
+| `consumer_spending` | Consumer spending | macro_factor | SD | S1 | `durable_goods_spending`: lognormal, 180 \$bn/mo, 0.03, spending_flow · `household_saving_rate`: beta, 0.045, 0.08, share · `credit_financed_purchases`: gamma, 40 \$bn/mo, 0.05, spending_flow |
 | `business_investment` | Business investment | macro_factor | SD | S1 | `capex_growth`: gaussian, 3.0 % y/y, 1.5, growth_rate · `new_orders`: gaussian, 50 index, 2, sentiment_index · `input_costs`: lognormal, 100 index, 0.04, cost_index |
 | `cross_border_trade` | Cross-border trade | macro_factor | SD | S4 | `trade_volume`: lognormal, 100 index, 0.03, trade_flow · `trade_finance_availability`: beta, 0.80, 0.15, share (entity aliases: exports, imports, trade) |
-| `gov_spending` | Gov. spending, taxes | macro_factor | SD | S5, S7 | `fiscal_deficit`: gaussian, 6.0 % GDP, 0.5, structural_level · `health_spending`: lognormal, 1200 $bn/qtr, 0.03, spending_flow · `relief_spending`: gamma, 20 $bn/qtr, 0.2, spending_flow |
+| `gov_spending` | Gov. spending, taxes | macro_factor | SD | S5, S7 | `fiscal_deficit`: gaussian, 6.0 % GDP, 0.5, structural_level · `health_spending`: lognormal, 1200 \$bn/qtr, 0.03, spending_flow · `relief_spending`: gamma, 20 \$bn/qtr, 0.2, spending_flow |
 | `asset_prices` | Asset price swings | market | SH | S1 | `equity_index`: lognormal, 5000, 0.05, asset_price · `house_prices`: lognormal, 320, 0.02, asset_price · `equity_volatility`: gamma, 16 vol pts, 0.15, volatility |
 | `financial_crises` | Financial crises | external_factor | SH | S3 | `banking_stress`: gaussian, 0 index, 0.5, stress_index · `default_rate`: beta, 0.03, 0.15, share |
 | `wars` | Wars, fragmentation | external_factor | SH | S2, S4 | `geopolitical_risk`: gamma, 120 index, 0.15, uncertainty_index · `sanctions_intensity`: gaussian, 0 index, 1, restriction_index |
 | `medical_crises` | Medical crises | external_factor | SH | S7 | `case_growth`: gaussian, 0 % w/w, 5, growth_rate · `lockdown_stringency`: beta, 0.02, 0.5, share |
 | `inequality_between` | Inequality between | macro_factor | DI | S3 | `cross_country_income_gap`: gaussian, 10 ratio, 0.3, structural_level · `em_growth_gap`: gaussian, 2.0 pp, 0.5, growth_rate |
 | `inequality_within` | Inequality within | macro_factor | DI | S6 | `gini`: beta, 0.39, 0.02, share · `top10_income_share`: beta, 0.46, 0.03, share |
-| `resources_energy` | Resources, energy | market | SC | S2 | `oil_price`: lognormal, 75 $/bbl, 0.08, commodity_price · `gas_price`: lognormal, 3.5 $/MMBtu, 0.12, commodity_price |
+| `resources_energy` | Resources, energy | market | SC | S2 | `oil_price`: lognormal, 75 \$/bbl, 0.08, commodity_price · `gas_price`: lognormal, 3.5 \$/MMBtu, 0.12, commodity_price |
 | `supply_chains` | Supply chains | macro_factor | SC | S2, S4 | `delivery_times`: gamma, 45 days, 0.08, duration_measure · `shipping_costs`: lognormal, 1500 index, 0.10, cost_index |
 | `market_concentration` | Market concentration | macro_factor | SC | none (dashed) | `top4_share`: beta, 0.42, 0.05, share |
-| `productivity_tech` | Productivity, tech | macro_factor | SC | S5 | `tfp_growth`: gaussian, 1.0 % y/y, 0.3, growth_rate · `tech_capex`: lognormal, 300 $bn/qtr, 0.05, spending_flow (aliases: chip capex, semiconductor investment) |
+| `productivity_tech` | Productivity, tech | macro_factor | SC | S5 | `tfp_growth`: gaussian, 1.0 % y/y, 0.3, growth_rate · `tech_capex`: lognormal, 300 \$bn/qtr, 0.05, spending_flow (aliases: chip capex, semiconductor investment) |
 | `labor_demographics` | Labor, demographics | macro_factor | SC | S7 | `labor_force_participation`: beta, 0.625, 0.02, share · `unemployment_rate`: beta, 0.042, 0.05, share |
 | `legal_regulatory` | Legal, regulatory | external_factor | DF | S4 | `export_controls`: gaussian, 0 index, 1, restriction_index · `regulatory_burden`: gaussian, 0 index, 1, restriction_index (entity aliases: regulation, export controls, trade rules) |
 | `geography` | Geography | external_factor | DF | none (dashed) | `trade_distance_cost`: gaussian, 0 index, 1, structural_level |
 | `institutions` | Institutions | external_factor | DF | S6 | `rule_of_law`: gaussian, 1.0 index, 0.1, structural_level · `central_bank_independence`: beta, 0.80, 0.10, share |
 | `culture_trust` | Culture, trust | external_factor | DF | S6 | `social_trust`: beta, 0.30, 0.05, share |
-| `climate_change` | Climate change | external_factor | EN | S5 | `temperature_anomaly`: gaussian, 1.3 °C, 0.05, structural_level · `carbon_price`: lognormal, 70 $/t, 0.08, commodity_price |
-| `disasters_weather` | Disasters, weather | external_factor | EN | S5 | `disaster_losses`: gamma, 60 $bn/qtr, 0.3, loss_flow |
+| `climate_change` | Climate change | external_factor | EN | S5 | `temperature_anomaly`: gaussian, 1.3 °C, 0.05, structural_level · `carbon_price`: lognormal, 70 \$/t, 0.08, commodity_price |
+| `disasters_weather` | Disasters, weather | external_factor | EN | S5 | `disaster_losses`: gamma, 60 \$bn/qtr, 0.3, loss_flow |
 | `confidence` | Confidence | macro_factor | EX | S2 | `consumer_confidence`: gaussian, 100 index, 3, sentiment_index · `business_confidence`: gaussian, 100 index, 3, sentiment_index |
 | `policy_uncertainty` | Policy uncertainty | macro_factor | EX | S4 | `epu_index`: lognormal, 150 index, 0.10, uncertainty_index |
-| `federal_reserve` (demo addition) | Federal Reserve | agency | MF | S8, S9 | `policy_stance`: gaussian, 4.25 %, 0.25, policy_rate (a decision variable) · `balance_sheet`: lognormal, 6.8 $tn, 0.02, structural_level. Features `{region: US, function: monetary_policy}`; aliases Fed, FOMC |
+| `federal_reserve` (demo addition) | Federal Reserve | agency | MF | S8, S9 | `policy_stance`: gaussian, 4.25 %, 0.25, policy_rate (a decision variable) · `balance_sheet`: lognormal, 6.8 \$tn, 0.02, structural_level. Features `{region: US, function: monetary_policy}`; aliases Fed, FOMC |
 | `ecb` (demo addition) | European Central Bank | agency | MF | none (dashed) | `policy_stance`: gaussian, 2.00 %, 0.25, policy_rate (a decision variable). Features `{region: EA, function: monetary_policy}`; alias ECB |
-| `northwind_semis` (demo addition) | Northwind Semiconductors (fictional) | company | SC | none (dashed) | `export_revenue`: lognormal, 12 $bn/qtr, 0.06, revenue_flow · `capex`: lognormal, 4 $bn/qtr, 0.08, spending_flow · `share_price`: lognormal, 150, 0.08, asset_price. Features `{sector: semiconductors, region: US}` |
+| `northwind_semis` (demo addition) | Northwind Semiconductors (fictional) | company | SC | none (dashed) | `export_revenue`: lognormal, 12 \$bn/qtr, 0.06, revenue_flow · `capex`: lognormal, 4 \$bn/qtr, 0.08, spending_flow · `share_price`: lognormal, 150, 0.08, asset_price. Features `{sector: semiconductors, region: US}` |
 | `fed_chair` (demo addition) | Fed Chair (role) | person | MF | none (dashed) | `hawkishness`: gaussian, 0 index, 1, sentiment_index. This is a role, not a named person. |
 
 That gives 33 entities and 69 subentities. The 29 entities from Figure 1 keep their Figure 1 names. The demo additions cover the notes' other entity kinds: two agencies, a company, and a person. Market concentration, Geography, the ECB, Northwind Semiconductors, and the Fed Chair are in no superentity, so they are drawn dashed. The company is fictional and the person is a role, so nothing in the demo claims to describe a real firm or a real official.

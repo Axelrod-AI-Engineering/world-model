@@ -2,6 +2,17 @@
 
 Why the world model organizes memory the way a cognitive architecture does, instead of the standard stack of chunks, embeddings, a vector index, and top-k retrieval. The framings come from research on concept formation, analogy, and causal learning, including our own work on hierarchical retrieval with Cobweb (Gupta et al., 2025) and on concepts and chunks (Singaravadivelan & Langley, 2026). Every framing lands in a slot, so each claim can be tested by swapping in the standard method and comparing ([how to test it](#how-to-test-the-claim)).
 
+<!-- toc -->
+**Contents**
+
+- [In one table](#in-one-table)
+- [The difference in one picture](#the-difference-in-one-picture)
+- [The framings](#the-framings)
+- [Where standard tools still fit](#where-standard-tools-still-fit)
+- [How to test the claim](#how-to-test-the-claim)
+- [References](#references)
+<!-- /toc -->
+
 ## In one table
 
 | # | Framing | The standard approach | What we do instead | What it buys a PM | Status |
@@ -23,25 +34,7 @@ Why the world model organizes memory the way a cognitive architecture does, inst
 
 ## The difference in one picture
 
-```mermaid
-flowchart LR
-  subgraph STD["Standard retrieval stack"]
-    direction TB
-    D1[/"Documents"/] --> C1["Chunk"] --> E1["Embed text"] --> V1[("One vector index")]
-    Q1[/"Query"/] --> K1["Top-k cosine"]
-    V1 --> K1 --> L1["LLM reads the chunks"]
-  end
-  subgraph OURS["The world model's memory"]
-    direction TB
-    D2[/"Event"/] --> S2["Sort each part into its own tree<br/>(subentity · entity · interaction · episode)"]
-    S2 --> P2["Inherit the kind's priors"]
-    S2 --> R2["Recall: filter, then align structure"]
-    P2 & R2 --> W2["Working memory<br/>exact state now"]
-    W2 -- "daily distillation" --> L2["Long-term memory<br/>kinds · schemas · Entity memories · frontier"]
-    L2 -- "priors · analogs · schemas" --> W2
-    W2 --> H2["Hypothesis frontier<br/>what is worth learning next"]
-  end
-```
+![The standard retrieval stack vs the model memory](diagrams/memory-vs-retrieval.svg)
 
 The standard stack answers "which text is like this text". The world model answers "what kind of thing is this, what does that kind usually do, what past case had the same shape, and what don't we know yet". It is the second question set that a forecast needs.
 

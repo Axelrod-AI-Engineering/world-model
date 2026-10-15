@@ -2,6 +2,16 @@
 
 **Layer** 5 · **Package** `views/`, `api/`, `cli.py` · **Status** views are gathered from `api/` and `control/`; the API is thinned.
 
+<!-- toc -->
+**Contents**
+
+- [Purpose](#purpose)
+- [Owns](#owns)
+- [Depends on](#depends-on)
+- [Invariants](#invariants)
+- [Done when](#done-when)
+<!-- /toc -->
+
 **Code today:**
 - `api/views.py` (924 lines), `brief.py`, `find.py`, `checks.py`;
 - the view half of `control/stage.py`;

@@ -1,0 +1,24 @@
+sequenceDiagram
+  autonumber
+  actor A as Asker (Predict)
+  participant TS as ThesisService (M13)
+  participant RF as Refiner (M05)
+  participant R as Repo (M04)
+  participant IT as InferenceTask (M12)
+  participant SR as Shared read (M06)
+  participant INF as Inference slots (M10)
+  participant EX as Explainer (M06)
+
+  A->>TS: pose(question, version=latest, watch)
+  TS->>RF: refine(thesis.event)
+  alt an end is not one value
+    RF-->>A: candidates (nothing runs)
+  end
+  TS->>R: branch(version) — read-only overlay
+  TS->>IT: forecast(thesis, branch, watch)
+  IT->>SR: read(event, txn=None)
+  IT->>INF: isolate → predict each network → plan scenarios → couple (± shock) → weigh → combine
+  IT->>EX: explain_forecast (ablation, top paths)
+  IT-->>TS: Forecast + Explanation
+  TS->>R: ledger THESIS, FORECAST (no version bump)
+  TS-->>A: forecast, transmission grid, brief

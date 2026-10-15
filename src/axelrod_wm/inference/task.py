@@ -1,4 +1,14 @@
-"""The inference task: isolate, predict, couple, unify, explain (§8.9, D1, D2, D5)."""
+"""The inference task (§8.9, D1, D2, D5), in the seven stages of flows/inference.py, each answering one question:
+
+1. Pose a thesis (ThesisService, before this task): what is asked?
+2. Isolate: what can the shock reach? (isolator, plus the context network)
+3. Isolated prediction: how does each network respond alone? (network_predictor)
+4. Distributed prediction: how do the networks move together? Scenarios are formed and weighed once
+   (unifier.plan: rival_detector, scenario_weighter), then each is coupled (coupler).
+5. Unify: one forecast, the scenarios mixed by those weights (unifier.combine).
+6. Read out: what moves, when, by which path, and why (groups, constraints, transmission, explainer).
+7. Evaluate (evaluation/, after the horizon): did it come true?
+"""
 
 from __future__ import annotations
 
@@ -108,7 +118,8 @@ class InferenceTask:
         shared = self.shared.run(thesis.event, ctx, txn=None)                           # includes the analysis
         shocks = shared.parsed.shocks
         ctx.notes["is_baseline"] = not shocks
-        networks = comp["isolator"].isolate(shared, wm, ltm, ctx)                       # goal 1
+        # 2 · Isolate: what can the shock reach?
+        networks = comp["isolator"].isolate(shared, wm, ltm, ctx)
         if shocks:                                                                      # the context layer
             from axelrod_wm.inference.isolate import watch_network
 
@@ -116,20 +127,24 @@ class InferenceTask:
                                   targets=list(thesis.targets))
             if extra is not None and extra.id not in {n.id for n in networks}:
                 networks = [*networks, extra]
+        # 3 · Isolated prediction: how does each network respond alone?
         local = {n.id: comp["network_predictor"].predict(n, NetworkInputs(shocks=shocks_in(shared, n)),
                                                           shared.model, ctx)
-                 for n in networks}                                                     # goal 2, isolated
+                 for n in networks}
+        # 4 · Distributed prediction: scenarios formed and weighed once, then each coupled (± the shock, same draws)
         scenarios = comp["unifier"].plan(networks, wm, ltm, ctx)
         members = {s.id: [n for n in networks if n.id in s.network_ids] for s in scenarios}
         coupler = comp["coupler"]
         coupled = {s.id: coupler.couple(members[s.id], s.forced_existence, shocks, shared.model, ctx)
-                   for s in scenarios}                                                  # goal 2, distributed
+                   for s in scenarios}
         baseline = {s.id: coupler.couple(members[s.id], s.forced_existence, [], shared.model, ctx)
                     for s in scenarios}                                                 # same rng keys
         for s in scenarios:
             ctx.tracer.emit(Phase.COUPLE, "couple.done", refs=[s.id] + s.network_ids, scenario_id=s.id, name=s.name,
                             weight=round(s.weight, 6))
-        forecast = comp["unifier"].combine(thesis, scenarios, coupled, baseline, local, networks, ctx)  # goal 3
+        # 5 · Unify: one forecast, the scenarios mixed by their weights
+        forecast = comp["unifier"].combine(thesis, scenarios, coupled, baseline, local, networks, ctx)
+        # 6 · Read out: groups, binding constraints, transmission paths, and the explanation
         # coarser targets (entities, superentities, sectors, categories) from the same scenario mixture
         from axelrod_wm.inference.groups import EffectMixture, group_forecasts, movers
 

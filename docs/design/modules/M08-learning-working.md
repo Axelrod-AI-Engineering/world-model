@@ -3,6 +3,20 @@
 **Layer** 3 · **Package** `learning/working/` · **Status** exists; regrouped, and it receives VOI from `inference/`.
 **Code today:** `learning/working_memory.py`, `fold.py`, `kernel_learning.py`, `inference/voi.py`.
 
+<!-- toc -->
+**Contents**
+
+- [Purpose](#purpose)
+- [Owns](#owns)
+- [Interface](#interface)
+- [Slots](#slots)
+- [Depends on](#depends-on)
+- [Diagrams](#diagrams)
+- [Invariants](#invariants)
+- [Planned](#planned)
+- [Done when](#done-when)
+<!-- /toc -->
+
 ## Purpose
 
 What the world is like now. One vetted event is **folded** into the current state:
@@ -47,48 +61,11 @@ HypothesisScorer.score(h, wm, ltm, ctx) -> float; .rescore_touched(entity_ids, w
 
 Step by step:
 
-```mermaid
-flowchart TD
-  IN[/"Graph update event, on its day"/] --> OPEN["The day opens: yesterday's moves ripple forward<br/>(slot: daily_propagator, once per day)"]
-  OPEN --> P["Apply each operation<br/>add or retire structure; a change becomes a shock;<br/>a report becomes an observation (slot: parser)"]
-  P --> NEW{"New items?"}
-  NEW -- yes --> CL["Sort each down its taxonomy; inherit the kind's priors<br/>(slot: classifier)"]
-  NEW -- no --> RC
-  CL --> RC["Recall superentities and past days with a matching signature<br/>(slot: recaller, attention)"]
-  RC --> FIT{"Does a recalled superentity fit?"}
-  FIT -- yes --> BD["Bind it as an instance;<br/>a relation it predicts but the graph lacks → proposal (slot: binder)"]
-  FIT -- no --> PF
-  BD --> PF["Build the working set: interactions near the event,<br/>adjusted by similar past days (slot: prefiller)"]
-  PF --> MV{"Does the event move a value?"}
-  MV -- yes --> AN["Simulate with and without the move on the same draws;<br/>each reached value gets an order, a path, a peak (slot: analyzer → propagator)"]
-  MV -- no --> RP
-  AN --> RP{"Does the event report a value?"}
-  RP -- yes --> FO["Surprise = report − prediction;<br/>update the level and each incoming interaction by its share (slot: folder)"]
-  RP -- no --> HG
-  FO --> HG{"Hedged ends waiting?"}
-  HG -- yes --> WH["Weigh each candidate by this event × your confidence<br/>(refiner.weigh_hedges)"]
-  WH --> PASS{"One candidate past the bound?"}
-  PASS -- yes --> RES["Propose the resolution (waits for review)"]
-  PASS -- no --> OUT
-  HG -- no --> OUT
-  RES --> OUT[/"Staged working memory: structure, moves, ripple by order,<br/>updated values and effects, hedges' new odds"/]
-```
+![Learning of working memory, step by step](../diagrams/wm-learning-flow.svg)
 
 A hypothesis's lifecycle:
 
-```mermaid
-stateDiagram-v2
-  [*] --> open: proposed by intake, the frontier, or a person
-  open --> open: rescored when its entities are touched (VOI, 14-day half-life)
-  open --> branched: valuable and undecided in a thesis → scenarios with and without it
-  branched --> open
-  open --> supported: marked, or evidence passes the bound
-  open --> refuted
-  open --> expired
-  supported --> [*]
-  refuted --> [*]
-  expired --> [*]
-```
+![A hypothesis lifecycle](../diagrams/hypothesis-lifecycle.svg)
 
 ## Invariants
 

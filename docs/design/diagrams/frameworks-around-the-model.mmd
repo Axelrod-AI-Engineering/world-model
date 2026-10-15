@@ -1,0 +1,16 @@
+flowchart LR
+  subgraph UP["Upstream (optional)"]
+    DOCS["Articles · filings · notes"]:::ext --> COG[("Research memory<br/>Cognee")]:::store
+    COG --> RA["Research agent"]:::ext
+  end
+  RA ==>|"axelrod.import/v1<br/>items with quotes"| IN
+  subgraph WM["World model (ours) · M01–M13"]
+    IN["Intake"]:::step ==> REV{"Staged review"}:::check
+    REV ==> LED[("Ledger<br/>PROV + bitemporal<br/>Semantica's patterns")]:::store
+  end
+  subgraph CL["Context layer (ours) · M15"]
+    V["recall · ask · trace<br/>propose · feedback · status<br/>Cognee's verb shape"]:::step
+  end
+  LED ==> V
+  V -.->|propose → review| IN
+  AG["Agents · analysts"]:::start ==>|recall · ask · propose| V

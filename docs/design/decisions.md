@@ -2,6 +2,9 @@
 
 One row per decision. To change a decision, add a new row and mark the old one *Superseded by D-nn*; don't edit it.
 
+<!-- toc -->
+<!-- /toc -->
+
 **Status:**
 - **Accepted:** the code does this.
 - **Proposed:** this design; for review.
@@ -25,6 +28,9 @@ One row per decision. To change a decision, add a new row and mark the old one *
 | D-14 | Bind a mention only when it is named; otherwise hedge it, plus an open share | Score and margin binding (plan §7.5; `bind_score` is now unread) | No false precision ([cognition.md F11](cognition.md#f11--an-open-world)) | Accepted |
 | D-15 | Learn is internal; Predict is external, opens blank, and shows only what a forecast reaches | One view for everyone | Clients see their answer and its causal story, not the whole internal graph | Accepted |
 | D-16 | Organize memory as a cognitive architecture (F1–F12), each framing behind a slot and tested by ablation | Chunks, embeddings, a vector index, and top-k recall | A forecast needs kinds, schemas, analogs, and known unknowns, not similar text ([cognition.md](cognition.md)) | Proposed |
+| D-17 | Inference in seven MECE stages, in the naming guide's terms: Pose a thesis, Isolate, Isolated prediction, Distributed prediction, Unify, Read out, Evaluate. Scenarios are weighed once (distributed prediction); unify only mixes. | Six stages, where "Simulate and couple" bundled two stages and scenario planning, rivals were marked in isolation, and scoring was mixed with deciding | Each stage answers one question with one output; the flows, the code's comments, and the docs say the same thing | Accepted |
+| D-18 | Design for the next horizon, build for the current one | Building for scale now; or designing only for today | Interfaces, data shapes, and module boundaries anticipate bigger graphs, better methods, and agents; what sits behind them is the simplest thing that works ([README §4](README.md#4-design-principles)) | Accepted |
+| D-19 | Diagrams are SVG files rendered from Mermaid sources, in the app's palette | Mermaid blocks rendered by GitHub; hand-drawn images | They look the same everywhere (GitHub, VS Code, a PDF), and they stay editable as text; `--check` keeps them current | Accepted |
 
 ## Where older documents disagree
 

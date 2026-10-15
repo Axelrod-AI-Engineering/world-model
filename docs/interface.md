@@ -2,6 +2,17 @@
 
 The first screen is the graph, a caption, and one row of controls. Everything else opens on demand, and `Esc` closes the top thing. Press `?` in the demo for every shortcut; [the table at the end](#shortcuts) lists them too.
 
+<!-- toc -->
+**Contents**
+
+- [Two views](#two-views)
+- [The top bar](#the-top-bar)
+- [The canvas](#the-canvas)
+- [The bottom bar](#the-bottom-bar)
+- [Panels](#panels)
+- [Shortcuts](#shortcuts)
+<!-- /toc -->
+
 ## Two views
 
 **Learn** and **Predict** (top left) are two views of the same model. They differ only in their controls.

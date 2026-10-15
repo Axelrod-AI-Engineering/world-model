@@ -1,0 +1,17 @@
+flowchart TD
+  A["Article, data release, filing, or imported item"]:::start ==> D{"Seen before?<br/>same address, or same site and title"}:::check
+  D ==>|no| T{"A reviewed translation exists?"}:::check
+  T ==>|no| TR["Translate<br/>template · data_feed · structured · llm"]:::step
+  TR ==> OPS{"Any operations?"}:::check
+  OPS ==>|yes| K{"Does an end name a kind<br/>(an airline) rather than a value?"}:::check
+  K ==>|no| OUT["Graph update event<br/>ends are values, plus any hedged ends"]:::done
+  D -->|yes| DROP["Drop the duplicate (logged)"]:::done
+  T -->|yes| F["Use the reviewed fixture"]:::opt
+  F --> OPS
+  OPS -->|no| UN["Nothing to learn (logged)"]:::done
+  K -->|yes| N["Narrow one level: kind → entity → subentity<br/>refiner · entity_resolver"]:::opt
+  N --> NAMED{"Does the article name<br/>one candidate outright?"}:::check
+  NAMED -->|yes| BIND["Bind the end"]:::opt
+  NAMED -->|no| HEDGE["Hedge: a probability per candidate + an open share,<br/>drawn as soft interactions"]:::opt
+  BIND --> OUT
+  HEDGE --> OUT

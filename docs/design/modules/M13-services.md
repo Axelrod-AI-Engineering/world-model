@@ -2,6 +2,17 @@
 
 **Layer** 4 · **Package** `control/` · **Status** split the god object.
 
+<!-- toc -->
+**Contents**
+
+- [Purpose](#purpose)
+- [Owns](#owns)
+- [Depends on](#depends-on)
+- [Diagrams](#diagrams)
+- [Invariants](#invariants)
+- [Done when](#done-when)
+<!-- /toc -->
+
 **Code today:**
 - `control/controller.py`: `WorldModelController`, 940 lines with about 47 `self.engine` references;
 - `control/updates.py`;
@@ -34,80 +45,15 @@ A thin `WorldModelController` facade keeps today's callers working.
 
 Human review and commit:
 
-```mermaid
-flowchart TD
-  ST[/"Every staged change: items, moves, ripple by order, lessons"/] --> SH["Show each change with the phrase that asked for it"]
-  SH --> CONF["Set confidence: the article's and any change's own<br/>(re-stages; goes into the data written)"]
-  CONF --> CHK["Check the event's own move, then each further order:<br/>sign follows from the path? size and timing plausible?"]
-  CHK --> OK{"Does every change make sense?"}
-  OK -- "no: deselect" --> RS["Re-stage without them<br/>on a fresh copy"] --> SH
-  OK -- "not yet" --> DEF[/"Defer: approved later, it folds in late"/]
-  OK -- "none" --> REJ[/"Reject with a note: nothing changes (logged)"/]
-  OK -- "yes" --> AP["Approve the selection<br/>(deselected operations are edited out)"]
-  AP --> EFF{"Does approval store anything?<br/>(pending ends, soft support, ripple judgments)"}
-  EFF -- yes --> C0["▣ commit: review"]
-  EFF -- no --> SE
-  C0 --> SE{"A structural edit?"}
-  SE -- yes --> C1["▣ commit: structural"]
-  SE -- no --> C2["▣ commit: learn.working"]
-  C2 --> C3["▣ commit: learn.long_term"]
-  C1 & C3 --> LAST{"Day's last event?"}
-  LAST -- yes --> C4["▣ day.record → ▣ day.distill → ▣ day.close"]
-  LAST -- no --> PR
-  C4 --> PR{"Proposals raised?<br/>(promoted pair, collapse, resolved end)"}
-  PR -- yes --> QUEUE[/"Join the review queue; same review"/]
-  PR -- no --> VER[/"New version in the log"/]
-  QUEUE --> VER
-```
+![Human review and commit](../diagrams/review-flow.svg)
 
 A staged review, as a sequence:
 
-```mermaid
-sequenceDiagram
-  autonumber
-  actor P as Reviewer
-  participant W as Web (M16)
-  participant RS as ReviewService (M13)
-  participant SB as Sandbox (M12)
-  participant LT as LearningTask (M12)
-  participant V as Views (M14)
-  participant R as Repo (M04)
-
-  P->>W: open Review
-  W->>RS: stage(proposal, keep=all, confidence)
-  RS->>SB: branch(current version) — copy-on-write, throwaway ledger
-  SB->>LT: open_day · review effects · run(event) · close_day
-  LT-->>SB: staged change sets
-  SB-->>RS: StagedChange (ops, ripple by order, lessons, hedges, recall)
-  RS->>V: staged_review_view(StagedChange)
-  V-->>W: grouped by stage: Intake · WM · LTM · Your review
-  P->>W: deselect a change / weigh a ripple / set confidence
-  W->>RS: stage(proposal, keep=subset, ripple weights)
-  Note over RS,SB: re-staged on a fresh copy
-  P->>W: Approve
-  W->>RS: approve(proposal, keep, confidence, ripple, by)
-  RS->>R: commit review effects · REVIEW_DECISION
-  RS->>LT: run(selection) on live state
-  LT->>R: commits learn.working, learn.long_term
-  R-->>W: /ws state.version
-```
+![A staged review, as a sequence](../diagrams/review-sequence.svg)
 
 A proposal's lifecycle. Its kinds are graph_update, refinement, frontier_promotion, superentity_admission, superentity_dissolution, and missing_relation.
 
-```mermaid
-stateDiagram-v2
-  [*] --> pending: propose() and the policy wants review
-  [*] --> auto_applied: the policy auto-approves
-  pending --> pending: re-staged with a new selection or confidence
-  pending --> approved: approve(selection)
-  pending --> rejected: reject(note)
-  pending --> deferred: defer
-  deferred --> approved: approved later (folds in late)
-  deferred --> rejected
-  approved --> [*]
-  rejected --> [*]
-  auto_applied --> [*]
-```
+![A proposal lifecycle](../diagrams/proposal-lifecycle.svg)
 
 ## Invariants
 

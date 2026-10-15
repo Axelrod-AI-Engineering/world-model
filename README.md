@@ -2,10 +2,18 @@
 
 The **Axelrod World Model**, v0. It is one causal world model of the economy, built like version control:
 
+<!-- toc -->
+**Contents**
+
+- [Quick start](#quick-start)
+- [Hosted demo](#hosted-demo)
+- [Documentation](#documentation)
+<!-- /toc -->
+
 - **Backend users** teach it (the Learn view). Each event's learning runs on a staged copy, first working memory and then long-term memory. A person checks everything it would commit, down to the second- and third-order ripple. They keep what makes sense, and only that is committed.
 - **Everyone else** only asks it (the Predict view). A thesis runs on a branch of a committed version that is never merged.
 
-![The flowchart: learning and prediction](docs/flowchart.svg)
+![Overview: learning, inference, and the architecture](docs/flowchart.svg)
 
 The repository has two parts:
 
@@ -50,6 +58,6 @@ The full demo runs on Railway's `dev` environment at **https://world-model-dev.u
 | [docs/development.md](docs/development.md) | Tests, the repository layout, conventions, and the demo videos |
 | [docs/archive/plan.md](docs/archive/plan.md) | The original specification (historical), which the code's § references point to |
 
-Inside the demo, **How it works** (`H`) explains the model itself: the five stages of learning and the six of inference, each with its flowchart; the literature review; and the implementation.
+Inside the demo, **How it works** (`H`) explains the model itself: the five stages of learning and the seven of inference, each with its flowchart; the literature review; and the implementation.
 
 Videos (a two-minute devlog, a one-minute tour of learning, and the external trailer of Emily's demo) are kept out of the repository: ask the team for them. Locally they go in `docs/media/`, which is gitignored, and [scripts/video](scripts/video/README.md) records and cuts them.

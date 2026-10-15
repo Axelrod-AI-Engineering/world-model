@@ -2,6 +2,19 @@
 
 **Layer** 3 · **Package** `shared/` · **Status** exists. It takes in transmission and the inducer's `bind`, so it stops calling up into learning and inference.
 
+<!-- toc -->
+**Contents**
+
+- [Purpose](#purpose)
+- [Owns](#owns)
+- [Interface](#interface)
+- [Slots](#slots)
+- [Depends on](#depends-on)
+- [Diagram](#diagram)
+- [Invariants](#invariants)
+- [Done when](#done-when)
+<!-- /toc -->
+
 **Code today:** `shared/process.py`, `parse.py`, `classify.py`, `recall.py`, `recognize.py`, `prefill.py`, `analyze.py`, `explain.py`; `inference/transmission.py`, `inference/paths.py`; `learning/abduction.py:bind`.
 
 ## Purpose
@@ -55,11 +68,7 @@ isolate_grid(source, method, outputs) -> GridView   # relevant (each further ord
 
 ## Diagram
 
-```mermaid
-flowchart LR
-  E[/"Graph update event"/] --> P["parse"] --> C["classify<br/>(kind, priors)"] --> R["recall<br/>(superentities, episodes)"] --> B["bind"] --> F["prefill"] --> A["analyze<br/>(± shock, same draws)"] --> T["transmission<br/>(order, path, peak)"]
-  T --> O[/"SharedResult"/]
-```
+![The shared read](../diagrams/shared-read.svg)
 
 ## Invariants
 

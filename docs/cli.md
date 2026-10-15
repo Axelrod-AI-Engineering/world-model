@@ -2,6 +2,15 @@
 
 Every command runs through uv: `uv run axelrod <command>`. `uv run axelrod --help` lists them all, and `--help` after a command lists its options.
 
+<!-- toc -->
+**Contents**
+
+- [Demos](#demos)
+- [The model without the browser](#the-model-without-the-browser)
+- [Configuration](#configuration)
+- [Environment variables](#environment-variables)
+<!-- /toc -->
+
 ## Demos
 
 ```bash
@@ -15,7 +24,7 @@ uv run axelrod demo                    # the full oil-shock demo at http://127.0
 ## The model without the browser
 
 ```bash
-uv run axelrod flows --svg docs/flowchart.svg              # learning's and inference's stages and their flowcharts, as text; learning's overview as a picture
+uv run axelrod flows --svg docs/flowchart.svg              # learning's and inference's stages and their flowcharts, as text; the overview (learning, inference, architecture) as a picture
 uv run axelrod contracts                                   # every component's inputs, outputs, and writes
 uv run axelrod init oil_shock_demo                         # build the init snapshot and start a session in var/axelrod
 uv run axelrod update --until 2026-02-02 --auto-approve    # fold news and data through Feb 2 into that session

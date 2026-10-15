@@ -1,0 +1,6 @@
+flowchart LR
+  GH["Push to main"]:::start ==>|build the Dockerfile| APP["world-model service · one replica<br/>FastAPI: /api · /ws · /login · web/"]:::step
+  B["Browser"]:::ext ==>|HTTPS · session cookie| APP
+  APP ==> ENG["One engine per login<br/>var/axelrod/demo-‹user›"]:::step
+  ENG ==> VOL[("Volume /app/var<br/>ledger · versions · snapshots · traces · init cache")]:::store
+  RW["Railway readiness probe"]:::ext -.->|GET /api/health| APP
