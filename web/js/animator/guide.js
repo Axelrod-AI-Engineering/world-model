@@ -1,5 +1,5 @@
 // The guide (addition). DECISION: the user asked for a small animal, not a hijacked mouse, to show what
-// the model does the first time it forecasts. A raccoon hops to whatever the model is working on and
+// the model does the first time it forecasts. A red panda hops to whatever the model is working on and
 // says what it does in one short line, while a soft spotlight marks the thing it means on the canvas.
 // It is paced by the trace (the player awaits it), it never takes input from the user, a click on its
 // bubble skips ahead, and it can be switched off (Admin › Settings, or the bubble's "Turn off").
@@ -9,25 +9,31 @@ import { store } from "../store.js";
 const KEY_MODE = "axelrod.guide.mode";
 const KEY_SEEN = "axelrod.guide.seen";
 
-// a raccoon in sunglasses, after the team's sticker: flat, a few shapes, the canvas's inks
-const RACCOON = `<svg viewBox="0 0 52 48" width="46" height="42" aria-hidden="true">
-  <path d="M9.5 47.5 Q26 35.5 42.5 47.5 Z" fill="#37312D"/>
-  <path d="M12 16.5 L8.6 4.6 Q15 6.4 20.4 11.4 Z" fill="#8E8780" stroke="#2F2A25" stroke-width="1.4" stroke-linejoin="round"/>
-  <path d="M40 16.5 L43.4 4.6 Q37 6.4 31.6 11.4 Z" fill="#8E8780" stroke="#2F2A25" stroke-width="1.4" stroke-linejoin="round"/>
-  <path d="M12.6 13.2 L11.1 7.9 L16.4 10.8 Z" fill="#EFE3D7"/>
-  <path d="M39.4 13.2 L40.9 7.9 L35.6 10.8 Z" fill="#EFE3D7"/>
-  <path d="M26 9.2 C37.2 9.2 45.2 16.3 45.6 25.2 C46 33.6 38.8 41.4 26 41.9 C13.2 41.4 6 33.6 6.4 25.2 C6.8 16.3 14.8 9.2 26 9.2 Z" fill="#A49D95" stroke="#2F2A25" stroke-width="1.4"/>
-  <path d="M26 11.2 Q24.4 15.6 25.1 18.8 Q26 19.8 26.9 18.8 Q27.6 15.6 26 11.2 Z" fill="#857D76"/>
-  <path d="M9.4 26.4 Q26 15.6 42.6 26.4 Q40.6 38.6 26 40.8 Q11.4 38.6 9.4 26.4 Z" fill="#F4F0E8"/>
-  <path d="M7.6 25.2 Q15.2 18.6 26 23.2 Q36.8 18.6 44.4 25.2 Q41 31.2 33 30.4 Q26 28.2 19 30.4 Q11 31.2 7.6 25.2 Z" fill="#2F2A25"/>
-  <g class="shades">
-    <rect x="11.6" y="21.4" width="11.8" height="7.2" rx="3.2" fill="#E8643B" stroke="#2F2A25" stroke-width="1.2"/>
-    <rect x="28.6" y="21.4" width="11.8" height="7.2" rx="3.2" fill="#E8643B" stroke="#2F2A25" stroke-width="1.2"/>
-    <path d="M23.4 24 Q26 22.4 28.6 24" stroke="#2F2A25" stroke-width="1.3" fill="none"/>
-    <path class="glint" d="M13.8 23.4 L17.4 23.4 M30.8 23.4 L34.4 23.4" stroke="#FFE0D2" stroke-width="1.1" stroke-linecap="round"/>
+// a red panda (review, Oct 14: the old raccoon read as a red panda in goggles, so it became a clear one): rust fur, white
+// ear rims, white brows, cheeks, and muzzle, dark tear marks under dark eyes, a small dark nose. Flat, a few shapes, the
+// canvas's inks; the eyes blink now and then (CSS)
+const RED_PANDA = `<svg viewBox="0 0 52 48" width="46" height="42" aria-hidden="true">
+  <path d="M9.5 47.5 Q26 35.2 42.5 47.5 Z" fill="#5A2A17"/>
+  <path d="M6.4 21.4 Q3.6 8.2 13.6 5.8 Q19.4 7.6 20.8 13.2 Z" fill="#FBF6EE" stroke="#2F2A25" stroke-width="1.4" stroke-linejoin="round"/>
+  <path d="M45.6 21.4 Q48.4 8.2 38.4 5.8 Q32.6 7.6 31.2 13.2 Z" fill="#FBF6EE" stroke="#2F2A25" stroke-width="1.4" stroke-linejoin="round"/>
+  <path d="M9.2 18.6 Q8 10.6 13.8 9.2 Q17.2 10.4 18 13.8 Z" fill="#7A3418"/>
+  <path d="M42.8 18.6 Q44 10.6 38.2 9.2 Q34.8 10.4 34 13.8 Z" fill="#7A3418"/>
+  <path d="M26 10.4 C38.6 10.4 46.6 17.8 46.6 26.6 C46.6 35.6 37.6 41.9 26 41.9 C14.4 41.9 5.4 35.6 5.4 26.6 C5.4 17.8 13.4 10.4 26 10.4 Z" fill="#C4612F" stroke="#2F2A25" stroke-width="1.4"/>
+  <path d="M26 12.6 Q18.6 13.4 16.6 18.6 Q26 15.8 35.4 18.6 Q33.4 13.4 26 12.6 Z" fill="#D47A42"/>
+  <path d="M7 28.6 Q7.8 22.6 14 23.2 Q14.2 31.2 19.6 36.8 Q10.6 37 7 28.6 Z" fill="#FBF6EE"/>
+  <path d="M45 28.6 Q44.2 22.6 38 23.2 Q37.8 31.2 32.4 36.8 Q41.4 37 45 28.6 Z" fill="#FBF6EE"/>
+  <ellipse cx="26" cy="33.4" rx="7.4" ry="5.8" fill="#FBF6EE"/>
+  <ellipse cx="18.6" cy="19.4" rx="2.7" ry="1.7" transform="rotate(-12 18.6 19.4)" fill="#FBF6EE"/>
+  <ellipse cx="33.4" cy="19.4" rx="2.7" ry="1.7" transform="rotate(12 33.4 19.4)" fill="#FBF6EE"/>
+  <path d="M17.6 26.2 Q16.4 30.6 19.6 34.4 M34.4 26.2 Q35.6 30.6 32.4 34.4" stroke="#6A2C14" stroke-width="2.6" fill="none" stroke-linecap="round"/>
+  <g class="eyes">
+    <circle cx="19" cy="24.4" r="2.5" fill="#2A2522"/>
+    <circle cx="33" cy="24.4" r="2.5" fill="#2A2522"/>
+    <circle cx="19.8" cy="23.6" r="0.8" fill="#FFFDF8"/>
+    <circle cx="33.8" cy="23.6" r="0.8" fill="#FFFDF8"/>
   </g>
-  <ellipse cx="26" cy="33.8" rx="2.7" ry="1.9" fill="#2A2522"/>
-  <path d="M26 35.6 Q24.4 37.6 22.6 36.8 M26 35.6 Q27.6 37.6 29.4 36.8" stroke="#2A2522" stroke-width="1.1" fill="none" stroke-linecap="round"/>
+  <path d="M23.4 30 Q26 28.9 28.6 30 Q27.8 32.4 26 32.6 Q24.2 32.4 23.4 30 Z" fill="#2A2522"/>
+  <path d="M26 32.6 Q25.2 35.2 23 34.8 M26 32.6 Q26.8 35.2 29 34.8" stroke="#2A2522" stroke-width="1.1" fill="none" stroke-linecap="round"/>
 </svg>`;
 
 function load(key, fallback) {
@@ -51,7 +57,7 @@ export class Guide {
     this.el.className = "guide hidden";
     this.el.setAttribute("role", "status");
     this.el.setAttribute("aria-live", "polite");
-    this.el.innerHTML = `<div class="critter">${RACCOON}</div>
+    this.el.innerHTML = `<div class="critter">${RED_PANDA}</div>
       <div class="bubble"><span class="txt"></span><span class="sub"></span>
         <span class="ctl"><button class="next" title="Next (or click the bubble)">▸</button><button class="off" title="Turn the guide off">Turn off</button>
           <button class="x" aria-label="Stop the guide">✕</button></span></div>`;
