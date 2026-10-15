@@ -9,6 +9,7 @@
 3. **Misspecified and null worlds, then real vintages.** A method is judged first by recovery and calibration on synthetic worlds built *differently* from the model (R16), including worlds with no edges at all. Only then is it judged on real, point-in-time data (R15), against simple baselines, with proper scores (R10).
 4. **Prices and fundamentals are different things.** Traded values (prices, yields, spreads, volatility) respond to surprises at once. Fundamentals (margins, CPI, capex) respond to realized changes with lags. The model treats them differently (R13).
 5. **People stay in the loop.** Every structural change remains a proposal a person reviews. Better statistics change what is proposed and how it is described. They also change how much the proposal's numbers can be trusted; they do not change who decides.
+6. **The smallest model that does the job.** Rules, classical ML, small embedders, finetuned classifiers, and decision models (typed, calibrated answers, Jev-type) come first; a large LLM is the logged fallback for the long tail (R20).
 
 ## Phase 0: stop the model confirming itself
 
@@ -288,6 +289,26 @@ Review findings F-M2, F-M3, and F-M5 are about the demo world's economics rather
 - Same-day blocks for market variables, including two-way causality between volatility and positioning.
 - Transient defaults for margins and flows.
 
+## A parallel track: small models and owned structure
+
+### R20. Small models first, and fine-tuning to own the structure
+
+**Problem.** The only language model in the code is a stub (`translator: llm`). Text is read by fixtures and regular expressions, which cover only what someone wrote a rule for. Filling the gap with a large LLM on every call would put client text on a third party's servers, make readings non-deterministic, and cost per item what a small model costs per thousand. It would also leave our structure in prompts rather than in models we own.
+
+**Method.** [ml-stack.md, Small models first](ml-stack.md#small-models-first) assigns each step its smallest adequate model, with a large LLM last and logged; [ml-stack.md §14](ml-stack.md#14-fine-tuning-to-own-the-structure) gives the fine-tuning plan. Its milestones, in order:
+
+| Milestone | Delivers | Needs first | Done when |
+|---|---|---|---|
+| R20.0 · Datasets (P0) | D1–D5, versioned, split by time, built inside the client's environment | R18 (provenance), so each example records the observations it used | A leakage audit passes: no test example precedes a training one, and every example traces to a ledger entry |
+| R20.1 · Fallback chain | `llm` last in each `translators:` chain, every call logged with its review decision; quote alignment and conflict rules | R20.0 | Fallback cases appear in D3 with their outcome |
+| R20.2 · Decision models (P1) | A `decision_model` slot; our own typed, calibrated decision models for linking, signal type, conflict, triage, and review confidence, compared with a hosted one (Jev) on synthetic and public items; bi-encoder retrieval; interaction typing | R20.0 | The P1 bars in ml-stack §14 on the held-out period, including calibration error after recalibration |
+| R20.3 · Small structured generator (P2) | A ≤ 8B LoRA model emitting `TranslationResult` under constrained decoding | R20.2 (candidate ids), and a few thousand reviewed items | Approved-unchanged rate within 2 points of the large-LLM fallback, at a fraction of its cost |
+| R20.4 · JEPA-style state predictor (P3) | A state encoder for analogs, anomalies, and candidate order | R0 (raw observations), R15 (point-in-time data), R16 (worlds to test on) | Beats signature Jaccard on analog recall, and its candidate order raises R2's pass rate, on R16 worlds |
+
+**Boundary.** A decision model's calibrated probabilities may weigh *readings* of text (which candidate, which signal, how sure the reading is), after the calibration audit. None of these models computes an effect, a kernel, a forecast, an existence belief, or a scenario weight, and none applies a change a person must review. R20.4 in particular only ranks and proposes; the causal engine stays the source of truth.
+
+**Test.** Each milestone is an ablation behind its slot: the same history on the same seed, with and without the model.
+
 ## Phases
 
 | Phase | Items | Why |
@@ -297,6 +318,7 @@ Review findings F-M2, F-M3, and F-M5 are about the demo world's economics rather
 | 2. Discovery | R2, R11 | The largest source of false structure |
 | 3. One honest model | R1, R17, R4, R6, R9 | Filter and forecast agree; uncertainty means what it says |
 | 4. Structure and inference | R5, R7, R8, R12, R19 | Long-term memory, scenarios, readouts, economics |
+| Parallel. Small models and owned structure | R20.0 with R18, then R20.1–R20.3; R20.4 after R0, R15, R16 | Reading text without a large LLM; models trained on our ids and reviews |
 
 ## How this was reviewed
 

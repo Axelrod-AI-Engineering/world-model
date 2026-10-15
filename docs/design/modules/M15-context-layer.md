@@ -52,6 +52,7 @@ Each MCP tool is one verb, and its schema is generated from these types.
 **Slot:** `context_retriever`.
 - **Default:** `find_plus_neighborhood`.
 - **Planned:** `concept_tree` (F3), and `cognee_adapter`, which also recalls across an upstream research memory.
+- **Models behind the verbs:** small embedders, classifiers, and decision models (typed, calibrated answers, Jev-type) first, a large LLM only as a logged fallback; the v4 export stays a deterministic mapping. See [ml-stack.md, Small models first](../../ml-stack.md#small-models-first).
 
 ## Depends on
 

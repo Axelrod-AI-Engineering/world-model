@@ -978,6 +978,15 @@ async def sim_load(request: Request, body: LoadBody | None = None) -> dict:
     return status.model_dump(mode="json")
 
 
+@router.post("/sim/reset-all")
+async def sim_reset_all(request: Request) -> dict:
+    """Every demo this login has opened back to its original state, and the login's first demo served (Oct 15)."""
+    st = S(request)
+    await _stop_play(st)
+    status = await st.call(st.reset_all)
+    return status.model_dump(mode="json")
+
+
 @router.post("/sim/step")
 async def sim_step(request: Request) -> dict:
     st = S(request)
