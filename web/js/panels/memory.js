@@ -31,7 +31,8 @@ export function initMemory({ onSelect } = {}) {
   let timer = null;
 
   const isOpen = () => drawer.classList.contains("open");
-  const subName = (sid) => store.view?.subentities.find((s) => s.id === sid)?.name ?? sid;
+  // a value under its entity's heading reads bare; on its own, "Entity · subentity" (names.js)
+  const subName = (sid) => names().short(sid);
 
   function setOpen(open) {
     drawer.classList.toggle("open", open);
@@ -113,13 +114,13 @@ export function initMemory({ onSelect } = {}) {
     const det = body.querySelector("#em-detail");
     if (!mem) { det.innerHTML = `<p class="empty">No memory yet.</p>`; return; }
     det.innerHTML = `<h3 style="margin-bottom:6px">${esc(v.entity.name)}</h3><div class="small muted">${mem.entries} weekly entries</div>
-      ${v.subentities.map((s) => `<div class="subrow"><span class="nm">${esc(s.name)}</span>
+      ${v.subentities.map((s) => `<div class="subrow"><span class="nm" title="${esc(s.name)}">${esc(subName(s.id))}</span>
         <span class="val">level noise ${fmt(s.level_noise, 3)}</span><span class="sub2" data-ser="${esc(s.id)}"></span></div>`).join("")}
       ${Object.entries(mem.profiles ?? {}).map(([sid, prof]) => `<div class="section"><h4>Decisions of ${esc(subName(sid))}</h4>
         ${Object.entries(prof).map(([ctx, c]) => `<div class="small mono">${esc(ctx)}: raised ${c[0]}, cut ${c[1]}, held ${c[2]}</div>`).join("")}</div>`).join("")}`;
     for (const el of det.querySelectorAll("[data-ser]")) {
       el.appendChild(sparkline(mem.series?.[el.dataset.ser] ?? [], { value: (p) => p.z, width: 360, height: 30, zero: true,
-        label: `${subName(el.dataset.ser)} weekly deviation` }));
+        label: `${names().value(el.dataset.ser)} weekly deviation` }));
     }
   }
 
@@ -133,7 +134,7 @@ export function initMemory({ onSelect } = {}) {
       most once every 14 days; enough consistent support proposes a promotion to a learned edge. ${all.length} in all.</p>
       <table class="list"><thead><tr><th>Earlier → later</th><th>Lag</th><th>Sign</th><th>Support</th><th>Consistent</th><th>Status</th><th>Next check</th></tr></thead>
       <tbody>${fr.map((c) => `<tr class="clickable ${c.status === "promotion_proposed" ? "hl" : ""}" data-fr="${esc(c.id)}">
-        <td>${esc(subName(c.earlier_id))} → ${esc(subName(c.later_id))}</td><td>${c.lag_days} d</td>
+        <td>${names().valueHtml(c.earlier_id)} → ${names().valueHtml(c.later_id)}</td><td>${c.lag_days} d</td>
         <td>${c.sign > 0 ? "same" : "opposite"}</td><td>${fmt(c.support)}</td><td>${c.consistent} of ${c.consistent + c.inconsistent}</td>
         <td><span class="badge front">${esc(c.status.replace(/_/g, " "))}</span>${c.seeded ? " <span class='faint small'>seeded</span>" : ""}</td>
         <td class="mono">${esc(c.next_eligible ?? "now")}</td></tr>`).join("")}</tbody></table>

@@ -12,6 +12,7 @@
 // the others' outlines reach to it.
 
 const GAP = { entity: [22, 14], region: [72, 56] };   // [x, y] gaps between items; regions stand well apart (Oct 11)
+const RANK_GAP = 34;                                     // added between causal columns at the root (Oct 14)
 const PAD = 30;                                          // room around a region's contents for its outline and tab
 const ASPECT = 1.3;                                      // the width to height every arrangement aims for (Oct 11)
 
@@ -199,7 +200,10 @@ function solve(items, pairs, rank, root = false) {
   const pos = new Map();
   if (items.length === 1) { pos.set(items[0].id, { x: 0, y: 0 }); return pos; }
   const gap = (it) => (it.region ? GAP.region : GAP.entity);
-  if (root) return shelves(items, rank, pos);
+  // DECISION (Oct 14): a root that holds only entities (no superentities yet, as in the small demo) is laid out like a
+  // region, causes left of effects; packed as shelves, a chain stacked into one column with its arrows squeezed between
+  // the pills
+  if (root && items.some((it) => it.region)) return shelves(items, rank, pos);
   // layers by rank, then barycenter order within each
   const layers = [];
   for (const it of items) (layers[rank.get(it.id) ?? 0] ??= []).push(it);
@@ -220,7 +224,7 @@ function solve(items, pairs, rank, root = false) {
   const area = items.reduce((t, it) => t + (it.w + gap(it)[0]) * (it.h + gap(it)[1]), 0);
   let best = null;
   for (const f of [0.35, 0.45, 0.55, 0.65, 0.8, 0.95, 1.15, 1.4, 1.8, 2.5]) {
-    const out = layered(L, Math.max(90, Math.sqrt(area) * f), gap);
+    const out = layered(L, Math.max(90, Math.sqrt(area) * f), gap, root ? RANK_GAP : 0);
     const score = Math.abs(Math.log(out.w / Math.max(out.h, 1) / ASPECT));
     if (!best || score < best.score - 1e-9) best = { ...out, score };
   }
@@ -229,11 +233,16 @@ function solve(items, pairs, rank, root = false) {
 }
 
 // columns of a region's layers, each wrapping into sub-columns no taller than maxH; returns positions and the size
-function layered(L, maxH, gap) {
+function layered(L, maxH, gap, rankGap = 0) {
   const pos = new Map();
   let x = 0;
   let hMax = 0;
-  for (const layer of L) {
+  L.forEach((layer, li) => {
+    // DECISION (Oct 14): at the root (entities with no superentity yet), causal columns stand further apart than the
+    // sub-columns of one rank, so the arrows between causes and effects have room to curve and to show their heads;
+    // inside a superentity the columns keep their tight spacing, so the regions (and the zoom levels they fold at) keep
+    // their size
+    if (li > 0) x += rankGap;
     const cols = [[]];
     let h = 0;
     for (const it of layer) {
@@ -254,7 +263,7 @@ function layered(L, maxH, gap) {
       }
       x += w;
     }
-  }
+  });
   return { pos, w: x, h: hMax };
 }
 

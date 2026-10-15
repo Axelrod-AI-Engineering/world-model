@@ -135,7 +135,7 @@ class InferenceTask:
 
         mix = EffectMixture(scenarios, coupled, baseline, int(ctx.config.propagation.samples),
                             int(ctx.notes["horizon_days"]))
-        groups, densities = group_forecasts(thesis, list(forecast.targets), mix, wm, ltm)
+        groups, densities, splits = group_forecasts(thesis, list(forecast.targets), mix, wm, ltm)
         shocked = {op.target.subentity_id for op in thesis.event.ops
                    if getattr(op, "op", "") == "change_value" and getattr(op.target, "kind", "") == "concrete"}
         # economic constraints (addition): how often a soft bound bent a value, weighted by scenario
@@ -161,7 +161,7 @@ class InferenceTask:
                              trans, int(ctx.config.propagation.min_delay_days)) if chans else None
         reached = {e.subentity_id for e in trans} | {s.subentity_id for s in shocks}
         binding = {sid: round(v, 4) for sid, v in sorted(hits.items()) if v >= 0.05 and sid in reached}
-        forecast = forecast.model_copy(update={"groups": groups, "effect_density": densities,
+        forecast = forecast.model_copy(update={"groups": groups, "effect_density": densities, "split": splits,
                                                "movers": movers(mix, coupled, shocked), "transmission": trans,
                                                "shocked": sorted({s.subentity_id for s in shocks}),
                                                "constraints_binding": binding, "paths": grid_src})

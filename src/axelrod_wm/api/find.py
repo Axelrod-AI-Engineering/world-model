@@ -159,8 +159,9 @@ def find(ctl: WorldModelController, q: str, limit: int = 40) -> dict:
                   ("kind", f"{s.attribute_kind.replace('_', ' ')} {' '.join(kinds)}", 1.5), ("unit", s.unit, 0.8)]
         sc, why = score(fields) if query else (1.0, [])
         if sc > 0:
-            hits.append({"kind": "subentity", "id": s.id, "name": s.name, "entity": s.entity_id, "score": round(sc, 3),
-                         "why": why, "detail": f"{e.name} · {s.z:+.1f} sd"})
+            # the screen names it with its entity ("Delta Air Lines · share price", web/js/names.js)
+            hits.append({"kind": "subentity", "id": s.id, "name": s.name, "entity": s.entity_id, "entity_name": e.name,
+                         "score": round(sc, 3), "why": why, "detail": f"{s.z:+.1f} sd"})
     for link in view.links:
         a, b = sub_by.get(link.source), sub_by.get(link.target)
         if a is None or b is None:

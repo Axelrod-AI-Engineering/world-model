@@ -11,6 +11,7 @@ import { sparkline } from "../charts/sparkline.js";
 import { paletteOf } from "../graph/hulls.js";
 import { CATEGORY_BLURBS, CATEGORY_NAMES } from "../graph/layouts.js";
 import { rowLabels } from "../graph/model.js";
+import { names } from "../names.js";
 import { store } from "../store.js";
 import { esc, fmt, fmtDate, fmtTime, signed } from "../util.js";
 import { reportView } from "./update.js";
@@ -33,7 +34,10 @@ export function initInspector({ onSelect, focusNode, renderer, onAction, scopeFo
   const el = document.getElementById("tab-inspector");
   let seq = 0;
 
-  const subName = (sid) => store.view?.subentities.find((s) => s.id === sid)?.name ?? sid;
+  // a value inside the entity the inspector is headed by reads bare; any other reads "Entity · subentity"
+  const subName = (sid) => names().short(sid);
+  const subHtml = (sid) => names().valueHtml(sid);
+  const subLink = (sid) => `<a href="#" data-goto="subentity|${esc(sid)}">${subHtml(sid)}</a>`;
   const entName = (eid) => store.view?.entities.find((e) => e.id === eid)?.name ?? eid;
   const linkOf = (iid) => store.view?.links.find((l) => l.id === iid);
 
@@ -103,8 +107,8 @@ export function initInspector({ onSelect, focusNode, renderer, onAction, scopeFo
     const mine = dir === "in" ? l.target : l.source;
     const arrow = `<span class="faint">${dir === "in" ? "→" : "→"}</span>`;
     const text = dir === "in"
-      ? `${link("subentity", other, subName(other))} ${arrow} ${esc(subName(mine))}`
-      : `${esc(subName(mine))} ${arrow} ${link("subentity", other, subName(other))}`;
+      ? `${subLink(other)} ${arrow} ${esc(subName(mine))}`
+      : `${esc(subName(mine))} ${arrow} ${subLink(other)}`;
     return `<div class="small" style="padding:2px 0">${text} <span class="faint">· ${link("interaction", iid, l.label)}${l.edge_type === "learned_causal" ? " · learned" : ""}</span></div>`;
   }
 
@@ -205,7 +209,7 @@ export function initInspector({ onSelect, focusNode, renderer, onAction, scopeFo
     const d = wrap(`
       <div class="group-label">Interaction · ${esc(r.edge_type.replace(/_/g, " "))}${r.internal ? " · inside one entity" : ""}</div>
       <h3>${esc(r.label)}</h3>
-      <p class="lede">${link("subentity", r.source, subName(r.source))} ${sign} ${link("subentity", r.target, subName(r.target))},
+      <p class="lede">${subLink(r.source)} ${sign} ${subLink(r.target)},
         after about ${fmt(r.kernel_means?.delay_days, 0)} days, building over ${fmt(r.kernel_means?.lag_days, 0)} more.</p>
       ${linkOf(id)?.hedge ? `<p class="small hedge-note">A candidate of a fuzzy end: ${Math.round(100 * (linkOf(id).hedge_p ?? 0))}% likely to be the one the
         article meant. It stays soft until later evidence carries one candidate past the bound and a reviewer approves.</p>` : ""}
@@ -266,9 +270,9 @@ export function initInspector({ onSelect, focusNode, renderer, onAction, scopeFo
       ${parts.length ? `<div class="section"><h4>Made of</h4><div class="row">${parts.join(" ")}${extra.length ? ` <span class="faint">plus</span> ${extra.map((m) => link("entity", m, entName(m))).join(", ")}` : ""}</div></div>` : ""}
       ${parents.length ? `<div class="section"><h4>Part of</h4><div class="row">${parents.join(" ")}</div></div>` : ""}
       <div class="section"><h4>Entities</h4><div class="small">${members.map((m) => link("entity", m, entName(m))).join(", ") || "—"}</div></div>
-      <div class="section"><h4>How it works</h4>${more(ids.map((i) => { const l = linkOf(i); return l ? `<div class="small" style="padding:1px 0">${esc(subName(l.source))} <span class="faint">→</span> ${esc(subName(l.target))} <span class="faint">· ${link("interaction", i, l.label)}</span></div>` : ""; }), 5, "<span class='muted small'>no interactions bound</span>")}
+      <div class="section"><h4>How it works</h4>${more(ids.map((i) => { const l = linkOf(i); return l ? `<div class="small" style="padding:1px 0">${subHtml(l.source)} <span class="faint">→</span> ${subHtml(l.target)} <span class="faint">· ${link("interaction", i, l.label)}</span></div>` : ""; }), 5, "<span class='muted small'>no interactions bound</span>")}
         ${inst?.absent_interaction_ids?.length ? `<div class="small muted" style="margin-top:4px">and, by this pattern, no interaction ${inst.absent_interaction_ids.map((i) => esc(linkOf(i)?.label ?? i)).join(", ")}</div>` : ""}</div>
-      ${fold(`Subentities it runs through <span class="faint small">${subs.length}</span>`, `<div class="small">${subs.map((s) => link("subentity", s, subName(s))).join(", ") || "—"}</div>`)}
+      ${fold(`Subentities it runs through <span class="faint small">${subs.length}</span>`, `<div class="small">${subs.map(subLink).join(", ") || "—"}</div>`)}
       ${p.rival_ids?.length ? `<div class="section"><h4>Rivals</h4><div class="small">${p.rival_ids.map((x) => link("pattern", x)).join(", ")}: they explain the same moves with a different structure, and forecasts weigh both.</div></div>` : ""}
       ${fold(`Connections to other superentities <span class="faint small">${r.super_interactions.filter((s) => s.kind === "causal").length}</span>`, more(r.super_interactions.filter((s) => s.kind === "causal").slice(0, 24).map((s) => `<div class="small">${esc(s.source_instance_id)} → ${esc(s.target_instance_id)} · <b>${esc(s.label)}</b></div>`), 6, "<span class='muted small'>none</span>"))}
       <div class="section"><h4>Support</h4><div class="small">${fmt(p.support)} (track record ${fmt(r.track_record.mean)}: ${r.track_record.hits} hits, ${r.track_record.misses} misses)</div><div class="sspark"></div></div>
@@ -282,8 +286,8 @@ export function initInspector({ onSelect, focusNode, renderer, onAction, scopeFo
     const s = await api.frontierSeries(id);
     const d = wrap(`
       <div class="group-label">Co-movement on the correlation frontier</div>
-      <h3>${esc(subName(s.earlier))} → ${esc(subName(s.later))}</h3>
-      <p class="lede">${link("subentity", s.earlier, subName(s.earlier))} tends to move first, and ${link("subentity", s.later, subName(s.later))}
+      <h3>${subHtml(s.earlier)} → ${subHtml(s.later)}</h3>
+      <p class="lede">${subLink(s.earlier)} tends to move first, and ${subLink(s.later)}
         follows about ${s.lag_days ?? s.lag_steps} days later, in the ${s.sign > 0 ? "same" : "opposite"} direction. It is not yet a causal link:
         it becomes one only if it keeps holding and you approve its promotion.</p>
       ${entry ? `<dl class="kv"><dt>Support</dt><dd>${fmt(entry.support)}</dd><dt>Consistent</dt><dd>${entry.consistent} of ${entry.consistent + entry.inconsistent}</dd>

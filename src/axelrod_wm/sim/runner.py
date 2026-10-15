@@ -139,6 +139,9 @@ class ScenarioRunner:
         self.error: str | None = None
         self.pending_step: dict[str, Any] | None = None    # a step whose update paused for review
         self.update_ids: list[str] = []
+        # what load() is doing, read by the demo menu's progress bar from another thread (api/app.py): its phase
+        # ("world", "replay", "session", "ready") and, during the history replay, the engine and how many days it has
+        self.progress: dict[str, Any] = {}
 
     # -- configuration -------------------------------------------------------------------------
     @property
@@ -232,6 +235,7 @@ class ScenarioRunner:
         storage.reset()
         vocab = load_vocabulary(ini.taxonomy_dir)
         eng = build_engine(cfg, storage, NullTracer(), vocab=vocab)
+        self.progress = {"phase": "replay", "engine": eng, "days": (hist.to - hist.from_).days + 1}
         init = Initializer(eng)
         spec = ConstructionSpec.load(ini.construction_dir, ini.taxonomy_dir)
         init.construct(spec, ini.taxonomy_dir, start=hist.from_, vocab=vocab)
@@ -306,10 +310,12 @@ class ScenarioRunner:
             cfg = self.effective_config()
             if self.auto_approve:
                 cfg.review.policy = "auto_approve_all"
+            self.progress = {"phase": "world"}
             world, history = self._build_world(cfg)
             # one builder at a time: a demo server, the CLI, and the tests may share a scenario's init cache
             with self._init_lock():
                 meta = self._load_or_build_init(cfg, history)
+                self.progress = {"phase": "session"}
                 storage = self._session_storage(cfg, meta)
             vocab = load_vocabulary(self.script.initialization.taxonomy_dir)
             eng = build_engine(cfg, storage, self.tracer, vocab=vocab)

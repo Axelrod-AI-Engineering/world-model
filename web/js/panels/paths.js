@@ -5,6 +5,7 @@
 // sit at the top (inference/paths.py): by order, the largest, toward the outputs, the strongest paths.
 // It serves both processes: a staged event under review (learning) and a forecast (generation).
 import { api } from "../api.js";
+import { ownOf } from "../names.js";
 import { on } from "../store.js";
 import { errorText, esc, signed } from "../util.js";
 
@@ -156,8 +157,10 @@ export function initPaths({ toast, onSelect, onShow, onHide, onIsolate }) {
       const v = vals[id];
       // an output the chain carries on past sits at its order (inference/paths._grid), marked as asked
       const asked = v.column !== "output" && v.order && (grid.outputs ?? []).includes(id);
-      return `<button class="px-chip ${asked ? "asked" : ""}" data-id="${esc(id)}" type="button" title="${esc(v.name)}: ${signed(v.peak)} sd at its peak on day ${v.peak_day}; ${signed(v.effect)} sd at the horizon${v.order ? `; first reached around day ${v.arrives_day}` : ""}${asked ? "; an output, which the grid follows further" : ""}">
-        <span class="px-name">${(v.column === "output" || asked) && v.order ? `<i class="px-ord o${Math.min(3, v.order)}" title="${esc(ORDINAL[v.order] ?? v.order)} order">${v.order}</i>` : ""}${esc(v.name)}</span>
+      // its row names its entity, so the chip names only its own part; the tooltip names both
+      const own = ownOf(v.name, v.entity);
+      return `<button class="px-chip ${asked ? "asked" : ""}" data-id="${esc(id)}" type="button" title="${esc(v.entity ? `${v.entity} · ${own}` : v.name)}: ${signed(v.peak)} sd at its peak on day ${v.peak_day}; ${signed(v.effect)} sd at the horizon${v.order ? `; first reached around day ${v.arrives_day}` : ""}${asked ? "; an output, which the grid follows further" : ""}">
+        <span class="px-name">${(v.column === "output" || asked) && v.order ? `<i class="px-ord o${Math.min(3, v.order)}" title="${esc(ORDINAL[v.order] ?? v.order)} order">${v.order}</i>` : ""}${esc(own)}</span>
         <span class="px-meter"><i class="band"></i><i class="bar"></i><i class="zero"></i></span>
         <span class="px-num mono"></span></button>`;
     };

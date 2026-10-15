@@ -13,6 +13,7 @@ import { filterView } from "./isolate.js";
 import { hierarchicalLayout } from "./layout-hier.js";
 import { createLOD } from "./lod.js";
 import { createZoom, installGrid } from "./zoom.js";
+import { cubicAt, rectOf, routeEdges } from "./edge-route.js";
 
 /** The interface every renderer implements. */
 export class GraphRenderer {
@@ -38,7 +39,11 @@ export class GraphRenderer {
   select(_sel) {}
 }
 
-const LABEL_SETTLE = 3;         // layouts in a row a hidden label needs room before it shows again
+const ARROW = 8;                // arrowhead length (world units): a routed edge stops this far from the border
+const ARROW_SUPER = 11;
+const EDGE_IN_MS = 300;         // an interaction that is new draws itself in from its cause
+const EDGE_OUT_MS = 180;
+const LABEL_SETTLE = 3;        // layouts in a row a hidden label needs room before it shows again
 const TAB_REACH = 180;          // world units: a tab further than this from its free spots starts afresh
 // theme colors, read once a frame: reading computed style on every tick forced the page's styles to be recomputed
 const cssCache = new Map();
@@ -53,10 +58,6 @@ const ROW_FONT = "500 11.5px Instrument Sans";
 const TAB_FONT = "700 13px Instrument Sans";
 
 
-function rectOf(n) {
-  return { x0: n.x - n.w / 2, y0: n.y + n.oy, x1: n.x + n.w / 2, y1: n.y + n.oy + n.h };
-}
-
 // Where a segment from the center of a box toward (tx, ty) leaves the box.
 function boxExit(n, tx, ty, pad = 2) {
   const r = rectOf(n);
@@ -68,12 +69,6 @@ function boxExit(n, tx, ty, pad = 2) {
   const hh = (r.y1 - r.y0) / 2 + pad;
   const s = Math.min(hw / Math.abs(dx || 1e-9), hh / Math.abs(dy || 1e-9));
   return [cx + dx * Math.min(s, 1), cy + dy * Math.min(s, 1)];
-}
-
-function cubicPoint(p0, c1, c2, p3, t) {
-  const u = 1 - t;
-  return [u * u * u * p0[0] + 3 * u * u * t * c1[0] + 3 * u * t * t * c2[0] + t * t * t * p3[0],
-          u * u * u * p0[1] + 3 * u * u * t * c1[1] + 3 * u * t * t * c2[1] + t * t * t * p3[1]];
 }
 
 export class SvgRenderer extends GraphRenderer {
@@ -190,20 +185,23 @@ export class SvgRenderer extends GraphRenderer {
   }
 
   makeMarkers() {
-    const mk = (id, color, size = 6, start = false) => {
-      this.defs.append("marker").attr("id", id).attr("viewBox", "0 0 10 10").attr("refX", start ? 1 : 9).attr("refY", 5)
+    // DECISION (Oct 14): a routed edge stops short of its box by the arrowhead's length and the arrowhead is drawn from
+    // there (its base on the curve's end, refX 0), so the tip lands exactly on the border. Sizes are in world units, so
+    // an arrowhead keeps its proportion to the boxes at every zoom and does not grow with the stroke's width.
+    const mk = (id, color, size = 6, { start = false, base = true } = {}) => {
+      this.defs.append("marker").attr("id", id).attr("viewBox", "0 0 10 10").attr("refX", base ? 0 : 9).attr("refY", 5)
         .attr("markerWidth", size).attr("markerHeight", size).attr("orient", start ? "auto-start-reverse" : "auto")
-        .attr("markerUnits", "userSpaceOnUse").attr("viewBox", "0 0 10 10")
-        .append("path").attr("d", "M0 0L10 5L0 10z").attr("fill", color);
+        .attr("markerUnits", "userSpaceOnUse")
+        .append("path").attr("d", "M0 0.6L10 5L0 9.4z").attr("fill", color);
     };
-    mk("arr", "#857C70", 8);
-    mk("arr-s", "#857C70", 8, true);
-    mk("arr-learned", "#7C64C4", 8);
-    mk("arr-hl", "#874B2B", 9);
-    mk("arr-hl-s", "#874B2B", 9, true);
-    mk("arr-super", "#665E54", 11);
-    mk("arr-ghost", "#7C64C4", 8);
-    mk("arr-front", "#93465F", 8);
+    mk("arr", "#857C70", ARROW);
+    mk("arr-s", "#857C70", ARROW, { start: true });
+    mk("arr-learned", "#7C64C4", ARROW);
+    mk("arr-hl", "#874B2B", ARROW);
+    mk("arr-hl-s", "#874B2B", ARROW, { start: true });
+    mk("arr-super", "#665E54", ARROW_SUPER);
+    mk("arr-ghost", "#7C64C4", 8, { base: false });     // ghost edges run center to center and are not routed
+    mk("arr-front", "#93465F", ARROW);
     // a soft glow for deviation outlines and the guide's spotlight
     const f = this.defs.append("filter").attr("id", "soft-glow").attr("x", "-30%").attr("y", "-30%").attr("width", "160%").attr("height", "160%");
     f.append("feGaussianBlur").attr("in", "SourceGraphic").attr("stdDeviation", 2.4).attr("result", "b");
@@ -295,6 +293,36 @@ export class SvgRenderer extends GraphRenderer {
   }
 
   homeOf(box) {
+    const h = this.layoutHome(box);
+    const dy = this.shifts?.get(box.id);
+    return dy ? { x: h.x, y: h.y + dy } : h;
+  }
+
+  // Oct 14: an entity opens where it is. The layout keeps closed sizes, so an open entity makes room by pushing down the
+  // boxes beneath it whose span overlaps its own (its column, and what lies straight below); nothing else moves.
+  openShifts() {
+    const shifts = new Map();
+    this.shifts = shifts;
+    if (!this.model || this.isolated || this.mode !== "gravity") return;
+    const boxes = this.model.boxes.filter((b) => !this.hasFixedHome(b.id));
+    const at = new Map(boxes.map((b) => [b.id, this.layoutHome(b)]));
+    const opened = boxes.filter((b) => b.kind === "entity" && b.open && b.h > GEOM.HEAD_H)
+      .sort((a, z) => at.get(a.id).y - at.get(z.id).y || at.get(a.id).x - at.get(z.id).x);
+    for (const o of opened) {
+      const ho = at.get(o.id);
+      const extra = o.h - GEOM.HEAD_H + 6;
+      const x0 = ho.x - o.w / 2 - 10;
+      const x1 = ho.x + o.w / 2 + 10;
+      for (const b of boxes) {
+        if (b.id === o.id) continue;
+        const hb = at.get(b.id);
+        if (hb.y <= ho.y + 1 || hb.x + b.w / 2 <= x0 || hb.x - b.w / 2 >= x1) continue;
+        shifts.set(b.id, (shifts.get(b.id) ?? 0) + extra);
+      }
+    }
+  }
+
+  layoutHome(box) {
     if (box.kind === "entity") return this.entityHome(box.id) ?? { x: 600, y: 440 };
     // a folded superentity sits where its region was laid out (graph/layout-hier.js), when it was
     const rh = this.regionHomes?.get(box.group?.key);
@@ -314,7 +342,9 @@ export class SvgRenderer extends GraphRenderer {
     for (const id of [...this.ui.expanded]) if (!this.view.entities.some((e) => e.id === id)) this.ui.expanded.delete(id);
     this.updateHomes();
     this.model = computeModel(this.view, this.groupsInfo, this.ui);
-    this.easeSizes = reason === "lod";
+    this.openShifts();
+    // an entity opened or closed by hand also grows over a few frames, so its edges and outline follow its border
+    this.easeSizes = reason === "lod" || (reason === "structure" && this.animOK());
     const structural = this.syncNodes();
     const nodes = [...this.nodes.values()];
     this.sim.nodes(nodes);
@@ -326,8 +356,17 @@ export class SvgRenderer extends GraphRenderer {
     // of structure or size (a box that opens or closes, a card that folds, a new entity) re-packs the hierarchy, so blocks
     // stay separate and in order at every zoom. The order is the same every time, so blocks only make room; the entity
     // nearest the middle of the view stays put.
-    if (reason !== "first" && (structural || unplaced) && this.blocks()) this.repack();
+    // Oct 14: the layout is solved at full detail (fullDetail), so a change of detail (lod) moves nothing; only a change of
+    // structure (an entity or superentity added or retired) lays the graph out again
+    if (reason !== "first" && ((structural && reason !== "lod") || unplaced) && this.blocks()) this.repack();
     else if (unplaced || reason === "first" || (structural && reason !== "lod")) this.relayout();
+    // homes may have moved (a layout); the pushes of open entities follow them
+    this.openShifts();
+    for (const n of this.nodes.values()) {
+      if (n.kind === "entity" && n.flow) continue;
+      const h = this.homeOf(n.box);
+      n.hx = h.x; n.hy = h.y;
+    }
     this.draw();
     if (reason === "first") {
       resolveCollisions(nodes, 6);
@@ -337,6 +376,9 @@ export class SvgRenderer extends GraphRenderer {
       setTimeout(() => this.frameAll(0), 30);
     }
     if (reason === "lod") {
+      // before a person has moved the view, the first view keeps framing the whole graph as it folds (only the camera
+      // moves; the boxes keep their places)
+      if (!this.userMoved) this.autoFrame = true;
       this.sim.alpha(Math.max(this.sim.alpha(), 0.22)).restart();
     } else if (structural || reason === "structure") {
       if (structural) this.autoFrame = true;
@@ -412,27 +454,38 @@ export class SvgRenderer extends GraphRenderer {
   // Gravity, solved off-screen (Oct 9): every box gravity places gets a home, and keeps it until the structure
   // changes. Boxes already placed are anchored near their homes, so a change moves what it must and little else;
   // `fresh` lays everything out anew (switching to the Gravity layout, grouping by category).
+  // The layout's input (Oct 14): every superentity open, every entity at its closed size. Where things sit then does not
+  // depend on what detail-follows-zoom has folded or opened, so zooming changes detail and moves almost nothing, like a
+  // map: a card sits at the center of its region, and an entity that opens pushes down only what sits beneath it in
+  // its own column (openShifts). An isolated graph keeps the entities it pins open at their open size.
+  fullDetail() {
+    const open = this.isolated ? new Set(this.ui.expanded) : new Set();
+    const m = computeModel(this.view, this.groupsInfo, { ...this.ui, collapsed: new Set(), expanded: open });
+    const boxes = new Map(m.boxes.filter((b) => b.kind === "entity").map((b) => [b.id, b]));
+    const links = m.edges.filter((e) => boxes.has(e.a.box) && boxes.has(e.b.box) && e.a.box !== e.b.box)
+      .map((e) => ({ source: e.a.box, target: e.b.box, significance: e.sig }));
+    return { boxes, links };
+  }
+
   relayout(fresh = false) {
     const nodes = [...this.nodes.values()];
     if (!nodes.length) return;
-    const movable = (n) => !this.hasFixedHome(n.id) && (n.kind === "entity" ? this.byGravity(n.id)
-      : [...n.box.group.members].every((m) => this.byGravity(m)));
-    const prev = (n) => (n.kind === "entity" ? this.gravHomes.get(n.id)
-      : (() => { const pts = [...n.box.group.members].map((m) => this.gravHomes.get(m)).filter(Boolean);
-        return pts.length ? { x: pts.reduce((t, q) => t + q.x, 0) / pts.length, y: pts.reduce((t, q) => t + q.y, 0) / pts.length } : null; })());
+    const movableId = (id) => !this.hasFixedHome(id) && this.byGravity(id);
     // a transmission lane's entities sit in the lane, not in their blocks: the layout places everything else
     const inLane = (n) => n.kind === "entity" && !!this.lane?.ids.has(n.id);
-    const copies = nodes.filter((n) => !inLane(n)).map((n) => {
-      const was = fresh ? null : prev(n);
-      const fixed = !movable(n);
-      const start = fixed ? this.homeOf(n.box) : was ?? { x: n.x, y: n.y };
-      return { id: n.id, kind: n.kind, w: n.wGoal ?? n.w, h: n.hGoal ?? n.h, oy: n.oy, tags: n.tags, groupKeys: n.groupKeys,
-               x: start.x, y: start.y, fixed, anchor: was };
+    const full = this.fullDetail();
+    const byId = new Map(nodes.map((n) => [n.id, n]));
+    const copies = [...full.boxes.values()].filter((b) => !this.lane?.ids.has(b.id)).map((b) => {
+      const was = fresh ? null : this.gravHomes.get(b.id) ?? null;
+      const fixed = !movableId(b.id);
+      const n = byId.get(b.id);
+      const start = fixed ? (this.fixedHome(b.id) ?? this.homes.get(b.id) ?? { x: 600, y: 440 })
+        : was ?? (n ? { x: n.x, y: n.y } : this.homes.get(b.id) ?? { x: 600, y: 440 });
+      return { id: b.id, kind: "entity", w: b.w, h: b.h, oy: b.oy, tags: b.entity?.category_tags,
+               groupKeys: this.groupsInfo.ofEntity.get(b.id) ?? [], x: start.x, y: start.y, fixed, anchor: was };
     });
     const laneIds = new Set(nodes.filter(inLane).map((n) => n.id));
-    const links = this.sim.force("link").links().map((l) => ({
-      source: typeof l.source === "object" ? l.source.id : l.source, target: typeof l.target === "object" ? l.target.id : l.target,
-      significance: l.significance })).filter((l) => !laneIds.has(l.source) && !laneIds.has(l.target));
+    const links = full.links.filter((l) => !laneIds.has(l.source) && !laneIds.has(l.target));
     // DECISION (Oct 11): a fresh placement follows the hierarchy (graph/layout-hier.js): regions inside regions, causes
     // left of effects, nothing overlapping. Later changes keep boxes near their homes with the gravity physics, so a
     // new entity finds its place without reshuffling the rest.
@@ -443,23 +496,9 @@ export class SvgRenderer extends GraphRenderer {
       : staticLayout(copies, links, { groups, groupByCategory: this.opts.groupByCategory });
     if (placed.regions) this.regionHomes = placed.regions;
     if (placed.primary && (placed.primary.size || !this.homeRegion)) this.homeRegion = placed.primary;
-    for (const n of nodes) {
-      const p = placed.get(n.id);
-      if (!p || !movable(n)) continue;
-      if (n.kind === "entity") {
-        this.gravHomes.set(n.id, p);
-      } else {
-        // a closed superentity: its card goes where the layout put it, and its members move with it
-        if (this.blocks()) {
-          if (!this.regionHomes) this.regionHomes = new Map();
-          this.regionHomes.set(n.box.group.key, p);
-        }
-        const was = this.homeOf(n.box);
-        for (const m of n.box.group.members) {
-          const h = this.gravHomes.get(m) ?? was;
-          this.gravHomes.set(m, { x: h.x + p.x - was.x, y: h.y + p.y - was.y });
-        }
-      }
+    for (const c of copies) {
+      const p = placed.get(c.id);
+      if (p && !c.fixed) this.gravHomes.set(c.id, p);
     }
     this.placeLane(nodes);
     for (const n of nodes) {
@@ -1038,7 +1077,7 @@ export class SvgRenderer extends GraphRenderer {
     this.openGroups = groups;
     const pal = this.view?.palettes ?? {};
     const sel = this.layers.hulls.selectAll("g.hull:not(.exiting)").data(groups, (g) => g.key);
-    const fade = this.drawnOnce && !this.opts.reducedMotion ? 160 : 0;
+    const fade = this.animOK() ? 160 : 0;
     sel.exit().classed("exiting", true).style("pointer-events", "none").transition().duration(fade).style("opacity", 0).remove();
     const enter = sel.enter().append("g").attr("class", "hull");
     enter.append("path").attr("class", "shape").attr("fill-rule", "evenodd");
@@ -1055,8 +1094,8 @@ export class SvgRenderer extends GraphRenderer {
     this.bindGroupEvents(all);
     this.hullSel = all;
     // tabs: one per pattern (rivals side by side), above links and nodes so they stay readable
-    const tsel = this.layers.tabs.selectAll("g.hull-tabs").data(groups.filter((g) => !g.transient || g.hulls.length), (g) => g.key);
-    tsel.exit().remove();
+    const tsel = this.layers.tabs.selectAll("g.hull-tabs:not(.exiting)").data(groups.filter((g) => !g.transient || g.hulls.length), (g) => g.key);
+    tsel.exit().classed("exiting", true).style("pointer-events", "none").transition().duration(fade ? 120 : 0).style("opacity", 0).remove();
     const tenter = tsel.enter().append("g").attr("class", "hull-tabs");
     const tall = tenter.merge(tsel);
     tall.attr("data-instance", (g) => g.key);
@@ -1122,7 +1161,7 @@ export class SvgRenderer extends GraphRenderer {
     const pal = this.view?.palettes ?? {};
     const sel = this.layers.nodes.selectAll("g.pill:not(.exiting)").data(ents, (d) => d.id);
     // closing a superentity: its members fly into the card that now holds them
-    const dur = this.drawnOnce && !this.opts.reducedMotion ? 200 : 0;
+    const dur = this.animOK() ? 200 : 0;
     sel.exit().classed("exiting", true).style("pointer-events", "none").each((d, i, els) => {
       const g = d3.select(els[i]);
       const hk = this.model.host.get(d.id);
@@ -1254,8 +1293,11 @@ export class SvgRenderer extends GraphRenderer {
     const pal = this.view?.palettes ?? {};
     const rows = d.open ? d.rows.map((sid, k) => ({ sid, k, s: this.subIndex.get(sid), w: d.w, eid: d.id })) : [];
     const labels = rowLabels(rows.map((r) => r.s ?? { id: r.sid }));
-    const rs = g.selectAll("g.row").data(rows, (r) => r.sid);
-    rs.exit().remove();
+    const anim = this.animOK();
+    const rs = g.selectAll("g.row:not(.exiting)").data(rows, (r) => r.sid);
+    // closing an entity: its values fade as the box shrinks around them
+    if (anim) rs.exit().classed("exiting", true).style("pointer-events", "none").transition().duration(120).style("opacity", 0).remove();
+    else rs.exit().remove();
     const re = rs.enter().append("g").attr("class", "row").attr("data-kind", "subentity").attr("tabindex", 0).attr("role", "button");
     re.append("rect").attr("class", "bg").attr("rx", 4);
     re.append("g").attr("class", "marks");
@@ -1286,14 +1328,36 @@ export class SvgRenderer extends GraphRenderer {
       .text((r) => truncate(labels.get(r.sid) ?? r.sid, r.w - 132 - markW(r), ROW_FONT));
     ra.each((r, i, nodes) => {
       const gl = d3.select(nodes[i]).select("g.glyph").attr("transform", `translate(${r.w / 2 - 84},0)`);
+      // redrawn only when the distribution changes; a change cross-fades in, so a moved value is seen to move
+      const sig = r.s?.density ? `${r.s.density.length}|${r.s.density[0]}|${r.s.density.at(-1)}|${r.s.density[r.s.density.length >> 1]}|${r.s.summary?.q50}` : "";
+      const glNode = gl.node();
+      if (glNode.__sig === sig) return;
+      const changed = glNode.__sig != null;
+      glNode.__sig = sig;
       densityCurve(gl, r.s?.density, { width: 32, height: 10, marker: r.s?.summary?.q50 });
+      if (anim && changed) gl.interrupt().style("opacity", 0.25).transition().duration(260).style("opacity", 1);
     });
     // a forecast shown in Predict (Oct 11): the values it reaches show its effect, not today's state
     const zOf = (r) => this.rowOverride?.get(r.sid) ?? r.s?.z;
+    const zText = (z) => `${z > 0.25 ? "▲" : z < -0.25 ? "▼" : ""}${Math.abs(z).toFixed(1)} sd`;
     ra.select("text.rz").attr("x", (r) => r.w / 2 - 9)
       .classed("forecast", (r) => !!this.rowOverride?.has(r.sid))
       .attr("fill", (r) => (zOf(r) > 0.25 ? css("--up") : zOf(r) < -0.25 ? css("--down") : css("--ink-3")))
-      .text((r) => { const z = zOf(r); return r.s ? `${z > 0.25 ? "▲" : z < -0.25 ? "▼" : ""}${Math.abs(z).toFixed(1)} sd` : ""; });
+      .each((r, i, els) => {
+        // a value that changes counts to its new reading
+        const el = els[i];
+        const z = r.s ? +zOf(r) : null;
+        const was = el.__z;
+        el.__z = z;
+        const sel = d3.select(el);
+        if (anim && z != null && was != null && Number.isFinite(was) && Math.abs(was - z) >= 0.05) {
+          sel.interrupt("value").transition("value").duration(320).ease(d3.easeCubicOut)
+            .tween("text", () => { const f = d3.interpolateNumber(was, z); return (t) => { el.textContent = zText(f(t)); }; });
+        } else {
+          sel.interrupt("value");
+          el.textContent = z == null ? "" : zText(z);
+        }
+      });
     ra.each((r, i, nodes) => openNode(d3.select(nodes[i]).select("g.open-slot"), r.w / 2, 0, r.s?.open, { min: 1.5, max: 4, stub: 2.5 }));
     ra.on("click", (ev, r) => { ev.stopPropagation(); this.handlers.onSelect?.({ kind: "subentity", id: r.sid }); })
       .on("dblclick", (ev) => ev.stopPropagation())
@@ -1316,7 +1380,7 @@ export class SvgRenderer extends GraphRenderer {
     const cards = this.model.boxes.filter((b) => b.kind === "card");
     const pal = this.view?.palettes ?? {};
     const sel = this.layers.nodes.selectAll("g.card-super:not(.exiting)").data(cards, (d) => d.id);
-    const dur = this.drawnOnce && !this.opts.reducedMotion ? 190 : 0;
+    const dur = this.animOK() ? 190 : 0;
     sel.exit().classed("exiting", true).style("pointer-events", "none")
       .call((x) => x.select("g.inner").transition().duration(dur).ease(d3.easeCubicOut).attr("transform", "scale(1.12)").style("opacity", 0))
       .transition().duration(dur).remove();
@@ -1425,7 +1489,7 @@ export class SvgRenderer extends GraphRenderer {
     all.each((d) => { d.color = paletteOf(this.groupsInfo.byKey.get(d.group), pal).line; });
     all.select("path.line").attr("stroke", (d) => d.color);
     all.select("circle.end").attr("fill", (d) => d.color);
-    if (this.drawnOnce && !this.opts.reducedMotion) {
+    if (this.animOK()) {
       enter.style("opacity", 0).transition().delay(150).duration(170).style("opacity", 1);
     }
     this.tetherSel = all;
@@ -1553,9 +1617,22 @@ export class SvgRenderer extends GraphRenderer {
     if (this.opts.figure1LinksOnly) data = data.filter((d) => !d.demo);
     const internal = this.model.internal.map((x) => ({ ...x, key: `int:${x.id}`, internalArc: true }));
     const all = [...data, ...internal];
-    const sel = this.layers.edges.selectAll("g.edge").data(all, (d) => d.key);
-    sel.exit().remove();
+    const sel = this.layers.edges.selectAll("g.edge:not(.exiting)").data(all, (d) => d.key);
+    // DECISION (Oct 14): only a genuine change animates. An edge whose interactions are still drawn (re-anchored because
+    // an entity opened or a superentity folded) is swapped at once; one whose interactions left the view fades out, and
+    // one whose interactions are new draws itself in from its cause (enterEdges, once it has a path).
+    const ids = new Set(all.flatMap((d) => d.ids ?? []));
+    const before = this.drawnIds ?? null;
+    this.drawnIds = ids;
+    const anim = this.animOK();
+    sel.exit().each((d, i, els) => {
+      const gone = !(d.ids ?? []).some((x) => ids.has(x));
+      if (!anim || !gone) { els[i].remove(); return; }
+      d3.select(els[i]).classed("exiting", true).classed("entering", false).style("pointer-events", "none")
+        .transition("exit").duration(EDGE_OUT_MS).ease(d3.easeCubicOut).style("opacity", 0).remove();
+    });
     const enter = sel.enter().append("g").attr("class", "edge");
+    if (anim && before) enter.filter((d) => !(d.ids ?? []).some((x) => before.has(x))).classed("entering", true);
     enter.append("path").attr("class", "hit");
     enter.append("path").attr("class", "line");
     enter.append("path").attr("class", "flow");
@@ -1566,8 +1643,17 @@ export class SvgRenderer extends GraphRenderer {
       .classed("hedged", (d) => !!d.hedge);
     // a hedged edge (one candidate of a fuzzy end) is as visible as it is probable
     a.style("opacity", (d) => (d.hedge ? (0.3 + 0.7 * Math.min(1, d.hedgeP)).toFixed(2) : null));
+    // a weight that changes (an interaction's significance) eases to its new width
+    const widthOf = (d) => (d.super ? 2.4 + 3 * Math.min(1, d.sig) : d.learned ? 0.9 + 1.4 * Math.min(1, d.sig) : 1 + 2.2 * Math.min(1, d.sig));
+    a.select("path.line").each((d, i, els) => {
+      const el = els[i];
+      const w = +widthOf(d).toFixed(2);
+      const was = el.__w;
+      el.__w = w;
+      if (anim && was != null && Math.abs(was - w) > 0.15) d3.select(el).transition("width").duration(280).attr("stroke-width", w);
+      else if (was !== w) el.setAttribute("stroke-width", w);
+    });
     a.select("path.line")
-      .attr("stroke-width", (d) => (d.super ? 2.4 + 3 * Math.min(1, d.sig) : d.learned ? 0.9 + 1.4 * Math.min(1, d.sig) : 1 + 2.2 * Math.min(1, d.sig)))
       .attr("marker-end", (d) => (d.super ? "url(#arr-super)" : d.learned ? "url(#arr-learned)" : "url(#arr)"))
       .attr("marker-start", (d) => (d.bidir ? "url(#arr-s)" : null));
     a.select("text.label").text((d) => (d.hedge ? `≈ ${Math.round(100 * d.hedgeP)}% · ${d.label ?? ""}` : d.label ?? ""));
@@ -1580,13 +1666,47 @@ export class SvgRenderer extends GraphRenderer {
       .on("mousemove", (ev) => this.handlers.onHoverMove?.(ev))
       .on("mouseleave", () => { this.setFocus(null); this.handlers.onHover?.(null); });
     this.edgeSel = a;
+    this.pendingDrawIn = anim && !enter.filter(".entering").empty();
+  }
+
+  // Motion is for genuine changes only: never before the first view, never with reduced motion (the app setting or
+  // the system's), and never while the view moves (zooming and panning slide one buffered layer; nothing animates in it).
+  animOK() {
+    if (!this.drawnOnce || this.opts.reducedMotion) return false;
+    if (document.body.classList.contains("reduced-motion") || document.body.classList.contains("zooming")) return false;
+    if (this.container?.classList?.contains("buffering") || this.svg.node().parentNode?.classList?.contains("buffering")) return false;
+    return !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  }
+
+  // New interactions draw themselves in, from cause to effect, once they have a path: the stroke is dashed to its own
+  // length and the dash slides in, then the dash is cleared so dashed styles (learned, hedged, staged) apply again. The
+  // arrowhead and the label wait for the line to arrive (CSS: .edge.entering).
+  enterEdges() {
+    if (!this.pendingDrawIn) return;
+    this.pendingDrawIn = false;
+    this.edgeSel?.filter(".entering").each((d, i, els) => {
+      const g = els[i];
+      const line = g.querySelector("path.line");
+      const L = line?.getAttribute("d") ? line.getTotalLength() : 0;
+      const done = () => { g.classList.remove("entering"); line?.style.removeProperty("stroke-dasharray"); line?.style.removeProperty("stroke-dashoffset"); };
+      if (!(L > 0)) { done(); return; }
+      const len = L + 24;      // a little slack, for a path that grows while the layout settles
+      line.style.strokeDasharray = `${len} ${len}`;
+      line.style.strokeDashoffset = `${len}`;
+      d3.select(line).transition("draw").delay(60).duration(EDGE_IN_MS).ease(d3.easeCubicOut)
+        .styleTween("stroke-dashoffset", () => (t) => `${len * (1 - t)}`)
+        .on("end", done).on("interrupt", done);
+    });
   }
 
   drawFrontier() {
     const data = this.model.frontier;
-    const sel = this.layers.frontier.selectAll("g.frontier").data(data, (d) => d.id);
-    sel.exit().remove();
+    const sel = this.layers.frontier.selectAll("g.frontier:not(.exiting)").data(data, (d) => d.id);
+    const fade = this.animOK() ? EDGE_OUT_MS : 0;
+    sel.exit().classed("exiting", true).style("pointer-events", "none")
+      .transition("exit").duration(fade).style("opacity", 0).remove();
     const enter = sel.enter().append("g").attr("class", "frontier");
+    if (fade) enter.style("opacity", 0).transition("enter").delay(60).duration(EDGE_IN_MS).style("opacity", 1);
     enter.append("path").attr("class", "hit").attr("stroke", "transparent").attr("stroke-width", 12).attr("fill", "none");
     enter.append("path").attr("class", "line").attr("marker-end", "url(#arr-front)");
     enter.append("text").attr("class", "label").attr("dy", -5);
@@ -1679,17 +1799,15 @@ export class SvgRenderer extends GraphRenderer {
         badge?.classList.toggle("lbl-hidden", !d.learned);
         // a learned edge without its label still shows its "L", at the middle of its own path
         if (badge && d.learned) {
-          const p = g.querySelector("path.line");
-          const len = p?.getTotalLength?.() ?? 0;
-          if (len > 0) {
-            const m = p.getPointAtLength(len / 2);
-            badge.setAttribute("x", m.x + 4);
-            badge.setAttribute("y", m.y - 4);
+          if (g.__route) {
+            const m = cubicAt(g.__route, 0.5);
+            badge.setAttribute("x", m[0] + 4);
+            badge.setAttribute("y", m[1] - 4);
           } else badge.classList.add("lbl-hidden");
         }
         return;
       }
-      items.push({ el: t, badge: d.learned ? badge : null, path: g.querySelector("path.line"), text: d.label,
+      items.push({ el: t, badge: d.learned ? badge : null, route: g.__route, text: d.label,
                    font: d.super ? "700 12.5px Instrument Sans" : "500 11.5px Instrument Sans", h: d.super ? 16 : 15,
                    pri: (d.super ? 4 : 0) + (focus ? 2 : 0) + d.sig, now: focus });
     });
@@ -1697,7 +1815,7 @@ export class SvgRenderer extends GraphRenderer {
       const g = els[i];
       const t = g.querySelector("text.label");
       if (!t.textContent || g.style.display === "none" || t.style.display === "none") { t.classList.add("lbl-hidden"); return; }
-      items.push({ el: t, path: g.querySelector("path.line"), text: t.textContent, font: "500 11.5px Instrument Sans", h: 15, pri: 1.5 });
+      items.push({ el: t, route: g.__route, text: t.textContent, font: "500 11.5px Instrument Sans", h: 15, pri: 1.5 });
     });
     // steadiness (Oct 11): a label on screen keeps its place in the queue and tries its last spot first; a hidden one
     // comes back only once it has had room LABEL_SETTLE layouts in a row, so labels do not blink while boxes move
@@ -1707,16 +1825,16 @@ export class SvgRenderer extends GraphRenderer {
     let waiting = false;
     for (const it of items) {
       const w = textWidth(it.text, it.font) + 8;
-      const L = it.path?.getTotalLength?.() ?? 0;
       const was = it.el.__lbl;
       let spot = null;
-      if (L > 0) {
+      // spots along the edge's own curve (its route, so no layout is read back from the page)
+      if (it.route) {
         const tries = FS.flatMap((f) => [-5, 15].map((dy) => [f, dy]));
         if (was?.f != null) tries.unshift([was.f, was.dy]);
         for (const [f, dy] of tries) {
-          const p = it.path.getPointAtLength(L * f);
-          const r = { x0: p.x - w / 2, x1: p.x + w / 2, y0: p.y + dy - it.h + 3, y1: p.y + dy + 4 };
-          if (free(r)) { spot = { x: p.x, y: p.y + dy + 5, r, f, dy }; break; }
+          const [px, py] = cubicAt(it.route, f);
+          const r = { x0: px - w / 2, x1: px + w / 2, y0: py + dy - it.h + 3, y1: py + dy + 4 };
+          if (free(r)) { spot = { x: px, y: py + dy + 5, r, f, dy }; break; }
         }
       }
       const hidden = it.el.classList.contains("lbl-hidden");
@@ -1854,6 +1972,7 @@ export class SvgRenderer extends GraphRenderer {
     this.pillSel?.attr("transform", (d) => { const n = this.nodes.get(d.id); return n ? `translate(${n.x},${n.y})` : null; });
     this.cardSel?.attr("transform", (d) => { const n = this.nodes.get(d.id); return n ? `translate(${n.x},${n.y})` : null; });
     this.tickEdges();
+    this.enterEdges();
     this.tickTethers();
     this.tickFrontier();
     this.tickGhosts();
@@ -1872,17 +1991,6 @@ export class SvgRenderer extends GraphRenderer {
     return false;
   }
 
-  endpoint(anchor, other) {
-    const n = this.nodes.get(anchor.box);
-    if (!n) return null;
-    if (anchor.row >= 0) {
-      const y = n.y + rowCenterY(anchor.row);
-      const left = other.x < n.x;
-      return { x: n.x + (left ? -n.w / 2 : n.w / 2), y, dir: left ? -1 : 1, port: true };
-    }
-    return { n };
-  }
-
   centerOf(anchor) {
     const n = this.nodes.get(anchor.box);
     if (!n) return null;
@@ -1891,50 +1999,47 @@ export class SvgRenderer extends GraphRenderer {
     return { x: (r.x0 + r.x1) / 2, y: (r.y0 + r.y1) / 2 };
   }
 
-  edgePath(a, b, curve) {
-    const ca = this.centerOf(a);
-    const cb = this.centerOf(b);
-    if (!ca || !cb) return null;
-    const ea = this.endpoint(a, cb);
-    const eb = this.endpoint(b, ca);
-    let p1 = ea.port ? [ea.x, ea.y] : null;
-    let p2 = eb.port ? [eb.x, eb.y] : null;
-    if (!p1) p1 = boxExit(ea.n, p2 ? p2[0] : cb.x, p2 ? p2[1] : cb.y, 2);
-    if (!p2) p2 = boxExit(eb.n, p1[0], p1[1], 4);
-    if (ea.port || eb.port) {
-      const dx = Math.max(36, Math.abs(p2[0] - p1[0]) / 2.5);
-      const c1 = ea.port ? [p1[0] + ea.dir * dx, p1[1]] : [p1[0] + (p2[0] - p1[0]) / 3, p1[1] + (p2[1] - p1[1]) / 3];
-      const c2 = eb.port ? [p2[0] + eb.dir * dx, p2[1]] : [p2[0] - (p2[0] - p1[0]) / 3, p2[1] - (p2[1] - p1[1]) / 3];
-      const m = cubicPoint(p1, c1, c2, p2, 0.5);
-      return { d: `M${p1[0]} ${p1[1]}C${c1[0]} ${c1[1]} ${c2[0]} ${c2[1]} ${p2[0]} ${p2[1]}`, mx: m[0], my: m[1] };
-    }
-    if (!curve) return { d: `M${p1[0]} ${p1[1]}L${p2[0]} ${p2[1]}`, mx: (p1[0] + p2[0]) / 2, my: (p1[1] + p2[1]) / 2 };
-    const dx = p2[0] - p1[0];
-    const dy = p2[1] - p1[1];
-    const len = Math.hypot(dx, dy) || 1;
-    const cx = (p1[0] + p2[0]) / 2 - (dy / len) * 20;
-    const cy = (p1[1] + p2[1]) / 2 + (dx / len) * 20;
-    return { d: `M${p1[0]} ${p1[1]}Q${cx} ${cy} ${p2[0]} ${p2[1]}`, mx: (p1[0] + 2 * cx + p2[0]) / 4, my: (p1[1] + 2 * cy + p2[1]) / 4 };
+  // the arrowhead an edge ends in, and so how far its curve stops short of the border (see makeMarkers)
+  arrowOf(d) {
+    return d.super ? ARROW_SUPER : ARROW;
+  }
+
+  // Every edge and frontier co-movement, routed together (graph/edge-route.js): ports spread along the borders, curves
+  // clipped to them, detours around other boxes. While the layout moves this runs once a tick; at rest, once.
+  routeAll() {
+    const specs = [];
+    this.edgeSel?.each((d) => {
+      if (d.internalArc) return;
+      specs.push({ key: d.key, a: d.a, b: d.b, gapA: d.bidir ? ARROW : 1, gapB: this.arrowOf(d) });
+    });
+    this.frontSel?.each((d) => specs.push({ key: `front:${d.id}`, a: d.a, b: d.b, gapA: 1, gapB: ARROW }));
+    this.routes = routeEdges(specs, this.nodes, { rowY: rowCenterY, headH: GEOM.HEAD_H, obstacles: this.tabRects ?? [] });
   }
 
   tickEdges() {
+    this.routeAll();
+    const setD = (el, dAttr) => { if (el && el.__d !== dAttr) { el.__d = dAttr; el.setAttribute("d", dAttr); } };
     this.edgeSel?.each((d, i, els) => {
-      const g = d3.select(els[i]);
-      let p;
+      const g = els[i];
+      let r;
       if (d.internalArc) {
         const n = this.nodes.get(d.box);
-        if (!n) { g.style("display", "none"); return; }
-        const x = n.x + n.w / 2;
-        const ya = n.y + rowCenterY(d.ra);
-        const yb = n.y + rowCenterY(d.rb);
-        const bulge = 16 + 4 * Math.abs(d.rb - d.ra);
-        p = { d: `M${x} ${ya}C${x + bulge} ${ya} ${x + bulge} ${yb} ${x + 1} ${yb}`, mx: x + bulge * 0.75, my: (ya + yb) / 2 };
-      } else p = this.edgePath(d.a, d.b, d.curve);
-      if (!p) { g.style("display", "none"); return; }
-      g.style("display", null);
-      g.select("path.line").attr("d", p.d);
-      g.select("path.hit").attr("d", p.d);
-      if (d.flowing) g.select("path.flow").attr("d", p.d);
+        if (n) {
+          // two values of one entity: a loop out of its right side and back, ending in an arrow on the border
+          const x = n.x + n.w / 2;
+          const ya = n.y + rowCenterY(d.ra);
+          const yb = n.y + rowCenterY(d.rb);
+          const bulge = 16 + 4 * Math.abs(d.rb - d.ra);
+          r = { p0: [x + 1, ya], c1: [x + bulge, ya], c2: [x + bulge, yb], p3: [x + this.arrowOf(d), yb] };
+          r.d = `M${r.p0[0]} ${r.p0[1]}C${r.c1[0]} ${r.c1[1]} ${r.c2[0]} ${r.c2[1]} ${r.p3[0]} ${r.p3[1]}`;
+        }
+      } else r = this.routes.get(d.key);
+      if (!r) { if (g.style.display !== "none") g.style.display = "none"; return; }
+      if (g.style.display === "none") g.style.display = "";
+      g.__route = r;
+      setD(g.querySelector("path.line"), r.d);
+      setD(g.querySelector("path.hit"), r.d);
+      if (d.flowing) setD(g.querySelector("path.flow"), r.d);
       // labels are placed by layoutLabels (clear of other text)
     });
   }
@@ -1942,11 +2047,12 @@ export class SvgRenderer extends GraphRenderer {
   tickFrontier() {
     this.frontSel?.each((d, i, els) => {
       const g = d3.select(els[i]);
-      const p = this.edgePath(d.a, d.b, 1);
-      if (!p) { g.style("display", "none"); return; }
+      const r = this.routes?.get(`front:${d.id}`);
+      if (!r) { g.style("display", "none"); return; }
       g.style("display", null);
-      g.select("path.line").attr("d", p.d);
-      g.select("path.hit").attr("d", p.d);
+      els[i].__route = r;
+      g.select("path.line").attr("d", r.d);
+      g.select("path.hit").attr("d", r.d);
       const a = this.centerOf(d.a);
       const b = this.centerOf(d.b);
       const long = a && b && Math.hypot(a.x - b.x, a.y - b.y) > 90;
@@ -2278,6 +2384,7 @@ export class SvgRenderer extends GraphRenderer {
   fitReadable(duration = 320) {
     this.autoFrame = false;
     this.zoom.fit(this.bounds(true), duration, { minK: 0.68, pad: this.freePad({ top: 132, right: 24, bottom: 64, left: 24 }) });
+    setTimeout(() => this.lod.mark(), duration + 40);
   }
 
   // Frame the boxes that hold these entities, subentities, or superentity instances in the part of the

@@ -248,7 +248,7 @@ export function initAdmin({ renderer, actions }) {
     const pol = store.config?.review_policy;
     return `
       <h4>The guide</h4>
-      <p class="small muted">A raccoon that shows what the model does, step by step, while it forecasts or reads news.</p>
+      <p class="small muted">A red panda that shows what the model does, step by step, while it forecasts or reads news.</p>
       <div class="seg" role="group">${[["first", "First time"], ["always", "Every time"], ["off", "Off"]]
         .map(([k, l]) => `<button data-guide="${k}" aria-pressed="${gm === k}">${l}</button>`).join("")}</div>
       <div class="row" style="margin-top:6px"><button class="ghost small" data-a="guide-again">Show it on the next forecast</button></div>

@@ -781,19 +781,21 @@ def forecast_view(fc: Any, explanation: Any, wm: WorkingMemory, watchlist: dict 
                         "effects": [x.model_dump() for x in fc.effect_summary.get(sid, [])],
                         "z_levels": [x.model_dump() for x in fc.z_summary.get(sid, [])],
                         "decomposition": fc.decomposition.get(sid, {}),
-                        "effect_density": fc.effect_density.get(sid, [])})
+                        "effect_density": fc.effect_density.get(sid, []),
+                        "split": fc.split.get(sid, {})})
     groups = []
     for grp in fc.groups:
         groups.append({"id": grp.id, "kind": grp.kind, "ref": grp.ref, "name": grp.name,
                        "members": len(grp.members), "effects": [x.model_dump() for x in grp.effect_summary],
-                       "effect_density": grp.effect_density,
+                       "effect_density": grp.effect_density, "split": grp.split,
                        "top": [{"id": sid, "name": g.subentities[sid].name if sid in g.subentities else sid, "effect": v}
                                for sid, v in grp.top]})
     movers = [{"id": sid, "name": g.subentities[sid].name if sid in g.subentities else sid,
                "entity": g.entities[g.subentities[sid].entity_id].name if sid in g.subentities else None, "effect": v}
               for sid, v in (fc.movers or {}).items()]
     return {"forecast": fc.model_dump(mode="json", exclude={"summary", "effect_summary", "z_summary", "groups",
-                                                            "effect_density", "movers", "transmission", "paths"}),
+                                                            "effect_density", "movers", "transmission", "paths",
+                                                            "split"}),
             "movers": movers, "transmission": transmission_view(fc, wm, watchlist),
             "dates": dates, "targets": targets, "groups": groups,
             "scenarios": [{"id": s.id, "name": s.name, "weight": s.weight, "network_ids": s.network_ids,

@@ -33,7 +33,7 @@ function contextText(bucket, nm) {
   if (!bucket || bucket === "neutral") return "neutral: no driver beyond ±0.75 sd";
   return bucket.split("&").map((part) => {
     const m = /^(.+)>([+-])([\d.]+)$/.exec(part);
-    return m ? `${nm.node(m[1])} ${m[2] === "+" ? "above +" : "below −"}${m[3]} sd` : part;
+    return m ? `${nm.value(m[1])} ${m[2] === "+" ? "above +" : "below −"}${m[3]} sd` : part;
   }).join(" and ");
 }
 
@@ -44,7 +44,7 @@ function evidenceHtml(ev, nm) {
   const d = ev.decision;
   const parts = [`<div class="small"><b>p comes from</b> ${esc(BASIS[ev.basis] ?? ev.basis)}.</div>`];
   if (co) {
-    parts.push(`<div class="small muted">${esc(nm.node(co.earlier))} → ${esc(nm.node(co.later))}, ${co.lag_days} days later,
+    parts.push(`<div class="small muted">${(nm.valueHtml(co.earlier))} → ${(nm.valueHtml(co.later))}, ${co.lag_days} days later,
       ${co.sign > 0 ? "same" : "opposite"} direction · support ${fmt(co.support)} · ${co.consistent + co.inconsistent
       ? `${co.consistent} of ${co.consistent + co.inconsistent} spaced checks consistent` : "no spaced checks yet"} · correlation ${fmt(co.corr)} · ${esc(String(co.status).replace(/_/g, " "))}</div><div class="ev-scatter"></div>`);
   }
@@ -56,13 +56,13 @@ function evidenceHtml(ev, nm) {
   }
   if (d) {
     const rows = Object.entries(d.profile ?? {});
-    parts.push(`<div class="small">The hypothesis: <b>${esc(nm.node(d.subentity))}</b> ${Math.abs(d.change ?? 0) < 1e-9 ? "stays unchanged"
+    parts.push(`<div class="small">The hypothesis: <b>${(nm.valueHtml(d.subentity))}</b> ${Math.abs(d.change ?? 0) < 1e-9 ? "stays unchanged"
       : `changes by ${signed(d.change)} ${esc(unit(d.subentity))}`} within ${d.window_days ?? "?"} days.</div>
       <div class="small muted">Its context now: ${esc(contextText(d.context, nm))}</div>
       ${rows.length ? `<table class="list small ev-profile"><thead><tr><th>Context</th><th>Raised</th><th>Cut</th><th>Held</th></tr></thead>
         <tbody>${rows.map(([c, n]) => `<tr class="${c === d.context ? "hl" : ""}"><td>${esc(contextText(c, nm))}</td><td>${n[0]}</td><td>${n[1]}</td><td>${n[2]}</td></tr>`).join("")}</tbody></table>`
         : `<div class="small faint">No decisions recorded yet: its entity memory has no profile for it.</div>`}
-      ${d.drivers.length ? `<div class="small">Driven by ${d.drivers.map((x) => `${esc(nm.node(x.source))} <span class="mono">${signed(x.z)} sd</span> <span class="faint">(${esc(x.label)})</span>`).join("; ")}</div>` : ""}`);
+      ${d.drivers.length ? `<div class="small">Driven by ${d.drivers.map((x) => `${(nm.valueHtml(x.source))} <span class="mono">${signed(x.z)} sd</span> <span class="faint">(${esc(x.label)})</span>`).join("; ")}</div>` : ""}`);
   }
   if (ev.series.length) {
     parts.push(`<div class="small muted" style="margin-top:6px">The data it reads: daily deviation from normal (sd), the last ${ev.series[0].points.length} days;
@@ -111,7 +111,7 @@ export function initHypotheses({ toast }) {
         const k = kindOf(h);
         return `<details class="hrow" data-h="${esc(h.id)}" ${opened.has(h.id) ? "open" : ""}>
           <summary><span class="badge ${k === "entity_decision" ? "init" : k === "interaction_absent" ? "hyp" : "front"}" title="${esc(h.kind)}">${esc(KIND_NAME[k])}</span>
-            <span class="st">${esc(String(h.statement).replace(/ \(co-movement on the frontier\)$/, ""))}</span>
+            <span class="st">${names().namedHtml(String(h.statement).replace(/ \(co-movement on the frontier\)$/, ""))}</span>
             <span class="small muted" title="p: the probability that it holds · informational value (sd): how much your forecasts would move if it held, times how unsure the model is">p ${fmt(h.probability)} · informational value ${fmt(v.current_value, 2)} sd</span></summary>
           <div class="hbody"><div class="small faint mono">${esc(h.id)} · ${esc(h.status)} · half-life ${fmt(h.half_life_days, 0)} days</div>
             <div class="spark"></div>

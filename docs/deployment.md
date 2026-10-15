@@ -76,6 +76,8 @@ Every page, static file, API call, the API docs, and the WebSocket stream requir
 
 `WORLD_MODEL_LOGINS` adds logins that each open their own scenario, as comma-separated `username:password:scenario` entries (no `:` or `,` inside a field). On dev it holds Emily's login, which opens `emily_demo`; the main login opens `WORLD_MODEL_SCENARIO` (`prod_demo` on dev; `oil_shock_demo` when unset). Each login gets an engine of its own, with its own storage (`var/axelrod/demo-<username>`) and trace stream, so reviews under one login never show under another. Everyone who signs in with the same login still shares that login's session. The variable lives in Railway only, like the main credentials.
 
+The top bar's demo menu ([demos.md](demos.md#switching-demos)) switches only the signed-in login's engine. Each demo a login opens keeps its own storage next to that login's storage (`var/axelrod/demo-<username>-<demo>`), and it stays in memory until the server restarts. The first time the production or full demo opens on a fresh container, its history is replayed, which takes a few minutes.
+
 The browser keeps a Basic Auth login until it is closed: to switch logins, use a private window, or sign in through `https://<username>@world-model-dev.up.railway.app`.
 
 Emily's research bundle (`data/emily_data/`) is never uploaded (`.gitignore`, `.dockerignore`). On the hosted demo, import it with the file picker.

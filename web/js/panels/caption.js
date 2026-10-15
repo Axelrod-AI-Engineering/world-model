@@ -1,6 +1,7 @@
 // The caption above the canvas: one line of story for each scripted step, and the read-only banner for
 // earlier versions. After a step, "How it learned" and "How it inferred" buttons replay what the model did with its news and its
 // questions, one step at a time.
+import { names } from "../names.js";
 import { backToLive, on, store } from "../store.js";
 import { esc } from "../util.js";
 
@@ -50,7 +51,8 @@ export function initCaption({ onWalk } = {}) {
     el.querySelector(".step").textContent = c.step != null ? `${c.step + 1} / ${total}` : "";
     // DECISION: the user asked that the opening sentence go; before the first step the caption is empty and
     // hidden, and any caption can be cleared (✕) until the next step brings its own
-    let text = c.text || st?.caption || "";
+    // a value the story names reads with its entity ("Federal Reserve · policy rate"), as everywhere else
+    let text = names().named(c.text || st?.caption || "");
     const loading = !st?.loaded && !text;
     if (loading) text = "Loading the world model…";
     el.querySelector(".text").textContent = text;

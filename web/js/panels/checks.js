@@ -2,6 +2,7 @@
 // check happens. A check weighs one piece of evidence and moves one stored weight; enough of them, past a bound,
 // raise a proposal for review. The pane opens on the live list; how the checks work sits below it.
 import { api } from "../api.js";
+import { names } from "../names.js";
 import { on } from "../store.js";
 import { errorText, esc, fmt } from "../util.js";
 
@@ -31,7 +32,7 @@ export function initChecks({ toast, onSelect }) {
     const met = m.below ? m.value < m.bound : m.value >= m.bound;
     const val = m.unit === "pct" ? `${Math.round(100 * m.value)}%` : m.unit === "r" ? fmt(m.value, 2) : fmt(m.value, 1);
     const bnd = m.unit === "pct" ? `${Math.round(100 * m.bound)}%` : m.unit === "r" ? fmt(m.bound, 2) : fmt(m.bound, 0);
-    return `<div class="ck-row ${met ? "met" : ""}"><span class="ck-what">${esc(m.what)}</span>
+    return `<div class="ck-row ${met ? "met" : ""}"><span class="ck-what">${names().namedHtml(m.what)}</span>
       <span class="ck-bar wide"><i style="width:${(100 * frac).toFixed(0)}%"></i></span>
       <span class="mono ck-val">${val} <span class="muted">${m.below ? "falls below" : "of"} ${bnd}</span></span></div>`;
   };
@@ -50,9 +51,9 @@ export function initChecks({ toast, onSelect }) {
       <section class="mf-sec"><h4>Being checked now <span class="small muted">${data.live.length} item${data.live.length === 1 ? "" : "s"}</span></h4>
         ${data.live.length ? [...byKind.entries()].map(([k, xs]) => `<div class="ck-group"><div class="ck-gh" title="${esc(KIND[k]?.help ?? "")}">${esc(KIND[k]?.word ?? k)}</div>
           ${xs.map((x) => `<div class="ck-item" data-kind="${esc(x.kind)}" data-id="${esc(x.id)}" tabindex="0" role="button">
-            <div class="ck-label"><b>${esc(x.label)}</b>${x.status && x.status !== "holding" ? ` <span class="badge">${esc(x.status.replace(/_/g, " "))}</span>` : ""}</div>
+            <div class="ck-label"><b>${names().namedHtml(x.label)}</b>${x.status && x.status !== "holding" ? ` <span class="badge">${esc(x.status.replace(/_/g, " "))}</span>` : ""}</div>
             ${x.progress.map(meter).join("")}
-            <div class="small muted">${x.last ? `last checked ${esc(x.last)} · ` : ""}next: ${esc(x.next)}${x.passed != null ? ` · passed ${x.passed}, failed ${x.failed}` : ""}</div></div>`).join("")}</div>`).join("")
+            <div class="small muted">${x.last ? `last checked ${esc(x.last)} · ` : ""}next: ${names().namedHtml(x.next)}${x.passed != null ? ` · passed ${x.passed}, failed ${x.failed}` : ""}</div></div>`).join("")}</div>`).join("")
           : `<p class="small muted">Nothing is being checked: no fuzzy end is hedged, no co-movement is held, and no candidate superentity waits.</p>`}
       </section>
       <section class="mf-sec"><h4>When checks happen</h4>
