@@ -89,6 +89,8 @@ uv run python scripts/imports/bundles.py days sally_demo data/sally_data/_bundle
 
 5. **Export the world model** (☰, Learn) exports the model as it stands after the research approved so far, without a forecast: the 036 domain pack, its 020 registry entry, and the current state as an evidence pack, as one file or as the separate files the agents' load order names. Export again after each day's research, and the agents read the updated model.
 
+To write the whole upload set to a folder (after folding in a folder of daily bundles, with an evidence pack per ready thesis, and the client's 000, 010, and 020 beside it, 020 with our row appended): `uv run python scripts/imports/export_context.py sally_demo data/sally_data/exports/<name> --days data/sally_data/days --theses --client-core <their folder>`. Point it at a gitignored folder: the set holds client files.
+
 The API: `GET /api/context/v4` returns the export (load order, domain pack, registry entry, evidence); `?forecast=<id>` adds that forecast's evidence pack. The exporter is `src/axelrod_wm/context/v4.py`.
 
 ## The tutorial (small and production demos)
