@@ -1933,3 +1933,7 @@ body.txpath #canvas .root > g:not(.layer-txpath) { display: none; }
 .cp-branch > .small { flex-basis: 100%; }
 .cp-concept { display: inline-flex; align-items: center; gap: 5px; }
 .cp-concept i { display: inline-block; width: 18px; height: 11px; border-radius: 4px; border-style: solid; background: var(--sheet); }
+
+/* the world model export's counts (Oct 15) */
+.context .ctx-counts { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 8px 0 2px; }
+.context .ctx-counts b { font-variant-numeric: tabular-nums; }
