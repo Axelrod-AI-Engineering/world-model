@@ -136,6 +136,8 @@ class ScenarioScript(_M):
     imports_dir: str | None = None    # a server-side folder of bundles, when it exists (never committed)
     examples: str | None = None       # a demo with a chain of examples: "small" or "prod" (sim/examples)
     base: str | None = None           # a demo built on another scenario's world and history (prod_demo)
+    # the client-format export's identity (context/v4.py): domain_pack_id, name, slug, file_index, edge_id_start
+    context_pack: dict = {}
     steps: list[ScenarioStep]
 
     @classmethod

@@ -643,7 +643,8 @@ async def get_context_v4(request: Request, forecast: str | None = None) -> dict:
         eng = ctl.engine
         return context_pack(eng.wm, eng.ltm, scenario_id=script.id, title=script.title.split(":")[0],
                             book=list(watch.get("entities", [])), version=eng.version, state_hash=eng.state_hash,
-                            forecast=fc, explanation=ctl.explanation(fc.explanation_id) if fc else None)
+                            forecast=fc, explanation=ctl.explanation(fc.explanation_id) if fc else None,
+                            pack_cfg=script.context_pack)
 
     return await st.call(run)
 

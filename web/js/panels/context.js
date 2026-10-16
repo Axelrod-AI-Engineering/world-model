@@ -1,13 +1,13 @@
 // Agent context (Oct 15): the world model as the context layer for a client's agents. A client's agents (a decision
 // engine, a disruption-propagation agent, an execution and monetization agent) load a world model before they reason:
-// a domain pack (companies, clusters, edges, transmission paths) and a dated baseline, in the client's v4.1.4 format.
+// the numbered files of the client's v4.1.4 format (000, 010, 020, then a 03x domain pack) and then evidence. The
+// export is a domain pack, a registry entry to append to 020, and evidence packs (the current state, and a forecast).
 // GET /api/context/v4 exports ours in that format, with a forecast's decision context when one is open. The dialog
 // shows the card an agent fills from it (the Decision Engine's "Scenarios & conviction") beside the context itself, and
 // which part of the context each of the agents' cards reads; Download saves the whole pack as one JSON file. Opened
-// without a forecast (Learn, ☰ › Export the world model), it exports the world model as it stands: the pack and baseline.
+// without a forecast (Learn, ☰ › Export the world model), it exports the world model as it stands: the pack, its registry entry, and the state as evidence.
 // The context grounds the agent's judgment and never concludes it: no ratings, no sizing.
 import { api } from "../api.js";
-import { names as nameIndex } from "../names.js";
 import { emit, on } from "../store.js";
 import { errorText, esc, fmt } from "../util.js";
 
@@ -50,7 +50,8 @@ export function scenarioTableHtml(t, { compact = false } = {}) {
   </div>`;
 }
 
-const PARTS = [["manifest", "Manifest"], ["domain_pack", "Domain pack"], ["baseline", "Baseline"], ["forecast", "Decision context"]];
+const PARTS = [["manifest", "Load order"], ["domain_pack", "Domain pack"], ["registry_entry", "Registry entry"],
+               ["evidence", "Evidence"], ["forecast", "Forecast evidence"]];
 
 function partSummary(key, v) {
   if (!v) return "";
@@ -58,17 +59,23 @@ function partSummary(key, v) {
     return `<ol class="small ctx-load">${v.load_order.map((f) => `<li><span class="mono">${esc(f.file)}</span> <span class="muted">${esc(f.source)}</span></li>`).join("")}</ol>`;
   }
   if (key === "domain_pack") {
-    const counts = ["companies", "clusters", "cluster_memberships", "company_edge_relationships", "transmission_paths",
-                    "cross_validation_assertions", "industry_caveat_definitions"].map((k) => `${(v[k] ?? []).length} ${k.replaceAll("_", " ")}`);
+    const counts = ["companies", "clusters", "sector_packs", "company_edge_relationships", "transmission_paths",
+                    "required_search_scopes", "cross_validation_assertions", "industry_caveat_definitions"].map((k) => `${(v[k] ?? []).length} ${k.replaceAll("_", " ")}`);
     const e = v.company_edge_relationships?.[0];
     return `<div class="small muted">${counts.join(" · ")}</div>
-      ${e ? `<div class="small" style="margin-top:6px">An edge as the agents read it: <b>${esc(nameIndex().value?.(e.source_metric) ?? e.source_metric)}</b> ${esc(e.mechanism_label)}
-        <b>${esc(nameIndex().value?.(e.affected_metrics[0]) ?? e.affected_metrics[0])}</b>: ${esc(e.direction)}, ${esc(e.confidence_prior)} confidence, ${esc(e.time_horizon)}.
+      ${e ? `<div class="small" style="margin-top:6px">A relationship as the agents read it: <b>${esc(e.mechanism_label)}</b>: ${esc(e.direction)}, ${esc(e.confidence_prior)} confidence, ${esc(e.time_horizon)}.
+        Validator: ${esc(e.validator)}.
         <span class="muted">Ours adds the size (${fmt(e.axelrod.effect_sd_per_sd)} sd per sd), the chance the link exists
         (${fmt(e.axelrod.existence_p * 100, 0)}%), and its evidence (${e.axelrod.evidence_count}).</span></div>` : ""}`;
   }
-  if (key === "baseline") {
-    return `<div class="small muted">As of ${esc(String(v.as_of).slice(0, 10))} · version ${v.state_version} · ${v.values.length} values ·
+  if (key === "registry_entry") {
+    const r = v.domains[0];
+    return `<div class="small muted">Appended to their domain pack registry (020), so the harness activates “${esc(r.domain_pack_name)}” by its pack id or file index
+      ${esc(r.file_index)}, from ${r.activation_terms.length} activation terms.</div>`;
+  }
+  if (key === "evidence") {
+    return `<div class="small muted">Live state is evidence, loaded after the domain pack, never part of it. As of ${esc(String(v.as_of).slice(0, 10))} ·
+      version ${v.state_version} · ${v.values.length} values (${v.values.filter((x) => x.observed).length} observed in reviewed research) ·
       ${v.unresolved_questions.length} open questions from the hypothesis frontier</div>`;
   }
   return `<div class="small muted">${esc(v.question)} · ${v.targets.length} targets · ${v.transmission.length} transmission steps ·
@@ -78,23 +85,20 @@ function partSummary(key, v) {
 // the world model on its own (Oct 15, the Learn side's export): what the agents receive, at a glance
 function modelCardHtml(p) {
   const pack = p.domain_pack;
-  const base = p.baseline;
-  const nm = nameIndex();
-  const label = (id) => nm.value?.(id) ?? id;
+  const base = p.evidence;
   const edges = [...pack.company_edge_relationships]
     .sort((a, b) => Math.abs(b.axelrod.effect_sd_per_sd) * b.axelrod.existence_p - Math.abs(a.axelrod.effect_sd_per_sd) * a.axelrod.existence_p)
     .slice(0, 6);
   const counts = [["companies", pack.companies.length], ["clusters", pack.clusters.length],
                   ["relationships", pack.company_edge_relationships.length], ["transmission paths", pack.transmission_paths.length],
-                  ["values in the baseline", base.values.length], ["open questions", base.unresolved_questions.length]];
+                  ["values in the evidence", base.values.length], ["open questions", base.unresolved_questions.length]];
   return `<div class="group-label">The world model, as it stands</div>
     <div class="ctx-q">As of ${esc(String(base.as_of).slice(0, 10))} · version ${base.state_version}</div>
     <div class="small muted">State hash <span class="mono">${esc(String(base.state_hash ?? "").slice(0, 12))}</span>: an agent can tell which
       committed version its context came from, and the same version always exports the same pack.</div>
     <div class="ctx-counts small">${counts.map(([k, n]) => `<span><b>${n}</b> ${esc(k)}</span>`).join("")}</div>
     <div class="group-label" style="margin-top:10px">Strongest relationships</div>
-    <ul class="small ctx-feeds">${edges.map((e) => `<li>${esc(label(e.source_metric))} <i class="via">${esc(e.mechanism_label)}</i>
-      ${esc(label(e.affected_metrics[0]))} <span class="muted">· ${esc(e.direction)}, ${esc(e.confidence_prior)} confidence,
+    <ul class="small ctx-feeds">${edges.map((e) => `<li>${esc(e.mechanism_label)} <span class="muted">· ${esc(e.direction)}, ${esc(e.confidence_prior)} confidence,
       ${e.axelrod.effect_sd_per_sd > 0 ? "+" : ""}${fmt(e.axelrod.effect_sd_per_sd)} sd per sd</span></li>`).join("")}</ul>
     ${base.unresolved_questions.length ? `<div class="group-label" style="margin-top:10px">Open questions it passes on</div>
       <ul class="small ctx-feeds">${base.unresolved_questions.slice(0, 3).map((q) => `<li>${esc(q.question)} <span class="faint">(${fmt(q.probability * 100, 0)}%)</span></li>`).join("")}</ul>` : ""}`;
@@ -118,8 +122,9 @@ export function initContext() {
         <button class="small" data-download ${p ? "" : "disabled"} title="The whole context pack as one JSON file">Download</button>
         <button class="ghost win-max-btn" data-max type="button" aria-label="Full screen" title="Full screen (or back)">⤢</button><button class="close" aria-label="Close (Esc)">✕</button></header>
       <p class="small muted elede">${st.forecast ? `The world model is the context layer for the agents. This is it in the agents' own world-model format
-        (v4.1.4): a domain pack and a dated baseline, and the forecast's decision context.` : `The world model as it stands now on the learning
-        side, in the agents' own world-model format (v4.1.4): the domain pack and the dated baseline, at the latest committed version.
+        (v4.1.4): a 03x domain pack loaded after their 000, 010, and 020, and the state and the forecast as evidence.` : `The world model as it
+        stands now on the learning side, in the agents' own world-model format (v4.1.4): a 03x domain pack loaded after their 000, 010, and
+        020 (with its registry entry for 020), and the current state as an evidence pack, at the latest committed version.
         Export it again after new research is approved, and the agents read the updated model.`} The agents read it before they reason;
         it grounds their judgment and never concludes it.</p>
       ${st.error ? `<p class="error small">${esc(st.error)}</p>` : ""}
@@ -147,15 +152,16 @@ export function initContext() {
     if (t.dataset.max != null) { pane.classList.toggle("win-max"); return; }
     if (t.dataset.part) { st.part = t.dataset.part; render(); return; }
     if (t.dataset.download != null && st.pack) {
-      const b = st.pack.baseline;
+      const b = st.pack.evidence;
       save(`${st.pack.domain_pack.domain_pack_id}_${String(b.as_of).slice(0, 10)}_v${b.state_version}${st.forecast ? `_${st.forecast}` : ""}.context.json`, st.pack);
     }
     // each part under the file name the manifest's load order gives it, so the files drop into the agents' folder as is
     if (t.dataset.files != null && st.pack) {
       const files = st.pack.manifest.load_order.filter((f) => f.source.startsWith("this export"));
-      const partOf = (f) => (f.source.includes("domain_pack") ? "domain_pack" : f.source.includes("baseline") ? "baseline" : "forecast");
-      files.forEach((f, i) => setTimeout(() => save(f.file.endsWith(".json") ? f.file : `${f.file}.json`, st.pack[partOf(f)]), 250 * i));
-      setTimeout(() => save("axelrod_manifest.json", st.pack.manifest), 250 * files.length);
+      const partOf = (f) => (f.source.includes("domain_pack") ? "domain_pack" : f.source.includes("evidence") ? "evidence" : "forecast");
+      files.forEach((f, i) => setTimeout(() => save(f.file, st.pack[partOf(f)]), 250 * i));
+      setTimeout(() => save(st.pack.manifest.registry_entry_file, st.pack.registry_entry), 250 * files.length);
+      setTimeout(() => save("axelrod_manifest.json", st.pack.manifest), 250 * (files.length + 1));
     }
   });
 
