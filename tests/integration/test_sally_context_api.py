@@ -106,3 +106,12 @@ def test_forecast_views_are_compact(client, posed):
     assert all("levels" not in s for s in posed["scenarios"])
     e = posed["targets"][0]["effects"][-1]
     assert all(len(repr(v)) <= 9 for v in e.values())
+
+
+def test_the_world_model_exports_on_its_own_at_the_current_version(client):
+    st = client.get("/api/sim/status").json()
+    ctx = client.get("/api/context/v4").json()
+    assert ctx["baseline"]["state_version"] == st["version"] and ctx["baseline"]["state_hash"]
+    files = [f["file"] for f in ctx["manifest"]["load_order"]]
+    assert any(f.startswith("036_world_model_domain_pack") for f in files) and "036_19_current_baseline.json" in files
+    assert not any("decision_context" in f for f in files)

@@ -83,6 +83,8 @@ uv run python scripts/imports/bundles.py check sally_demo data/sally_data/_bundl
 uv run python scripts/imports/bundles.py days sally_demo data/sally_data/_bundle_parts data/sally_data/days --title "Sally's research"
 ```
 
+5. **Export the world model** (☰, Learn) exports the model as it stands after the research approved so far, without a forecast: the domain pack and the dated baseline, as one file or as the separate files the agents' load order names. Export again after each day's research, and the agents read the updated model.
+
 The API: `GET /api/context/v4` returns the pack (domain pack and baseline); `?forecast=<id>` adds that forecast's decision context. The exporter is `src/axelrod_wm/context/v4.py`.
 
 ## The tutorial (small and production demos)

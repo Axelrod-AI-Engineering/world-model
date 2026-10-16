@@ -1079,6 +1079,8 @@ async function boot() {
   on("load-scenario", (id) => { consolePane.close(); examples.close(); loadScenario(id); });
   on("open-version", (v) => { openVersion(v).catch((err) => toast(errorText(err), "err")); });
   $("#btn-admin").addEventListener("click", () => admin.toggle());
+  // Export the world model (Oct 15): the Learn side's counterpart of a forecast's Agent context: the model as it stands
+  $("#btn-export-wm").addEventListener("click", () => { $("#menu-panel").hidden = true; emit("open-context", null); });
   // Reset to the original demo (Oct 15): every demo under this login goes back to its initial state; every page on
   // this login reloads (the server's "switched" message), this one included
   $("#btn-reset-all").addEventListener("click", async () => {
