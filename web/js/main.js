@@ -49,6 +49,11 @@ import { names } from "./names.js";
 import { applyTrace, backToLive, clearStaged, emit, on, openVersion, refreshGraph, scheduleRefresh, setStatus, stepShown, store } from "./store.js";
 import { errorText, esc, fmt, signed } from "./util.js";
 
+// The app is one fixed screen and the document never scrolls (Oct 17). `overflow: clip` on the root still lets a
+// script scroll it (scrollIntoView, focus on an element past the edge, a test driver's click), which slid the top bar
+// and every panel off the screen; put it back at once.
+window.addEventListener("scroll", () => { if (window.scrollX || window.scrollY) window.scrollTo(0, 0); }, { passive: true });
+
 const $ = (sel) => document.querySelector(sel);
 const IS_MAC = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || "");
 const MOD = IS_MAC ? "⌘" : "Ctrl-";

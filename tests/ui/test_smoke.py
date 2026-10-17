@@ -185,7 +185,9 @@ def test_the_demo_loads_opens_nodes_and_steps(server):
         page.wait_for_selector("#methods .doc ol.refs li", timeout=20000)
         assert page.locator("#methods .doc ol.refs li").count() >= 40
         page.keyboard.press("Escape")
-        # two scripted steps (the second reads the Fed's decision), then walk through it
+        # two scripted steps (the second reads the Fed's decision), then walk through it. Asking moved the app to
+        # Predict, where the step keys only say to switch back (they learn), so step from Learn
+        page.click("#mode-learn")
         page.locator("#canvas").focus()
         # the label shows the step on screen (from its start); the Step button comes back when it has finished
         done = "(n) => document.querySelector('#step-label').textContent.startsWith(n + ' /') && !document.querySelector('#btn-step').disabled"
