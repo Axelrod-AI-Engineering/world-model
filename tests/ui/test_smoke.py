@@ -147,7 +147,8 @@ def test_the_demo_loads_opens_nodes_and_steps(server):
         page.click(".brief-nudge [data-bn-open]")
         page.wait_for_selector("#left-panel:not([hidden]) .brief h3", timeout=60000)
         text = page.locator(".brief").inner_text().lower()
-        assert "bottom line" in text and "transmission path" in text and "timeline" in text
+        # its sections (renamed Oct 15: the bottom line reads "Summary", the timeline "Expected timing")
+        assert "summary" in text and "transmission path" in text and "expected timing" in text
         # selecting text in the brief offers a chat, which is a labeled mock-up. Panels slide in and the brief settles its
         # layout after it opens (Oct 14), so the drag waits until the line stops moving
         box = settled_box(page, page.locator(".brief .lede").first)
