@@ -1,5 +1,7 @@
 # Axelrod World Model
 
+[![Tests](https://github.com/Axelrod-AI-Engineering/world-model/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/Axelrod-AI-Engineering/world-model/actions/workflows/tests.yml)
+
 The **Axelrod World Model**, v0. It is one causal world model of the economy, built like version control:
 
 <!-- toc -->
@@ -7,6 +9,8 @@ The **Axelrod World Model**, v0. It is one causal world model of the economy, bu
 
 - [Quick start](#quick-start)
 - [Hosted demo](#hosted-demo)
+- [API](#api)
+- [Tests](#tests)
 - [Documentation](#documentation)
 <!-- /toc -->
 
@@ -44,6 +48,53 @@ The production and full demos replay three years of synthetic history the first 
 
 The full demo runs on Railway's `dev` environment at **https://world-model-dev.up.railway.app**, behind Basic Auth. Ask the team for the credentials. Everyone who opens it shares one session, so a review approved there is approved for everyone. [docs/deployment.md](docs/deployment.md) covers the infrastructure, the release runbook, and the checks.
 
+## API
+
+The world model is also a service: REST under `/api/world-model` and MCP tools at `/mcp`, on the same deploy, with an API key per caller. Upload research (PDF, Office, HTML, CSV, text), read it into proposed graph updates, import them through review, search everything ingested, read the model at any past version, and pose forecasts. See [docs/api.md](docs/api.md) and, for how a file becomes graph updates, [docs/ingestion.md](docs/ingestion.md).
+
+## Tests
+
+The badge above is the CI run on `main`. The table is the last full run (`scripts/coverage_gate.py`): tests per suite, and line and branch coverage per package. CI fails if a strict module loses a line or branch of coverage, or if the repository falls below its floor.
+
+<!-- tests:start -->
+
+| Suite | Passed | Failed | Skipped |
+|---|---:|---:|---:|
+| ✅ `tests/ingest` | 270 | 0 | 0 |
+| ✅ `tests/integration` | 50 | 0 | 12 |
+| ✅ `tests/lake` | 146 | 0 | 0 |
+| ✅ `tests/scenario` | 20 | 0 | 2 |
+| ✅ `tests/service` | 77 | 0 | 0 |
+| ✅ `tests/ui` | 0 | 0 | 2 |
+| ✅ `tests/unit` | 244 | 0 | 0 |
+
+| Package | Lines | Branches | Gate |
+|---|---:|---:|---|
+| `(top level)` | 33.5% | 22.6% | ratchet |
+| `api` | 87.5% | 76.7% | 100% for service, mcp, keys; ratchet |
+| `context` | 93.8% | 86.5% | ratchet |
+| `control` | 86.3% | 73.7% | ratchet |
+| `dynamics` | 89.4% | 77.8% | ratchet |
+| `engine` | 94.2% | 80.7% | ratchet |
+| `evaluation` | 23.4% | 0.0% | ratchet |
+| `events` | 97.5% | 75.0% | ratchet |
+| `flows` | 98.9% | 90.5% | ratchet |
+| `inference` | 93.8% | 83.3% | ratchet |
+| `ingest` | 100.0% | 100.0% | 100% required |
+| `intake` | 90.5% | 78.4% | ratchet |
+| `lake` | 100.0% | 100.0% | 100% required |
+| `learning` | 97.3% | 90.5% | ratchet |
+| `memory` | 97.1% | 89.6% | ratchet |
+| `model` | 92.2% | 71.0% | ratchet |
+| `repo` | 96.0% | 89.0% | ratchet |
+| `shared` | 92.9% | 83.7% | ratchet |
+| `sim` | 76.1% | 62.3% | ratchet |
+| **all** | **88.9%** | **78.7%** | floor in `coverage-floor.json` |
+
+Slow scenario runs (`--runslow`) are not in these numbers. Regenerate with `scripts/coverage_gate.py` (see its docstring).
+
+<!-- tests:end -->
+
 ## Documentation
 
 | Read | For |
@@ -54,6 +105,8 @@ The full demo runs on Railway's `dev` environment at **https://world-model-dev.u
 | [docs/cli.md](docs/cli.md) | The command line and configuration |
 | [docs/ml-stack.md](docs/ml-stack.md) | The ML stack as built, stated formally, with its adversarial review |
 | [docs/ml-roadmap.md](docs/ml-roadmap.md) | The plan to replace each heuristic with a method we can defend |
+| [docs/api.md](docs/api.md) | The outward API and MCP server: auth, routes, errors, and mounting it from core |
+| [docs/ingestion.md](docs/ingestion.md) | The ingestion pipeline and the lakehouse: parsing, extraction, event time, determinism, search |
 | [docs/deployment.md](docs/deployment.md) | The Railway dev deployment, sign-in, and running the container locally |
 | [docs/development.md](docs/development.md) | Tests, the repository layout, conventions, and the demo videos |
 | [docs/archive/plan.md](docs/archive/plan.md) | The original specification (historical), which the code's § references point to |

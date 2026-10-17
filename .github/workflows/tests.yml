@@ -18,3 +18,20 @@ jobs:
           version: "0.9.2"
       - run: uv sync --frozen
       - run: uv run pytest tests/unit
+
+  # Oct 17: the whole suite (not the slow scenario runs) with line and branch coverage. The ingestion pipeline, the
+  # lakehouse, and the outward API must stay fully covered; everything else may not fall below coverage-floor.json.
+  coverage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.9.2"
+      - run: uv sync --frozen
+      - run: >
+          uv run pytest -p no:cacheprovider --cov=axelrod_wm --cov-branch --cov-report=json:coverage.json
+          --cov-report=term --junitxml=junit.xml
+      - if: always()
+        run: uv run python scripts/coverage_gate.py coverage.json --junit junit.xml --summary "$GITHUB_STEP_SUMMARY"

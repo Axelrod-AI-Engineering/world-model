@@ -37,6 +37,10 @@ An end binds only when the article names it; otherwise it is hedged. Intake retu
 - `EntityResolver`, `Refiner` (`refine`, `weigh_hedges`), `IngestionPipeline`.
 - **New** `ConflictDetector`, which yields `Conflict {op_index, kind: value|sign|timing|existence|type, severity, against}`.
 
+### Ingestion from files, built (Oct 17)
+
+`ingest/` reads uploaded files into import bundles, so bundles no longer need to be written by hand or by an upstream agent. The steps: store in the lakehouse (`lake/`, content-hashed, per login), parse (PDF, Office, HTML, CSV, text, JSON), chunk (never across a paragraph or page), index, recognize the model's own names (`ingest/gazetteer.py`), extract signals by rules (`ingest/extract.py`), optionally ask a cached LLM about chunks the rules left empty (`ingest/llm.py`, off by default, answers verified against the text), and build `axelrod.import/v1`. It is deterministic: the same file and model give the same bundle id. Documents keep an event time and an ingestion time, and late items fold into the next processed day (`sim/imports.py`). See [ingestion.md](../../ingestion.md).
+
 ## Interface
 
 ```python
