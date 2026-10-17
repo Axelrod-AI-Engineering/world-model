@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import threading
 import time
 from collections.abc import Callable
@@ -381,7 +382,8 @@ def state_for(app: Any, scope: Any) -> AppState:
 def create_app(config_path: str | None = None, scenario: str = "oil_shock_demo", *,
                storage: StorageBackend | None = None, trace_dir: str | Path | None = "var/axelrod/traces",
                load_on_startup: bool = True, play_delay: float = 0.4,
-               cache_dir: str | Path | None = None, start_example: str | None = None) -> FastAPI:
+               cache_dir: str | Path | None = None, start_example: str | None = None,
+               lake_dir: str | Path | None = None) -> FastAPI:
     from axelrod_wm.api.auth import extra_logins
     from axelrod_wm.repo.snapshots import FilesBackend
 
@@ -403,6 +405,13 @@ def create_app(config_path: str | None = None, scenario: str = "oil_shock_demo",
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
+        # the MCP server's session manager runs for the app's lifetime (api/mcp.py)
+        async with app.state.mcp.session_manager.run():
+            async with _engines(app):
+                yield
+
+    @asynccontextmanager
+    async def _engines(app: FastAPI):
         if load_on_startup:
             await anyio.to_thread.run_sync(state.ensure_loaded)
             for other in by_login.values():
@@ -431,6 +440,14 @@ def create_app(config_path: str | None = None, scenario: str = "oil_shock_demo",
     app.add_middleware(GZipMiddleware, minimum_size=2048, compresslevel=5)
     app.state.axelrod = state
     app.state.axelrod_by_login = by_login
+    # the lakehouse and the ingestion pipeline behind the outward service (Oct 17): one store, partitioned by login
+    from axelrod_wm.ingest.llm import provider_from_env
+    from axelrod_wm.ingest.pipeline import Ingestor
+    from axelrod_wm.lake.embed import LazyEmbedder
+    from axelrod_wm.lake.sqlite import SQLiteLake
+
+    app.state.lake = SQLiteLake(Path(lake_dir or os.environ.get("WORLD_MODEL_LAKE_DIR") or "var/lake"))
+    app.state.ingestor = Ingestor(app.state.lake, LazyEmbedder(), provider=provider_from_env())
 
     @app.exception_handler(UnboundThesis)
     async def _unbound(request: Request, exc: UnboundThesis) -> JSONResponse:
@@ -465,9 +482,15 @@ def create_app(config_path: str | None = None, scenario: str = "oil_shock_demo",
         return _error(501, str(exc))
 
     from axelrod_wm.api.routes import router
+    from axelrod_wm.api.service import router as service_router
     from axelrod_wm.api.ws import ws_router
 
+    app.include_router(service_router)
     app.include_router(router)
+    from axelrod_wm.api.mcp import build_mcp, install_mcp
+
+    app.state.mcp = build_mcp(app)
+    install_mcp(app, app.state.mcp)
     app.include_router(ws_router)
     if WEB_DIR.exists():
         app.mount("/", _RevalidatedFiles(directory=WEB_DIR, html=True), name="web")

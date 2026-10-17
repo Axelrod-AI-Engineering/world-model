@@ -37,6 +37,8 @@ export default defineRailway((ctx) => {
       WORLD_MODEL_BASIC_AUTH_PASSWORD: preserve(),
       // logins that open their own scenario, username:password:scenario (api/auth.py); set in Railway only
       WORLD_MODEL_LOGINS: preserve(),
+      // the outward API's keys, caller:key:login (api/keys.py, docs/api.md); set in Railway only
+      WORLD_MODEL_API_KEYS: preserve(),
     },
     networking: {
       serviceDomains: { "world-model-dev.up.railway.app": { port: 8080 } },

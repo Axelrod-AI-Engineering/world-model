@@ -18,3 +18,8 @@ docs/media/
 *.m4a
 # meeting notes (client and team context): local only
 *Notes by Gemini*.pdf
+
+# coverage reports (scripts/coverage_gate.py)
+.coverage
+coverage.json
+junit.xml

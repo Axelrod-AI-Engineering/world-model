@@ -176,6 +176,13 @@ class ImportRunner(ScenarioRunner):
                 self.imported[me.id] = item
                 events.append(me)
             last = max(chosen[-1].published_at, ctl.now)
+            # Oct 17: when every item is older than the model's last processed day, the run would have no day to
+            # process and would end before collecting them; it runs through the next day instead, so they queue
+            # onto it as late items (folded in late, each still reviewed) rather than being dropped
+            wm = ctl.engine.wm
+            lp = int(wm.last_processed_day)
+            if wm.deviations.day_of(last) <= lp:
+                last = datetime.combine(wm.deviations.date_of(lp + 1), datetime.max.time().replace(microsecond=0), UTC)
             run = ctl.request_update(UpdateRequest(requested_by="import", until=last.date(), requested_at=last,
                                                    user_market_events=events, sources=[]), run_to_end=True)
             self.update_ids.append(run.id)
