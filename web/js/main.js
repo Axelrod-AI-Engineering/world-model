@@ -10,7 +10,7 @@ import { ribbonItems } from "./graph/fuzzy.js";
 import { paletteOf } from "./graph/hulls.js";
 import { CATEGORY_NAMES } from "./graph/layouts.js";
 import { closeMenu, menuOpen, openMenu } from "./graph/menu.js";
-import { kinKey } from "./graph/model.js";
+import { fmtMove, fmtValue, kinKey } from "./graph/model.js";
 import { SvgRenderer } from "./graph/renderer.js";
 import { initZoomSlider } from "./graph/zoom-slider.js";
 import { isolationSet } from "./graph/isolate.js";
@@ -30,7 +30,7 @@ import { initContext } from "./panels/context.js";
 import { colOf, initPaths } from "./panels/paths.js";
 import { initFind } from "./panels/find.js";
 import { initLevels } from "./panels/levels.js";
-import { entityLens, groupLens, linkLens } from "./graph/lens.js";
+import { entityLens, linkLens } from "./graph/lens.js";
 import { initColorKey } from "./panels/colorkey.js";
 import { initManual } from "./panels/manual.js";
 import { initForecast, progress, trackForecast } from "./panels/forecast.js";
@@ -57,7 +57,7 @@ const REDO_KEY = IS_MAC ? "⇧⌘Z" : "Ctrl-Y";
 // the keyboard sheet (?): every shortcut in one place, so none needs a button on screen
 const SHORTCUTS = [
   ["Canvas", [[`${MOD}Z`, "Undo a view change (open, close, move, layout)"], [`${REDO_KEY}`, "Redo"],
-              ["1 · 2 · 3", "Superentities · entities · subentities"], ["0", "Auto: detail follows zoom"], ["K", "Color: what pills are colored by, and the key"], ["[ · ]", "Up a level · down into the first part (superentities within superentities)"], ["+ · − · F", "Zoom in · zoom out · fit"],
+              ["1 · 2", "Entities · subentities"], ["0", "Auto: detail follows zoom"], ["K", "Color: what pills are colored by, and the key"], ["[ · ]", "Up a concept · down into the first narrower one (the taxonomy, top left)"], ["+ · − · F", "Zoom in · zoom out · fit"],
               [`/ · ${MOD}K`, "Find or filter: words, concepts, “moved”, “open>0.8”, “learned”; widen to neighborhoods"], ["D", "Draw a proposed edge"], ["Esc", "Close the top thing"]]],
   ["Demo", [["E", "Tutorial"], ["I", "Import research (imported models)"], ["→", "Next scripted step"], ["Space", "Play or pause"],
             ["⇧← · ⇧→", "Step through the timeline"], ["U", "Request an update"]]],
@@ -246,14 +246,18 @@ async function boot() {
     onAction: (act, arg) => {
       if (act === "toggle-entity") { renderer.toggleEntityByHand(arg); select(store.selection); }
       else if (act === "ask-entity") { thesis.prefill(arg); openRight("thesis"); }
-      else if (act === "toggle-group") { renderer.toggleGroup(arg); select(store.selection); }
-      else if (act === "close-parts") renderer.setGroupChildren(arg, true);
       else if (act === "forecast") {
         const [kind, ref] = String(arg).split("|");
         thesis.forecastFor(kind, ref);
         openRight("thesis");
         toast("Added to “Forecast for”. Ask a question to forecast it.");
       } else if (act === "walk") walk.open(arg);
+      else if (act === "dissolve") {
+        // Oct 17: from the superentity's inspector, now that superentities have no menu on the canvas
+        const g = [...renderer.groupsInfo.byKey.values()].find((x) => x.pattern_id === arg);
+        if (learning()) dissolveDialog(arg, g?.label ?? arg);
+        else toast("Structure changes are made in Learn.");
+      }
     },
     scopeFor: (id) => latestScopeFor(id),
   });
@@ -384,7 +388,7 @@ async function boot() {
       try { localStorage.setItem("axelrod.hinted", "1"); } catch { /* fine */ }
       for (const t of ["click", "dblclick", "contextmenu"]) svg.removeEventListener(t, onGraph, true);
     };
-    const onGraph = (ev) => { if (ev.target.closest?.("g.pill, g.card-super, g.hull, g.edge, g.row, g.frontier")) done(); };
+    const onGraph = (ev) => { if (ev.target.closest?.("g.pill, g.edge, g.row, g.frontier")) done(); };
     for (const t of ["click", "dblclick", "contextmenu"]) svg.addEventListener(t, onGraph, true);
     hint.querySelector(".x").addEventListener("click", done);
     // it has said its piece once the canvas has been zoomed or panned, or after a while
@@ -436,13 +440,7 @@ async function boot() {
           ${e.description ? `<div class="tt-d">${esc(e.description)}</div>` : ""}
           ${top && Math.abs(top.z) >= 0.25 ? `<div>${top.z > 0 ? "<span class='z-up'>▲</span>" : "<span class='z-down'>▼</span>"} ${esc(names().short(top.id))}: ${signed(top.z)} sd
             ${top.observed_today ? "(observed today)" : "(propagated)"}</div>` : ""}
-          ${(() => {
-            const os = renderer.model?.owners.get(e.id) ?? [];
-            if (os.length > 1) {
-              return `<div class="small"><b>Shared</b> by ${os.map((o) => `${esc(groupLabel(o.key))}${o.drawn === "card" ? " (closed)" : ""}`).join(" and ")}</div>`;
-            }
-            return gs.length ? `<div class="small muted">In ${gs.map(esc).join("; ")}</div>` : `<div class="small muted">In no superentity yet</div>`;
-          })()}
+          ${gs.length ? `<div class="small muted">In ${gs.map(esc).join("; ")}</div>` : `<div class="small muted">In no superentity yet</div>`}
           ${openLine(e.open, "its values' movement")}
           ${renderer.ui.expanded.has(e.id) ? "" : entityLens(subs, e.name, e.kind)}
           <div class="tt-f">double-click: subentities · right-click: options</div>`;
@@ -450,12 +448,16 @@ async function boot() {
     } else if (info.kind === "subentity") {
       const s = v?.subentities.find((x) => x.id === info.id);
       if (s) {
-        const used = (renderer.model?.marks.get(s.id) ?? []).map(groupLabel);
+        const used = (renderer.marks.get(s.id) ?? []).map(groupLabel);
+        // the row shows the mean in its unit (Oct 17); the card adds the range, the move from normal in sd, and, in
+        // Predict, the forecast's move in both
+        const fz = renderer.rowOverride?.get(s.id);
         html = `<div class="tt-h">${names().valueHtml(s.id)}</div>
           ${s.unit ? `<div class="tt-s">${esc(s.unit)}</div>` : ""}
-          <div>median ${fmt(s.summary.q50)} ${esc(s.unit)} <span class="muted">(90%: ${fmt(s.summary.q05)} to ${fmt(s.summary.q95)})</span></div>
+          <div>mean ${esc(fmtValue(s.summary.mean, s.unit))} <span class="muted">(median ${esc(fmtValue(s.summary.q50, s.unit))}; 90%: ${esc(fmtValue(s.summary.q05, s.unit))} to ${esc(fmtValue(s.summary.q95, s.unit))})</span></div>
           <div>${s.z > 0.25 ? "<span class='z-up'>▲</span>" : s.z < -0.25 ? "<span class='z-down'>▼</span>" : "·"} ${signed(s.z)} sd from normal ·
             ${s.observed_today ? "observed today" : s.observed ? "carried forward by the graph" : "never observed; moved by the graph"}</div>
+          ${fz != null ? `<div><b>Forecast move</b> ${esc(fmtMove(+fz, s))} <span class="muted">(${signed(+fz)} sd)</span></div>` : ""}
           ${used.length ? `<div class="small muted">Used by ${used.map(esc).join("; ")}</div>` : ""}
           ${(() => {
             // its kin: the same value in similar entities (lit on the canvas while hovered)
@@ -469,19 +471,6 @@ async function boot() {
             return kin.length ? `<div class="small">Also in ${esc(listNames(kin))}</div>` : "";
           })()}
           ${openLine(s.open, "its movement")}`;
-      }
-    } else if (info.kind === "group") {
-      const g = renderer.groupsInfo.byKey.get(info.key);
-      const h = info.hull;
-      if (g) {
-        const closed = renderer.ui.collapsed.has(g.key);
-        html = `<div class="tt-h">${esc(h?.label ?? g.label)}</div>
-          <div class="tt-s">${g.transient ? "bound for one hypothetical" : `${esc(g.status)} superentity`}${g.composite ? " · made of superentities" : ""} · ${g.members.size} entities · support ${fmt(g.support, 1)}</div>
-          ${(h?.description || g.description) ? `<div class="tt-d">${esc(h?.description || g.description)}</div>` : ""}
-          ${g.composite ? `<div class="small muted">Parts: ${g.children.map(groupLabel).map(esc).join("; ")}</div>` : ""}
-          ${openLine(h?.open, "its members' movement")}
-          ${groupLens([...g.members], v)}
-          <div class="tt-f">double-click: ${closed ? "open" : "close into one card"} · right-click: options</div>`;
       }
     } else if (info.kind === "link") {
       const ls = (v?.links ?? []).filter((l) => info.ids.includes(l.id)).sort((a, b) => b.significance - a.significance);
@@ -542,8 +531,8 @@ async function boot() {
           { label: "Only what it moves", action: () => isolate([target.id], "down") },
           ...(gs.length ? [{ sep: true }, { group: "Its superentities" }] : []),
           ...gs.map((k) => {
-            const closed = renderer.ui.collapsed.has(k);
-            return { label: `${closed ? "Open" : "Close"} ${groupLabel(k)}`, swatch: swatch(k), action: () => renderer.toggleGroup(k) };
+            const h = renderer.groupsInfo.byKey.get(k).hulls[0];
+            return { label: groupLabel(k), swatch: swatch(k), action: () => select({ kind: "pattern", id: h.pattern_id, instance: h.id, group: k }) };
           }),
           { sep: true },
           ...(learning() ? [{ label: "Draw an edge from here", kbd: "D", action: () => setDraw(true) }] : []),
@@ -555,7 +544,7 @@ async function boot() {
       });
     } else if (target.kind === "subentity") {
       const s = v.subentities.find((x) => x.id === target.id);
-      const used = renderer.model?.marks.get(target.id) ?? [];
+      const used = renderer.marks.get(target.id) ?? [];
       openMenu(at, {
         title: names().value(target.id), subtitle: s?.unit || null,
         items: [
@@ -570,29 +559,6 @@ async function boot() {
             const h = renderer.groupsInfo.byKey.get(k).hulls[0];
             return { label: groupLabel(k), swatch: swatch(k), action: () => select({ kind: "pattern", id: h.pattern_id, instance: h.id, group: k }) };
           }),
-        ],
-      });
-    } else if (target.kind === "group") {
-      const g = renderer.groupsInfo.byKey.get(target.key);
-      if (!g) return;
-      const closed = renderer.ui.collapsed.has(g.key);
-      const membersOpen = [...g.members].some((m) => renderer.ui.expanded.has(m));
-      const h = g.hulls[0];
-      openMenu(at, {
-        title: g.label, subtitle: g.composite ? "a superentity of superentities" : `${g.members.size} entities`,
-        items: [
-          { label: closed ? "Open it" : "Close it into one card", kbd: "dbl-click", action: () => renderer.toggleGroup(g.key) },
-          ...(g.children.length ? [
-            { label: "Open it with its parts closed", action: () => renderer.setGroupChildren(g.key, true) },
-            { label: "Open it and all its parts", action: () => renderer.setGroupChildren(g.key, false) }] : []),
-          ...(!closed ? [{ label: membersOpen ? "Hide its members' subentities" : "Show its members' subentities",
-                           action: () => renderer.setMembersOpen(g.key, !membersOpen) }] : []),
-          { label: "Inspect", kbd: "click", action: () => select({ kind: "pattern", id: h.pattern_id, instance: h.id, group: g.key }) },
-          ...(g.transient ? [] : [{ label: "Forecast it", action: () => forecastIt("superentity", h.pattern_id) }]),
-          ...(g.parents.length ? [{ sep: true }, { group: "Part of" }] : []),
-          ...g.parents.map((k) => ({ label: `Close ${groupLabel(k)}`, swatch: swatch(k), action: () => renderer.toggleGroup(k, true) })),
-          ...(learning() && !g.transient && g.status === "admitted" ? [{ sep: true }, { group: "Structure (proposed, then vetted)" },
-            { label: "Dissolve it into its constituents…", action: () => dissolveDialog(h.pattern_id, g.label) }] : []),
         ],
       });
     } else if (target.kind === "edge") {
@@ -612,12 +578,9 @@ async function boot() {
           ...(renderer.undoStack.length ? [{ label: `Undo ${renderer.undoStack.at(-1).label}`, kbd: `${MOD}Z`, action: undo }] : []),
           ...(renderer.redoStack.length ? [{ label: `Redo ${renderer.redoStack.at(-1).label}`, kbd: REDO_KEY, action: redo }] : []),
           ...(renderer.undoStack.length || renderer.redoStack.length ? [{ sep: true }] : []),
-          { label: "Close every superentity", kbd: "1", action: () => renderer.setDetail("super") },
-          { label: "Open every superentity", kbd: "2", action: () => renderer.setDetail("entity") },
-          { label: "Show every entity's subentities", kbd: "3", action: () => renderer.setDetail("sub") },
+          { label: "Close every entity", kbd: "1", action: () => renderer.setDetail("entity") },
+          { label: "Show every entity's subentities", kbd: "2", action: () => renderer.setDetail("sub") },
           { sep: true },
-          { label: store.settings.showCandidates ? "Hide candidate superentities" : "Show candidate superentities",
-            action: () => setCandidates(!store.settings.showCandidates) },
           { label: document.body.classList.contains("labels") ? "Hide interaction labels" : "Show every interaction label",
             action: () => document.body.classList.toggle("labels") },
           { sep: true },
@@ -824,8 +787,7 @@ async function boot() {
     // the ripple's interactions, and the ones the event itself strengthens, weakens, or adds
     const path = new Set([...(r.ripple ?? []).flatMap((a) => a.via ?? []),
       ...(r.items ?? []).filter((it) => it.what === "interaction").flatMap((it) => it.refs ?? [])]);
-    return { new: new Set(m.new ?? []), retired: store.staged.retired ?? new Set(m.retired ?? []), orders, path,
-             collapsed: new Set(m.collapsed ?? []) };
+    return { new: new Set(m.new ?? []), retired: store.staged.retired ?? new Set(m.retired ?? []), orders, path };
   }
   // the transmission grid is the default view of a forecast's ripple (Oct 11): it opens once per forecast. In Learn a
   // staged review's path is drawn on the canvas instead (the lane, below).
@@ -1107,7 +1069,7 @@ async function boot() {
   $("#btn-checks").addEventListener("click", () => { closeMenu(); checks.toggle(); });
 
   // canvas controls
-  const detailButtons = { super: $("#lvl-super"), entity: $("#lvl-entity"), sub: $("#lvl-sub") };
+  const detailButtons = { entity: $("#lvl-entity"), sub: $("#lvl-sub") };
   function setDetailButtons(lv) {
     for (const [k, b] of Object.entries(detailButtons)) b.setAttribute("aria-pressed", String(k === lv));
   }
@@ -1133,7 +1095,7 @@ async function boot() {
     store.settings.draw = on_;
     $("#btn-draw").setAttribute("aria-pressed", String(on_));
     $("#canvas").classList.toggle("draw-mode", on_);
-    if (on_) toast("Draw: drag from a subentity, entity, or superentity to another.");
+    if (on_) toast("Draw: drag from a subentity or an entity to another.");
     else draw.disarm();
   }
   $("#btn-draw").addEventListener("click", () => setDraw(!store.settings.draw));
@@ -1511,9 +1473,8 @@ async function boot() {
     else if (ev.key === "ArrowLeft" && ev.shiftKey) { ev.preventDefault(); timeline.stepBack(); }
     else if (ev.key === "ArrowRight") { ev.preventDefault(); doStep(); }
     else if (ev.key === "u" || ev.key === "U") update.open();
-    else if (ev.key === "1") { setAuto(false); renderer.setDetail("super"); }
-    else if (ev.key === "2") { setAuto(false); renderer.setDetail("entity"); }
-    else if (ev.key === "3") { setAuto(false); renderer.setDetail("sub"); }
+    else if (ev.key === "1") { setAuto(false); renderer.setDetail("entity"); }
+    else if (ev.key === "2") { setAuto(false); renderer.setDetail("sub"); }
     else if (ev.key === "0") setAuto(!renderer.autoDetail);
     else if (ev.key === "f" || ev.key === "F") renderer.fit();
     else if (ev.key === "+" || ev.key === "=") renderer.zoomBy(1.25);

@@ -26,3 +26,34 @@ export function conceptStyles(view) {
   });
   return out;
 }
+
+// The canvas's arrangement (Oct 17): superentities are no longer drawn, so entities are placed by the static,
+// expert-provided taxonomy instead. Each concept on an entity's path (Actor > Firm > Bank) is a group for the layout
+// (graph/layout-hier.js), never drawn: related entities sit together, and each top-level branch keeps a block of its
+// own. Groups look like buildGroups' (key, members, children, parents), so the layout and the gravity force read both.
+export function conceptGroups(view) {
+  const byKey = new Map();
+  const get = (id, parent) => {
+    const key = `concept:${id}`;
+    let g = byKey.get(key);
+    if (!g) {
+      g = { key, concept: id, members: new Set(), children: [], parents: parent ? [parent] : [], transient: false, level: 0 };
+      byKey.set(key, g);
+      if (parent) byKey.get(parent).children.push(key);
+    }
+    return g;
+  };
+  const ofEntity = new Map();
+  for (const e of [...(view?.entities ?? [])].sort((a, b) => String(a.id).localeCompare(String(b.id)))) {
+    let parent = null;
+    const keys = [];
+    for (const c of e.concept_path ?? []) {
+      const g = get(c, parent);
+      g.members.add(e.id);
+      keys.push(g.key);
+      parent = g.key;
+    }
+    if (keys.length) ofEntity.set(e.id, keys);
+  }
+  return { groups: [...byKey.values()], byKey, ofEntity };
+}

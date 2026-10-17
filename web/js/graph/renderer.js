@@ -1,13 +1,13 @@
 // The canvas (§13.3). Drawing sits behind the GraphRenderer interface, so a canvas or WebGL renderer
 // can replace SVG if the node count passes about 2,000.
 /* global d3 */
-import { conceptStyles } from "./concepts.js";
+import { conceptGroups, conceptStyles } from "./concepts.js";
 import { densityCurve } from "../charts/density.js";
 import { createSimulation, resolveCollisions, staticLayout } from "./forces.js";
 import { drawRibbons, prettyNode } from "./fuzzy.js";
-import { ancestors, blockHull, buildGroups, hullContour, hullContourCached, hullPolygon, hullStyle, NEST_PAD, PAD, paletteOf } from "./hulls.js";
+import { buildGroups, hullContourCached, hullPolygon, PAD, superentityMarks } from "./hulls.js";
 import { figurePosition, slotPosition } from "./layouts.js";
-import { CHIP, computeModel, GEOM, kinKey, rowCenterY, rowLabels, textWidth, truncate } from "./model.js";
+import { computeModel, fmtMove, fmtValue, GEOM, kinKey, ROW_GEOM, rowCenterY, rowLabels, textWidth, truncate, valueWidth } from "./model.js";
 import { openNode } from "./open-node.js";
 import { createAttention } from "./attention.js";
 import { filterView } from "./isolate.js";
@@ -23,7 +23,6 @@ export class GraphRenderer {
   setExtras(_extras) {}
   setDetail(_level) {}
   toggleEntity(_id, _open) {}
-  toggleGroup(_key, _closed) {}
   setLayoutMode(_mode) {}
   setOptions(_opts) {}
   fit() {}
@@ -41,11 +40,9 @@ export class GraphRenderer {
 }
 
 const ARROW = 8;                // arrowhead length (world units): a routed edge stops this far from the border
-const ARROW_SUPER = 11;
 const EDGE_IN_MS = 300;         // an interaction that is new draws itself in from its cause
 const EDGE_OUT_MS = 180;
 const LABEL_SETTLE = 3;        // layouts in a row a hidden label needs room before it shows again
-const TAB_REACH = 180;          // world units: a tab further than this from its free spots starts afresh
 // theme colors, read once a frame: reading computed style on every tick forced the page's styles to be recomputed
 const cssCache = new Map();
 const css = (name) => {
@@ -55,7 +52,6 @@ const css = (name) => {
   return v;
 };
 const NAME_FONT = "600 13px Instrument Sans";
-const ROW_FONT = "500 11.5px Instrument Sans";
 const TAB_FONT = "700 13px Instrument Sans";
 
 
@@ -83,13 +79,13 @@ export class SvgRenderer extends GraphRenderer {
     const grid = installGrid(this.svg, this.defs);
     this.root = this.svg.append("g").attr("class", "root");
     this.layers = {};
-    for (const name of ["lane", "hulls", "lenses", "netlines", "edges", "tethers", "frontier", "ghosts", "fuzzy", "nodes", "tabs", "overlays"]) {
+    for (const name of ["lane", "netlines", "edges", "frontier", "ghosts", "fuzzy", "nodes", "overlays"]) {
       this.layers[name] = this.root.append("g").attr("class", `layer-${name}`);
     }
     this.layout = null;
     this.view = null;
     this.extras = { ribbons: [], ghostEdges: [], ghostSubs: [], pendingPatterns: new Set() };
-    this.ui = { expanded: new Set(), collapsed: new Set(), showCandidates: false };
+    this.ui = { expanded: new Set(), showCandidates: false };
     this.mode = "figure1";
     this.opts = { figure1LinksOnly: false, groupByCategory: false, reducedMotion: false };
     this.nodes = new Map();
@@ -98,14 +94,17 @@ export class SvgRenderer extends GraphRenderer {
     this.pinnedHomes = new Map();
     this.lane = null;             // a staged review's transmission lane (setLane): {cols, ids}
     this.laneHomes = null;        // where the lane puts its entities
+    // superentities as data (graph/hulls.js), for the panels, the walkthrough, and framing; not drawn (Oct 17)
     this.groupsInfo = { groups: [], byKey: new Map(), ofEntity: new Map(), ofInstance: new Map() };
+    this.marks = new Map();
+    // the taxonomy's concepts, which arrange the canvas (graph/concepts.js); not drawn either
+    this.layoutGroups = { groups: [], byKey: new Map(), ofEntity: new Map() };
     this.model = null;
     this.subIndex = new Map();
     this.highlight = null;
     this.focus = null;
     this.selection = null;
     this.haloData = new Map();
-    this.contours = new Map();
     this.lastContourPos = new Map();
     this.tickCount = 0;
     this.undoStack = [];
@@ -116,7 +115,7 @@ export class SvgRenderer extends GraphRenderer {
     this.sim = createSimulation({
       getMode: () => this.mode,
       getBlocks: () => this.blocks(),
-      getGroups: () => this.groupsInfo.groups.filter((g) => !g.transient),
+      getGroups: () => this.layoutGroups.groups,
       groupByCategory: () => this.opts.groupByCategory,
       onTick: () => this.ticked(),
     });
@@ -129,7 +128,6 @@ export class SvgRenderer extends GraphRenderer {
     this.autoDetail = true;
     this.attention = createAttention("default");
     this.lod = createLOD(this, this.attention);
-    this.tabSpots = new Map();   // where each superentity's tab last sat (world units)
     this.lastMove = 0;
     this.personZoomUntil = 0;
     this.zoom = createZoom(this.svg, this.root, { grid, onRest: () => this.releaseLayout(), onZoom: (t, byUser) => {
@@ -157,10 +155,11 @@ export class SvgRenderer extends GraphRenderer {
     } });
     // attention: every half second the view is still, the nodes in its middle count as looked at
     this.attentionTimer = setInterval(() => this.observeAttention(), 500);
-    this.sim.on("end.contours", () => { if (this.contourStale) this.updateContours(true); });
     this.sim.on("end.frame", () => {
-      // not while a walkthrough or a staged review frames what it is showing
-      const framed = document.body.classList.contains("staging") || document.querySelector("#walkthrough:not(.hidden)");
+      // not while a walkthrough, a staged review, or a transmission path (Oct 17: its own framing was undone by this one)
+      // frames what it is showing
+      const framed = document.body.classList.contains("staging") || document.body.classList.contains("txpath")
+        || document.querySelector("#walkthrough:not(.hidden)");
       if (this.autoFrame && this.mode === "gravity" && !framed) { this.autoFrame = false; this.frameAll(500); }
     });
     const isBackground = (ev) => ev.target === this.svg.node() || ev.target.closest?.(".grid-bg");
@@ -179,7 +178,6 @@ export class SvgRenderer extends GraphRenderer {
   }
 
   releaseLayout() {
-    if (this.contourStale) this.updateContours();
     if (!this.layoutHeld) return;
     this.layoutHeld = false;
     this.sim.restart();
@@ -200,7 +198,6 @@ export class SvgRenderer extends GraphRenderer {
     mk("arr-learned", "#7C64C4", ARROW);
     mk("arr-hl", "#874B2B", ARROW);
     mk("arr-hl-s", "#874B2B", ARROW, { start: true });
-    mk("arr-super", "#665E54", ARROW_SUPER);
     mk("arr-ghost", "#7C64C4", 8, { base: false });     // ghost edges run center to center and are not routed
     mk("arr-front", "#93465F", ARROW);
     // a soft glow for deviation outlines and the guide's spotlight
@@ -217,11 +214,9 @@ export class SvgRenderer extends GraphRenderer {
     this.homes.clear();
   }
 
-  // another world: none of the last one's placements apply (its homes, regions, and blocks)
+  // another world: none of the last one's placements apply
   resetHomes() {
     this.gravHomes.clear();
-    this.homeRegion = null;
-    this.regionHomes = null;
     this.savedHomes = null;
     this.userMoved = false;
   }
@@ -266,8 +261,8 @@ export class SvgRenderer extends GraphRenderer {
 
   updateHomes() {
     const regions = [];
-    for (const g of this.groupsInfo.groups) {
-      if (g.transient || g.composite) continue;
+    for (const g of this.layoutGroups.groups) {
+      if (g.children.length) continue;
       const pts = [...g.members].map((m) => figurePosition(this.layout, m)).filter(Boolean);
       if (pts.length < 2) continue;
       regions.push({ x0: Math.min(...pts.map((p) => p.x)), x1: Math.max(...pts.map((p) => p.x)),
@@ -306,7 +301,9 @@ export class SvgRenderer extends GraphRenderer {
   openShifts() {
     const shifts = new Map();
     this.shifts = shifts;
-    if (!this.model || this.isolated || this.mode !== "gravity") return;
+    // Oct 17: an isolated graph too (a forecast's entities in Predict open after they are placed), unless its homes are
+    // fixed (the transmission grid's), which hasFixedHome leaves out below
+    if (!this.model || this.mode !== "gravity") return;
     const GAP = 12;
     const boxes = this.model.boxes.filter((b) => !this.hasFixedHome(b.id)).map((b) => {
       const h = this.layoutHome(b);
@@ -317,13 +314,15 @@ export class SvgRenderer extends GraphRenderer {
     // reading order: what comes first stays, what comes after makes room
     boxes.sort((a, z) => a.top - z.top || a.x - z.x);
     const rect = (o) => ({ x0: o.x + o.dx - o.w / 2, x1: o.x + o.dx + o.w / 2, y0: o.top + o.dy, y1: o.top + o.dy + o.h });
-    for (let round = 0; round < 6; round++) {
+    for (let round = 0; round < 24; round++) {
       let moved = false;
       for (let i = 0; i < boxes.length; i++) {
         const a = boxes[i];
         for (let j = i + 1; j < boxes.length; j++) {
           const b = boxes[j];
-          if (!a.open && !b.open) continue;          // two closed boxes keep the layout's own spacing
+          // two closed boxes keep the layout's own spacing, unless one was pushed into the other (Oct 17: a column of
+          // pills beneath an open entity used to land on one spot, each pushed just clear of the open box)
+          if (!a.open && !b.open && !a.dx && !a.dy && !b.dx && !b.dy) continue;
           const ra = rect(a);
           const rb = rect(b);
           const ox = Math.min(ra.x1, rb.x1) - Math.max(ra.x0, rb.x0) + GAP;
@@ -342,13 +341,7 @@ export class SvgRenderer extends GraphRenderer {
   }
 
   layoutHome(box) {
-    if (box.kind === "entity") return this.entityHome(box.id) ?? { x: 600, y: 440 };
-    // a folded superentity sits where its region was laid out (graph/layout-hier.js), when it was
-    const rh = this.regionHomes?.get(box.group?.key);
-    if (rh && this.mode === "gravity") return rh;
-    const pts = [...box.group.members].map((m) => this.entityHome(m)).filter(Boolean);
-    if (!pts.length) return { x: 600, y: 440 };
-    return { x: pts.reduce((a, p) => a + p.x, 0) / pts.length, y: pts.reduce((a, p) => a + p.y, 0) / pts.length };
+    return this.entityHome(box.id) ?? { x: 600, y: 440 };
   }
 
   recompute(reason) {
@@ -357,10 +350,11 @@ export class SvgRenderer extends GraphRenderer {
     this.entIndex = new Map(this.view.entities.map((e) => [e.id, e]));
     this.groupsInfo = buildGroups(this.view, { showCandidates: this.ui.showCandidates,
                                                pendingPatterns: this.extras.pendingPatterns ?? new Set() });
-    for (const k of [...this.ui.collapsed]) if (!this.groupsInfo.byKey.has(k)) this.ui.collapsed.delete(k);
+    this.marks = superentityMarks(this.view, this.groupsInfo);
+    this.layoutGroups = conceptGroups(this.view);
     for (const id of [...this.ui.expanded]) if (!this.view.entities.some((e) => e.id === id)) this.ui.expanded.delete(id);
     this.updateHomes();
-    this.model = computeModel(this.view, this.groupsInfo, this.ui);
+    this.model = computeModel(this.view, this.ui);
     this.openShifts();
     // an entity opened or closed by hand also grows over a few frames, so its edges and outline follow its border
     this.easeSizes = reason === "lod" || (reason === "structure" && this.animOK());
@@ -371,12 +365,11 @@ export class SvgRenderer extends GraphRenderer {
       .map((e) => ({ source: e.a.box, target: e.b.box, significance: e.sig })));
     // a change of detail (lod) keeps every box's home: an opened entity grows in place and its neighbors step aside
     const unplaced = nodes.some((n) => n.kind === "entity" && this.byGravity(n.id) && !this.gravHomes.has(n.id) && !this.hasFixedHome(n.id));
-    // DECISION (Oct 11, supersedes "a change of detail keeps every home"): with superentities drawn as blocks, any change
-    // of structure or size (a box that opens or closes, a card that folds, a new entity) re-packs the hierarchy, so blocks
-    // stay separate and in order at every zoom. The order is the same every time, so blocks only make room; the entity
-    // nearest the middle of the view stays put.
+    // DECISION (Oct 11, supersedes "a change of detail keeps every home"): a change of structure (a new entity) re-packs
+    // the arrangement, so blocks stay separate and in order. The order is the same every time, so blocks only make room;
+    // the entity nearest the middle of the view stays put.
     // Oct 14: the layout is solved at full detail (fullDetail), so a change of detail (lod) moves nothing; only a change of
-    // structure (an entity or superentity added or retired) lays the graph out again
+    // structure (an entity added or retired) lays the graph out again
     if (reason !== "first" && ((structural && reason !== "lod") || unplaced) && this.blocks()) this.repack();
     else if (unplaced || reason === "first" || (structural && reason !== "lod")) this.relayout();
     // homes may have moved (a layout); the pushes of open entities follow them
@@ -395,7 +388,7 @@ export class SvgRenderer extends GraphRenderer {
       setTimeout(() => this.frameAll(0), 30);
     }
     if (reason === "lod") {
-      // before a person has moved the view, the first view keeps framing the whole graph as it folds (only the camera
+      // before a person has moved the view, the first view keeps framing the whole graph as it opens (only the camera
       // moves; the boxes keep their places)
       if (!this.userMoved) this.autoFrame = true;
       this.sim.alpha(Math.max(this.sim.alpha(), 0.22)).restart();
@@ -421,14 +414,13 @@ export class SvgRenderer extends GraphRenderer {
       const home = this.homeOf(b);
       n.pinned = this.hasFixedHome(b.id);
       // free: Figure 1 does not place it, so gravity and tension do (graph/forces.js)
-      const placed = (id) => this.hasFixedHome(id) || !!figurePosition(this.layout, id);
-      n.free = b.kind === "entity" ? !placed(b.id) : ![...b.group.members].some(placed);
+      n.free = !this.hasFixedHome(b.id) && !figurePosition(this.layout, b.id);
       // a change of detail grows a box over a few frames (ticked eases w and h), so its neighbors slide aside
       if (this.easeSizes && old.has(b.id) && (n.w !== b.w || n.h !== b.h)) { n.wGoal = b.w; n.hGoal = b.h; }
       else { n.w = b.w; n.h = b.h; n.wGoal = null; n.hGoal = null; }
       Object.assign(n, { kind: b.kind, ref: b.ref, oy: b.oy, box: b, hx: home.x, hy: home.y,
                          tags: b.entity?.category_tags,
-                         groupKeys: b.kind === "entity" ? this.groupsInfo.ofEntity.get(b.id) ?? [] : [] });
+                         groupKeys: this.layoutGroups.ofEntity.get(b.id) ?? [] });
       next.set(b.id, n);
     }
     if (old.size !== next.size) structural = true;
@@ -438,7 +430,7 @@ export class SvgRenderer extends GraphRenderer {
   }
 
   repack() {
-    // before a person has moved the view, the first view keeps framing the whole graph as it folds
+    // before a person has moved the view, the first view keeps framing the whole graph as it changes
     if (!this.userMoved) this.autoFrame = true;
     const t = this.zoom.transform();
     const { width, height } = this.zoom.rect();
@@ -457,7 +449,6 @@ export class SvgRenderer extends GraphRenderer {
     const dx = was.x - now.x;
     const dy = was.y - now.y;
     for (const [id, h] of this.gravHomes) this.gravHomes.set(id, { x: h.x + dx, y: h.y + dy });
-    for (const [k, h] of this.regionHomes ?? []) this.regionHomes.set(k, { x: h.x + dx, y: h.y + dy });
     for (const [k, h] of this.laneHomes ?? []) this.laneHomes.set(k, { x: h.x + dx, y: h.y + dy });
     if (this.laneBox) {
       const lb = this.laneBox;
@@ -473,14 +464,13 @@ export class SvgRenderer extends GraphRenderer {
   // Gravity, solved off-screen (Oct 9): every box gravity places gets a home, and keeps it until the structure
   // changes. Boxes already placed are anchored near their homes, so a change moves what it must and little else;
   // `fresh` lays everything out anew (switching to the Gravity layout, grouping by category).
-  // The layout's input (Oct 14): every superentity open, every entity at its closed size. Where things sit then does not
-  // depend on what detail-follows-zoom has folded or opened, so zooming changes detail and moves almost nothing, like a
-  // map: a card sits at the center of its region, and an entity that opens pushes down only what sits beneath it in
-  // its own column (openShifts). An isolated graph keeps the entities it pins open at their open size.
+  // The layout's input (Oct 14): every entity at its closed size. Where things sit then does not depend on what
+  // detail-follows-zoom has opened, so zooming changes detail and moves almost nothing, like a map: an entity that opens
+  // pushes aside only what is in its way (openShifts). An isolated graph keeps the entities it pins open at their open size.
   fullDetail() {
     const open = this.isolated ? new Set(this.ui.expanded) : new Set();
-    const m = computeModel(this.view, this.groupsInfo, { ...this.ui, collapsed: new Set(), expanded: open });
-    const boxes = new Map(m.boxes.filter((b) => b.kind === "entity").map((b) => [b.id, b]));
+    const m = computeModel(this.view, { ...this.ui, expanded: open });
+    const boxes = new Map(m.boxes.map((b) => [b.id, b]));
     const links = m.edges.filter((e) => boxes.has(e.a.box) && boxes.has(e.b.box) && e.a.box !== e.b.box)
       .map((e) => ({ source: e.a.box, target: e.b.box, significance: e.sig }));
     return { boxes, links };
@@ -501,20 +491,18 @@ export class SvgRenderer extends GraphRenderer {
       const start = fixed ? (this.fixedHome(b.id) ?? this.homes.get(b.id) ?? { x: 600, y: 440 })
         : was ?? (n ? { x: n.x, y: n.y } : this.homes.get(b.id) ?? { x: 600, y: 440 });
       return { id: b.id, kind: "entity", w: b.w, h: b.h, oy: b.oy, tags: b.entity?.category_tags,
-               groupKeys: this.groupsInfo.ofEntity.get(b.id) ?? [], x: start.x, y: start.y, fixed, anchor: was };
+               groupKeys: this.layoutGroups.ofEntity.get(b.id) ?? [], x: start.x, y: start.y, fixed, anchor: was };
     });
     const laneIds = new Set(nodes.filter(inLane).map((n) => n.id));
     const links = full.links.filter((l) => !laneIds.has(l.source) && !laneIds.has(l.target));
     // DECISION (Oct 11): a fresh placement follows the hierarchy (graph/layout-hier.js): regions inside regions, causes
     // left of effects, nothing overlapping. Later changes keep boxes near their homes with the gravity physics, so a
-    // new entity finds its place without reshuffling the rest.
+    // new entity finds its place without reshuffling the rest. Oct 17: the regions are the taxonomy's concepts.
     const fresh0 = fresh || copies.every((c) => !c.anchor);
-    const groups = this.groupsInfo.groups.filter((g) => !g.transient);
+    const groups = this.layoutGroups.groups;
     const placed = fresh0 && !this.opts.groupByCategory && copies.every((c) => !c.fixed)
       ? hierarchicalLayout(copies, links, groups)
       : staticLayout(copies, links, { groups, groupByCategory: this.opts.groupByCategory });
-    if (placed.regions) this.regionHomes = placed.regions;
-    if (placed.primary && (placed.primary.size || !this.homeRegion)) this.homeRegion = placed.primary;
     for (const c of copies) {
       const p = placed.get(c.id);
       if (p && !c.fixed) this.gravHomes.set(c.id, p);
@@ -537,7 +525,7 @@ export class SvgRenderer extends GraphRenderer {
     const key = lane ? lane.cols.map((c) => `${c.key}:${c.ids.join(",")}`).join("|") : "";
     if (key === (this.lane?.key ?? "")) return;
     if (!ids.size) lane = null;
-    if (lane && !this.lane) this.laneSaved = { expanded: new Set(this.ui.expanded), collapsed: new Set(this.ui.collapsed) };
+    if (lane && !this.lane) this.laneSaved = { expanded: new Set(this.ui.expanded) };
     this.lane = lane ? { ...lane, ids, key } : null;
     this.laneHomes = null;
     if (lane) {
@@ -621,8 +609,8 @@ export class SvgRenderer extends GraphRenderer {
 
   // DECISION: in the Figure 1 layout, opening entities reflows Figure 1's grid like a table. Each row
   // grows by its tallest open entity and each column by its widest pill, so nothing overlaps, the
-  // figure's alignment survives, and closing everything restores the figure exactly. A closed
-  // superentity's card sits at the center of its members' places.
+  // figure's alignment survives, and closing everything restores the figure exactly. Oct 17: sizes are the ones boxes
+  // are growing to, so a row or column opened a moment ago is not measured at its old size (pills overlapped).
   applyFlow() {
     const nodes = [...this.nodes.values()];
     const flowing = nodes.filter((n) => n.kind === "entity" && !this.hasFixedHome(n.id));
@@ -634,15 +622,8 @@ export class SvgRenderer extends GraphRenderer {
       if (!h) continue;
       const ry = Math.round(h.y);
       const cx = Math.round(h.x);
-      rows.set(ry, Math.max(rows.get(ry) ?? 0, n.h - GEOM.HEAD_H));
-      cols.set(cx, Math.max(cols.get(cx) ?? 0, n.w - GEOM.PILL_MIN_W));
-    }
-    // also count the rows and columns of hidden members, so a card's place follows the grid
-    for (const e of this.view?.entities ?? []) {
-      const h = homeOf(e.id);
-      if (!h) continue;
-      if (!rows.has(Math.round(h.y))) rows.set(Math.round(h.y), 0);
-      if (!cols.has(Math.round(h.x))) cols.set(Math.round(h.x), 0);
+      rows.set(ry, Math.max(rows.get(ry) ?? 0, (n.hGoal ?? n.h) - GEOM.HEAD_H));
+      cols.set(cx, Math.max(cols.get(cx) ?? 0, (n.wGoal ?? n.w) - GEOM.PILL_MIN_W));
     }
     const ys = [...rows.keys()].sort((a, b) => a - b);
     const xs = [...cols.keys()].sort((a, b) => a - b);
@@ -658,43 +639,22 @@ export class SvgRenderer extends GraphRenderer {
       return h ? { x: xAt.get(Math.round(h.x)) ?? h.x, y: yAt.get(Math.round(h.y)) ?? h.y } : null;
     };
     for (const n of nodes) {
-      n.flow = n.kind === "entity" && !this.hasFixedHome(n.id) && !n.free;
-      if (n.kind === "entity") {
-        const f = flowed(n.id);
-        if (f) { n.hx = f.x; n.hy = f.y; }
-      } else {
-        const pts = [...n.box.group.members].map(flowed).filter(Boolean);
-        if (pts.length) {
-          n.hx = pts.reduce((a, p) => a + p.x, 0) / pts.length;
-          n.hy = pts.reduce((a, p) => a + p.y, 0) / pts.length;
-        }
-      }
+      n.flow = !this.hasFixedHome(n.id) && !n.free;
+      const f = flowed(n.id);
+      if (f) { n.hx = f.x; n.hy = f.y; }
     }
   }
 
-  // A box that appears grows out of whatever held it a moment ago; a new free entity, out of the boxes it
-  // interacts with (so it arrives next to them, not in a far grid slot).
+  // A new free entity grows out of the boxes it interacts with (so it arrives next to them, not in a far grid slot).
   startPosition(b, old) {
-    if (b.kind === "entity") {
-      for (const [id, n] of old) {
-        if (n.kind === "card" && n.box.group.members.has(b.id)) return { x: n.x, y: n.y };
+    if (!figurePosition(this.layout, b.id) && !this.hasFixedHome(b.id)) {
+      const near = (this.view?.entity_links ?? []).flatMap((l) => (l.source === b.id ? [l.target] : l.target === b.id ? [l.source] : []))
+        .map((id) => old.get(id)).filter(Boolean);
+      if (near.length) {
+        const a = (b.id.length * 2.39996) % (Math.PI * 2);      // a stable angle, so siblings fan out
+        return { x: near.reduce((t, n) => t + n.x, 0) / near.length + 150 * Math.cos(a),
+                 y: near.reduce((t, n) => t + n.y, 0) / near.length + 90 * Math.sin(a) };
       }
-      if (!figurePosition(this.layout, b.id) && !this.hasFixedHome(b.id)) {
-        const near = (this.view?.entity_links ?? []).flatMap((l) => (l.source === b.id ? [l.target] : l.target === b.id ? [l.source] : []))
-          .map((id) => old.get(id) ?? old.get(this.model?.boxOfEntity?.(id))).filter(Boolean);
-        if (near.length) {
-          const a = (b.id.length * 2.39996) % (Math.PI * 2);      // a stable angle, so siblings fan out
-          return { x: near.reduce((t, n) => t + n.x, 0) / near.length + 150 * Math.cos(a),
-                   y: near.reduce((t, n) => t + n.y, 0) / near.length + 90 * Math.sin(a) };
-        }
-      }
-      return this.homeOf(b);
-    }
-    const pts = [...b.group.members].map((m) => old.get(m)).filter(Boolean);
-    if (pts.length) return { x: pts.reduce((a, p) => a + p.x, 0) / pts.length, y: pts.reduce((a, p) => a + p.y, 0) / pts.length };
-    for (const a of ancestors(this.groupsInfo.byKey, b.ref)) {
-      const n = old.get(`card:${a}`);
-      if (n) return { x: n.x, y: n.y };
     }
     return this.homeOf(b);
   }
@@ -702,10 +662,6 @@ export class SvgRenderer extends GraphRenderer {
   // -- detail: per node, or all at once ---------------------------------------------------------------
   entityName(id) {
     return this.view?.entities.find((e) => e.id === id)?.name ?? id;
-  }
-
-  groupName(key) {
-    return this.groupsInfo.byKey.get(key)?.label ?? key;
   }
 
   toggleEntity(id, open = null) {
@@ -717,34 +673,8 @@ export class SvgRenderer extends GraphRenderer {
     this.recompute("structure");
   }
 
-  toggleGroup(key, closed = null) {
-    const want = closed ?? !this.ui.collapsed.has(key);
-    if (want === this.ui.collapsed.has(key)) return;
-    this.record(`${want ? "close" : "open"} ${this.groupName(key)}`);
-    if (want) this.ui.collapsed.add(key);
-    else this.ui.collapsed.delete(key);
-    this.recompute("structure");
-  }
-
-  setGroupChildren(key, closed) {
-    const g = this.groupsInfo.byKey.get(key);
-    if (!g) return;
-    this.record(`open ${this.groupName(key)} with its parts ${closed ? "closed" : "open"}`);
-    this.ui.collapsed.delete(key);
-    for (const c of g.children) if (closed) this.ui.collapsed.add(c); else this.ui.collapsed.delete(c);
-    this.recompute("structure");
-  }
-
-  setMembersOpen(key, open) {
-    const g = this.groupsInfo.byKey.get(key);
-    if (!g) return;
-    this.record(`${open ? "show" : "hide"} the subentities in ${this.groupName(key)}`);
-    for (const m of g.members) if (open) this.ui.expanded.add(m); else this.ui.expanded.delete(m);
-    this.recompute("structure");
-  }
-
+  // candidate superentities in the panels' lists (they are not drawn on the canvas)
   setShowCandidates(on) {
-    this.record(`${on ? "show" : "hide"} candidate superentities`);
     this.ui.showCandidates = on;
     this.recompute("structure");
   }
@@ -755,7 +685,7 @@ export class SvgRenderer extends GraphRenderer {
   // `camera`: the change also moves the view (a preset refits it), so undo returns the view as well
   snapshot(camera = false) {
     const t = camera ? this.zoom.transform() : null;
-    return { expanded: [...this.ui.expanded], collapsed: [...this.ui.collapsed], showCandidates: this.ui.showCandidates,
+    return { expanded: [...this.ui.expanded], showCandidates: this.ui.showCandidates,
              pinned: [...this.pinnedHomes.entries()].map(([k, v]) => [k, { ...v }]), mode: this.mode,
              camera: t ? { x: t.x, y: t.y, k: t.k } : null };
   }
@@ -770,7 +700,6 @@ export class SvgRenderer extends GraphRenderer {
 
   restore(state) {
     this.ui.expanded = new Set(state.expanded);
-    this.ui.collapsed = new Set(state.collapsed);
     this.ui.showCandidates = state.showCandidates;
     this.pinnedHomes = new Map(state.pinned.map(([k, v]) => [k, { ...v }]));
     if (state.mode !== this.mode) {
@@ -843,18 +772,15 @@ export class SvgRenderer extends GraphRenderer {
   // isolate (Oct 11): show only `keep` (a set of entity ids), laid out fresh; null brings the full graph back where it was
   setIsolation(iso) {
     if (!this.fullView) return;
-    if (iso && !this.isolated) this.savedHomes = { grav: new Map(this.gravHomes), regions: this.regionHomes, mode: this.mode,
-      homeRegion: this.homeRegion };
+    if (iso && !this.isolated) this.savedHomes = { grav: new Map(this.gravHomes), mode: this.mode };
     // an isolated graph is always laid out by the hierarchy, even over the hand-placed Figure 1
     if (iso) this.mode = "gravity";
     else if (this.savedHomes) this.mode = this.savedHomes.mode;
     this.isolated = iso;
     this.isoHomes = iso?.homes ?? null;
     this.view = iso ? filterView(this.fullView, iso.keep, { subs: iso.subs, links: iso.links, hulls: iso.hulls }) : this.fullView;
-    this.ui.collapsed.clear();
     if (iso) {
       this.gravHomes.clear();
-      this.regionHomes = null;
       // a small isolated graph opens its entities, so its values and their links show at once; the transmission
       // grid's isolation (iso.open === false) starts compact, since the grid beside it already shows the values
       this.ui.expanded = new Set(iso.expand ?? (iso.open === false ? [] : iso.keep.size <= 8 ? iso.keep : iso.ids));
@@ -862,8 +788,6 @@ export class SvgRenderer extends GraphRenderer {
       this.lod.pin(this.ui.expanded);
     } else if (this.savedHomes) {
       this.gravHomes = this.savedHomes.grav;
-      this.regionHomes = this.savedHomes.regions;
-      this.homeRegion = this.savedHomes.homeRegion;
       this.ui.expanded.clear();
     }
     this.recompute(iso ? "first" : "structure");
@@ -912,47 +836,30 @@ export class SvgRenderer extends GraphRenderer {
     this.toggleEntity(id, want);
   }
 
+  // two levels (Oct 17: the superentity level left the canvas with the superentities): every entity closed, or open
   setDetail(level) {
-    const tops = this.groupsInfo.groups.filter((g) => !g.transient && !g.parents.length).map((g) => g.key);
-    this.record({ super: "close every superentity", entity: "open every superentity", sub: "open every entity" }[level] ?? level, { camera: true });
-    if (level === "super") {
-      this.ui.collapsed = new Set(tops);
-      this.ui.expanded.clear();
-    } else if (level === "entity") {
-      this.ui.collapsed.clear();
-      this.ui.expanded.clear();
-    } else if (level === "sub") {
-      this.ui.collapsed.clear();
-      this.ui.expanded = new Set(this.view?.entities.map((e) => e.id) ?? []);
-    }
+    this.record({ entity: "close every entity", sub: "open every entity" }[level] ?? level, { camera: true });
+    if (level === "entity") this.ui.expanded.clear();
+    else if (level === "sub") this.ui.expanded = new Set(this.view?.entities.map((e) => e.id) ?? []);
     this.recompute("structure");
     setTimeout(() => this.fit(320), this.opts.reducedMotion ? 30 : 220);
   }
 
   detailLevel() {
-    const tops = this.groupsInfo.groups.filter((g) => !g.transient && !g.parents.length);
     const nEnt = this.view?.entities.length ?? 0;
-    const { collapsed, expanded } = this.ui;
-    if (!collapsed.size && !expanded.size) return "entity";
-    if (!collapsed.size && expanded.size === nEnt) return "sub";
-    if (!expanded.size && tops.length && tops.every((g) => collapsed.has(g.key)) && collapsed.size === tops.length) return "super";
+    const { expanded } = this.ui;
+    if (!expanded.size) return "entity";
+    if (expanded.size === nEnt) return "sub";
     return null;
   }
 
-  // Make sure a node is on screen: open the cards that hold it, and its entity if it is a subentity.
+  // Make sure a node is on screen: open its entity if it is a subentity.
   reveal(id) {
     if (!this.view) return false;
     const before = this.snapshot();
     const sub = this.subIndex.get(id);
     const eid = sub ? sub.entity_id : id;
     let changed = false;
-    if (!this.model.visible.has(eid)) {
-      for (const k of this.groupsInfo.ofEntity.get(eid) ?? []) {
-        for (const a of [k, ...ancestors(this.groupsInfo.byKey, k)]) {
-          if (this.ui.collapsed.delete(a)) changed = true;
-        }
-      }
-    }
     if (sub && !this.ui.expanded.has(eid)) { this.ui.expanded.add(eid); changed = true; }
     if (changed) {
       if (!this.quiet) {
@@ -968,22 +875,17 @@ export class SvgRenderer extends GraphRenderer {
   // The walkthrough opens what a step needs to show, measured from the view before the walkthrough
   // began, and closes it again afterwards; none of it enters the undo history.
   peek(ids) {
-    if (!this.peeked) this.peeked = { expanded: new Set(this.ui.expanded), collapsed: new Set(this.ui.collapsed) };
+    if (!this.peeked) this.peeked = { expanded: new Set(this.ui.expanded) };
     const expanded = new Set(this.peeked.expanded);
-    const collapsed = new Set(this.peeked.collapsed);
     for (const id of ids) {
       const sub = this.subIndex.get(id);
       const eid = sub ? sub.entity_id : id;
       if (!this.view?.entities.some((e) => e.id === eid)) continue;
-      for (const k of this.groupsInfo.ofEntity.get(eid) ?? []) {
-        for (const a of [k, ...ancestors(this.groupsInfo.byKey, k)]) collapsed.delete(a);
-      }
       if (sub) expanded.add(eid);
     }
     const same = (a, b) => a.size === b.size && [...a].every((x) => b.has(x));
-    if (same(expanded, this.ui.expanded) && same(collapsed, this.ui.collapsed)) return;
+    if (same(expanded, this.ui.expanded)) return;
     this.ui.expanded = expanded;
-    this.ui.collapsed = collapsed;
     this.recompute("structure");
   }
 
@@ -1043,7 +945,6 @@ export class SvgRenderer extends GraphRenderer {
   unpeek() {
     if (!this.peeked) return;
     this.ui.expanded = this.peeked.expanded;
-    this.ui.collapsed = this.peeked.collapsed;
     this.peeked = null;
     this.recompute("structure");
   }
@@ -1051,14 +952,11 @@ export class SvgRenderer extends GraphRenderer {
   // -- drawing --------------------------------------------------------------------------------------
   draw() {
     this.drawLane();
-    this.drawHulls();
     this.drawEdges();
     this.drawFrontier();
     this.drawGhosts();
     this.drawFuzzy(false);
     this.drawNodes();
-    this.drawCards();
-    this.drawTethers();
     this.applyFocus();
     this.drawnOnce = true;
     this.applyHighlight();
@@ -1086,125 +984,26 @@ export class SvgRenderer extends GraphRenderer {
     this.edgeSel?.classed("staged-new", (d) => any(d, st?.new ?? new Set()))
       .classed("staged-retired", (d) => any(d, st?.retired ?? new Set()))
       .classed("staged-path", (d) => any(d, st?.path ?? new Set()));
-    this.cardSel?.classed("staged-new", (d) => !!st && d.group.patternIds.some((p) => st.collapsed.has(p)));
-  }
-
-  drawHulls() {
-    const st = this.model.state;
-    const groups = this.groupsInfo.groups.filter((g) => st.get(g.key) === "open")
-      .sort((a, b) => (b.level - a.level) || (b.members.size - a.members.size) || a.key.localeCompare(b.key));
-    this.openGroups = groups;
-    const pal = this.view?.palettes ?? {};
-    const sel = this.layers.hulls.selectAll("g.hull:not(.exiting)").data(groups, (g) => g.key);
-    const fade = this.animOK() ? 160 : 0;
-    sel.exit().classed("exiting", true).style("pointer-events", "none").transition().duration(fade).style("opacity", 0).remove();
-    const enter = sel.enter().append("g").attr("class", "hull");
-    enter.append("path").attr("class", "shape").attr("fill-rule", "evenodd");
-    if (fade) enter.style("opacity", 0).transition().duration(fade).delay(40).style("opacity", 1);
-    const all = enter.merge(sel).order();
-    all.attr("data-instance", (g) => g.key).classed("composite", (g) => g.composite).classed("transient", (g) => g.transient);
-    all.each((g, i, nodes) => {
-      const p = paletteOf(g, pal);
-      const s = hullStyle(g, p);
-      g.pal = p;
-      d3.select(nodes[i]).select("path.shape").attr("fill", s.fill).attr("fill-opacity", s.fillOpacity)
-        .attr("stroke", s.stroke).attr("stroke-dasharray", s.dash);
-    });
-    this.bindGroupEvents(all);
-    this.hullSel = all;
-    // tabs: one per pattern (rivals side by side), above links and nodes so they stay readable
-    const tsel = this.layers.tabs.selectAll("g.hull-tabs:not(.exiting)").data(groups.filter((g) => !g.transient || g.hulls.length), (g) => g.key);
-    tsel.exit().classed("exiting", true).style("pointer-events", "none").transition().duration(fade ? 120 : 0).style("opacity", 0).remove();
-    const tenter = tsel.enter().append("g").attr("class", "hull-tabs");
-    const tall = tenter.merge(tsel);
-    tall.attr("data-instance", (g) => g.key);
-    tall.each((g, i, nodes) => {
-      const tabs = d3.select(nodes[i]).selectAll("g.hull-tab").data(g.hulls.map((h) => ({ h, g })), (x) => x.h.id);
-      tabs.exit().remove();
-      const te = tabs.enter().append("g").attr("class", "hull-tab hull").attr("tabindex", 0).attr("role", "button");
-      te.append("rect").attr("rx", 7).attr("height", 22).attr("y", -11);
-      te.append("text").attr("x", 8);
-      const ta = te.merge(tabs);
-      ta.attr("data-instance", (x) => x.g.key);
-      // DECISION: rival patterns that share an outline get one compact tab each (their ids); hovering a
-      // tab gives the full name, so the pair labels its outline without crowding its neighbors
-      ta.each((x) => {
-        const base = x.g.hulls.length > 1 ? x.h.pattern_id : x.h.label;
-        x.text = truncate(`${base}${x.h.status === "candidate" ? "  (candidate)" : ""}${x.g.transient ? "  (hypothetical)" : ""}`, 190, TAB_FONT);
-        x.w = textWidth(x.text, TAB_FONT) + 30;
-      });
-      ta.select("rect").attr("width", (x) => x.w).attr("stroke", (x) => (x.g.transient ? css("--hyp-line") : x.g.pal.line))
-        .attr("stroke-dasharray", (x) => (x.h.status === "candidate" ? "2 2" : null));
-      ta.select("text").text((x) => x.text).attr("fill", (x) => (x.g.transient ? css("--hyp-ink") : x.g.pal.ink));
-      // the open node (Oct 9): its members' movement the superentity's own interactions do not explain
-      ta.each((x, k, els) => openNode(d3.select(els[k]), x.w - 16, 0, x.h.open, { min: 1.8, max: 4.5, stub: 2 }));
-      this.bindGroupEvents(ta, (x) => x.g, (x) => x.h);
-    });
-    this.tabSel = tall;
-    this.contourDirty = true;
-  }
-
-  bindGroupEvents(sel, groupOf = (d) => d, hullOf = (d) => d.hulls[0]) {
-    sel.on("click", (ev, d) => {
-      ev.stopPropagation();
-      const g = groupOf(d);
-      const h = hullOf(d);
-      this.delayedSelect({ kind: "pattern", id: h.pattern_id, instance: h.id, group: g.key });
-    })
-      .on("dblclick", (ev, d) => {
-        ev.stopPropagation();
-        clearTimeout(this.clickTimer);
-        const g = groupOf(d);
-        if (!g.transient) this.toggleGroup(g.key, true);
-      })
-      .on("contextmenu", (ev, d) => {
-        ev.preventDefault();
-        ev.stopPropagation();
-        this.handlers.onContext?.(ev, { kind: "group", key: groupOf(d).key, pattern: hullOf(d).pattern_id });
-      })
-      .on("keydown", (ev, d) => {
-        if (ev.key === "Enter") this.handlers.onSelect?.({ kind: "pattern", id: hullOf(d).pattern_id, instance: hullOf(d).id, group: groupOf(d).key });
-        if (ev.key === "ContextMenu" || (ev.key === "F10" && ev.shiftKey)) {
-          ev.preventDefault();
-          const r = ev.currentTarget.getBoundingClientRect();
-          this.handlers.onContext?.({ clientX: r.left, clientY: r.bottom, keyboard: true }, { kind: "group", key: groupOf(d).key, pattern: hullOf(d).pattern_id });
-        }
-      })
-      .on("mouseenter", (ev, d) => { this.setFocus({ group: groupOf(d).key }); this.handlers.onHover?.(ev, { kind: "group", key: groupOf(d).key, hull: hullOf(d) }); })
-      .on("mousemove", (ev) => this.handlers.onHoverMove?.(ev))
-      .on("mouseleave", () => { this.setFocus(null); this.handlers.onHover?.(null); });
   }
 
   drawNodes() {
-    const ents = this.model.boxes.filter((b) => b.kind === "entity");
-    const pal = this.view?.palettes ?? {};
+    const ents = this.model.boxes;
     const sel = this.layers.nodes.selectAll("g.pill:not(.exiting)").data(ents, (d) => d.id);
-    // closing a superentity: its members fly into the card that now holds them
     const dur = this.animOK() ? 200 : 0;
-    sel.exit().classed("exiting", true).style("pointer-events", "none").each((d, i, els) => {
-      const g = d3.select(els[i]);
-      const hk = this.model.host.get(d.id);
-      const card = hk ? this.nodes.get(`card:${hk}`) : null;
-      if (card && dur) {
-        g.transition().duration(dur).ease(d3.easeCubicIn).attr("transform", `translate(${card.x},${card.y})`).remove();
-        g.select("g.inner").transition().duration(dur).ease(d3.easeCubicIn).attr("transform", "scale(0.3)").style("opacity", 0);
-      } else {
-        g.transition().duration(dur ? 120 : 0).style("opacity", 0).remove();
-      }
-    });
+    sel.exit().classed("exiting", true).style("pointer-events", "none")
+      .transition().duration(dur ? 120 : 0).style("opacity", 0).remove();
     const enter = sel.enter().append("g").attr("class", "pill").attr("tabindex", 0).attr("role", "button")
       .attr("data-kind", "entity");
     const inner = enter.append("g").attr("class", "inner");
     inner.append("rect").attr("class", "halo");
     inner.append("rect").attr("class", "body").attr("rx", 8);
     inner.append("line").attr("class", "sep");
-    inner.append("g").attr("class", "owners");
     inner.append("text").attr("class", "name").attr("y", 0.5);
     inner.append("text").attr("class", "dev").attr("y", 0.5);
     inner.append("text").attr("class", "code").attr("y", 0.5);
     inner.append("g").attr("class", "rows");
     inner.append("g").attr("class", "open-slot");
-    // opening a superentity: its members grow out of the card that held them (they start at its place)
+    // a new entity grows in where it is placed
     if (dur) {
       inner.attr("transform", "scale(0.35)").style("opacity", 0)
         .transition().duration(dur + 30).ease(d3.easeBackOut.overshoot(1.05)).attr("transform", "scale(1)").style("opacity", 1);
@@ -1238,26 +1037,9 @@ export class SvgRenderer extends GraphRenderer {
     all.select("line.sep").attr("x1", (d) => -d.w / 2 + 1).attr("x2", (d) => d.w / 2 - 1).attr("y1", GEOM.HEAD_H / 2).attr("y2", GEOM.HEAD_H / 2)
       .style("display", (d) => (d.open ? null : "none"));
     const codeW = (d) => textWidth((d.entity.category_tags ?? []).join(" "), "500 12.7px IBM Plex Mono");
-    // ownership stripes: one per superentity that owns this entity, shown when it is shared by two or
-    // more, or when an owner is closed into a card (a tether then runs from the card's chip to here)
-    all.each((d, i, nodes) => {
-      const os0 = this.model.owners.get(d.id) ?? [];
-      const os = os0.length > 1 || os0.some((o) => o.drawn === "card") ? os0 : [];
-      d.stripeW = os.length ? os.length * 4.5 + 3 : 0;
-      d.owners = os;
-      const ss = d3.select(nodes[i]).select("g.owners").selectAll("rect").data(os, (o) => o.key);
-      ss.exit().remove();
-      ss.enter().append("rect").attr("width", 3).attr("rx", 1.5).merge(ss)
-        .attr("x", (o, j) => -d.w / 2 + 5 + j * 4.5).attr("y", -GEOM.HEAD_H / 2 + 5).attr("height", GEOM.HEAD_H - 10)
-        .attr("fill", (o) => paletteOf(this.groupsInfo.byKey.get(o.key), pal).line)
-        .classed("closed-owner", (o) => o.drawn === "card")
-        .each(function (o) {
-          const t = d3.select(this).selectAll("title").data([o]);
-          t.enter().append("title").merge(t).text(`${o.drawn === "card" ? "Also in the closed" : "In"} ${o.key.replace(/^inst-/, "")}`);
-        });
-    });
-    all.select("text.name").attr("x", (d) => -d.w / 2 + 10 + d.stripeW)
-      .text((d) => truncate(d.entity.name, d.w - 34 - codeW(d) - 14 - d.stripeW, NAME_FONT));
+    // Oct 17: no ownership stripes (superentities left the canvas); the concept outline says what kind of thing it is
+    all.select("text.name").attr("x", (d) => -d.w / 2 + 12)
+      .text((d) => truncate(d.entity.name, d.w - 36 - codeW(d) - 14, NAME_FONT));
     all.select("text.code").attr("x", (d) => d.w / 2 - 10).text((d) => (d.entity.category_tags ?? []).join(" "));
     // the largest deviation: ▲ or ▼, with a halo that is solid when today's value was observed and
     // dotted when it came from daily propagation
@@ -1318,8 +1100,11 @@ export class SvgRenderer extends GraphRenderer {
     this.pillSel?.each((d, i, nodes) => this.drawRows(d3.select(nodes[i]).select("g.rows"), d));
   }
 
+  // An open entity's values, one row each (Oct 17, after the user's notes): its name, a small picture of its posterior
+  // in its own unit, and its mean in that unit ("3.88%", "¥156.0 per $", "$109.7bn/yr"); the move from normal in sd is
+  // in its hover card (main.js). In Predict, a value the forecast reaches shows the forecast's move instead, in its unit
+  // where it can ("▲2.4%" for a value that moves in logs, "▲0.25pp" for a rate).
   drawRows(g, d) {
-    const pal = this.view?.palettes ?? {};
     const rows = d.open ? d.rows.map((sid, k) => ({ sid, k, s: this.subIndex.get(sid), w: d.w, eid: d.id })) : [];
     const labels = rowLabels(rows.map((r) => r.s ?? { id: r.sid }));
     const anim = this.animOK();
@@ -1329,7 +1114,6 @@ export class SvgRenderer extends GraphRenderer {
     else rs.exit().remove();
     const re = rs.enter().append("g").attr("class", "row").attr("data-kind", "subentity").attr("tabindex", 0).attr("role", "button");
     re.append("rect").attr("class", "bg").attr("rx", 4);
-    re.append("g").attr("class", "marks");
     re.append("circle").attr("class", "obs").attr("r", 3);
     re.append("text").attr("class", "rname").attr("y", 0.5);
     re.append("g").attr("class", "glyph");
@@ -1339,52 +1123,57 @@ export class SvgRenderer extends GraphRenderer {
     ra.attr("data-id", (r) => r.sid).attr("transform", (r) => `translate(0,${rowCenterY(r.k)})`).classed("alt", (r) => r.k % 2 === 1)
       .attr("aria-label", (r) => r.s?.name ?? r.sid);
     ra.select("rect.bg").attr("x", (r) => -r.w / 2 + 4).attr("width", (r) => r.w - 8).attr("y", -GEOM.ROW_H / 2 + 1).attr("height", GEOM.ROW_H - 2);
-    // superentities of subentities: a colored bar per drawn superentity whose relations use this one
-    ra.each((r, i, nodes) => {
-      const ks = (this.model.marks.get(r.sid) ?? []).slice(0, 4);
-      const ms = d3.select(nodes[i]).select("g.marks").selectAll("rect").data(ks, (k) => k);
-      ms.exit().remove();
-      ms.enter().append("rect").attr("width", 3).attr("height", 14).attr("y", -7).attr("rx", 1.5).merge(ms)
-        .attr("x", (k, j) => -r.w / 2 + 7 + j * 4.5)
-        .attr("fill", (k) => paletteOf(this.groupsInfo.byKey.get(k), pal).line);
-    });
-    const markW = (r) => Math.min(4, (this.model.marks.get(r.sid) ?? []).length) * 4.5;
-    ra.select("circle.obs").attr("cx", (r) => -r.w / 2 + 13 + markW(r))
+    ra.select("circle.obs").attr("cx", (r) => -r.w / 2 + 13)
       .attr("fill", (r) => (r.s?.observed_today ? css("--ink-2") : "none"))
       .attr("stroke", (r) => (r.s?.observed === false ? css("--ink-3") : css("--ink-2")))
       .attr("stroke-dasharray", (r) => (r.s?.observed_today ? null : "1.5 1.5"));
-    ra.select("text.rname").attr("x", (r) => -r.w / 2 + 21 + markW(r))
-      .text((r) => truncate(labels.get(r.sid) ?? r.sid, r.w - 132 - markW(r), ROW_FONT));
+    // a forecast shown in Predict (Oct 11): the values it reaches show its effect, not today's state
+    const zOf = (r) => this.rowOverride?.get(r.sid);
+    const textOf = (r) => (this.rowOverride?.has(r.sid) ? fmtMove(+zOf(r), r.s) : r.s ? fmtValue(r.s.summary?.mean, r.s.unit) : "");
+    // the values' column is as wide as the widest of this entity's, so the curves line up
+    const valW = Math.max(valueWidth(rows.map((r) => r.s).filter(Boolean)),
+                          ...rows.filter((r) => this.rowOverride?.has(r.sid)).map((r) => textWidth(textOf(r), ROW_GEOM.VAL_FONT)));
+    const glyphX = (r) => r.w / 2 - ROW_GEOM.RIGHT - valW - ROW_GEOM.GAP - ROW_GEOM.GLYPH_W / 2;
+    ra.select("text.rname").attr("x", (r) => -r.w / 2 + ROW_GEOM.LEFT)
+      .text((r) => truncate(labels.get(r.sid) ?? r.sid, r.w - ROW_GEOM.LEFT - ROW_GEOM.RIGHT - valW - 2 * ROW_GEOM.GAP - ROW_GEOM.GLYPH_W - 4, ROW_GEOM.ROW_FONT));
     ra.each((r, i, nodes) => {
-      const gl = d3.select(nodes[i]).select("g.glyph").attr("transform", `translate(${r.w / 2 - 84},0)`);
-      // redrawn only when the distribution changes; a change cross-fades in, so a moved value is seen to move
-      const sig = r.s?.density ? `${r.s.density.length}|${r.s.density[0]}|${r.s.density.at(-1)}|${r.s.density[r.s.density.length >> 1]}|${r.s.summary?.q50}` : "";
+      const gl = d3.select(nodes[i]).select("g.glyph").attr("transform", `translate(${glyphX(r)},0)`);
+      // the posterior in its own unit (the server's points are native values); the tick marks its mean. Redrawn only
+      // when the distribution changes; a change cross-fades in, so a moved value is seen to move
+      const sig = r.s?.density ? `${r.s.density.length}|${r.s.density[0]}|${r.s.density.at(-1)}|${r.s.density[r.s.density.length >> 1]}|${r.s.summary?.mean}` : "";
       const glNode = gl.node();
       if (glNode.__sig === sig) return;
       const changed = glNode.__sig != null;
       glNode.__sig = sig;
-      densityCurve(gl, r.s?.density, { width: 32, height: 10, marker: r.s?.summary?.q50 });
+      densityCurve(gl, r.s?.density, { width: ROW_GEOM.GLYPH_W, height: 10, marker: r.s?.summary?.mean });
       if (anim && changed) gl.interrupt().style("opacity", 0.25).transition().duration(260).style("opacity", 1);
     });
-    // a forecast shown in Predict (Oct 11): the values it reaches show its effect, not today's state
-    const zOf = (r) => this.rowOverride?.get(r.sid) ?? r.s?.z;
-    const zText = (z) => `${z > 0.25 ? "▲" : z < -0.25 ? "▼" : ""}${Math.abs(z).toFixed(1)} sd`;
-    ra.select("text.rz").attr("x", (r) => r.w / 2 - 9)
+    ra.select("text.rz").attr("x", (r) => r.w / 2 - ROW_GEOM.RIGHT)
       .classed("forecast", (r) => !!this.rowOverride?.has(r.sid))
-      .attr("fill", (r) => (zOf(r) > 0.25 ? css("--up") : zOf(r) < -0.25 ? css("--down") : css("--ink-3")))
+      .attr("fill", (r) => {
+        if (!this.rowOverride?.has(r.sid)) return css("--ink-2");
+        const z = +zOf(r);
+        return z > 0.25 ? css("--up") : z < -0.25 ? css("--down") : css("--ink-3");
+      })
       .each((r, i, els) => {
-        // a value that changes counts to its new reading
+        // a value that changes counts to its new reading (the mean, or the forecast's move)
         const el = els[i];
-        const z = r.s ? +zOf(r) : null;
-        const was = el.__z;
-        el.__z = z;
+        const fc = !!this.rowOverride?.has(r.sid);
+        const v = fc ? +zOf(r) : r.s?.summary?.mean ?? null;
+        const was = el.__v;
+        const wasFc = el.__fc;
+        el.__v = v;
+        el.__fc = fc;
         const sel = d3.select(el);
-        if (anim && z != null && was != null && Number.isFinite(was) && Math.abs(was - z) >= 0.05) {
+        const fmt = (x) => (fc ? fmtMove(x, r.s) : fmtValue(x, r.s?.unit));
+        const moved = v != null && was != null && wasFc === fc && Number.isFinite(was) && Number.isFinite(v)
+          && Math.abs(was - v) > 1e-9 * Math.max(1, Math.abs(v)) && fmt(was) !== fmt(v);
+        if (anim && moved) {
           sel.interrupt("value").transition("value").duration(320).ease(d3.easeCubicOut)
-            .tween("text", () => { const f = d3.interpolateNumber(was, z); return (t) => { el.textContent = zText(f(t)); }; });
+            .tween("text", () => { const f = d3.interpolateNumber(was, v); return (t) => { el.textContent = fmt(f(t)); }; });
         } else {
           sel.interrupt("value");
-          el.textContent = z == null ? "" : zText(z);
+          el.textContent = v == null ? "" : textOf(r);
         }
       });
     ra.each((r, i, nodes) => openNode(d3.select(nodes[i]).select("g.open-slot"), r.w / 2, 0, r.s?.open, { min: 1.5, max: 4, stub: 2.5 }));
@@ -1403,157 +1192,6 @@ export class SvgRenderer extends GraphRenderer {
       .on("mouseenter", (ev, r) => { this.setFocus({ box: r.eid, row: r.k }); this.handlers.onHover?.(ev, { kind: "subentity", id: r.sid }); })
       .on("mousemove", (ev) => this.handlers.onHoverMove?.(ev))
       .on("mouseleave", (ev, r) => { this.setFocus({ box: r.eid }); this.handlers.onHover?.(null); });
-  }
-
-  drawCards() {
-    const cards = this.model.boxes.filter((b) => b.kind === "card");
-    const pal = this.view?.palettes ?? {};
-    const sel = this.layers.nodes.selectAll("g.card-super:not(.exiting)").data(cards, (d) => d.id);
-    const dur = this.animOK() ? 190 : 0;
-    sel.exit().classed("exiting", true).style("pointer-events", "none")
-      .call((x) => x.select("g.inner").transition().duration(dur).ease(d3.easeCubicOut).attr("transform", "scale(1.12)").style("opacity", 0))
-      .transition().duration(dur).remove();
-    const enter = sel.enter().append("g").attr("class", "card-super hull").attr("tabindex", 0).attr("role", "button");
-    const inner = enter.append("g").attr("class", "inner");
-    inner.append("rect").attr("class", "body").attr("rx", 12);
-    inner.append("text").attr("class", "title");
-    inner.append("text").attr("class", "meta");
-    inner.append("g").attr("class", "chips");
-    inner.append("g").attr("class", "open-slot");
-    if (dur) {
-      inner.attr("transform", "scale(0.6)").style("opacity", 0)
-        .transition().delay(dur * 0.3).duration(dur).ease(d3.easeBackOut.overshoot(1.1)).attr("transform", "scale(1)").style("opacity", 1);
-    }
-    const all = enter.merge(sel);
-    all.attr("data-instance", (d) => d.group.key).attr("data-id", (d) => d.id)
-      .attr("aria-label", (d) => `${d.group.label}, closed`).attr("aria-expanded", "false");
-    all.each((d) => { d.pal = paletteOf(d.group, pal); });
-    all.select("rect.body").attr("x", (d) => -d.w / 2).attr("y", (d) => -d.h / 2).attr("width", (d) => d.w).attr("height", (d) => d.h)
-      .attr("fill", (d) => (d.group.status === "candidate" ? css("--sheet") : d.pal.fill))
-      .attr("fill-opacity", (d) => (d.group.composite ? 0.6 : 0.85))
-      .attr("stroke", (d) => d.pal.line)
-      .attr("stroke-dasharray", (d) => (d.group.status === "candidate" ? "1.5 4" : d.group.composite ? "12 4 2 4" : "6 4"));
-    all.select("text.title").attr("x", (d) => -d.w / 2 + 12).attr("y", (d) => -d.h / 2 + 16).attr("fill", (d) => d.pal.ink)
-      .text((d) => truncate(d.group.label, d.w - 24, "700 13px Instrument Sans"));
-    all.select("text.meta").attr("x", (d) => -d.w / 2 + 12).attr("y", (d) => -d.h / 2 + 32).text((d) => {
-      const g = d.group;
-      const n = g.members.size;
-      const shared = (d.chips ?? []).filter((c) => c.hosted === false).length;
-      const sh = shared ? ` · ${shared} shared` : "";
-      if (g.composite) {
-        const inParts = new Set(g.children.flatMap((k) => [...this.groupsInfo.byKey.get(k).members]));
-        const extra = [...g.members].filter((m) => !inParts.has(m)).length;
-        return `${g.children.length} superentities${extra ? ` + ${extra} entit${extra === 1 ? "y" : "ies"}` : ""}${sh} · open ▸`;
-      }
-      return `${n} entit${n === 1 ? "y" : "ies"}${sh} · open ▸`;
-    });
-    all.each((d, i, els) => openNode(d3.select(els[i]).select("g.open-slot"), d.w / 2, -d.h / 2 + 16, d.group.hulls[0]?.open));
-    // its members as chips: solid if the card holds them, dashed if they are drawn elsewhere (shared)
-    all.each((d, i, els) => {
-      const box = d3.select(els[i]).select("g.chips").attr("transform", `translate(${-d.w / 2 + 12},${-d.h / 2 + CHIP.TOP})`);
-      const cs = box.selectAll("g.chip").data(d.chips ?? [], (c) => c.eid ?? "more");
-      cs.exit().remove();
-      const ce = cs.enter().append("g").attr("class", "chip");
-      ce.append("rect").attr("rx", CHIP.H / 2).attr("height", CHIP.H);
-      ce.append("circle").attr("class", "port").attr("r", 2.6);
-      ce.append("text").attr("y", CHIP.H / 2 + 0.5);
-      const ca = ce.merge(cs);
-      ca.attr("transform", (c) => `translate(${c.x},${c.y})`).classed("shared", (c) => c.hosted === false).classed("more", (c) => !!c.more)
-        .attr("data-eid", (c) => c.eid ?? null);
-      ca.select("rect").attr("width", (c) => c.w).attr("stroke", (c) => (c.more ? "none" : d.pal.line));
-      ca.select("circle.port").attr("cx", (c) => c.w - 6).attr("cy", CHIP.H / 2).attr("fill", d.pal.line)
-        .style("display", (c) => (c.hosted === false ? null : "none"));
-      ca.select("text").attr("x", CHIP.PADX).text((c) => c.label).attr("fill", (c) => (c.hosted === false ? d.pal.ink : null));
-      ca.on("click", (ev, c) => {
-        if (!c.eid) return;
-        ev.stopPropagation();
-        clearTimeout(this.clickTimer);
-        if (c.hosted === false) this.focusNode(c.eid);
-        this.handlers.onSelect?.({ kind: "entity", id: c.eid });
-      })
-        .on("dblclick", (ev) => ev.stopPropagation())
-        .on("mouseenter", (ev, c) => { if (c.eid) { this.setFocus({ box: d.id, chip: c.eid }); this.handlers.onHover?.(ev, { kind: "entity", id: c.eid }); } })
-        .on("mousemove", (ev) => this.handlers.onHoverMove?.(ev))
-        .on("mouseleave", () => { this.setFocus({ box: d.id }); this.handlers.onHover?.(null); });
-    });
-    all.on("click", (ev, d) => {
-      ev.stopPropagation();
-      const h = d.group.hulls[0];
-      this.delayedSelect({ kind: "pattern", id: h.pattern_id, instance: h.id, group: d.group.key });
-    })
-      .on("dblclick", (ev, d) => { ev.stopPropagation(); clearTimeout(this.clickTimer); this.toggleGroup(d.group.key, false); })
-      .on("contextmenu", (ev, d) => { ev.preventDefault(); ev.stopPropagation(); this.handlers.onContext?.(ev, { kind: "group", key: d.group.key, pattern: d.group.pattern_id }); })
-      .on("keydown", (ev, d) => {
-        if (ev.key === "Enter") this.toggleGroup(d.group.key, false);
-        if (ev.key === "ContextMenu" || (ev.key === "F10" && ev.shiftKey)) {
-          ev.preventDefault();
-          const r = ev.currentTarget.getBoundingClientRect();
-          this.handlers.onContext?.({ clientX: r.left, clientY: r.bottom, keyboard: true }, { kind: "group", key: d.group.key, pattern: d.group.pattern_id });
-        }
-      })
-      .on("mouseenter", (ev, d) => { this.setFocus({ box: d.id }); this.handlers.onHover?.(ev, { kind: "group", key: d.group.key, hull: d.group.hulls[0] }); })
-      .on("mousemove", (ev) => this.handlers.onHoverMove?.(ev))
-      .on("mouseleave", () => { this.setFocus(null); this.handlers.onHover?.(null); });
-    this.dragBehavior(all);
-    this.cardSel = all;
-  }
-
-  // Tethers: from a card's dashed chip to wherever that shared member is drawn (an entity's pill, or the
-  // chip of the card that holds it), so one entity owned by two superentities reads as one thing.
-  drawTethers() {
-    const data = [];
-    for (const [key, list] of this.model.cardMembers ?? []) {
-      for (const m of list) {
-        if (m.hosted) continue;
-        data.push({ key: `${key}>${m.eid}`, card: `card:${key}`, group: key, eid: m.eid, where: m.where });
-      }
-    }
-    const pal = this.view?.palettes ?? {};
-    const sel = this.layers.tethers.selectAll("g.tether").data(data, (d) => d.key);
-    sel.exit().transition().duration(this.opts.reducedMotion ? 0 : 110).style("opacity", 0).remove();
-    const enter = sel.enter().append("g").attr("class", "tether");
-    enter.append("path").attr("class", "line");
-    enter.append("circle").attr("class", "end").attr("r", 3.2);
-    const all = enter.merge(sel);
-    all.each((d) => { d.color = paletteOf(this.groupsInfo.byKey.get(d.group), pal).line; });
-    all.select("path.line").attr("stroke", (d) => d.color);
-    all.select("circle.end").attr("fill", (d) => d.color);
-    if (this.animOK()) {
-      enter.style("opacity", 0).transition().delay(150).duration(170).style("opacity", 1);
-    }
-    this.tetherSel = all;
-    this.tickTethers();
-  }
-
-  chipCenter(cardId, eid) {
-    const n = this.nodes.get(cardId);
-    const c = n?.box?.chips?.find((x) => x.eid === eid);
-    if (!n || !c) return null;
-    return { x: n.x - n.w / 2 + 12 + c.x + c.w - 6, y: n.y - n.h / 2 + CHIP.TOP + c.y + CHIP.H / 2, chip: c, n };
-  }
-
-  tickTethers() {
-    this.tetherSel?.each((d, i, els) => {
-      const g = d3.select(els[i]);
-      const a = this.chipCenter(d.card, d.eid);
-      let b = null;
-      if (String(d.where).startsWith("card:")) {
-        const c = this.chipCenter(d.where, d.eid);
-        if (c) b = { x: c.x - c.chip.w + 12, y: c.y };
-      } else {
-        const n = this.nodes.get(d.where);
-        if (n && a) {
-          const p = boxExit(n, a.x, a.y, 3);
-          b = { x: p[0], y: p[1] };
-        }
-      }
-      if (!a || !b) { g.style("display", "none"); return; }
-      g.style("display", null);
-      const mx = (a.x + b.x) / 2;
-      const my = Math.min(a.y, b.y) - Math.min(60, 12 + Math.abs(a.x - b.x) * 0.12);
-      g.select("path.line").attr("d", `M${a.x} ${a.y}Q${mx} ${my} ${b.x} ${b.y}`);
-      g.select("circle.end").attr("cx", b.x).attr("cy", b.y);
-    });
   }
 
   // A single click selects after a short pause, so a double-click only opens or closes the node.
@@ -1604,8 +1242,8 @@ export class SvgRenderer extends GraphRenderer {
         // DECISION: a dropped node keeps its new place as its home (it is pinned there), so the
         // layout does not pull it back; "Return to its place" in its menu unpins it
         if (Math.hypot(n.fx - n.hx, n.fy - n.hy) > 4) {
-          this.record(`move ${n.kind === "entity" ? this.entityName(n.id) : this.groupName(n.ref)}`);
-          if (n.kind === "entity") this.pinnedHomes.set(n.id, { x: n.fx, y: n.fy });
+          this.record(`move ${this.entityName(n.id)}`);
+          this.pinnedHomes.set(n.id, { x: n.fx, y: n.fy });
           n.hx = n.fx; n.hy = n.fy;
           n.pinned = true;
         }
@@ -1648,7 +1286,7 @@ export class SvgRenderer extends GraphRenderer {
     const all = [...data, ...internal];
     const sel = this.layers.edges.selectAll("g.edge:not(.exiting)").data(all, (d) => d.key);
     // DECISION (Oct 14): only a genuine change animates. An edge whose interactions are still drawn (re-anchored because
-    // an entity opened or a superentity folded) is swapped at once; one whose interactions left the view fades out, and
+    // an entity opened) is swapped at once; one whose interactions left the view fades out, and
     // one whose interactions are new draws itself in from its cause (enterEdges, once it has a path).
     const ids = new Set(all.flatMap((d) => d.ids ?? []));
     const before = this.drawnIds ?? null;
@@ -1668,12 +1306,12 @@ export class SvgRenderer extends GraphRenderer {
     enter.append("text").attr("class", "label").attr("dy", -5);
     enter.append("text").attr("class", "badge-l").text("L");
     const a = enter.merge(sel);
-    a.classed("learned", (d) => d.learned).classed("super", (d) => !!d.super).classed("demo", (d) => !!d.demo)
+    a.classed("learned", (d) => d.learned).classed("demo", (d) => !!d.demo)
       .classed("hedged", (d) => !!d.hedge);
     // a hedged edge (one candidate of a fuzzy end) is as visible as it is probable
     a.style("opacity", (d) => (d.hedge ? (0.3 + 0.7 * Math.min(1, d.hedgeP)).toFixed(2) : null));
     // a weight that changes (an interaction's significance) eases to its new width
-    const widthOf = (d) => (d.super ? 2.4 + 3 * Math.min(1, d.sig) : d.learned ? 0.9 + 1.4 * Math.min(1, d.sig) : 1 + 2.2 * Math.min(1, d.sig));
+    const widthOf = (d) => (d.learned ? 0.9 + 1.4 * Math.min(1, d.sig) : 1 + 2.2 * Math.min(1, d.sig));
     a.select("path.line").each((d, i, els) => {
       const el = els[i];
       const w = +widthOf(d).toFixed(2);
@@ -1683,7 +1321,7 @@ export class SvgRenderer extends GraphRenderer {
       else if (was !== w) el.setAttribute("stroke-width", w);
     });
     a.select("path.line")
-      .attr("marker-end", (d) => (d.super ? "url(#arr-super)" : d.learned ? "url(#arr-learned)" : "url(#arr)"))
+      .attr("marker-end", (d) => (d.learned ? "url(#arr-learned)" : "url(#arr)"))
       .attr("marker-start", (d) => (d.bidir ? "url(#arr-s)" : null));
     a.select("text.label").text((d) => (d.hedge ? `≈ ${Math.round(100 * d.hedgeP)}% · ${d.label ?? ""}` : d.label ?? ""));
     a.select("text.badge-l").style("display", (d) => (d.learned ? null : "none"));
@@ -1801,9 +1439,9 @@ export class SvgRenderer extends GraphRenderer {
     this.labelsDirty = true;
   }
 
-  // Labels never sit on other text. Every label that is showing (a focused or super edge's, every
-  // edge's when "every link label" is on, the frontier's, the fuzzy ribbons') tries spots along its own
-  // path, the most important first, and takes the first spot clear of every box, tab, and label placed
+  // Labels never sit on other text. Every label that is showing (a focused edge's, every edge's when
+  // "every link label" is on, the frontier's, the fuzzy ribbons') tries spots along its own
+  // path, the most important first, and takes the first spot clear of every box and label placed
   // before it; a label with no free spot is hidden (hovering its edge shows it in the tooltip).
   layoutLabels() {
     if (!this.model || !this.edgeSel) return;
@@ -1813,7 +1451,6 @@ export class SvgRenderer extends GraphRenderer {
       const r = rectOf(n);
       occupied.push({ x0: r.x0 - 3, x1: r.x1 + 3, y0: r.y0 - 3, y1: r.y1 + 3 });
     }
-    for (const t of this.tabRects ?? []) occupied.push(t);
     const free = (r) => !occupied.some((o) => r.x0 < o.x1 && r.x1 > o.x0 && r.y0 < o.y1 && r.y1 > o.y0);
     const labelsOn = document.body.classList.contains("labels");
     const items = [];
@@ -1822,7 +1459,7 @@ export class SvgRenderer extends GraphRenderer {
       const t = g.querySelector("text.label");
       const badge = g.querySelector("text.badge-l");
       const focus = g.classList.contains("focus");
-      const shown = !!d.label && (labelsOn || d.super || focus) && g.style.display !== "none";
+      const shown = !!d.label && (labelsOn || focus) && g.style.display !== "none";
       if (!shown) {
         t.classList.add("lbl-hidden");
         badge?.classList.toggle("lbl-hidden", !d.learned);
@@ -1837,8 +1474,7 @@ export class SvgRenderer extends GraphRenderer {
         return;
       }
       items.push({ el: t, badge: d.learned ? badge : null, route: g.__route, text: d.label,
-                   font: d.super ? "700 12.5px Instrument Sans" : "500 11.5px Instrument Sans", h: d.super ? 16 : 15,
-                   pri: (d.super ? 4 : 0) + (focus ? 2 : 0) + d.sig, now: focus });
+                   font: "500 11.5px Instrument Sans", h: 15, pri: (focus ? 2 : 0) + d.sig, now: focus });
     });
     this.frontSel?.each((d, i, els) => {
       const g = els[i];
@@ -1930,7 +1566,6 @@ export class SvgRenderer extends GraphRenderer {
     if (!f) {
       this.edgeSel.classed("focus", false).classed("unfocus", false);
       this.frontSel?.classed("unfocus", false);
-      this.applyOwnerFocus(null);
       this.applyKinFocus(null);
       this.layoutLabels();
       return;
@@ -1949,13 +1584,12 @@ export class SvgRenderer extends GraphRenderer {
     // the rest step back, still visible: hovering focuses, it does not hide
     this.edgeSel.classed("focus", hit).classed("unfocus", (d) => !hit(d));
     this.frontSel?.classed("unfocus", (d) => !(d.a.box === f.box || d.b.box === f.box));
-    this.applyOwnerFocus(f);
     this.applyKinFocus(f);
     this.layoutLabels();
   }
 
   // hovering a value lights the same value in similar entities (its kin: every airline's jet fuel cost): the
-  // rows of other open entities, and the pills and card chips of closed entities that have one
+  // rows of other open entities, and the pills of closed entities that have one
   applyKinFocus(f) {
     const box = f?.box != null && f.row != null ? this.model?.boxes.find((b) => b.id === f.box) : null;
     const sid = box?.kind === "entity" && box.open ? box.rows[f.row] : null;
@@ -1964,18 +1598,6 @@ export class SvgRenderer extends GraphRenderer {
     const has = (eid) => !!key && eid !== box.id && (this.entIndex.get(eid)?.subentity_ids ?? []).some(kin);
     this.pillSel?.classed("kin", (d) => !d.open && has(d.id));
     this.pillSel?.selectAll("g.row").classed("kin", (r) => r.sid !== sid && r.eid !== box?.id && kin(r.sid));
-    this.cardSel?.selectAll("g.chip").classed("kin", (c) => !!c.eid && has(c.eid));
-  }
-
-  // hovering a shared entity (or a card's chip) lights up everything that owns it, and the tethers
-  applyOwnerFocus(f) {
-    const eid = f?.chip ?? (f?.box && this.nodes.get(f.box)?.kind === "entity" ? f.box : null);
-    const owners = new Set((this.model?.owners.get(eid) ?? []).map((o) => o.card ?? o.key));
-    this.lensSel?.classed("lit", (d) => !!eid && d.shared.includes(eid));
-    this.tetherSel?.classed("lit", (d) => !!eid && d.eid === eid);
-    this.hullSel?.classed("owner-lit", (g) => !!eid && owners.size > 1 && owners.has(g.key));
-    this.cardSel?.classed("owner-lit", (d) => !!eid && owners.has(d.group.key));
-    this.cardSel?.selectAll("g.chip").classed("lit", (c) => !!eid && c.eid === eid);
   }
 
   // -- tick -------------------------------------------------------------------------------------------
@@ -1990,7 +1612,7 @@ export class SvgRenderer extends GraphRenderer {
       if (Math.abs(n.hGoal - n.h) < 0.5 && Math.abs(n.wGoal - n.w) < 0.5) { n.w = n.wGoal; n.h = n.hGoal; n.hGoal = n.wGoal = null; }
       else if (this.sim.alpha() < 0.05) this.sim.alpha(0.05);
     }
-    // in block mode the layout's homes never overlap, so boxes glide through one another to them; pushing them apart on
+    // in the gravity layout the homes never overlap, so boxes glide through one another to them; pushing them apart on
     // the way could stop two that must swap places
     if (!this.blocks()) resolveCollisions(nodes, 3);
     if (this.sim.alpha() < 0.02) {
@@ -1999,14 +1621,12 @@ export class SvgRenderer extends GraphRenderer {
       }
     }
     this.pillSel?.attr("transform", (d) => { const n = this.nodes.get(d.id); return n ? `translate(${n.x},${n.y})` : null; });
-    this.cardSel?.attr("transform", (d) => { const n = this.nodes.get(d.id); return n ? `translate(${n.x},${n.y})` : null; });
     this.tickEdges();
     this.enterEdges();
-    this.tickTethers();
     this.tickFrontier();
     this.tickGhosts();
     this.tickCount += 1;
-    if (force || this.contourDirty || (this.tickCount % 2 === 0 && this.moved())) this.updateContours(force);
+    if (force || this.contourDirty || (this.netSel?.size() && this.tickCount % 2 === 0 && this.moved())) this.updateContours();
     if (this.fuzzySel && this.sim.alpha() > 0.03) this.drawFuzzy(false);
     this.tickOverlays();
     if (force || this.labelsDirty || this.tickCount % 5 === 0) this.layoutLabels();
@@ -2029,8 +1649,8 @@ export class SvgRenderer extends GraphRenderer {
   }
 
   // the arrowhead an edge ends in, and so how far its curve stops short of the border (see makeMarkers)
-  arrowOf(d) {
-    return d.super ? ARROW_SUPER : ARROW;
+  arrowOf() {
+    return ARROW;
   }
 
   // Every edge and frontier co-movement, routed together (graph/edge-route.js): ports spread along the borders, curves
@@ -2042,7 +1662,7 @@ export class SvgRenderer extends GraphRenderer {
       specs.push({ key: d.key, a: d.a, b: d.b, gapA: d.bidir ? ARROW : 1, gapB: this.arrowOf(d) });
     });
     this.frontSel?.each((d) => specs.push({ key: `front:${d.id}`, a: d.a, b: d.b, gapA: 1, gapB: ARROW }));
-    this.routes = routeEdges(specs, this.nodes, { rowY: rowCenterY, headH: GEOM.HEAD_H, obstacles: this.tabRects ?? [] });
+    this.routes = routeEdges(specs, this.nodes, { rowY: rowCenterY, headH: GEOM.HEAD_H, obstacles: [] });
   }
 
   tickEdges() {
@@ -2105,30 +1725,10 @@ export class SvgRenderer extends GraphRenderer {
     });
   }
 
-  // DECISION (Oct 11): in the hierarchy's layout a superentity's outline goes around its own block, the members whose
-  // home it is (or the home of one of its parts), so regions stay separate and orderly; a member that lives in another
-  // block still shows its membership by its owner stripe. A member with no home yet (added since the layout) counts
-  // everywhere it belongs, and so does every member of a superentity that has no home members at all.
-  // superentities are drawn as blocks when the hierarchy placed them (each has its own region) and they form a tree:
-  // no superentity is a part of two others. A world where parts are shared (the oil demo's composites) cannot be
-  // drawn as nested blocks without overlap, so it keeps traced outlines.
+  // the gravity layout places every box (graph/layout-hier.js), so homes never overlap and each box glides straight home
+  // (Oct 11, "blocks"); Oct 17: the blocks are the taxonomy's concepts, not drawn
   blocks() {
-    // the world's shape decides, not what is folded right now (folding every superentity leaves no homes for a moment)
-    if (this.mode !== "gravity" || this.opts.groupByCategory || !this.groupsInfo?.groups.length) return false;
-    const live = new Set(this.groupsInfo.groups.filter((g) => !g.transient).map((g) => g.key));
-    return this.groupsInfo.groups.every((g) => g.transient || g.parents.filter((k) => live.has(k)).length <= 1);
-  }
-
-  outlineMembers(g) {
-    // a transmission lane's entities are drawn in the lane, away from their superentities
-    const laned = (m) => !!this.laneHomes?.has(m);
-    const homes = this.blocks() ? this.homeRegion : null;
-    if (!homes || !homes.size) return this.laneHomes ? new Set([...g.members].filter((m) => !laned(m))) : g.members;
-    const within = new Set([g.key]);
-    const walk = (k) => { for (const c of this.groupsInfo.byKey.get(k)?.children ?? []) if (!within.has(c)) { within.add(c); walk(c); } };
-    walk(g.key);
-    const own = [...g.members].filter((m) => !laned(m) && (!homes.has(m) || within.has(homes.get(m))));
-    return own.length ? new Set(own) : new Set([...g.members].filter((m) => !laned(m)));
+    return this.mode === "gravity" && !this.opts.groupByCategory;
   }
 
   // the world-space box the view shows, grown by `margin` of its size on each side
@@ -2142,40 +1742,13 @@ export class SvgRenderer extends GraphRenderer {
     return { x0: x0 - w * margin, y0: y0 - h * margin, x1: x0 + w * (1 + margin), y1: y0 + h * (1 + margin) };
   }
 
-  // DECISION (Oct 11): while the layout floats, only outlines in or near the view are traced again; one off screen
-  // keeps its last outline until it comes into view or the layout settles (`full`). Zoomed in, most outlines are off
-  // screen, and tracing them all on every tick was most of a tick.
-  updateContours(full = false) {
+  // The walkthrough's and forecasts' outlined networks (setOverlayGroups), traced around their members. Oct 17: the only
+  // outlines left on the canvas; superentities are not drawn.
+  updateContours() {
     this.contourDirty = false;
     const nodes = [...this.nodes.values()];
     const rects = new Map(nodes.map((n) => [n.id, rectOf(n)]));
     this.lastContourPos = new Map(nodes.map((n) => [n.id, [n.x, n.y, n.h]]));
-    const v = full ? null : this.viewWorld(0.35);
-    this.contourStale = false;
-    for (const g of this.openGroups ?? []) {
-      const ids = new Set();
-      for (const m of this.outlineMembers(g)) {
-        const b = this.model.boxOfEntity(m);
-        if (b) ids.add(b);
-      }
-      const members = [...ids].map((id) => rects.get(id)).filter(Boolean);
-      if (v && this.contours.get(g.key) && members.length) {
-        let x0 = Infinity; let y0 = Infinity; let x1 = -Infinity; let y1 = -Infinity;
-        for (const r of members) { x0 = Math.min(x0, r.x0); y0 = Math.min(y0, r.y0); x1 = Math.max(x1, r.x1); y1 = Math.max(y1, r.y1); }
-        if (x1 < v.x0 || x0 > v.x1 || y1 < v.y0 || y0 > v.y1) { this.contourStale = true; continue; }
-      }
-      const pad = PAD + NEST_PAD * g.level;
-      // the hierarchy's layout gives every superentity a block of its own: draw it as one (Oct 11)
-      const c = this.blocks() ? blockHull(members, pad)
-        : hullContourCached(g.key, members, nodes.filter((n) => !ids.has(n.id)).map((n) => rects.get(n.id)), pad);
-      this.contours.set(g.key, c);
-    }
-    this.hullSel?.each((g, i, els) => {
-      const path = els[i].querySelector("path.shape");
-      const d = this.contours.get(g.key)?.d ?? null;
-      if (path && path.getAttribute("d") !== d) d3.select(path).attr("d", d);
-    });
-    this.drawLenses();
     const netPlaced = [];
     this.netSel?.each((d, i, els) => {
       const ids = new Set(d.members.map((m) => this.model.boxOfEntity(m)).filter(Boolean));
@@ -2202,95 +1775,7 @@ export class SvgRenderer extends GraphRenderer {
       if (b) netPlaced.push({ x0: x, x1: x + w, y });
       g.select("g.net-tab").style("display", b ? null : "none").attr("transform", b ? `translate(${x},${y})` : null);
     });
-    // tabs: each tab takes the free spot on its outline nearest the outline's top-left corner, clear of
-    // other tabs and of every node (rival patterns share an outline and place their tabs one by one)
-    const boxes = nodes.map((n) => rects.get(n.id));
-    const placed = [];
-    const free = (x0, x1, y) => !placed.some((p) => x0 < p.x1 + 4 && x1 > p.x0 - 4 && Math.abs(p.y - y) < 22)
-      && !boxes.some((r) => x0 < r.x1 + 2 && x1 > r.x0 - 2 && y - 11 < r.y1 + 2 && y + 11 > r.y0 - 2);
-    this.tabSel?.each((g, i, els) => {
-      const c = this.contours.get(g.key);
-      const sel = d3.select(els[i]);
-      if (!c) { sel.style("display", "none"); return; }
-      sel.style("display", null);
-      // tabs sit on the outline's top edges, the topmost (then leftmost) free spot first
-      const cands = c.topEdge?.length ? c.topEdge : (c.corners ?? [c.anchor]).map((k) => [k.x, k.y]);
-      sel.selectAll("g.hull-tab").each((t, j, tels) => {
-        // a tab keeps to the free spot nearest where it was (within a short reach), so outlines that shift as entities
-        // open do not send it jumping to another corner; it glides there (CSS) instead of stepping
-        const prev = this.tabSpots.get(t.h.id);
-        let spot = null;
-        let best = Infinity;
-        for (const [px, py] of cands) {
-          if (!free(px + 2, px + 2 + t.w, py)) continue;
-          if (!prev) { spot = { x: px + 2, y: py }; break; }
-          const dd = Math.hypot(px + 2 - prev.x, py - prev.y);
-          if (dd < best) { best = dd; spot = { x: px + 2, y: py }; }
-        }
-        if (prev && spot && best > TAB_REACH) {
-          spot = null;
-          for (const [px, py] of cands) if (free(px + 2, px + 2 + t.w, py)) { spot = { x: px + 2, y: py }; break; }
-        }
-        if (!spot) {
-          // no spot clear of nodes: settle for one clear of the other tabs (two outlines that hold the
-          // same entities, such as HP1 and HP2, would otherwise stack their tabs on one corner)
-          const tabFree = (x0, x1, y) => !placed.some((p) => x0 < p.x1 + 4 && x1 > p.x0 - 4 && Math.abs(p.y - y) < 23);
-          for (const [px, py] of cands) {
-            if (tabFree(px + 2, px + 2 + t.w, py)) { spot = { x: px + 2, y: py }; break; }
-          }
-          for (let k = 1; !spot && k < 10; k++) {
-            const x = c.anchor.x + 4 + k * (t.w + 6);
-            if (tabFree(x, x + t.w, c.anchor.y)) spot = { x, y: c.anchor.y };
-            else if (tabFree(c.anchor.x + 4, c.anchor.x + 4 + t.w, c.anchor.y - 24 * k)) spot = { x: c.anchor.x + 4, y: c.anchor.y - 24 * k };
-          }
-          if (!spot) spot = { x: c.anchor.x + 4 + j * (t.w + 4), y: c.anchor.y };
-        }
-        placed.push({ x0: spot.x, x1: spot.x + t.w, y: spot.y });
-        const el = d3.select(tels[j]).attr("transform", null);
-        if (!prev) {
-          el.classed("placing", true);
-          requestAnimationFrame(() => requestAnimationFrame(() => el.classed("placing", false)));
-        }
-        el.style("transform", `translate(${spot.x}px,${spot.y}px)`);
-        this.tabSpots.set(t.h.id, spot);
-      });
-    });
-    this.tabRects = placed.map((p) => ({ x0: p.x0 - 2, x1: p.x1 + 2, y0: p.y - 12, y1: p.y + 12 }));
     this.labelsDirty = true;
-  }
-
-  // Where two open outlines share entities, the shared part is a lens striped in both colors.
-  drawLenses() {
-    const pal = this.view?.palettes ?? {};
-    const safe = (k) => String(k).replace(/[^A-Za-z0-9_-]/g, "_");
-    const data = (this.model?.lenses ?? []).map((l) => ({ ...l, ca: this.contours.get(l.a), cb: this.contours.get(l.b) }))
-      .filter((l) => l.ca && l.cb);
-    const sel = this.layers.lenses.selectAll("g.lens").data(data, (d) => d.key);
-    sel.exit().remove();
-    const enter = sel.enter().append("g").attr("class", "lens");
-    enter.append("clipPath").attr("id", (d) => `lc-${safe(d.key)}`).append("path");
-    enter.append("path").attr("class", "lens-fill");
-    enter.append("path").attr("class", "lens-edge");
-    const all = enter.merge(sel);
-    all.each((d) => {
-      const pa = paletteOf(this.groupsInfo.byKey.get(d.a), pal);
-      const pb = paletteOf(this.groupsInfo.byKey.get(d.b), pal);
-      const id = `lp-${safe(d.a)}-${safe(d.b)}`;
-      if (this.defs.select(`#${id}`).empty()) {
-        const pat = this.defs.append("pattern").attr("id", id).attr("patternUnits", "userSpaceOnUse")
-          .attr("width", 8).attr("height", 8).attr("patternTransform", "rotate(45)");
-        pat.append("rect").attr("width", 4).attr("height", 8).attr("fill", pa.line).attr("fill-opacity", 0.2);
-        pat.append("rect").attr("x", 4).attr("width", 4).attr("height", 8).attr("fill", pb.line).attr("fill-opacity", 0.2);
-      }
-      d.pattern = id;
-      d.edge = pb.line;
-    });
-    all.select("clipPath path").attr("d", (d) => d.cb.d);
-    all.select("path.lens-fill").attr("d", (d) => d.ca.d).attr("clip-path", (d) => `url(#lc-${safe(d.key)})`)
-      .attr("fill", (d) => `url(#${d.pattern})`);
-    all.select("path.lens-edge").attr("d", (d) => d.ca.d).attr("clip-path", (d) => `url(#lc-${safe(d.key)})`)
-      .attr("stroke", (d) => d.edge);
-    this.lensSel = all;
   }
 
   // -- highlight and selection ---------------------------------------------------------------------
@@ -2302,24 +1787,23 @@ export class SvgRenderer extends GraphRenderer {
   applyHighlight() {
     const hl = this.highlight;
     const on = !!hl;
-    const ents = hl?.entities ?? new Set();
+    const ents = new Set(hl?.entities ?? []);
     const links = hl?.links ?? new Set();
     const hot = hl?.hot ?? new Set();
+    // a highlighted superentity (Oct 17: not drawn) lights its members
     const hullKeys = new Set([...(hl?.hulls ?? [])].map((i) => this.groupsInfo.ofInstance.get(i)).filter(Boolean));
+    for (const k of hullKeys) for (const m of this.groupsInfo.byKey.get(k)?.members ?? []) ents.add(m);
     // find (Oct 9): matches stand out, their neighbors one and two hops out step down, the rest dims
     const found = hl?.found ?? new Set();
     const ring1 = hl?.ring1 ?? new Set();
     const ring2 = hl?.ring2 ?? new Set();
     this.pillSel?.classed("dim", (d) => on && !ents.has(d.id))
       .classed("found", (d) => found.has(d.id)).classed("ring1", (d) => ring1.has(d.id)).classed("ring2", (d) => ring2.has(d.id));
-    this.cardSel?.classed("dim", (d) => on && !hullKeys.has(d.group.key) && ![...d.group.members].some((m) => ents.has(m)));
-    this.hullSel?.classed("dim", (g) => on && !hullKeys.has(g.key));
-    this.tabSel?.classed("dim", (g) => on && !hullKeys.has(g.key));
     this.edgeSel?.classed("dim", (d) => on && !d.ids.some((i) => links.has(i)))
       .classed("hl", (d) => d.ids.some((i) => hot.has(i)))
       .classed("chain", (d) => d.ids.some((i) => hl?.chain?.has(i)));
     this.edgeSel?.select("path.line").attr("marker-end", (d) => (d.ids.some((i) => hot.has(i)) ? "url(#arr-hl)"
-      : d.super ? "url(#arr-super)" : d.learned ? "url(#arr-learned)" : "url(#arr)"));
+      : d.learned ? "url(#arr-learned)" : "url(#arr)"));
   }
 
   select(sel) {
@@ -2328,7 +1812,6 @@ export class SvgRenderer extends GraphRenderer {
     if (sid) this.attention.touch(sid, this.zoom.transform().k, 2);
     this.pillSel?.classed("selected", (d) => sel?.kind === "entity" && sel.id === d.id);
     this.pillSel?.selectAll("g.row").classed("selected", (r) => sel?.kind === "subentity" && sel.id === r.sid);
-    this.cardSel?.classed("selected", (d) => sel?.kind === "pattern" && d.group.patternIds.includes(sel.id));
     if (sel?.kind === "entity") this.selFocus = { box: this.model?.boxOfEntity(sel.id) };
     else if (sel?.kind === "subentity") {
       const a = this.model?.anchorOf(sel.id);
@@ -2386,18 +1869,9 @@ export class SvgRenderer extends GraphRenderer {
       x0 = Math.min(x0, r.x0); y0 = Math.min(y0, r.y0); x1 = Math.max(x1, r.x1); y1 = Math.max(y1, r.y1);
     }
     if (settled) { x0 -= 48; y0 -= 64; x1 += 48; y1 += 48; }
-    for (const [key, c] of settled ? [] : this.contours) {
-      // only outlines drawn now (an isolated view, or a fold, leaves old ones behind)
-      if (!c || this.model?.state?.get(key) !== "open") continue;
-      x0 = Math.min(x0, c.bbox.x0); y0 = Math.min(y0, c.bbox.y0 - 12); x1 = Math.max(x1, c.bbox.x1); y1 = Math.max(y1, c.bbox.y1);
-    }
     if (this.lane && this.laneBox) {
       const b = this.laneBox;
       x0 = Math.min(x0, b.x0); y0 = Math.min(y0, b.y0 - 28); x1 = Math.max(x1, b.x1); y1 = Math.max(y1, b.y1);
-    }
-    // tabs can sit past an outline's end
-    for (const t of settled ? [] : this.tabRects ?? []) {
-      x0 = Math.min(x0, t.x0); y0 = Math.min(y0, t.y0); x1 = Math.max(x1, t.x1); y1 = Math.max(y1, t.y1);
     }
     return [[x0 - 16, y0 - 16], [x1 + 16, y1 + 16]];
   }
@@ -2466,20 +1940,19 @@ export class SvgRenderer extends GraphRenderer {
       const n = this.nodes.get(bid);
       return { x: n.x, y: n.y };
     }
+    // a superentity (not drawn, Oct 17): the middle of its members
     const gk = this.groupsInfo.ofInstance.get(ref) ?? (this.groupsInfo.byKey.has(ref) ? ref : null);
     if (gk) {
-      const card = this.nodes.get(`card:${gk}`);
-      if (card) return { x: card.x, y: card.y };
-      const c = this.contours.get(gk);
-      if (c) return { x: (c.bbox.x0 + c.bbox.x1) / 2, y: (c.bbox.y0 + c.bbox.y1) / 2 };
+      const ns = [...(this.groupsInfo.byKey.get(gk)?.members ?? [])].map((m) => this.nodes.get(m)).filter(Boolean);
+      if (ns.length) return { x: ns.reduce((t, n) => t + n.x, 0) / ns.length, y: ns.reduce((t, n) => t + n.y, 0) / ns.length };
     }
     // an entity id that is part of a subentity reference
     if (ref.includes(".")) return this.posOf(ref.split(".")[0]);
     return null;
   }
 
-  // The drawn shape that stands for an id: a subentity's row when its entity is open, else the box
-  // (pill or card) that holds it. Returns {key, box, row}.
+  // The drawn shape that stands for an id: a subentity's row when its entity is open, else its entity's
+  // box. Returns {key, box, row}.
   targetOf(id) {
     if (!this.model) return null;
     const ref = String(id ?? "").replace(/^new:/, "");
@@ -2488,9 +1961,7 @@ export class SvgRenderer extends GraphRenderer {
       if (!a || !this.nodes.has(a.box)) return null;
       return { key: `${a.box}#${a.row}`, box: a.box, row: a.row };
     }
-    const bid = this.model.boxOfEntity(ref)
-      ?? (this.groupsInfo.ofInstance.has(ref) && this.nodes.has(`card:${this.groupsInfo.ofInstance.get(ref)}`)
-        ? `card:${this.groupsInfo.ofInstance.get(ref)}` : null);
+    const bid = this.model.boxOfEntity(ref);
     return bid && this.nodes.has(bid) ? { key: `${bid}#-1`, box: bid, row: -1 } : null;
   }
 
@@ -2501,7 +1972,7 @@ export class SvgRenderer extends GraphRenderer {
       const y = n.y + rowCenterY(t.row);
       return { x: n.x - n.w / 2 + 3 - pad / 2, y: y - GEOM.ROW_H / 2 + 1 - pad / 2, w: n.w - 6 + pad, h: GEOM.ROW_H - 2 + pad, rx: 5 + pad / 2 };
     }
-    return { x: n.x - n.w / 2 - pad, y: n.y + n.oy - pad, w: n.w + 2 * pad, h: n.h + 2 * pad, rx: (n.kind === "card" ? 12 : 8) + pad };
+    return { x: n.x - n.w / 2 - pad, y: n.y + n.oy - pad, w: n.w + 2 * pad, h: n.h + 2 * pad, rx: 8 + pad };
   }
 
   // A ripple in the shape of what it marks: the outline grows a little and fades.
@@ -2624,19 +2095,13 @@ export class SvgRenderer extends GraphRenderer {
     return { left: box.left + x0, top: box.top + y0, right: box.left + x1, bottom: box.top + y1 };
   }
 
+  // a superentity the animation names (Oct 17: superentities are not drawn): its members ripple
   flashHull(instanceId, ms = 800) {
     const dur = this.opts.reducedMotion ? 150 : ms;
+    const h = (this.view?.hulls ?? []).find((x) => x.id === instanceId);
     const key = this.groupsInfo.ofInstance.get(instanceId);
-    const path = this.hullSel?.filter((g) => g.key === key).select("path.shape");
-    const card = this.cardSel?.filter((d) => d.group.key === key).select("rect.body");
-    const target = path && !path.empty() ? path : card && !card.empty() ? card : null;
-    if (target) {
-      target.interrupt().transition().duration(dur * 0.35).ease(d3.easeCubicOut).attr("stroke-width", 4.2)
-        .transition().duration(dur * 0.65).ease(d3.easeCubicIn).attr("stroke-width", null);
-    } else {
-      const h = (this.view?.hulls ?? []).find((x) => x.id === instanceId);
-      if (h) return this.pulse(h.members, css("--hyp-line"), dur);
-    }
+    const members = h?.members ?? [...(this.groupsInfo.byKey.get(key)?.members ?? [])];
+    if (members.length) return this.pulse(members, h?.transient ? css("--hyp-line") : css("--real-line"), dur);
     return new Promise((r) => setTimeout(r, dur));
   }
 

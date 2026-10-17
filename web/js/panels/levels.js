@@ -1,87 +1,85 @@
-// Levels (Oct 9): navigate the hierarchy of superentities, superentities within superentities. A path above the
-// canvas names each level of what is selected: World › Oil and rates › Policy loop › Inflation. Each step is a link:
-// the world closes everything into its outermost cards; a superentity opens with its parts closed and is framed; an
-// entity is focused. After the last step, chips name the level below (a superentity's parts and loose members), so
-// one click goes down a level. Keys: [ goes up a level, ] goes down into the first part.
-import { ancestors } from "../graph/hulls.js";
+// Levels (Oct 9): a path above the canvas that names each level of what is selected, each step a link. Oct 17: the
+// levels are the static taxonomy's concepts (Actor › Firm › Bank › AIB Group), no longer superentities, which left the
+// canvas. The world lists the top concepts; a concept frames its entities; an entity is focused. After the last step,
+// chips name the level below (a concept's narrower concepts and its own entities), so one click goes down a level.
+// Keys: [ goes up a level, ] goes down into the first chip.
 import { on, store } from "../store.js";
 import { esc } from "../util.js";
+
+const titleOf = (id) => {
+  const raw = String(id ?? "").split(":").pop().replaceAll("_", " ");
+  return raw ? raw[0].toUpperCase() + raw.slice(1) : "";
+};
 
 export function initLevels({ renderer, select }) {
   const bar = document.createElement("nav");
   bar.id = "levels";
   bar.className = "floating hidden";
-  bar.setAttribute("aria-label", "Levels of superentities");
+  bar.setAttribute("aria-label", "Levels of the taxonomy");
   document.getElementById("canvas").appendChild(bar);
-  let path = [];        // [{kind: "world" | "group" | "entity", key, label}]
+  let path = [];        // [{kind: "world" | "concept" | "entity", key, label}]
   let below = [];       // the level below the last step
+  let concept = null;   // a concept picked here (it is not a selection the inspector shows)
 
-  const info = () => renderer.groupsInfo;
-  const label = (k) => info().byKey.get(k)?.label ?? k;
-  const shown = (g) => g && !g.transient && (g.status === "admitted" || g.status === "candidate");
-
-  // the chain of groups from the outermost down to `key` (composites can share parts: take the first parent each time)
-  function chainTo(key) {
-    const out = [key];
-    let k = key;
-    const seen = new Set([key]);
-    for (;;) {
-      const ps = (info().byKey.get(k)?.parents ?? []).filter((p) => !seen.has(p) && shown(info().byKey.get(p)));
-      if (!ps.length) break;
-      k = ps[0];
-      seen.add(k);
-      out.unshift(k);
+  const info = () => renderer.layoutGroups;
+  const ents = () => store.view?.entities ?? [];
+  // each concept's name: an entity's own concept is its kind's name, a top concept its branch's name
+  function names() {
+    const out = new Map();
+    for (const e of ents()) {
+      if (e.generalization_id && e.kind_name) out.set(e.generalization_id, e.kind_name);
+      if (e.concept_branch && e.concept_branch_name) out.set(e.concept_branch, e.concept_branch_name);
     }
     return out;
   }
+  const label = (key, nm) => { const id = info().byKey.get(key)?.concept ?? key; return nm.get(id) ?? titleOf(id); };
+  const entName = (id) => ents().find((e) => e.id === id)?.name ?? id;
 
-  // the innermost group that holds an entity
-  function innermost(eid) {
-    const ks = (info().ofEntity.get(eid) ?? []).filter((k) => shown(info().byKey.get(k)));
-    if (!ks.length) return null;
-    return ks.reduce((a, k) => ((info().byKey.get(k)?.level ?? 0) < (info().byKey.get(a)?.level ?? 0) ? k : a), ks[0]);
+  // the chain of concepts from the top down to `key`
+  function chainTo(key) {
+    const out = [];
+    for (let k = key; k; k = info().byKey.get(k)?.parents?.[0]) out.unshift(k);
+    return out;
   }
 
   function compute() {
     const sel = store.selection;
-    path = [{ kind: "world", key: null, label: "World" }];
-    let groupKey = null;
+    const nm = names();
     let eid = null;
-    if (sel?.kind === "pattern") groupKey = sel.group ?? info().ofInstance.get(sel.instance) ?? null;
-    else if (sel?.kind === "entity") eid = sel.id;
+    if (sel?.kind === "entity") eid = sel.id;
     else if (sel?.kind === "subentity") eid = store.view?.subentities.find((s) => s.id === sel.id)?.entity_id ?? null;
-    if (eid) groupKey = innermost(eid);
-    if (groupKey && info().byKey.has(groupKey)) {
-      for (const k of chainTo(groupKey)) path.push({ kind: "group", key: k, label: label(k) });
-    }
-    if (eid) path.push({ kind: "entity", key: eid, label: store.view?.entities.find((e) => e.id === eid)?.name ?? eid });
+    if (eid) concept = null;
+    const leaf = eid ? info().ofEntity.get(eid)?.at(-1) ?? null : concept;
+    path = [{ kind: "world", key: null, label: "World" }];
+    for (const k of leaf ? chainTo(leaf) : []) path.push({ kind: "concept", key: k, label: label(k, nm) });
+    if (eid) path.push({ kind: "entity", key: eid, label: entName(eid) });
     // the level below the last step
     const last = path[path.length - 1];
     below = [];
     if (last.kind === "world") {
-      below = info().groups.filter((g) => shown(g) && !(g.parents ?? []).some((p) => shown(info().byKey.get(p))))
-        .map((g) => ({ kind: "group", key: g.key, label: g.label, composite: g.composite }));
-    } else if (last.kind === "group") {
+      below = info().groups.filter((g) => !g.parents.length).map((g) => ({ kind: "concept", key: g.key, label: label(g.key, nm) }));
+    } else if (last.kind === "concept") {
       const g = info().byKey.get(last.key);
-      const inParts = new Set((g.children ?? []).flatMap((c) => [...(info().byKey.get(c)?.members ?? [])]));
-      below = [...(g.children ?? []).filter((c) => shown(info().byKey.get(c))).map((c) => ({ kind: "group", key: c, label: label(c), composite: info().byKey.get(c)?.composite })),
-        ...[...g.members].filter((m) => !inParts.has(m)).map((m) => ({ kind: "entity", key: m, label: store.view?.entities.find((e) => e.id === m)?.name ?? m }))];
+      const inParts = new Set(g.children.flatMap((c) => [...(info().byKey.get(c)?.members ?? [])]));
+      below = [...g.children.map((c) => ({ kind: "concept", key: c, label: label(c, nm) })),
+        ...[...g.members].filter((m) => !inParts.has(m)).map((m) => ({ kind: "entity", key: m, label: entName(m) }))];
     }
   }
 
   function render() {
     compute();
-    // only worth a line once there is a hierarchy to walk: a superentity, or something selected inside one
-    const any = info().groups.some(shown);
+    // only worth a line once there is a taxonomy to walk
+    const any = info().groups.length > 0;
     bar.classList.toggle("hidden", !any);
     if (!any) return;
     // a long path folds its middle into "…" (each folded step is still a link, in the "…" menu's title)
     const shownSteps = path.length > 3 ? [0, -1, path.length - 2, path.length - 1] : path.map((_, i) => i);
+    const what = (p) => (p.kind === "world" ? "frame everything" : p.kind === "concept" ? "frame its entities" : "go to it");
     bar.innerHTML = `<ol class="lv-path">${shownSteps.map((i, n) => `<li>${n ? `<span class="lv-sep" aria-hidden="true">›</span>` : ""}
         ${i < 0 ? `<button class="lv-step more" data-i="1" title="${esc(path.slice(1, -2).map((p) => p.label).join(" › "))}">…</button>` : `<button class="lv-step ${path[i].kind}${i === path.length - 1 ? " cur" : ""}" data-i="${i}" ${i === path.length - 1 ? 'aria-current="true"' : ""}
-          title="${esc(path[i].label)}: ${path[i].kind === "world" ? "close every superentity into its card" : path[i].kind === "group" ? "open it, its parts closed, and frame it" : "go to it"}">${esc(path[i].label)}</button>`}</li>`).join("")}</ol>
-      ${below.length ? `<span class="lv-below"><span class="lv-sep" aria-hidden="true">›</span>${below.slice(0, 6).map((b, j) => `<button class="lv-chip ${b.kind}${b.composite ? " composite" : ""}" data-j="${j}"
-        title="${b.kind === "group" ? (b.composite ? "A superentity made of superentities: open it" : "Open this superentity") : "Go to this entity"}">${esc(b.label)}</button>`).join("")}${below.length > 6 ? `<span class="small muted">+${below.length - 6}</span>` : ""}</span>` : ""}
+          title="${esc(path[i].label)}: ${what(path[i])}">${esc(path[i].label)}</button>`}</li>`).join("")}</ol>
+      ${below.length ? `<span class="lv-below"><span class="lv-sep" aria-hidden="true">›</span>${below.slice(0, 6).map((b, j) => `<button class="lv-chip ${b.kind}" data-j="${j}"
+        title="${b.kind === "concept" ? "A concept in the taxonomy: frame its entities" : "Go to this entity"}">${esc(b.label)}</button>`).join("")}${below.length > 6 ? `<span class="small muted">+${below.length - 6}</span>` : ""}</span>` : ""}
 `;
     for (const b of bar.querySelectorAll(".lv-step")) b.addEventListener("click", () => goStep(path[+b.dataset.i]));
     for (const b of bar.querySelectorAll(".lv-chip")) b.addEventListener("click", () => goStep(below[+b.dataset.j]));
@@ -90,20 +88,17 @@ export function initLevels({ renderer, select }) {
   function goStep(p) {
     if (!p) return;
     if (p.kind === "world") {
-      renderer.setDetail("super");
+      concept = null;
       select(null);
       setTimeout(() => renderer.fit(), 60);
-    } else if (p.kind === "group") {
-      const g = info().byKey.get(p.key);
-      // open it and every level above it; its parts start closed, so one level shows at a time
-      for (const a of ancestors(info().byKey, p.key)) renderer.ui.collapsed.delete(a);
-      renderer.setGroupChildren(p.key, true);
-      const h = g?.hulls?.[0];
-      if (h) select({ kind: "pattern", id: h.pattern_id, instance: h.id, group: p.key }, false);
-      setTimeout(() => renderer.frame([...(g?.members ?? [])], { maxK: 1.1 }), 80);
+    } else if (p.kind === "concept") {
+      concept = p.key;
+      select(null, false);
+      setTimeout(() => renderer.frame([...(info().byKey.get(p.key)?.members ?? [])], { maxK: 1.1 }), 60);
     } else if (p.kind === "entity") {
       renderer.focusNode(p.key);
     }
+    render();
   }
 
   function up() { if (path.length > 1) goStep(path[path.length - 2]); }

@@ -167,7 +167,6 @@ body.strip #stage { top: calc(var(--topbar-h) + 36px); }
 /* one color by default; Admin > Settings colors it by what each zoom shows */
 body:not(.zoom-bands) .zoom-slider .zs-bands span { background: var(--ink-3); opacity: .45; }
 .zoom-slider .zs-bands span { display: block; height: 100%; }
-.zoom-slider .b-cards { background: var(--butter-line, #D2BB72); }
 .zoom-slider .b-ents { background: var(--wm-line, #A9C6A9); }
 .zoom-slider .b-vals { background: var(--real-line); }
 .zoom-slider .zs-detents { position: absolute; left: 7px; right: 7px; top: 0; height: 100%; pointer-events: none; }
@@ -390,36 +389,16 @@ body.has-examples .pill.fresh rect.body { stroke: var(--pill-line); stroke-dasha
 .pill .row text.rname { font: 500 11.5px var(--font-ui); fill: var(--ink); dominant-baseline: central; }
 .pill .row text.rz { font: 500 10.5px var(--font-mono); dominant-baseline: central; text-anchor: end; }
 .pill .row circle.obs { stroke-width: 1.2; }
-.pill .row circle.mark { stroke: none; }
 .pill line.sep { stroke: var(--rule); }
-.pill .owners rect { stroke: none; }
-.pill .owners rect.closed-owner { opacity: 0.5; }
-.card-super rect.body { stroke-width: 1.5; stroke-dasharray: 6 4; }
-.card-super:hover rect.body { stroke-width: 2; }
-.card-super text.title { font: 700 13px var(--font-ui); dominant-baseline: central; }
-.card-super text.meta { font: 500 10.5px var(--font-mono); fill: var(--ink-2); dominant-baseline: central; }
-.card-super.selected rect.body { stroke-width: 2.4; }
-.hull path.shape { stroke-width: 1.5; stroke-linejoin: round; transition: opacity 0.2s; }
-.hull.composite path.shape { stroke-width: 1.6; }
-.hull:hover path.shape { stroke-width: 2.2; }
-.hull-tab rect { fill: var(--sheet); stroke-width: 1.25; }
-.hull-tab text { font: 700 13px var(--font-ui); dominant-baseline: central; }
-.hull-tab { cursor: pointer; transition: transform .3s cubic-bezier(.2,.7,.2,1); }
-.hull-tab.placing { transition: none; }
 /* while the view zooms or pans, the canvas's content takes no hover (the svg itself still takes the wheel and drag) */
 body.zooming #canvas svg > g { pointer-events: none; }
-@media (prefers-reduced-motion: reduce) { .hull-tab { transition: none; } }
-.hull-tab:hover rect { stroke-width: 2; }
 .edge path.line { fill: none; stroke: var(--edge); stroke-linecap: round; opacity: 0.42; transition: opacity 0.2s; }
 .edge.focus path.line { opacity: 1; }
-.edge.super path.line { opacity: 0.9; }
-.pill, .card-super, .hull path.shape, .edge { cursor: pointer; }
+.pill, .edge { cursor: pointer; }
 .pill .row { cursor: default; }
 .edge.learned path.line { stroke: var(--real-line); }
 .edge.demo path.line { stroke-dasharray: none; }
-.edge.super path.line { stroke: var(--ink-2); }
 .edge text.label { font: 500 11.5px var(--font-ui); fill: var(--ink-2); text-anchor: middle; paint-order: stroke; stroke: var(--paper); stroke-width: 4px; stroke-linejoin: round; display: none; }
-.edge.super text.label { font: 700 12.5px var(--font-ui); fill: var(--ink); display: block; }
 .edge.focus text.label, body.labels .edge text.label { display: block; }
 .edge text.badge-l { font: 700 9.5px var(--font-mono); fill: var(--real-ink); }
 .edge.hl path.line { stroke: var(--out-ink); }
@@ -445,24 +424,6 @@ rect.spot { fill: rgba(124, 100, 196, 0.07); stroke: var(--real-line); stroke-wi
 .cand-flash .score text { font: 700 9.5px var(--font-mono); fill: #fff; text-anchor: middle; dominant-baseline: central; }
 .edge path.flow { fill: none; stroke-dasharray: 1.5 9; stroke-linecap: round; pointer-events: none; animation: flow-dash 1.2s linear infinite; }
 @keyframes flow-dash { to { stroke-dashoffset: -21; } }
-/* shared ownership: chips in cards, tethers to where a shared member is drawn, lenses where outlines overlap */
-.card-super .chip rect { fill: var(--sheet); stroke-width: 1; }
-.card-super .chip text { font: 600 11px var(--font-ui); fill: var(--ink); dominant-baseline: central; }
-.card-super .chip.shared rect { fill: rgba(255, 253, 248, 0.55); stroke-dasharray: 3 2; }
-.card-super .chip.more rect { fill: none; }
-.card-super .chip.more text { fill: var(--ink-2); font-weight: 500; }
-.card-super .chip { cursor: pointer; }
-.card-super .chip:hover rect, .card-super .chip.lit rect { stroke-width: 2; }
-.card-super .chip.kin rect { stroke: var(--butter-line); stroke-width: 2; }
-.tether path.line { fill: none; stroke-width: 1.4; stroke-dasharray: 4 3; opacity: 0.75; pointer-events: none; }
-.tether circle.end { pointer-events: none; }
-.tether.lit path.line { stroke-width: 2.4; opacity: 1; stroke-dasharray: none; }
-.lens path.lens-fill { pointer-events: none; }
-.lens path.lens-edge { fill: none; stroke-width: 0; pointer-events: none; }
-.lens.lit path.lens-fill { filter: brightness(0.92) saturate(1.4); }
-.lens.lit path.lens-edge { stroke-width: 2.5; }
-.hull.owner-lit path.shape { stroke-width: 2.6; }
-.card-super.owner-lit rect.body { stroke-width: 2.6; }
 .draw-line { stroke: var(--real-line); stroke-width: 2; stroke-dasharray: 4 3; pointer-events: none; }
 .dim { opacity: 0.22; }
 .fade { opacity: 0.12; }
@@ -1217,20 +1178,17 @@ g.lane text.lane-col.o3 { fill: #B57A8D; }
 g.lane text.lane-col.out { fill: var(--out-ink); }
 .predict-bar .chain-key { color: var(--out-ink); font-weight: 600; white-space: nowrap; }
 g.lane text.lane-arrow { font: 600 16px var(--font-mono); fill: var(--ink-3); }
-body.laned g.pill:not(.in-lane), body.laned g.card-super { opacity: 0.6; transition: opacity 0.2s; }
+body.laned g.pill:not(.in-lane) { opacity: 0.6; transition: opacity 0.2s; }
 body.laned g.edge:not(.staged-path):not(.staged-new):not(.staged-retired) path.line { opacity: 0.3; }
 body.laned g.edge.staged-path path.line { stroke: var(--real-line); }
 /* while the lane is up, the canvas carries only the review: the lane's colored headings replace the staged key, and
    detail, color, and drawing wait until it is decided */
 body.laned #staged-banner, body.laned #canvas-controls .seg[aria-label="Detail"], body.laned #canvas-controls .ck-wrap,
 body.laned #btn-draw { display: none !important; }
-g.card-super.staged-new rect { stroke: var(--real-line); stroke-width: 2.6; stroke-dasharray: 8 4;
-  filter: drop-shadow(0 0 5px rgba(124, 100, 196, 0.5)); }
-g.card-super.staged-retired rect { stroke: var(--down); stroke-width: 2.4; stroke-dasharray: 4 3; }
 @keyframes staged-march { to { stroke-dashoffset: -24; } }
-g.pill.staged-new rect.body, g.edge.staged-new path.line, g.card-super.staged-new rect { animation: staged-march 1.6s linear infinite; }
+g.pill.staged-new rect.body, g.edge.staged-new path.line { animation: staged-march 1.6s linear infinite; }
 @media (prefers-reduced-motion: reduce) {
-  g.pill.staged-new rect.body, g.edge.staged-new path.line, g.card-super.staged-new rect { animation: none; }
+  g.pill.staged-new rect.body, g.edge.staged-new path.line { animation: none; }
 }
 
 /* stage colors: one hue per stage everywhere (flowcharts, review groups, walkthrough chips, example tags) */
@@ -1606,8 +1564,7 @@ figure.stage-flow[class*="st-"] { --fl-band: color-mix(in srgb, var(--sf) 32%, v
 #levels .lv-step.cur { color: var(--ink); font-weight: 700; }
 #levels .lv-below { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 3px; }
 #levels .lv-chip { max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 500 11px var(--font-ui); padding: 1px 7px; border-radius: 999px; border: 1px dashed var(--rule-strong); background: var(--sheet); cursor: pointer; }
-#levels .lv-chip.group { border-style: solid; border-color: var(--ltm-line); }
-#levels .lv-chip.composite { border-width: 2px; }
+#levels .lv-chip.concept { border-style: solid; border-color: var(--ltm-line); }
 #levels .lv-chip:hover { border-color: var(--ink-2); }
 /* the lens (Oct 9): what the cursor is on, drawn larger in its hover card */
 #tooltip svg.lens { display: block; margin: 6px 0 2px; overflow: visible; }
@@ -1616,12 +1573,6 @@ figure.stage-flow[class*="st-"] { --fl-band: color-mix(in srgb, var(--sf) 32%, v
 .lens .lens-up { fill: var(--up); opacity: .75; }
 .lens .lens-down { fill: var(--down); opacity: .75; }
 .lens .lens-open { fill: var(--paper); stroke: var(--ink-3); stroke-dasharray: 2 1.5; }
-.lens .lens-edge { stroke: var(--edge); stroke-width: 1.2; }
-.lens .lens-arrow { fill: var(--edge); }
-.lens .lens-node { fill: var(--sheet); stroke: var(--pill-line); }
-.lens .lens-node.up { stroke: var(--up); stroke-width: 1.5; }
-.lens .lens-node.down { stroke: var(--down); stroke-width: 1.5; }
-.lens .lens-node-t { font: 600 9.5px var(--font-ui); fill: var(--ink); text-anchor: middle; }
 .lens .lens-track { fill: var(--rule); }
 .lens .lens-exist { fill: var(--real-line); opacity: .8; }
 /* color (Oct 9) */
@@ -1646,7 +1597,6 @@ figure.stage-flow[class*="st-"] { --fl-band: color-mix(in srgb, var(--sf) 32%, v
 .cp-key .sw.down { background: #F2CFC9; border-color: var(--down); }
 .cp-key .sw.learn { background: var(--real-fill); border-color: var(--real-line); border-style: dashed; }
 .cp-key .sw.hyp { background: var(--hyp-fill); border-color: var(--hyp-line); }
-.cp-key .sw.hull { background: var(--h1-fill); border-color: var(--h1-line); border-style: dashed; border-radius: 6px; }
 .cp-key .sw.open { width: 10px; height: 10px; border-radius: 50%; border: 1px dashed var(--ink-2); background: var(--paper); margin: 0 6px; }
 .cp-key .sw.dash { background: none; border: 0; border-top: 2px dashed var(--edge); height: 0; border-radius: 0; }
 #stage.left-open #levels { top: 72px; }

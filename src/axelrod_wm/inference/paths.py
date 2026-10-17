@@ -8,8 +8,9 @@ shock arriving.
 Which values are relevant is a choice, and there are five ways to make it (`METHODS`):
 
 - `relevant` (the default): what carries the most effect, with each further order discounted by `ORDER_BIAS`, so a
-  distant effect shows only if it is strong enough to matter. Orders go as deep as the effects do (up to six), and the
-  outputs are where the kept chains end.
+  distant effect shows only if it is strong enough to matter, and (Oct 17) the values that lie between those, up to
+  `RELEVANT_MAX`, with the interactions among them. Orders go as deep as the effects do (up to six), and the outputs
+  are where the kept chains end.
 
 - `orders`: every material value, at its breadth-first order, joined by its one most significant shortest path. This is
   what the review and the forecast list today.
@@ -33,6 +34,9 @@ import numpy as np
 
 ORDER_BIAS = 0.6        # each order further from the input counts this much less when choosing what is relevant
 RELEVANT_SHARE = 0.12   # a value is relevant if its discounted effect is at least this share of the largest one
+RELEVANT_MAX = 28       # values shown in all, inputs included, once the values between and after relevant ones are in
+FILL_FLOOR = 0.02       # a value filled in after the relevant ones moves at least this share of the largest move
+LINK_SHARE = 0.1        # an interaction among shown values is drawn if it carries this share of its target's effect
 METHODS = {
     "relevant": "What carries the most effect; each further order counts 40% less, so a distant effect shows only if it is strong",
     "orders": "Every material value at its order, along its most significant shortest path",
@@ -178,7 +182,9 @@ def isolate(src: dict, method: str = "relevant", outputs: list[str] | None = Non
 
 def _relevant(src: dict, inputs: list[str], outputs: list[str] | None) -> dict:
     """Keep what carries the most effect, discounting each order by ORDER_BIAS; join every kept value to an input by its
-    path; show an interaction between kept values when it carries a real share of its target's effect."""
+    path; then fill in the values that lie between kept ones (Oct 17: "transmission paths need more subentities and
+    relationships between subentities"), up to RELEVANT_MAX, and show the interactions among everything shown that run
+    forward in order and carry a real share of their target's effect."""
     vals = src["values"]
     edge_by_key = {e["key"]: e for e in src["edges"]}
     reached = [sid for sid, v in vals.items() if v["order"] > 0]
@@ -192,6 +198,28 @@ def _relevant(src: dict, inputs: list[str], outputs: list[str] | None) -> dict:
             e = edge_by_key.get(k)
             if e is not None and vals.get(e["source"], {}).get("order", 0) > 0:
                 keep.add(e["source"])
+    # the values in between (Oct 17): on some forward route from what is shown to a kept value, so a chain shows its
+    # intermediate steps and a second route shows beside the first. A side branch that leads to nothing kept stays out.
+    # The most relevant come first, up to RELEVANT_MAX values in all.
+    onward = [e for e in src["edges"] if e["source"] in vals and e["target"] in vals
+              and vals[e["target"]]["order"] > vals[e["source"]]["order"]]
+    after = _reach(sorted(keep | set(inputs)), onward, forward=True)
+    before = _reach(sorted(keep), onward, forward=False)
+    between = sorted((sid for sid in reached if sid not in keep and sid in after and sid in before),
+                     key=lambda sid: (-score[sid], sid))
+    room = max(0, RELEVANT_MAX - len(keep) - len(inputs))
+    keep |= set(between[:room])
+    # then where the kept chains carry on: a value one interaction on from a kept value (never from an input alone, so a
+    # weak direct side effect of the shock stays out), the most relevant first, until RELEVANT_MAX. An asked output the
+    # chain carries on past stays an output, in its order's column (_grid)
+    peak_max = max((abs(vals[s]["peak"]) for s in reached), default=0.0)
+    while len(keep) + len(inputs) < RELEVANT_MAX:
+        nxt = sorted({e["target"] for e in onward if e["source"] in keep
+                      and e["target"] not in keep and e["target"] not in inputs
+                      and abs(vals[e["target"]]["peak"]) >= FILL_FLOOR * peak_max}, key=lambda s: (-score[s], s))
+        if not nxt:
+            break
+        keep.add(nxt[0])
     shown = keep | set(inputs)
     edges = {}
     for sid in keep:
@@ -202,7 +230,7 @@ def _relevant(src: dict, inputs: list[str], outputs: list[str] | None) -> dict:
     for e in src["edges"]:
         s, t = e["source"], e["target"]
         if s in shown and t in keep and vals[t]["order"] > vals[s]["order"] \
-                and abs(e["exists"] * e["effect"] * vals[s]["peak"]) >= 0.25 * abs(vals[t]["peak"]):
+                and abs(e["exists"] * e["effect"] * vals[s]["peak"]) >= LINK_SHARE * abs(vals[t]["peak"]):
             edges[(s, t)] = e
     # the outputs: those asked for, else where the kept chains end, strongest first
     if asked:

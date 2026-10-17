@@ -4,6 +4,7 @@
 // values) is hidden while the path is shown; the canvas keeps its paper, grid, pan, and zoom. An output fed by
 // another output moves to a column of its own (downstream outputs), and the link between them is dashed.
 import { ownOf } from "../names.js";
+import { fmtMove } from "./model.js";
 import { colOf } from "../panels/paths.js";
 import { signed } from "../util.js";
 
@@ -114,6 +115,8 @@ export class TxPathLayer {
     const ox = 600 - P.width / 2;
     const oy = 440 - P.height / 2;
     const outs = new Set(grid.outputs ?? []);
+    // each value's move reads in its own unit where it can (Oct 17, as on the rows of open entities); sd stays in its title
+    const subOf = new Map(((this.r.fullView ?? this.r.view)?.subentities ?? []).map((s) => [s.id, s]));
     const colIx = new Map(P.columns.map((c, i) => [c.key, i]));
     this.g.selectAll("*").remove();
     const root = this.g.append("g").attr("class", "tx-root").attr("transform", `translate(${ox},${oy})`);
@@ -165,13 +168,13 @@ export class TxPathLayer {
           const asked = outs.has(ch.id);
           const chip = grp.append("g").attr("class", `tx-chip o${c.key === "input" ? 0 : c.key === "output" || c.key === "downstream" ? "out" : Math.min(3, +c.key)}${asked ? " asked" : ""}`)
             .attr("transform", `translate(${ch.x},${ch.y})`).attr("data-id", ch.id).attr("tabindex", 0).attr("role", "button")
-            .attr("aria-label", `${v.entity ?? ""} ${own}: ${fmtSd(peak)} sd at its peak`);
+            .attr("aria-label", `${v.entity ?? ""} ${own}: ${fmtMove(peak, subOf.get(ch.id))} at its peak (${fmtSd(peak)} sd)`);
           chip.append("rect").attr("class", "tx-box").attr("width", CHIP_W).attr("height", CHIP_H).attr("rx", 9);
           chip.append("rect").attr("class", "tx-bar").attr("x", 0).attr("y", 0).attr("width", 5).attr("height", CHIP_H).attr("rx", 2.5);
           chip.append("text").attr("class", "tx-name").attr("x", 14).attr("y", CHIP_H / 2 + 4.5).text(own.length > 25 ? `${own.slice(0, 24)}…` : own);
           chip.append("text").attr("class", `tx-num ${peak > 0.005 ? "up" : peak < -0.005 ? "down" : ""}`).attr("x", CHIP_W - 10).attr("y", CHIP_H / 2 + 4.5)
-            .attr("text-anchor", "end").text(c.key === "input" && !v.order ? "shock" : `${fmtSd(peak)} sd`);
-          chip.append("title").text(`${v.entity ? `${v.entity} · ` : ""}${own}: ${signed(peak)} sd at its peak on day ${v.peak_day}; `
+            .attr("text-anchor", "end").text(c.key === "input" && !v.order ? "shock" : fmtMove(peak, subOf.get(ch.id)));
+          chip.append("title").text(`${v.entity ? `${v.entity} · ` : ""}${own}: ${fmtMove(peak, subOf.get(ch.id))} (${signed(peak)} sd) at its peak on day ${v.peak_day}; `
             + `${signed(v.effect ?? 0)} sd at the horizon${v.order ? `; first reached around day ${v.arrives_day}` : ""}${asked ? "; an output" : ""}`);
         }
       }

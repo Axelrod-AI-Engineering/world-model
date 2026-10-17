@@ -15,7 +15,6 @@ const KEY = [
   ["sw down", "Moved down (▼), or a negative effect"],
   ["sw learn", "Learning: new, staged, or learned structure (violet)"],
   ["sw hyp", "Hypothetical: a what-if, never learned (orchid)"],
-  ["sw hull", "A superentity: one outline color per group"],
   ["sw open", "An open node: what the graph does not explain yet"],
   ["sw dash", "Dashed: not committed yet, or not yet sure (a candidate, a hedge)"],
 ];

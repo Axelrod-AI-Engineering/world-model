@@ -66,31 +66,34 @@ def test_the_demo_loads_opens_nodes_and_steps(server):
         page.wait_for_timeout(1500)
         # the guide is tested once, on the first forecast below; start from "first time" mode
         page.evaluate("() => { localStorage.removeItem('axelrod.guide.seen'); localStorage.removeItem('axelrod.guide.mode'); }")
-        # the first view: Figure 1's entities inside their superentities, no subentities, panels closed
+        # the first view: Figure 1's entities, no subentities, panels closed. Superentities are not drawn (Oct 17): no
+        # outlines, tabs, cards, ownership stripes, tethers, or lenses
         assert page.locator("g.pill").count() == 53
-        assert page.locator("g.hull[data-instance]").count() >= 8
+        for sel in ("g.hull", "g.hull-tab", "g.card-super", ".owners rect", "g.tether", "g.lens", "g.row .marks rect"):
+            assert page.locator(sel).count() == 0, sel
         assert page.locator("g.row").count() == 0
         assert page.locator("#right-panel").is_hidden() and page.locator("#left-panel").is_hidden()
         # no categories widget on the canvas: they live in the Admin window, which starts minimized
         assert page.locator("#key").count() == 0
         assert "minimized" in (page.locator("#admin").get_attribute("class") or "")
-        # entities shared by two superentities wear a stripe per owner; overlapping outlines draw a lens
-        assert page.locator('g.pill[data-id="nvidia"] .owners rect').count() == 3   # S11, S12, and S18 (the chip packaging chain)
-        assert page.locator("g.lens").count() >= 1
+        # the World path lists the taxonomy's top concepts, not superentities
+        assert page.locator("#levels .lv-chip.concept").count() >= 2
         # the zoom slider: + moves the thumb; a little zoom opens nothing (values open past the learned threshold)
         before = int(page.locator("#zoom-range").input_value())
         page.click(".zs-step[data-step='1.25']")
         page.wait_for_timeout(600)
         assert int(page.locator("#zoom-range").input_value()) > before
-        assert page.locator("g.row").count() == 0 and page.locator("g.card-super").count() == 0
+        assert page.locator("g.row").count() == 0
         # one more step passes the threshold: the few entities in the middle of the view open, not all of them
         page.click(".zs-step[data-step='1.25']")
         page.wait_for_timeout(800)
         assert 0 < page.locator("g.row").count() < 40
-        # detail presets
-        page.keyboard.press("3")
+        # detail presets (Oct 17: 1 entities, 2 subentities)
+        page.keyboard.press("2")
         page.wait_for_timeout(1200)
         assert page.locator("g.row").count() == 159
+        # each value shows its mean in its own unit, not a move in sd (that is in its hover card)
+        assert not any(t.endswith(" sd") for t in page.locator("g.row text.rz").all_text_contents())
         # similar objects have similar subentities: hovering United's jet fuel cost lights Delta's (its kin)
         assert page.locator('g.pill[data-id="delta"] text.rname').all_text_contents() == \
             page.locator('g.pill[data-id="united_airlines"] text.rname').all_text_contents()
@@ -101,43 +104,31 @@ def test_the_demo_loads_opens_nodes_and_steps(server):
         assert page.locator(".kin").count() == 0
         page.keyboard.press("1")
         page.wait_for_timeout(1200)
-        assert page.locator("g.card-super").count() >= 7 and page.locator("g.row").count() == 0
+        assert page.locator("g.row").count() == 0
         # undo and redo a view change
         page.keyboard.press("Control+z")
         page.wait_for_timeout(1200)
-        assert page.locator("g.row").count() == 159 and page.locator("g.card-super").count() == 0
+        assert page.locator("g.row").count() == 159
         page.keyboard.press("Control+y")
         page.wait_for_timeout(1200)
-        assert page.locator("g.card-super").count() >= 7
+        assert page.locator("g.row").count() == 0
         # every shortcut on one sheet
         page.keyboard.press("?")
         page.wait_for_selector(".modal .keys")
         page.keyboard.press("Escape")
-        page.keyboard.press("2")
+        page.keyboard.press("1")
         page.wait_for_timeout(1200)
-        assert page.locator("g.pill").count() == 53 and page.locator("g.card-super").count() == 0
-        # right-click opens one entity's subentities; right-click a superentity closes it into a card
+        assert page.locator("g.pill").count() == 53 and page.locator("g.row").count() == 0
+        # right-click opens one entity's subentities
         page.click('g.pill[data-id="inflation"]', button="right")
         page.wait_for_selector(".ctx-menu")
         page.click(".ctx-menu button:has-text('Show its subentities')")
         page.wait_for_timeout(800)
         assert page.locator('g.pill[data-id="inflation"] g.row').count() == 2
-        page.click('g.hull-tab[data-instance="inst-S6"]', button="right")
+        # its superentities are listed in its menu, not drawn
+        page.click('g.pill[data-id="nvidia"]', button="right")
         page.wait_for_selector(".ctx-menu")
-        page.click(".ctx-menu button:has-text('Close it into one card')")
-        page.wait_for_timeout(800)
-        assert page.locator('g.card-super[data-instance="inst-S6"]').count() == 1
-        # a closed superentity lists its members as chips; one shared with an open outline is tethered to it
-        page.evaluate("() => window.axelrod.renderer.toggleGroup('inst-S12', true)")
-        page.wait_for_timeout(900)
-        assert page.locator('g.card-super[data-instance="inst-S12"] g.chip').count() == 2
-        assert page.locator('g.card-super[data-instance="inst-S12"] g.chip.shared').count() == 2   # AMD is also in S18 and S20
-        assert page.locator("g.tether").count() >= 1
-        page.evaluate("() => window.axelrod.renderer.toggleGroup('inst-S12', false)")
-        # the nested superentity: S10 holds S1 and S2
-        page.click('g.hull-tab[data-instance="inst-S10"]', button="right")
-        page.wait_for_selector(".ctx-menu")
-        assert page.locator(".ctx-menu button:has-text('Open it with its parts closed')").count() == 1
+        assert page.locator(".ctx-menu button:has-text('Close it into one card')").count() == 0
         page.keyboard.press("Escape")
         # an actor's values, each with a small picture of its distribution
         page.click('g.pill[data-id="delta"]')
