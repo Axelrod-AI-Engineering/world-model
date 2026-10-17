@@ -17,3 +17,11 @@ initialization:
   seeds: data/scenarios/sally_demo/superentity_seeds.yaml
 config_overrides: configs/sally_demo.yaml
 steps: []
+# the export in the client's v4.1.4 world-model format (context/v4.py): a domain pack numbered after the client's 031-035,
+# with its edge vocabulary starting clear of theirs (E03-E35)
+context_pack:
+  domain_pack_id: PACK_GLOBAL_RATES_BANKS_INSURERS_JAPAN_EXPORTERS
+  name: "Global Rates / Banks, Insurers, and Japan Exporters"
+  slug: global_rates_banks_insurers_japan_exporters
+  file_index: "036"
+  edge_id_start: 60

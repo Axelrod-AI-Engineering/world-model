@@ -296,7 +296,7 @@ export class SvgRenderer extends GraphRenderer {
 
   // Oct 14: an entity opens where it is. The layout keeps closed sizes, so an open entity makes room by pushing the boxes
   // in its way; nothing else moves. Oct 15: in both directions. What lies beneath an open entity moves down, and what
-  // sits beside it (an open entity is wider than its pill) moves outward, away from it; a box pushed into another
+  // sits beside it (an open entity is wider than its pill) moves aside, to the right; a box pushed into another
   // pushes that one in turn, a few rounds, so no open entity overlaps its neighbors at any zoom.
   openShifts() {
     const shifts = new Map();
@@ -328,10 +328,11 @@ export class SvgRenderer extends GraphRenderer {
           const ox = Math.min(ra.x1, rb.x1) - Math.max(ra.x0, rb.x0) + GAP;
           const oy = Math.min(ra.y1, rb.y1) - Math.max(ra.y0, rb.y0) + GAP;
           if (ox <= GAP || oy <= GAP) continue;
-          // b began beneath a's head: it moves down; else it sits beside a, and moves away from it
-          if (b.top >= a.top + GEOM.HEAD_H * 0.75) b.dy += oy;
-          else if (b.x >= a.x) b.dx += ox;
-          else b.dx -= ox;
+          // pushes only ever go right or down (Oct 16): the box that began beneath the other's head moves down, else the
+          // box on the right moves right. A push to the left could land on a box already settled, and the rounds would
+          // trade the overlap back and forth; pushes in two directions only always settle
+          if (Math.abs(b.top - a.top) >= GEOM.HEAD_H * 0.75) (b.top > a.top ? b : a).dy += oy;
+          else (b.x >= a.x ? b : a).dx += ox;
           moved = true;
         }
       }

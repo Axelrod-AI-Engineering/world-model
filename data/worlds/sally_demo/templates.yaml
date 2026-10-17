@@ -6,6 +6,13 @@ subjects:
   - {pattern: "ms&ad|mitsui sumitomo(?: insurance)?", subentity: msad.share_price}
   - {pattern: "china construction bank|ccb", subentity: china_construction_bank.share_price}
   - {pattern: "aib(?: group)?|allied irish(?: banks)?", subentity: aib_group.share_price}
+  - {pattern: "japan(?:ese)? (?:stocks|equities|stock market)|topix|nikkei", subentity: japan_capital_markets.equity_index}
+  - {pattern: "chin(?:a|ese) (?:stocks|equities|stock market)|csi 300", subentity: china_capital_markets.equity_index}
+  - {pattern: "europe(?:an)? (?:stocks|equities|stock market)|euro stoxx(?: 50)?", subentity: europe_capital_markets.equity_index}
+  - {pattern: "chin(?:a|ese) (?:government )?bonds?|chin(?:a|ese) bond yields|cgbs?|chinese yields", subentity: cgbs.yield_10y}
+  - {pattern: "jpy/usd|jpyusd", subentity: jpy_usd.rate}
+  - {pattern: "usd/eur|usdeur", subentity: usd_eur.rate}
+  - {pattern: "jpy/eur|jpyeur", subentity: jpy_eur.rate}
   - {pattern: "(?:the )?pboc|people's bank of china|loan prime rate|lpr|chinese rates?", subentity: pboc.loan_prime_rate}
   - {pattern: "chin(?:a|ese) property|chin(?:a|ese) (?:home|housing) sales", subentity: china_economy.property_sales}
   - {pattern: "bunds?|euro(?:pean)? yields|german yields", subentity: bunds.yield_10y}
@@ -24,6 +31,7 @@ subjects:
   - {pattern: "(?:the )?ecb|euro(?:pean)? rates?", subentity: ecb.policy_rate}
   - {pattern: "dollar-yen|usd/jpy|usdjpy", subentity: dollar_yen.usd_jpy}
   - {pattern: "(?:the )?(?:japanese )?yen", subentity: dollar_yen.usd_jpy, invert: true}
+  - {pattern: "(?:the )?euro", subentity: usd_eur.rate, invert: true}
   - {pattern: "(?:30|thirty)[- ]year jgbs?|super-long jgbs?", subentity: jgbs.yield_30y}
   - {pattern: "jgbs?|jgb yields|japanese yields", subentity: jgbs.yield_10y}
   - {pattern: "(?:2|two)[- ]year (?:treasur(?:y|ies)|yields?)", subentity: us_treasuries.yield_2y}

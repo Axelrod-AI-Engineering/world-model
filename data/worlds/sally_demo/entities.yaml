@@ -23,7 +23,7 @@ entities:
 
   # --- the economies -----------------------------------------------------------------------------------------------
   - id: us_economy
-    name: US economy
+    name: United States economy
     kind: macro_factor
     description: "US inflation and growth: what the Fed reacts to."
     category_tags: [MF]
@@ -51,7 +51,7 @@ entities:
       - {id: japan_economy.gdp_growth, name: Japan real GDP growth, attribute_kind: growth_rate, unit: pct y/y,
          family: gaussian, prior: {family: gaussian, mu: 0.8, sigma: 0.4}, scale: 0.4, aliases: [Japan growth, Japanese GDP]}
   - id: euro_economy
-    name: Euro area economy
+    name: Europe economy
     kind: macro_factor
     description: "Euro area inflation: what the ECB reacts to, and so what Italian bank margins follow."
     category_tags: [MF]
@@ -151,7 +151,7 @@ entities:
       - {id: jgbs.yield_30y, name: JGB 30Y yield, attribute_kind: bond_yield, unit: pct,
          family: gaussian, prior: {family: gaussian, mu: 3.85, sigma: 0.15}, scale: 0.15, aliases: [thirty-year JGB, super-long JGB]}
   - id: dollar_yen
-    name: Dollar-yen
+    name: USD/JPY
     kind: market
     description: "USD/JPY and the carry trade it funds. A narrowing US-Japan gap strengthens the yen (USD/JPY falls) and can unwind the carry."
     category_tags: [MF]
@@ -164,7 +164,7 @@ entities:
          family: gaussian, prior: {family: gaussian, mu: 0.0, sigma: 1.0}, scale: 1.0, aliases: [carry trade, carry positions]}
 
   - id: bunds
-    name: Euro government bonds
+    name: Europe government bonds
     short: Bund
     kind: market
     description: "The euro curve. The ECB anchors the short end; the ten-year sets what European insurers and banks reinvest at."
@@ -186,6 +186,79 @@ entities:
          family: lognormal, mean: 100.0, scale: 0.08, aliases: [M&A, issuance, dealmaking, IPOs]}
       - {id: us_capital_markets.market_volatility, name: Rates and FX volatility, attribute_kind: volatility, unit: index,
          family: lognormal, mean: 100.0, scale: 0.1, aliases: [volatility, MOVE, market volatility]}
+
+  # --- the other legs of the currency, curve, and equity picture (Oct 15: the V1.0 taxonomy) ------------------------
+  - id: jpy_usd
+    name: JPY/USD
+    kind: market
+    description: "The yen priced in dollars: the inverse of USD/JPY, the way a dollar-based investor reads the yen."
+    category_tags: [MF]
+    features: {market: fx}
+    aliases: [JPY/USD, JPYUSD]
+    subentities:
+      - {id: jpy_usd.rate, name: JPY/USD, attribute_kind: fx_rate, unit: $ per ¥100,
+         family: lognormal, mean: 0.641, scale: 0.03, aliases: [yen in dollars, JPYUSD]}
+  - id: usd_eur
+    name: USD/EUR
+    kind: market
+    description: "The dollar priced in euros. A wider Fed-ECB gap strengthens the dollar (USD/EUR rises)."
+    category_tags: [MF]
+    features: {market: fx}
+    aliases: [USD/EUR, USDEUR]
+    subentities:
+      - {id: usd_eur.rate, name: USD/EUR, attribute_kind: fx_rate, unit: € per $,
+         family: lognormal, mean: 0.87, scale: 0.03, aliases: [dollar-euro, USDEUR]}
+  - id: jpy_eur
+    name: JPY/EUR
+    kind: market
+    description: "The yen priced in euros: JPY/USD times USD/EUR. It translates Japanese insurers' European profit."
+    category_tags: [MF]
+    features: {market: fx}
+    aliases: [JPY/EUR, JPYEUR]
+    subentities:
+      - {id: jpy_eur.rate, name: JPY/EUR, attribute_kind: fx_rate, unit: € per ¥100,
+         family: lognormal, mean: 0.558, scale: 0.03, aliases: [yen in euros, JPYEUR]}
+  - id: cgbs
+    name: China government bonds
+    short: CGB
+    kind: market
+    description: "The Chinese government curve. The PBoC's easing pulls it down; lower yields shave Chinese banks' asset yields."
+    category_tags: [MF]
+    features: {region: CN, market: rates}
+    aliases: [CGBs, CGB, Chinese government bonds, Chinese yields]
+    subentities:
+      - {id: cgbs.yield_10y, name: CGB 10Y yield, attribute_kind: bond_yield, unit: pct,
+         family: gaussian, prior: {family: gaussian, mu: 1.85, sigma: 0.1}, scale: 0.1, aliases: [ten-year CGB, China 10-year]}
+  - id: china_capital_markets
+    name: China capital markets
+    kind: market
+    description: "Chinese equities. Easing and a property recovery lift them; Chinese bank shares trade with them."
+    category_tags: [MF]
+    features: {region: CN, market: capital_markets}
+    aliases: [Chinese stocks, China equities, CSI 300]
+    subentities:
+      - {id: china_capital_markets.equity_index, name: China equity index (CSI 300), attribute_kind: asset_price, unit: index,
+         family: lognormal, mean: 100.0, scale: 0.08, aliases: [CSI 300, Chinese equities, China stocks]}
+  - id: japan_capital_markets
+    name: Japan capital markets
+    kind: market
+    description: "Japanese equities. A weaker yen lifts the exporters that lead the index; BoJ hikes weigh on it."
+    category_tags: [MF]
+    features: {region: JP, market: capital_markets}
+    aliases: [Japanese stocks, Japan equities, TOPIX, Nikkei]
+    subentities:
+      - {id: japan_capital_markets.equity_index, name: Japan equity index (TOPIX), attribute_kind: asset_price, unit: index,
+         family: lognormal, mean: 100.0, scale: 0.07, aliases: [TOPIX, Nikkei, Japanese equities]}
+  - id: europe_capital_markets
+    name: Europe capital markets
+    kind: market
+    description: "European equities. ECB easing and lower Bund yields lift them; European bank shares trade with them."
+    category_tags: [MF]
+    features: {region: EU, market: capital_markets}
+    aliases: [European stocks, European equities, Euro Stoxx]
+    subentities:
+      - {id: europe_capital_markets.equity_index, name: Europe equity index (Euro Stoxx 50), attribute_kind: asset_price, unit: index,
+         family: lognormal, mean: 100.0, scale: 0.07, aliases: [Euro Stoxx, European equities, Euro Stoxx 50]}
 
   # --- the names ---------------------------------------------------------------------------------------------------
   - id: tokio_marine
@@ -244,7 +317,7 @@ entities:
     kind: company
     description: "A US investment bank and wealth manager. Trading thrives on rate volatility; a hawkish Fed weighs on dealmaking."
     category_tags: [SC]
-    features: {sector: banking, region: US}
+    features: {sector: investment_banking, region: US}
     aliases: [MS]
     levels: {share_price: 185.0}
     subentities:

@@ -1,15 +1,17 @@
-# Sally's object taxonomy (from Emily's): the kinds of actor in a cross-asset PM's world. Every firm has a share price driven by its
-# profit (a default value and link); banks, insurers, and exporters are the kinds a new name is sorted into by its
-# sector feature, and inherit the priors of the kind's members once it has some.
+# Sally's object taxonomy (V1.0, Oct 15, 2026): the concepts of her world model. Institutions (central banks, and companies
+# by sector and industry), economies, and markets and asset classes (commodities, foreign exchange, sovereign bonds,
+# capital markets). Every company has a share price driven by its profit (a default value and link); a new name is
+# sorted into its industry by its sector feature, and inherits the priors of the concept's members once it has some.
 root: gen:obj:root
 nodes:
-  - {id: gen:obj:root, name: Economic object, parent: null}
-  - {id: gen:obj:actor, name: Actor, parent: gen:obj:root, signature: {required: {kind: [agency, company, person]}}}
-  - {id: gen:obj:monetary_authority, name: Monetary authority, parent: gen:obj:actor, signature: {required: {function: [monetary_policy]}}}
-  - {id: gen:obj:central_bank, name: Central bank, parent: gen:obj:monetary_authority, signature: {any_of: {attribute_kinds: [policy_rate]}}, instances: [federal_reserve, boj, ecb, pboc]}
-  - id: gen:obj:firm
-    name: Firm
-    parent: gen:obj:actor
+  - {id: gen:obj:root, name: World Model, parent: null}
+  # --- institutions: the actors -------------------------------------------------------------------------------------
+  - {id: gen:obj:institutions, name: Institutions, parent: gen:obj:root, signature: {required: {kind: [agency, company, person]}}}
+  - {id: gen:obj:public_institutions, name: Public institutions, parent: gen:obj:institutions, signature: {required: {kind: [agency]}}}
+  - {id: gen:obj:central_bank, name: Central banks, parent: gen:obj:public_institutions, signature: {required: {function: [monetary_policy]}, any_of: {attribute_kinds: [policy_rate]}}, instances: [federal_reserve, ecb, boj, pboc]}
+  - id: gen:obj:companies
+    name: Companies
+    parent: gen:obj:institutions
     signature: {required: {kind: [company]}}
     defaults:
       - {slot: share_price, name: share price, attribute_kind: asset_price, unit: local ccy, mean: 100.0, scale: 0.08}
@@ -20,15 +22,26 @@ nodes:
          kernel: {delay_days: 1, lag_days: 21, duration_days: null}, generalization: gen:int:asset_repricing}
       - {source: trading_revenue, target: share_price, label: drives, effect: 0.4,
          kernel: {delay_days: 1, lag_days: 21, duration_days: null}, generalization: gen:int:asset_repricing}
-  - {id: gen:obj:insurer, name: Insurer, parent: gen:obj:firm, signature: {required: {sector: [insurance]}}, instances: [tokio_marine, msad]}
-  - {id: gen:obj:bank, name: Bank, parent: gen:obj:firm, signature: {required: {sector: [banking]}}, instances: [jpmorgan, citigroup, morgan_stanley, unicredit, china_construction_bank, aib_group]}
-  - {id: gen:obj:exporter, name: Exporter, parent: gen:obj:firm, signature: {required: {sector: [autos, machinery]}}, instances: [toyota, komatsu]}
-  - {id: gen:obj:telecom, name: Telecom operator, parent: gen:obj:firm, signature: {required: {sector: [telecom]}}, instances: [softbank_corp]}
-  - {id: gen:obj:financial_condition, name: Financial condition, parent: gen:obj:root, signature: {required: {kind: [macro_factor, market]}, any_of: {attribute_kinds: [interest_rate, fx_rate, capital_flow]}}}
-  - {id: gen:obj:yield_curve, name: Yield curve, parent: gen:obj:financial_condition, instances: [us_treasuries, jgbs, bunds]}
-  - {id: gen:obj:currency, name: Currency and carry, parent: gen:obj:financial_condition, instances: [dollar_yen, us_capital_markets]}
-  - {id: gen:obj:price_level, name: Economy, parent: gen:obj:root, instances: [us_economy, japan_economy, euro_economy, china_economy]}
-  - {id: gen:obj:supply_factor, name: Commodity, parent: gen:obj:root, instances: [oil]}
+  - {id: gen:obj:financials, name: Financials, parent: gen:obj:companies, signature: {required: {sector: [banking, investment_banking, insurance]}}}
+  - {id: gen:obj:bank, name: Banks, parent: gen:obj:financials, signature: {required: {sector: [banking]}}, instances: [citigroup, jpmorgan, aib_group, unicredit, china_construction_bank]}
+  - {id: gen:obj:investment_bank, name: Investment banking and wealth management, parent: gen:obj:financials, signature: {required: {sector: [investment_banking]}}, instances: [morgan_stanley]}
+  - {id: gen:obj:insurer, name: Insurance, parent: gen:obj:financials, signature: {required: {sector: [insurance]}}, instances: [msad, tokio_marine]}
+  - {id: gen:obj:industrials, name: Industrials, parent: gen:obj:companies, signature: {required: {sector: [machinery]}}}
+  - {id: gen:obj:construction_mining_equipment, name: Construction and mining equipment, parent: gen:obj:industrials, signature: {required: {sector: [machinery]}}, instances: [komatsu]}
+  - {id: gen:obj:consumer_discretionary, name: Consumer discretionary, parent: gen:obj:companies, signature: {required: {sector: [autos]}}}
+  - {id: gen:obj:automobiles, name: Automobiles, parent: gen:obj:consumer_discretionary, signature: {required: {sector: [autos]}}, instances: [toyota]}
+  - {id: gen:obj:communication_services, name: Communication services, parent: gen:obj:companies, signature: {required: {sector: [telecom]}}}
+  - {id: gen:obj:telecommunications, name: Telecommunications, parent: gen:obj:communication_services, signature: {required: {sector: [telecom]}}, instances: [softbank_corp]}
+  # --- economies ----------------------------------------------------------------------------------------------------
+  - {id: gen:obj:economies, name: Economies, parent: gen:obj:root, signature: {required: {kind: [macro_factor]}}, instances: [us_economy, euro_economy, japan_economy, china_economy]}
+  # --- markets and asset classes ------------------------------------------------------------------------------------
+  - {id: gen:obj:markets, name: Markets and asset classes, parent: gen:obj:root, signature: {required: {kind: [market]}}}
+  - {id: gen:obj:commodities, name: Commodities, parent: gen:obj:markets, signature: {required: {market: [commodity]}}, instances: [oil]}
+  - {id: gen:obj:foreign_exchange, name: Foreign exchange, parent: gen:obj:markets, signature: {required: {market: [fx]}, any_of: {attribute_kinds: [fx_rate]}}, instances: [dollar_yen, jpy_usd, usd_eur, jpy_eur]}
+  - {id: gen:obj:fixed_income, name: Fixed income, parent: gen:obj:markets, signature: {required: {market: [rates]}}}
+  - {id: gen:obj:sovereign_bonds, name: Sovereign bonds, parent: gen:obj:fixed_income, signature: {required: {market: [rates]}, any_of: {attribute_kinds: [bond_yield]}}, instances: [us_treasuries, jgbs, cgbs, bunds]}
+  - {id: gen:obj:capital_markets, name: Capital markets, parent: gen:obj:markets, signature: {required: {market: [capital_markets]}}, instances: [us_capital_markets, china_capital_markets, japan_capital_markets, europe_capital_markets]}
+  # --- configurations: the superentities ----------------------------------------------------------------------------
   - {id: gen:obj:configuration, name: Configuration, parent: gen:obj:root, signature: {required: {object_type: [superentity]}}}
   - {id: gen:obj:policy_config, name: Policy configuration, parent: gen:obj:configuration, instances: [S1, S2]}
   - {id: gen:obj:shock_config, name: Shock configuration, parent: gen:obj:configuration, instances: [S3]}

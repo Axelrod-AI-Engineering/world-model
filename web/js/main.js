@@ -1041,6 +1041,8 @@ async function boot() {
   on("load-scenario", (id) => { consolePane.close(); examples.close(); loadScenario(id); });
   on("open-version", (v) => { openVersion(v).catch((err) => toast(errorText(err), "err")); });
   $("#btn-admin").addEventListener("click", () => admin.toggle());
+  // Export the world model (Oct 15): the Learn side's counterpart of a forecast's Agent context: the model as it stands
+  $("#btn-export-wm").addEventListener("click", () => { $("#menu-panel").hidden = true; emit("open-context", null); });
   // Reset to the original demo (Oct 15): every demo under this login goes back to its initial state; every page on
   // this login reloads (the server's "switched" message), this one included
   $("#btn-reset-all").addEventListener("click", async () => {
@@ -1160,7 +1162,14 @@ async function boot() {
   });
   on("walkthrough", (w) => { if (w) hideBriefNudge(); });
   // opening a brief lays its forecast's transmission path out on the canvas
-  on("brief-canvas", (id) => { setGridTarget({ kind: "forecast", id }); pathOnCanvas(id); });
+  on("brief-canvas", (id) => {
+    setGridTarget({ kind: "forecast", id });
+    // the brief and the forecast's panel together leave the path too little room: the panel gives way (Charts ▸ reopens it)
+    const c = $("#canvas").getBoundingClientRect();
+    const room = c.width - left.getBoundingClientRect().width - (right.hidden ? 0 : right.getBoundingClientRect().width);
+    if (!right.hidden && room < 720) closeRight();
+    pathOnCanvas(id);
+  });
   // the brief carries the same transmission path (rewindable), so opening it gives the grid's room back when the two
   // would not both fit; "As a grid" in the brief brings the grid back
   on("tab-left", (name) => {
@@ -1337,7 +1346,7 @@ async function boot() {
     if (!Object.keys(g.values ?? {}).length) return;
     let question = predict.question;
     try { question = (await api.forecasts()).find((f) => f.id === fid)?.question ?? question; } catch { /* keep the last question */ }
-    predict.path = { id: fid, grid: g, question };
+    predict.path = { id: fid, grid: g, question, frame: true };     // asked to show it: frame it, panels and all
     predict.all = false;
     if (store.settings.mode !== "predict") setMode("predict", false);
     else predictCanvas();
@@ -1355,8 +1364,11 @@ async function boot() {
     predictHint.className = "floating predict-bar";
     predictHint.innerHTML = `<span><b>Transmission path</b> <span class="muted">· ${n} values, shock to outputs${q ? ` · <span title="${esc(question)}">${esc(q)}</span>` : ""}</span></span>
       <button class="small ghost" data-path-grid>As a grid</button><button class="small" data-all>Show the whole model</button>`;
-    if (fresh) setTimeout(() => renderer.zoom.fit(bounds, store.settings?.reducedMotion ? 0 : 420,
-      { maxK: 1.15, pad: renderer.freePad({ top: 76, right: 24, bottom: 64, left: 24 }) }), 40);
+    // framed once now, and again once the side panels that open with a forecast have settled, so no column is cut off
+    const frame = () => renderer.zoom.fit(bounds, store.settings?.reducedMotion ? 0 : 420,
+      { maxK: 1.15, pad: renderer.freePad({ top: 76, right: 24, bottom: 64, left: 24 }) });
+    if (fresh || predict.path.frame) { setTimeout(frame, 40); setTimeout(frame, 650); }
+    predict.path.frame = false;
   }
   function clearPath() {
     if (txLayer.active) txLayer.hide();
