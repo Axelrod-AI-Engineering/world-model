@@ -57,6 +57,18 @@ The world model as the **context layer** for a client's agents. The client's age
 
 Policy divergence and oil and inflation sit above all three. Other names in the research (Zurich, Munich Re, NN, Duke Energy, National Grid) are sector context only: they inform the drivers, and have no entities. AIB and MS&AD have no research yet, so they move only through their drivers.
 
+**The taxonomy** (V1.0, Oct 15, 2026) is the world's object taxonomy in long-term memory (`data/worlds/sally_demo/taxonomy/objects.yaml`), and each entity's outline on the canvas is its concept in it:
+
+| Branch | Concepts | Entities |
+|---|---|---|
+| Institutions › Public institutions | Central banks | Federal Reserve, ECB, Bank of Japan, People's Bank of China |
+| Institutions › Companies › Financials | Banks · Investment banking and wealth management · Insurance | Citigroup, JPMorgan Chase, AIB Group, UniCredit, China Construction Bank · Morgan Stanley · MS&AD, Tokio Marine |
+| Institutions › Companies | Industrials › Construction and mining equipment · Consumer discretionary › Automobiles · Communication services › Telecommunications | Komatsu · Toyota Motor · SoftBank Corp |
+| Economies | | United States, Europe, Japan, China |
+| Markets and asset classes | Commodities · Foreign exchange · Fixed income › Sovereign bonds · Capital markets | Oil · USD/JPY, JPY/USD, USD/EUR, JPY/EUR · US Treasuries, JGBs, China and Europe government bonds · US, China, Japan, and Europe capital markets |
+
+JPY/USD is the inverse of USD/JPY; USD/EUR follows the Fed-ECB gap; JPY/EUR crosses through the dollar and translates Tokio Marine's European profit. China government bonds follow the PBoC and feed CCB's margin. Each capital market answers to its central bank, curve, or currency and to growth, and carries its banks', insurers', and SoftBank's shares. The world has 32 entities, 71 values, and 114 interactions; the export maps companies to sector and industry and every other node to its class (`taxonomy.sector`, `taxonomy.subsectors`).
+
 1. **Import** (`I`). The research is sorted into **one bundle per day** (`data/sally_data/days/YYYY-MM-DD.json`). The dialog offers **Next day** (the first day after the model's date) and **Any day…**; on the hosted demo, choose one or several days' files with the file picker, and they are merged. Each item is reviewed on its date, as in Emily's demo.
 2. **Predict.** Five ready-made theses: the BoJ to 1.5%, the Fed cutting 100 bp, a carry unwind (USD/JPY −8%), the PBoC cutting the LPR with property recovering, and the ECB cutting 50 bp. Or ask your own ("What if deal activity fell by 20% next quarter?").
 3. **Scenarios for the book.** Each forecast's panel opens with its scenario table, the form of the client's Decision Engine card "Scenarios & conviction". The forecast's joint draws are sorted by how the book moves (the average effect on the eleven names' share prices, or their earnings line where a name has no price). **Bear** is the worst quarter of the draws, **Base** the middle half, **Bull** the best quarter. For each band: the names it favors and hurts (median moves, in percent), the drivers that differ most between bear and bull (the mechanism), and what would change the read (the open hypothesis on the book worth most to learn). The chances of the book ending up or down at all are the model's own, and sit above the table. Nothing in it is learned or written by a language model (`inference/scenario_table.py`).

@@ -171,3 +171,48 @@ interactions:
      kernel: {delay_days: 90, lag_days: 240, duration_days: null}}
   - {id: s49, source: jgbs.yield_10y, target: softbank_corp.ai_capex, label: higher funding costs slow the build, effect: {mu: -0.2},
      kernel: {delay_days: 60, lag_days: 180, duration_days: null}}
+  # --- the V1.0 taxonomy's other legs (Oct 15): the crosses, China's curve, and the three equity markets -------------
+  - {id: s50, source: dollar_yen.usd_jpy, target: jpy_usd.rate, label: is the inverse of, effect: {mu: -1.0},
+     kernel: {delay_days: 1, lag_days: 1, duration_days: null}}
+  - {id: s51, source: federal_reserve.policy_rate, target: usd_eur.rate, label: a wider Fed lead strengthens the dollar, effect: {mu: 0.3},
+     kernel: {delay_days: 1, lag_days: 30, duration_days: null}}
+  - {id: s52, source: ecb.policy_rate, target: usd_eur.rate, label: ECB hikes strengthen the euro, effect: {mu: -0.3},
+     kernel: {delay_days: 1, lag_days: 30, duration_days: null}}
+  - {id: s53, source: jpy_usd.rate, target: jpy_eur.rate, label: crosses through the dollar, effect: {mu: 1.0},
+     kernel: {delay_days: 1, lag_days: 1, duration_days: null}}
+  - {id: s54, source: usd_eur.rate, target: jpy_eur.rate, label: crosses through the dollar, effect: {mu: 1.0},
+     kernel: {delay_days: 1, lag_days: 1, duration_days: null}}
+  - {id: s55, source: jpy_eur.rate, target: tokio_marine.international_profit, label: a stronger yen shrinks translated European profit, effect: {mu: -0.1},
+     kernel: {delay_days: 30, lag_days: 90, duration_days: null}}
+  - {id: s56, source: pboc.loan_prime_rate, target: cgbs.yield_10y, label: anchors, effect: {mu: 0.6},
+     kernel: {delay_days: 1, lag_days: 30, duration_days: null}}
+  - {id: s57, source: china_economy.gdp_growth, target: cgbs.yield_10y, label: stronger growth lifts, effect: {mu: 0.2},
+     kernel: {delay_days: 30, lag_days: 90, duration_days: null}}
+  - {id: s58, source: cgbs.yield_10y, target: china_construction_bank.net_interest_margin, label: bond yields set asset yields, effect: {mu: 0.2},
+     kernel: {delay_days: 60, lag_days: 180, duration_days: null}}
+  - {id: s59, source: pboc.loan_prime_rate, target: china_capital_markets.equity_index, label: easing lifts, effect: {mu: -0.3},
+     kernel: {delay_days: 5, lag_days: 30, duration_days: null}}
+  - {id: s60, source: china_economy.property_sales, target: china_capital_markets.equity_index, label: a property recovery lifts, effect: {mu: 0.3},
+     kernel: {delay_days: 10, lag_days: 60, duration_days: null}}
+  - {id: s61, source: china_capital_markets.equity_index, target: china_construction_bank.share_price, label: bank shares trade with the market, effect: {mu: 0.4},
+     kernel: {delay_days: 1, lag_days: 10, duration_days: null}}
+  - {id: s62, source: dollar_yen.usd_jpy, target: japan_capital_markets.equity_index, label: a weaker yen lifts the exporters that lead, effect: {mu: 0.4},
+     kernel: {delay_days: 1, lag_days: 20, duration_days: null}}
+  - {id: s63, source: boj.policy_rate, target: japan_capital_markets.equity_index, label: hikes weigh on, effect: {mu: -0.25},
+     kernel: {delay_days: 1, lag_days: 30, duration_days: null}}
+  - {id: s64, source: japan_economy.gdp_growth, target: japan_capital_markets.equity_index, label: growth lifts, effect: {mu: 0.25},
+     kernel: {delay_days: 30, lag_days: 90, duration_days: null}}
+  - {id: s65, source: japan_capital_markets.equity_index, target: softbank_corp.share_price, label: trades with the market, effect: {mu: 0.3},
+     kernel: {delay_days: 1, lag_days: 10, duration_days: null}}
+  - {id: s66, source: ecb.policy_rate, target: europe_capital_markets.equity_index, label: easing lifts, effect: {mu: -0.3},
+     kernel: {delay_days: 5, lag_days: 30, duration_days: null}}
+  - {id: s67, source: bunds.yield_10y, target: europe_capital_markets.equity_index, label: lower yields lift, effect: {mu: -0.2},
+     kernel: {delay_days: 1, lag_days: 30, duration_days: null}}
+  - {id: s68, source: europe_capital_markets.equity_index, target: unicredit.share_price, label: bank shares trade with the market, effect: {mu: 0.35},
+     kernel: {delay_days: 1, lag_days: 10, duration_days: null}}
+  - {id: s69, source: europe_capital_markets.equity_index, target: aib_group.share_price, label: bank shares trade with the market, effect: {mu: 0.3},
+     kernel: {delay_days: 1, lag_days: 10, duration_days: null}}
+  - {id: s70, source: japan_capital_markets.equity_index, target: tokio_marine.share_price, label: trades with the market, effect: {mu: 0.25},
+     kernel: {delay_days: 1, lag_days: 10, duration_days: null}}
+  - {id: s71, source: japan_capital_markets.equity_index, target: msad.share_price, label: trades with the market, effect: {mu: 0.25},
+     kernel: {delay_days: 1, lag_days: 10, duration_days: null}}

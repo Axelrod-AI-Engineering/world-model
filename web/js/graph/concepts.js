@@ -14,7 +14,8 @@ const titleOf = (id) => {
 // {generalization id -> {color, width, name, branch, branchName}} for the concepts the view's entities belong to
 export function conceptStyles(view) {
   const ents = (view?.entities ?? []).filter((e) => e.generalization_id && e.concept_branch);
-  const actor = (b) => /actor/.test(b ?? "");
+  // actors: the institutions branch (central banks and companies), or an older world's "actor" branch
+  const actor = (b) => /actor|institution/.test(b ?? "");
   const gens = [...new Map(ents.map((e) => [e.generalization_id, e])).values()]
     .sort((a, b) => Number(actor(b.concept_branch)) - Number(actor(a.concept_branch))
       || String(a.concept_branch).localeCompare(String(b.concept_branch)) || String(a.generalization_id).localeCompare(String(b.generalization_id)));

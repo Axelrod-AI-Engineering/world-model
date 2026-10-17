@@ -190,15 +190,18 @@ def domain_pack(wm: Any, ltm: Any, *, pc: dict, book: list[str], version: int, s
     for eid, e in sorted(ents.items()):
         cpath = concepts(e.generalization_id)
         region = e.features.get("region")
-        tax = {"sector": (e.features.get("sector") or (cpath[-1] if cpath else "")).replace("_", " ").title(),
-               "subsectors": cpath[1:] if len(cpath) > 1 else cpath, "geographies": [region] if region else [],
-               "geographic_scope": region or "global", "supply_chain_layer": None}
+        # a company's concept path reads institutions > companies > sector > industry (GICS-like); other nodes read
+        # branch > class > subclass (markets and asset classes > fixed income > sovereign bonds)
+        depth = 2 if is_co[eid] and len(cpath) >= 3 else 1 if len(cpath) >= 2 else 0
+        sector = cpath[depth] if cpath else (e.features.get("sector") or "").replace("_", " ").title()
+        tax = {"sector": sector, "subsectors": cpath[depth + 1:] or ([cpath[-1]] if cpath else []),
+               "geographies": [region] if region else [], "geographic_scope": region or "global", "supply_chain_layer": None}
         packs = sorted(set(sp_of.get(eid, [])))
         if is_co[eid]:
             t = _ticker(e)
             companies.append({
                 "company_id": node[eid], "descriptive_node_id": f"COMPANY_{node[eid][2:]}_{_snake(e.name)}",
-                "company_name": e.name, "ticker": t, "role_tags": sorted({_snake(c).lower() for c in cpath[1:]}
+                "company_name": e.name, "ticker": t, "role_tags": sorted({_snake(c).lower() for c in cpath[depth:]}
                                                                          | ({e.features["sector"]} if e.features.get("sector") else set())),
                 "primary_sector_pack_id": packs[0] if packs else None, "secondary_sector_pack_ids": packs[1:],
                 "node_group": "watchlist" if eid in book else "context", "source_packs_present": [stamp],

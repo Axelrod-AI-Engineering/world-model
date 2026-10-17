@@ -138,10 +138,16 @@ def test_the_yen_is_read_as_the_reciprocal_of_dollar_yen(client):
 def test_entities_carry_their_concepts_for_outlines(client):
     ents = {e["id"]: e for e in client.get("/api/state").json()["entities"]}
     jpm, boj, jgbs = ents["jpmorgan"], ents["boj"], ents["jgbs"]
-    assert jpm["kind_name"] == "Bank" and jpm["concept_branch"] == "gen:obj:actor" and jpm["concept_branch_name"] == "Actor"
-    assert jpm["concept_path"][0] == "gen:obj:actor" and jpm["concept_path"][-1] == "gen:obj:bank"
-    assert boj["kind_name"] == "Central bank" and boj["concept_branch"] == "gen:obj:actor"
-    assert jgbs["concept_branch"] == "gen:obj:financial_condition"
+    # the V1.0 taxonomy: institutions (central banks; companies by sector and industry), economies, markets and asset classes
+    assert jpm["kind_name"] == "Banks" and jpm["concept_branch"] == "gen:obj:institutions" and jpm["concept_branch_name"] == "Institutions"
+    assert jpm["concept_path"] == ["gen:obj:institutions", "gen:obj:companies", "gen:obj:financials", "gen:obj:bank"]
+    assert ents["morgan_stanley"]["kind_name"] == "Investment banking and wealth management"
+    assert boj["kind_name"] == "Central banks" and boj["concept_path"][1] == "gen:obj:public_institutions"
+    assert jgbs["kind_name"] == "Sovereign bonds" and jgbs["concept_branch"] == "gen:obj:markets"
+    assert {ents[e]["kind_name"] for e in ("dollar_yen", "jpy_usd", "usd_eur", "jpy_eur")} == {"Foreign exchange"}
+    assert {ents[e]["kind_name"] for e in ("us_capital_markets", "china_capital_markets", "japan_capital_markets",
+                                           "europe_capital_markets")} == {"Capital markets"}
+    assert ents["cgbs"]["kind_name"] == "Sovereign bonds" and ents["china_economy"]["kind_name"] == "Economies"
 
 
 def test_forecast_views_are_compact(client, posed):
