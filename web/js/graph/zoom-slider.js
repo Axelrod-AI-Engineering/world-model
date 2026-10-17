@@ -1,7 +1,7 @@
 // The zoom slider (Oct 11), in place of the − and + buttons. It is logarithmic, so each step of the thumb is the same
 // factor of zoom, and it shows:
-//   - bands for what the canvas shows at each zoom: superentities as cards, entities, values (the values band starts
-//     at the learned threshold, graph/attention.js);
+//   - bands for what the canvas shows at each zoom: entities, then values (the values band starts at the learned
+//     threshold, graph/attention.js; Oct 17: no superentity band, as superentities are not drawn);
 //   - up to three detents: zoom levels this person keeps settling at. The thumb snaps to them, and clicking one
 //     returns to that zoom centered on what was looked at there.
 // Dragging zooms about the focus point: the middle of the view, pulled toward what has been looked at most.
@@ -14,7 +14,7 @@ export function initZoomSlider(root, renderer, { names = (id) => id } = {}) {
   root.innerHTML = `
     <button class="zs-step icon" data-step="0.8" title="Zoom out (−)" aria-label="Zoom out">−</button>
     <div class="zs-track">
-      <div class="zs-bands" aria-hidden="true"><span class="b-cards"></span><span class="b-ents"></span><span class="b-vals"></span></div>
+      <div class="zs-bands" aria-hidden="true"><span class="b-ents"></span><span class="b-vals"></span></div>
       <div class="zs-detents"></div>
       <input id="zoom-range" type="range" min="0" max="1000" step="1" value="500" aria-label="Zoom">
     </div>
@@ -34,14 +34,11 @@ export function initZoomSlider(root, renderer, { names = (id) => id } = {}) {
   }
 
   function paintBands() {
-    // cards below roughly 0.45, entities to the values threshold, values above it; widths on the log track
-    const uCards = toUnit(0.45);
+    // entities to the values threshold, values above it; widths on the log track
     const uVals = toUnit(renderer.attention.kOpen);
-    const [c, e, v] = bands.children;
-    c.style.width = `${uCards * 100}%`;
-    e.style.width = `${(uVals - uCards) * 100}%`;
+    const [e, v] = bands.children;
+    e.style.width = `${uVals * 100}%`;
     v.style.width = `${(1 - uVals) * 100}%`;
-    c.title = "Superentities close into cards";
     e.title = "Entities";
     v.title = `Values open (from ${pct(renderer.attention.kOpen)})`;
   }

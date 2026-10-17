@@ -49,12 +49,13 @@ export function initInspector({ onSelect, focusNode, renderer, onAction, scopeFo
       <div class="group-label">How to read the graph</div>
       <h3>The economy as a causal graph</h3>
       <p class="lede">Each pill is one of ${n} <b>entities</b>: actors such as companies, cartels, and agencies, and the economic ideas
-        they act in, such as oil, inflation, or credit. Colored regions are <b>superentities</b>: groups that move together,
-        such as a supply chain, a rivalry, or a sector (${groups.length} so far). Arrows are causal links.</p>
+        they act in, such as oil, inflation, or credit. Each pill's outline says its kind, and pills of a kind sit together.
+        <b>Superentities</b>, groups that move together such as a supply chain, a rivalry, or a sector (${groups.length} so far),
+        are listed in the panels rather than drawn. Arrows are causal links.</p>
       <div class="section small">
         <div>Hover anything to see what it is. Click to inspect it here.</div>
         <div>Double-click an entity to open it into its <b>subentities</b>, the values the model tracks (a firm's revenue, share price…).</div>
-        <div>Right-click for every option: open or close superentities, show values, forecast, ask a what-if.</div>
+        <div>Right-click for every option: show values, forecast, ask a what-if.</div>
         <div>Press <b>Update</b> to read news and data up to a date, or <b>Step</b> to follow the scripted demo; then press
           <kbd>W</kbd> to walk through what the model did, one step at a time.</div>
         <div class="faint">${IS_MAC_HINT} undoes a view change · <kbd>?</kbd> lists every shortcut · all news and data in the demo are synthetic.</div>
@@ -126,7 +127,7 @@ export function initInspector({ onSelect, focusNode, renderer, onAction, scopeFo
     const node = store.view?.entities.find((x) => x.id === id);
     const tags = (e.category_tags ?? []).slice().sort();
     const groupKeys = renderer.groupsInfo.ofEntity.get(id) ?? [];
-    const marks = renderer.model?.marks ?? new Map();
+    const marks = renderer.marks ?? new Map();
     // one line per value (name, a small picture of its distribution, how far from normal); a click opens it.
     // Names read as on the canvas, without the entity's name they all start with.
     const labels = rowLabels(v.subentities);
@@ -259,14 +260,12 @@ export function initInspector({ onSelect, focusNode, renderer, onAction, scopeFo
     const inParts = new Set((g?.children ?? []).flatMap((k) => [...(renderer.groupsInfo.byKey.get(k)?.members ?? [])]));
     const extra = members.filter((m) => !inParts.has(m));
     const parents = (g?.parents ?? []).map((k) => groupChip(k));
-    const closed = g && renderer.ui.collapsed.has(g.key);
     const d = wrap(`
       <div class="group-label">Superentity · ${esc(p.status)} · ${esc(p.origin)}${p.sub_pattern_ids?.length ? " · made of superentities" : ""}</div>
       <h3>${esc(p.id)} · ${esc(p.name)}</h3>
       ${p.description ? `<p class="lede">${esc(p.description)}</p>` : `<p class="lede">A pattern the model inferred: these entities moved together through the interactions below often enough to count as one recurring configuration.</p>`}
-      ${g ? `<div class="row" style="margin:8px 0 4px"><button data-act="toggle-group" data-arg="${esc(g.key)}">${closed ? "Open it on the canvas" : "Close it into one card"}</button>
-        ${g.children.length ? `<button data-act="close-parts" data-arg="${esc(g.key)}">Close its parts</button>` : ""}
-        ${p.status === "admitted" ? `<button data-act="forecast" data-arg="superentity|${esc(p.id)}">Forecast it</button>` : ""}</div>` : ""}
+      ${g && p.status === "admitted" ? `<div class="row" style="margin:8px 0 4px"><button data-act="forecast" data-arg="superentity|${esc(p.id)}">Forecast it</button>
+        <button class="ghost" data-act="dissolve" data-arg="${esc(p.id)}" title="Break it back into its constituents (waits for review)">Dissolve…</button></div>` : ""}
       ${parts.length ? `<div class="section"><h4>Made of</h4><div class="row">${parts.join(" ")}${extra.length ? ` <span class="faint">plus</span> ${extra.map((m) => link("entity", m, entName(m))).join(", ")}` : ""}</div></div>` : ""}
       ${parents.length ? `<div class="section"><h4>Part of</h4><div class="row">${parents.join(" ")}</div></div>` : ""}
       <div class="section"><h4>Entities</h4><div class="small">${members.map((m) => link("entity", m, entName(m))).join(", ") || "—"}</div></div>

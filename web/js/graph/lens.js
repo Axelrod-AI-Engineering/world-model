@@ -1,7 +1,6 @@
 // The lens (Oct 9): whatever the cursor is on is drawn larger, as a small picture in its hover card, so a closed pill
-// or a card shows what it holds without opening it. An entity shows its values as bars from normal (up green, down
-// red) with each value's open node; a superentity shows its members and the interactions among them as a small
-// graph; an interaction shows its effect and the belief that it exists.
+// shows what it holds without opening it. An entity shows its values as bars from normal (up green, down red) with
+// each value's open node; an interaction shows its effect and the belief that it exists.
 import { ownPart } from "../names.js";
 import { esc } from "../util.js";
 
@@ -28,43 +27,6 @@ export function entityLens(subs, entName = null, kind = null) {
         <circle cx="${W - 8}" cy="${rh / 2}" r="${r.toFixed(1)}" class="lens-open"><title>${Math.round(100 * (s.open ?? 1))}% not explained by the graph yet</title></circle>
       </g>`;
     }).join("")}</svg>${subs.length > rows.length ? `<div class="tt-f">+ ${subs.length - rows.length} more values</div>` : ""}`;
-}
-
-export function groupLens(memberIds, view) {
-  const ents = (view?.entities ?? []).filter((e) => memberIds.includes(e.id));
-  if (ents.length < 2) return "";
-  const ent = new Map((view.subentities ?? []).map((s) => [s.id, s.entity_id]));
-  const pairs = new Map();
-  for (const l of view.links ?? []) {
-    const a = ent.get(l.source);
-    const b = ent.get(l.target);
-    if (a && b && a !== b && memberIds.includes(a) && memberIds.includes(b)) pairs.set(`${a}|${b}`, l);
-  }
-  const h = 120;
-  const cx = W / 2;
-  const cy = h / 2;
-  const R = Math.min(46, 18 + ents.length * 6);
-  const pos = new Map(ents.map((e, i) => {
-    const a = -Math.PI / 2 + (2 * Math.PI * i) / ents.length;
-    return [e.id, { x: cx + 1.9 * R * Math.cos(a), y: cy + R * Math.sin(a) }];
-  }));
-  return `<svg class="lens" viewBox="0 0 ${W} ${h}" width="${W}" height="${h}" role="img" aria-label="Its members and the interactions among them">
-    <defs><marker id="lens-arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0L10 5L0 10z" class="lens-arrow"/></marker></defs>
-    ${[...pairs.keys()].map((k) => {
-      const [a, b] = k.split("|");
-      const p = pos.get(a);
-      const q = pos.get(b);
-      const dx = q.x - p.x;
-      const dy = q.y - p.y;
-      const d = Math.hypot(dx, dy) || 1;
-      return `<line x1="${(p.x + (dx / d) * 14).toFixed(1)}" y1="${(p.y + (dy / d) * 9).toFixed(1)}" x2="${(q.x - (dx / d) * 16).toFixed(1)}" y2="${(q.y - (dy / d) * 10).toFixed(1)}" class="lens-edge" marker-end="url(#lens-arr)"/>`;
-    }).join("")}
-    ${ents.map((e) => {
-      const p = pos.get(e.id);
-      const z = e.deviation?.z ?? 0;
-      return `<g transform="translate(${p.x.toFixed(1)},${p.y.toFixed(1)})"><rect x="-30" y="-9" width="60" height="18" rx="6" class="lens-node${Math.abs(z) >= 0.5 ? (z > 0 ? " up" : " down") : ""}"/>
-        <text y="3.5" class="lens-node-t">${esc(trim(e.name, 10))}</text></g>`;
-    }).join("")}</svg>`;
 }
 
 export function linkLens(l) {
