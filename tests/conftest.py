@@ -32,6 +32,28 @@ def pytest_collection_modifyitems(config, items):
             item.add_marker(skip)
 
 
+@pytest.fixture(autouse=True, scope="session")
+def _session_lake(tmp_path_factory):
+    """Module- and session-scoped apps are built before any function fixture runs: give them a lakehouse of their own
+    too, so no test ever reads or writes the repo's var/lake."""
+    mp = pytest.MonkeyPatch()
+    mp.setenv("WORLD_MODEL_LAKE_DIR", str(tmp_path_factory.mktemp("session") / "lake"))
+    mp.setenv("WORLD_MODEL_EMBEDDER", "hashing")
+    mp.delenv("WORLD_MODEL_LLM_PROVIDER", raising=False)
+    mp.delenv("WORLD_MODEL_API_KEYS", raising=False)
+    yield
+    mp.undo()
+
+
+@pytest.fixture(autouse=True)
+def _isolated_lake(tmp_path, monkeypatch):
+    """Every test gets its own lakehouse and the hashing embedder (exact, and no model download), and no LLM step."""
+    monkeypatch.setenv("WORLD_MODEL_LAKE_DIR", str(tmp_path / "lake"))
+    monkeypatch.setenv("WORLD_MODEL_EMBEDDER", "hashing")
+    monkeypatch.delenv("WORLD_MODEL_LLM_PROVIDER", raising=False)
+    monkeypatch.delenv("WORLD_MODEL_API_KEYS", raising=False)
+
+
 def make_config(**updates):
     base = {"storage": {"backend": "memory", "path": "var/test"}}
     base.update(updates)
