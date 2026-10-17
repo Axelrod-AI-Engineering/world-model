@@ -16,3 +16,5 @@ data/sally_data/
 docs/media/
 *.mp4
 *.m4a
+# meeting notes (client and team context): local only
+*Notes by Gemini*.pdf

@@ -51,29 +51,73 @@ def test_a_forecast_carries_a_scenario_table_for_the_book(posed):
     assert bands["Bull"]["mechanism"] and t["changes_the_read"]
 
 
-def test_the_context_export_follows_the_agents_v4_format(client, posed):
+# the client's v4.1.4 domain-pack layout: the keys every item of a section carries in their packs, and the contract's ID rules
+REQUIRED = {
+    "companies": ({"company_id", "descriptive_node_id", "company_name", "ticker", "role_tags", "primary_sector_pack_id",
+                   "node_group", "source_packs_present", "ontology_entity_type", "taxonomy"}, "company_id", r"^N_[A-Z0-9_]+$"),
+    "clusters": ({"cluster_id", "cluster_name", "company_ids"}, "cluster_id", r"^CL_[A-Z0-9_]+$"),
+    "cluster_memberships": ({"cluster_membership_id", "cluster_id", "company_id", "membership_role"}, "cluster_membership_id",
+                            r"^CLMEM_[A-Z0-9_]+__[A-Z0-9_]+$"),
+    "sector_packs": ({"sector_pack_id", "sector_pack_name", "when_to_activate", "company_role_tags_covered", "metric_family_ids",
+                      "required_baselines", "do_not_infer", "source_packs_present"}, "sector_pack_id", r"^PACK_[A-Z0-9_]+$"),
+    "metric_families": ({"metric_family_id", "metric_family_name", "metrics", "required_baselines", "do_not_conclude_without",
+                         "source_packs_present"}, "metric_family_id", r"^MF_[A-Z0-9_]+$"),
+    "required_search_scopes": ({"required_search_scope_id", "search_scope_label", "sector_pack_ids", "cluster_ids", "caveat_ids",
+                                "metric_family_ids", "why_required", "member_selector", "seed_search_targets",
+                                "mechanisms_to_inspect", "confirming_evidence", "breaking_evidence", "search_templates",
+                                "search_cost_hint", "freshness_window_default", "result_states_allowed"},
+                               "required_search_scope_id", r"^REQ_SEARCH_[A-Z0-9_]+$"),
+    "company_edge_relationships": ({"relationship_id", "company_id", "edge_id", "direction", "confidence_prior", "affected_metrics"},
+                                   "relationship_id", r"^REL_[A-Z0-9_]+__E\d\d_[A-Z0-9_]+$"),
+    "cross_validation_assertions": ({"cross_validation_id", "source_company_id", "target_company_id", "edge_id",
+                                     "validation_direction", "mechanism"}, "cross_validation_id", r"^CV_[A-Z0-9_]+_TO_[A-Z0-9_]+__E\d\d_"),
+    "industry_caveat_definitions": ({"caveat_id", "caveat_name", "caveat_type", "definition"}, "caveat_id", r"^CAV_[A-Z0-9_]+$"),
+    "caveat_impact_assertions": ({"caveat_impact_id", "caveat_id", "affected_metrics"}, "caveat_impact_id", r"^CAVIMPACT_[A-Z0-9_]+__TO_"),
+    "transmission_paths": ({"path_id", "primary_company_id", "trigger", "ordered_steps", "edge_ids", "company_ids"}, "path_id",
+                           r"^PATH_[A-Z0-9_]+$"),
+    "financial_model_semantic_fields": ({"field_spec_id", "field_name", "applies_to", "required_for", "ontology_entity_type"},
+                                        "field_spec_id", r"^FMSPEC_[A-Z0-9_]+$"),
+}
+
+
+def test_the_context_export_follows_the_clients_v4_layout(client, posed):
+    import re
+
     r = client.get("/api/context/v4", params={"forecast": posed["forecast"]["id"]})
     assert r.status_code == 200, r.text
     ctx = r.json()
-    pack, base, fc = ctx["domain_pack"], ctx["baseline"], ctx["forecast"]
-    assert pack["schema_version"] == "v4.1.4" and pack["file_role"] == "domain_pack"
-    for key in ("companies", "clusters", "cluster_memberships", "sector_packs", "metric_families",
-                "company_edge_relationships", "cross_validation_assertions", "industry_caveat_definitions",
-                "transmission_paths"):
-        assert key in pack
+    pack, ev, fc, reg = ctx["domain_pack"], ctx["evidence"], ctx["forecast"], ctx["registry_entry"]
+    assert pack["schema_version"] == "v4.1.4_modular_domain_pack"
+    assert pack["file_role"] == "DOMAIN_PACK__LOAD_AFTER_CORE_WHEN_ACTIVATED"
+    assert pack["domain_pack_id"] == "PACK_GLOBAL_RATES_BANKS_INSURERS_JAPAN_EXPORTERS" and pack["file_index"] == "036"
+    for sec, (keys, idk, rx) in REQUIRED.items():
+        items = pack[sec]
+        assert items, sec
+        for it in items:
+            assert keys <= set(it), (sec, sorted(keys - set(it)))
+            assert re.match(rx, it[idk]), (sec, it[idk])
+        ids = [it[idk] for it in items]
+        assert len(ids) == len(set(ids)), f"duplicate ids in {sec}"
     assert {c["axelrod_entity_id"] for c in pack["companies"]} == BOOK
-    assert all("in_book" in c["role_tags"] for c in pack["companies"])
-    edge = pack["company_edge_relationships"][0]
-    assert edge["direction"] in {"positive", "negative", "neutral"} and edge["confidence_prior"] in {"high", "medium", "low"}
-    assert {"effect_sd_per_sd", "existence_p", "delay_days"} <= set(edge["axelrod"])
-    # the baseline is dated and versioned; the decision context is kept apart from the pack
-    assert base["file_role"] == "current_baseline" and base["state_version"] == fc["based_on_version"]
-    assert fc["file_role"] == "decision_context" and fc["scenario_table"]["rows"]
-    assert fc["transmission"] and fc["key_interactions"]
+    assert all(c["ontology_entity_type"] == "Company" for c in pack["companies"])
+    # every relationship is owned by a company and points at the pack's own edge vocabulary, clear of the client's E03-E35
+    vocab = {e["edge_id"] for e in pack["domain_specific_support_objects"]["axelrod_edge_vocabulary"]}
+    cos = {c["company_id"] for c in pack["companies"]}
+    for rel in pack["company_edge_relationships"]:
+        assert rel["company_id"] in cos and rel["edge_id"] in vocab and int(rel["edge_id"][1:]) >= 60
+        assert rel["confidence_prior"] in {"high", "medium_high", "medium", "context_only"}
+        assert {"effect_sd_per_sd", "existence_p", "delay_days"} <= set(rel["axelrod"])
+    macro = {m["node_id"] for m in pack["domain_specific_support_objects"]["macro_factor_nodes"]}
+    assert all(m in cos | macro for cl in pack["clusters"] for m in cl["company_ids"])
+    # the registry row the client's 020 takes, and live state as evidence, never in the pack
+    row = reg["domains"][0]
+    assert set(row) == {"domain_pack_id", "domain_pack_name", "file_name", "activation_terms", "never_merge_into_base", "file_index"}
+    assert row["file_name"].startswith("036_world_model_domain_pack_") and row["never_merge_into_base"] is True
+    assert ev["file_role"].startswith("EVIDENCE_PACK__") and ev["state_version"] == fc["based_on_version"]
+    assert fc["file_role"].startswith("EVIDENCE_PACK__") and fc["scenario_table"]["rows"] and fc["transmission"]
     files = [f["file"] for f in ctx["manifest"]["load_order"]]
-    assert files[0].startswith("000_") and any(f.startswith("036_") for f in files)
+    assert [f[:3] for f in files[:4]] == ["000", "010", "020", "036"] and files[4].startswith("evidence_pack_axelrod_")
     assert any(f["card"].startswith("5") for f in ctx["manifest"]["feeds"])
-    assert "never" in ctx["manifest"]["boundary"] or "does not" in ctx["manifest"]["boundary"]
 
 
 def test_the_context_without_a_forecast_and_for_an_unknown_one(client):
@@ -94,10 +138,16 @@ def test_the_yen_is_read_as_the_reciprocal_of_dollar_yen(client):
 def test_entities_carry_their_concepts_for_outlines(client):
     ents = {e["id"]: e for e in client.get("/api/state").json()["entities"]}
     jpm, boj, jgbs = ents["jpmorgan"], ents["boj"], ents["jgbs"]
-    assert jpm["kind_name"] == "Bank" and jpm["concept_branch"] == "gen:obj:actor" and jpm["concept_branch_name"] == "Actor"
-    assert jpm["concept_path"][0] == "gen:obj:actor" and jpm["concept_path"][-1] == "gen:obj:bank"
-    assert boj["kind_name"] == "Central bank" and boj["concept_branch"] == "gen:obj:actor"
-    assert jgbs["concept_branch"] == "gen:obj:financial_condition"
+    # the V1.0 taxonomy: institutions (central banks; companies by sector and industry), economies, markets and asset classes
+    assert jpm["kind_name"] == "Banks" and jpm["concept_branch"] == "gen:obj:institutions" and jpm["concept_branch_name"] == "Institutions"
+    assert jpm["concept_path"] == ["gen:obj:institutions", "gen:obj:companies", "gen:obj:financials", "gen:obj:bank"]
+    assert ents["morgan_stanley"]["kind_name"] == "Investment banking and wealth management"
+    assert boj["kind_name"] == "Central banks" and boj["concept_path"][1] == "gen:obj:public_institutions"
+    assert jgbs["kind_name"] == "Sovereign bonds" and jgbs["concept_branch"] == "gen:obj:markets"
+    assert {ents[e]["kind_name"] for e in ("dollar_yen", "jpy_usd", "usd_eur", "jpy_eur")} == {"Foreign exchange"}
+    assert {ents[e]["kind_name"] for e in ("us_capital_markets", "china_capital_markets", "japan_capital_markets",
+                                           "europe_capital_markets")} == {"Capital markets"}
+    assert ents["cgbs"]["kind_name"] == "Sovereign bonds" and ents["china_economy"]["kind_name"] == "Economies"
 
 
 def test_forecast_views_are_compact(client, posed):
@@ -106,3 +156,12 @@ def test_forecast_views_are_compact(client, posed):
     assert all("levels" not in s for s in posed["scenarios"])
     e = posed["targets"][0]["effects"][-1]
     assert all(len(repr(v)) <= 9 for v in e.values())
+
+
+def test_the_world_model_exports_on_its_own_at_the_current_version(client):
+    st = client.get("/api/sim/status").json()
+    ctx = client.get("/api/context/v4").json()
+    assert ctx["evidence"]["state_version"] == st["version"] and ctx["evidence"]["state_hash"]
+    files = [f["file"] for f in ctx["manifest"]["load_order"]]
+    assert any(f.startswith("036_world_model_domain_pack") for f in files)
+    assert sum(f.startswith("evidence_pack_axelrod_") for f in files) == 1 and "forecast" not in ctx

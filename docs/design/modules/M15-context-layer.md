@@ -40,11 +40,11 @@ There is no `forget`. Retiring an item is a reviewed proposal, and history stays
 
 ### Export in a client's own format (Oct 15)
 
-Some clients' agents already load a world model of their own before they reason. `context/v4.py` exports ours in the v4.1.4 format one client's agents read (a domain pack, a dated baseline, and a decision context per forecast, with a manifest of their load order), so the agents take our model as their context layer without changing. Their core contract files are named, never copied. The export adds what their schema lacks under an `axelrod` key on each edge: effect size, existence probability, timing, and evidence count. It grounds the agent and never concludes: no ratings, no sizing. `GET /api/context/v4[?forecast=<id>]`; the Agent context dialog shows it beside the card it fills ([demos.md](../../demos.md#sallys-demo)).
+Some clients' agents already load a world model of their own before they reason. `context/v4.py` exports ours in the v4.1.4 format one client's agents read: a numbered 03x domain pack loaded after their 000, 010, and 020, a registry entry for their 020, and evidence packs for the current state and each forecast, with a manifest of their load order, so the agents take our model as their context layer without changing. Their core contract files are named, never copied. The export adds what their schema lacks under an `axelrod` key on each edge: effect size, existence probability, timing, and evidence count. It grounds the agent and never concludes: no ratings, no sizing. `GET /api/context/v4[?forecast=<id>]`; the Agent context dialog shows it beside the card it fills ([demos.md](../../demos.md#sallys-demo)).
 
 ```python
-context_pack(wm, ltm, *, scenario_id, title, book, version, state_hash, forecast=None, explanation=None) -> dict
-# {"manifest", "domain_pack", "baseline", "forecast"?}
+context_pack(wm, ltm, *, scenario_id, title, book, version, state_hash, forecast=None, explanation=None, pack_cfg=None) -> dict
+# {"manifest", "domain_pack", "registry_entry", "evidence", "forecast"?}; pack_cfg from scenario.yaml context_pack
 ```
 
 ## Interface
