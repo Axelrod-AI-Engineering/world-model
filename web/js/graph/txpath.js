@@ -168,7 +168,7 @@ export class TxPathLayer {
             .attr("aria-label", `${v.entity ?? ""} ${own}: ${fmtSd(peak)} sd at its peak`);
           chip.append("rect").attr("class", "tx-box").attr("width", CHIP_W).attr("height", CHIP_H).attr("rx", 9);
           chip.append("rect").attr("class", "tx-bar").attr("x", 0).attr("y", 0).attr("width", 5).attr("height", CHIP_H).attr("rx", 2.5);
-          chip.append("text").attr("class", "tx-name").attr("x", 14).attr("y", CHIP_H / 2 + 4.5).text(own.length > 25 ? `${own.slice(0, 24)}…` : own);
+          chip.append("text").attr("class", "tx-name").attr("x", 14).attr("y", CHIP_H / 2 + 4.5).text(own.length > 22 ? `${own.slice(0, 21).trimEnd()}…` : own);
           chip.append("text").attr("class", `tx-num ${peak > 0.005 ? "up" : peak < -0.005 ? "down" : ""}`).attr("x", CHIP_W - 10).attr("y", CHIP_H / 2 + 4.5)
             .attr("text-anchor", "end").text(c.key === "input" && !v.order ? "shock" : `${fmtSd(peak)} sd`);
           chip.append("title").text(`${v.entity ? `${v.entity} · ` : ""}${own}: ${signed(peak)} sd at its peak on day ${v.peak_day}; `
