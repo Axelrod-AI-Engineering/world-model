@@ -10,6 +10,7 @@ The full demo is hosted on Railway's `dev` environment at **https://world-model-
 - [Releasing](#releasing)
 - [Verifying a release](#verifying-a-release)
 - [Sign-in](#sign-in)
+- [The API and its keys](#the-api-and-its-keys)
 - [Running the container locally](#running-the-container-locally)
 - [Tests](#tests)
 <!-- /toc -->
@@ -18,7 +19,7 @@ The full demo is hosted on Railway's `dev` environment at **https://world-model-
 
 | Piece | Where | What it does |
 |---|---|---|
-| Image | `Dockerfile` | Python 3.12 slim. Installs the frozen dependencies with uv (`uv sync --frozen --no-dev`) and copies `configs/`, `data/`, `web/`, and the start script. |
+| Image | `Dockerfile` | Python 3.12 slim. Installs the frozen dependencies with uv (`uv sync --frozen --no-dev --extra semantic`, which adds the embedding model's runtime) and copies `configs/`, `data/`, `web/`, and the start script. |
 | Start | `scripts/start-railway.sh` | Runs `axelrod demo --scenario $WORLD_MODEL_SCENARIO --host 0.0.0.0 --port $PORT`: on dev, the production demo for the main login, and Emily's demo for hers ([demos.md](demos.md), [A login per scenario](#a-login-per-scenario)) |
 | Infrastructure | `.railway/railway.ts` | The service, its volume, and its settings, as code |
 | Release checks | `scripts/persist-railway-fields.sh`, `scripts/verify-railway-drift.py` | Set the two fields Railway's IaC does not store, then reject any drift except known leftovers |
@@ -31,10 +32,10 @@ The service's settings, from `.railway/railway.ts`:
 - **One replica** in `us-west2`, built from the `Dockerfile`.
 - **Health check** at `/api/health`, with a **600-second** initial timeout. The first start replays three years of synthetic history before it is ready.
 - **Restarts** on failure, at most two retries. **App Sleep** is off.
-- **Storage:** a 5 GB volume mounted at `/app/var`. Runtime state, traces, and the init cache persist there, so later starts take seconds.
+- **Storage:** a 5 GB volume mounted at `/app/var`. Runtime state, traces, and the init cache persist there, so later starts take seconds. So do the lakehouse (`/app/var/lake`: uploaded files, their text, indexes, and bundles) and the embedding model (`/app/var/models`, downloaded on the first upload, about 70 MB).
 - **Port** 8080, served at `world-model-dev.up.railway.app`.
 
-The demo needs no database and no model-provider credentials. Everyone who opens it shares one session and one engine: a review approved there is approved for everyone.
+The demo needs no database server (the lakehouse is SQLite on the volume) and no model-provider credentials (the LLM extraction step is off unless one is set). Everyone who opens it shares one session and one engine: a review approved there is approved for everyone.
 
 ## Ownership in the shared project
 
@@ -95,6 +96,14 @@ The top bar's demo menu ([demos.md](demos.md#switching-demos)) switches only the
 The browser keeps a Basic Auth login until it is closed: to switch logins, use a private window, or sign in through `https://<username>@world-model-dev.up.railway.app`.
 
 Emily's and Sally's research (`data/emily_data/`, `data/sally_data/`) is never uploaded (`.gitignore`, `.dockerignore`). On the hosted demo, import it with the file picker; Sally's daily files can be chosen several at a time.
+
+## The API and its keys
+
+The outward API (`/api/world-model/*`) and its MCP server (`/mcp`) are described in [api.md](api.md). They take API keys rather than a sign-in:
+
+- `WORLD_MODEL_API_KEYS` holds comma-separated `caller:key:login` entries. Each key acts as that login (the main login or one from `WORLD_MODEL_LOGINS`), and opens only the API and MCP paths. Keys are at least 24 characters; a malformed entry stops the server from starting. Like the passwords, the variable lives in Railway only.
+- To add a caller: generate a key (`python -c "import secrets; print(secrets.token_urlsafe(32))"`), append `name:key:login` to the variable in Railway, and redeploy. To rotate, add the new entry first, then remove the old one.
+- Optional variables: `WORLD_MODEL_LLM_PROVIDER` (`anthropic` or `openai`) with `ANTHROPIC_API_KEY` or `OPENAI_API_KEY`, and `WORLD_MODEL_LLM_MODEL`, turn on the cached LLM extraction step; `WORLD_MODEL_EMBEDDER` (`auto`, `fastembed`, `hashing`) picks the embedder. The image sets `WORLD_MODEL_LAKE_DIR` and `WORLD_MODEL_EMBED_CACHE` to the volume.
 
 ## Running the container locally
 
