@@ -1,13 +1,11 @@
-// Hulls (§13.3). A superentity is drawn as a soft outline that hugs its members. DECISION: instead of a
-// convex hull (which swallows non-members on Figure 1's grid), the outline is one level of a field that
-// is high on member boxes and on bridges between neighboring members and low near non-members, traced
-// with d3.contours (in the spirit of Bubble Sets). Blocks of neighbors read like Figure 1's rounded
-// rectangles, far-apart members join through thin bands, and nearby non-members are carved out. A
-// composite's outline wraps its parts' outlines with more padding, so nesting reads at a glance.
+// Superentities as data, and soft outlines (§13.3). DECISION (Oct 17): superentities are no longer drawn on the canvas;
+// buildGroups still gives the panels, the walkthrough, and the frame and find tools each superentity's members, and the
+// traced outline below now serves only the walkthrough's and forecasts' outlined networks. The outline is one level of
+// a field that is high on member boxes and on bridges between neighboring members and low near non-members, traced
+// with d3.contours (in the spirit of Bubble Sets), so nearby non-members are carved out.
 /* global d3 */
 
-export const PAD = 12;          // a leaf hull's padding around its member boxes
-export const NEST_PAD = 20;     // extra padding per level of nesting
+export const PAD = 12;          // an outline's padding around its member boxes
 const CELL = 5;                 // field resolution, in canvas px
 const CLEAR = 8;                // clearance kept around non-members
 const BAND = 8;                 // half-width of the band that joins far-apart members
@@ -47,16 +45,6 @@ export function paletteOf(item, palettes) {
   const ink = d3.hcl(lineColor);
   ink.l = Math.max(22, ink.l - 18);
   return { fill, line: lineColor, ink: ink.formatHex() };
-}
-
-export function hullStyle(g, pal) {
-  if (g.transient) return { fill: "none", stroke: cssVar("--hyp-line"), dash: "7 4", fillOpacity: 0 };
-  if (g.status === "candidate") return { fill: "none", stroke: pal.line, dash: "1.5 4", fillOpacity: 0 };
-  // DECISION: an outer (composite) hull is mostly outline and a rival pair is lighter, so the seven
-  // Figure 1 hulls keep their tint and overlaps stay legible
-  if (g.composite) return { fill: pal.fill, stroke: pal.line, dash: "12 4 2 4", fillOpacity: 0.16 };
-  if (g.hulls.length > 1) return { fill: pal.fill, stroke: pal.line, dash: "6 4", fillOpacity: 0.3 };
-  return { fill: pal.fill, stroke: pal.line, dash: "6 4", fillOpacity: 0.55 };
 }
 
 // -- grouping -------------------------------------------------------------------------------------
@@ -158,6 +146,32 @@ export function ancestors(byKey, key) {
     stack.push(...(byKey.get(k)?.parents ?? []));
   }
   return out;
+}
+
+// Superentities of subentities: which superentities' relations run through each value (a composite counts only the
+// edges it adds, its boundary edges). For the panels: the inspector's "used by" and the value's menu.
+export function superentityMarks(view, groupsInfo) {
+  const { groups, byKey } = groupsInfo;
+  const linkById = new Map((view?.links ?? []).map((l) => [l.id, l]));
+  const marks = new Map();
+  for (const g of groups) {
+    if (g.transient) continue;
+    let ids = new Set(g.hulls.flatMap((h) => h.interaction_ids ?? []));
+    if (g.composite) {
+      const own = new Set(g.children.flatMap((k) => byKey.get(k).hulls.flatMap((h) => h.interaction_ids ?? [])));
+      ids = new Set([...ids].filter((i) => !own.has(i)));
+    }
+    for (const iid of ids) {
+      const l = linkById.get(iid);
+      if (!l) continue;
+      for (const sid of [l.source, l.target]) {
+        if (!marks.has(sid)) marks.set(sid, []);
+        const arr = marks.get(sid);
+        if (!arr.includes(g.key)) arr.push(g.key);
+      }
+    }
+  }
+  return marks;
 }
 
 // -- the field and its contour -------------------------------------------------------------------
@@ -369,32 +383,6 @@ export function hullContour(members, obstacles, pad = PAD) {
   }
   topEdge.sort((a, b) => (a[1] - b[1]) + 0.1 * (a[0] - b[0]));
   return { d, anchor: corners[0], corners, ring: best.ring, topEdge, bbox: { x0: bx0, y0: by0, x1: bx1, y1: by1 } };
-}
-
-// A block (Oct 11): a rounded rectangle around a superentity's home members, for the hierarchy's layout, where every
-// superentity has a block of its own. It returns what hullContour returns, so tabs and lenses work the same.
-const BLOCK_R = 14;
-export function blockHull(members, pad = PAD) {
-  if (!members.length) return null;
-  let x0 = Infinity; let y0 = Infinity; let x1 = -Infinity; let y1 = -Infinity;
-  for (const r of members) { x0 = Math.min(x0, r.x0); y0 = Math.min(y0, r.y0); x1 = Math.max(x1, r.x1); y1 = Math.max(y1, r.y1); }
-  x0 -= pad; y0 -= pad; x1 += pad; y1 += pad;
-  const rr = Math.min(BLOCK_R + pad / 3, (x1 - x0) / 2, (y1 - y0) / 2);
-  const d = `M${x0 + rr},${y0}H${x1 - rr}A${rr},${rr} 0 0 1 ${x1},${y0 + rr}V${y1 - rr}A${rr},${rr} 0 0 1 ${x1 - rr},${y1}`
-    + `H${x0 + rr}A${rr},${rr} 0 0 1 ${x0},${y1 - rr}V${y0 + rr}A${rr},${rr} 0 0 1 ${x0 + rr},${y0}Z`;
-  // the outline as points, clockwise from the top-left, for tabs (top edge) and lenses
-  const ring = [];
-  const step = 6;
-  for (let x = x0; x <= x1; x += step) ring.push([x, y0]);
-  for (let y = y0; y <= y1; y += step) ring.push([x1, y]);
-  for (let x = x1; x >= x0; x -= step) ring.push([x, y1]);
-  for (let y = y1; y >= y0; y -= step) ring.push([x0, y]);
-  const corners = [
-    { x: x0 + 6, y: y0 + 1, align: "left" }, { x: x0 + 6, y: y1 - 1, align: "left" },
-    { x: x1 - 6, y: y0 + 1, align: "right" }, { x: x1 - 6, y: y1 - 1, align: "right" },
-  ];
-  const topEdge = ring.filter(([, y], i) => y === y0 && i % 2 === 0);
-  return { d, anchor: corners[0], corners, ring, topEdge, bbox: { x0, y0, x1, y1 } };
 }
 
 // A convex blob around some boxes (for the generalization end of a fuzzy ribbon).

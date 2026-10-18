@@ -1,23 +1,17 @@
-// Draw tool (§13.5): drag from a subentity, entity, or hull to another to propose an edge.
-// A subentity gives a concrete end; an entity an abstract end with its entity_id; a hull an abstract
-// end whose candidate_entity_ids are the hull's members, so the refiner ranks them.
+// Draw tool (§13.5): drag from a subentity or an entity to another to propose an edge.
+// A subentity gives a concrete end; an entity an abstract end with its entity_id. (Oct 17: superentities are no
+// longer drawn, so they are no longer ends.)
 /* global d3 */
 import { api } from "../api.js";
 import { store } from "../store.js";
 
-function endFromTarget(el, view) {
+function endFromTarget(el) {
   const node = el?.closest?.("[data-kind]");
   if (node) {
     const kind = node.getAttribute("data-kind");
     const id = node.getAttribute("data-id");
     if (kind === "subentity") return { spec: { kind: "concrete", subentity_id: id }, label: id };
     if (kind === "entity") return { spec: { kind: "abstract", entity_id: id }, label: id };
-  }
-  const hull = el?.closest?.("g.hull");
-  if (hull) {
-    const iid = hull.getAttribute("data-instance");
-    const h = view?.hulls?.find((x) => x.id === iid);
-    if (h) return { spec: { kind: "abstract", candidate_entity_ids: [...h.members] }, label: h.label };
   }
   return null;
 }
@@ -30,7 +24,7 @@ export function installDrawTool({ svgEl, rootSel, renderer, openModal, toast }) 
 
   svgEl.addEventListener("pointerdown", (ev) => {
     if (!store.settings.draw || ev.button !== 0) return;
-    const end = endFromTarget(ev.target, store.view);
+    const end = endFromTarget(ev.target);
     if (!end) return;
     ev.preventDefault();
     ev.stopPropagation();
@@ -51,7 +45,7 @@ export function installDrawTool({ svgEl, rootSel, renderer, openModal, toast }) 
     start = null;
     line?.remove();
     line = null;
-    const to = endFromTarget(document.elementFromPoint(ev.clientX, ev.clientY), store.view);
+    const to = endFromTarget(document.elementFromPoint(ev.clientX, ev.clientY));
     if (!to) return;
     openForm(from, to);
   });

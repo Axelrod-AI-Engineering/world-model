@@ -114,3 +114,41 @@ def test_an_output_the_chain_carries_past_stays_at_its_order(src, method):
     assert cols["delta.margin"] == "2" and "delta.margin" in g["outputs"]
     assert not any(cols[e["source"]] == "output" for e in g["edges"])
     assert all(c in g["columns"] for c in cols.values())
+
+
+def test_relevant_fills_in_values_between_and_after_with_their_links():
+    # Oct 17 ("transmission paths need more subentities and relationships between subentities"): a weak second route
+    # into a kept value (d) and where a kept chain carries on (e) are shown, with the interactions among them; a weak
+    # direct side effect of the shock (f) still is not
+    values = {
+        "in.x": _v(0, 1.0, shock="in.x"),
+        "a.x": _v(1, 0.9, ["in>a"], shock="in.x"),
+        "b.x": _v(2, 0.5, ["in>a", "a>b"], shock="in.x"),
+        "c.x": _v(3, 0.8, ["in>a", "a>b", "b>c"], shock="in.x"),
+        "d.x": _v(2, 0.15, ["in>a", "a>d"], shock="in.x"),
+        "e.x": _v(4, 0.1, ["in>a", "a>b", "b>c", "c>e"], shock="in.x"),
+        "f.x": _v(1, 0.05, ["in>f"], shock="in.x"),
+    }
+    edges = [_e("in.x", "a.x", 0.9, "in>a"), _e("a.x", "b.x", 0.6, "a>b"), _e("b.x", "c.x", 0.9, "b>c"),
+             _e("a.x", "d.x", 0.2, "a>d"), _e("d.x", "c.x", 0.9, "d>c"), _e("c.x", "e.x", 0.3, "c>e"),
+             _e("in.x", "f.x", 0.05, "in>f")]
+    g = isolate({"horizon": 20, "values": values, "edges": edges}, "relevant")
+    assert {"d.x", "e.x"} <= set(g["values"]) and "f.x" not in g["values"]
+    pairs = {(e["source"], e["target"]) for e in g["edges"]}
+    assert {("a.x", "d.x"), ("d.x", "c.x"), ("c.x", "e.x")} <= pairs
+    assert g["values"]["d.x"]["column"] == "2"
+    # still joined: every shown value but the input has an interaction into it
+    assert all(sid in {t for _, t in pairs} for sid, v in g["values"].items() if v["column"] != "input")
+
+
+def test_relevant_caps_what_it_fills_in():
+    from axelrod_wm.inference.paths import RELEVANT_MAX
+
+    # one strong value, and a long tail behind it that would all be filled in without the cap
+    values = {"in.x": _v(0, 1.0, shock="in.x"), "a.x": _v(1, 0.9, ["in>a"], shock="in.x")}
+    edges = [_e("in.x", "a.x", 0.9, "in>a")]
+    for k in range(60):
+        values[f"t{k}.x"] = _v(2, 0.1, ["in>a", f"a>t{k}"], shock="in.x")
+        edges.append(_e("a.x", f"t{k}.x", 0.3, f"a>t{k}"))
+    g = isolate({"horizon": 20, "values": values, "edges": edges}, "relevant")
+    assert len(g["values"]) == RELEVANT_MAX

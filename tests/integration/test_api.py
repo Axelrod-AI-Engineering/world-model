@@ -70,6 +70,8 @@ def test_read_endpoints_after_load(client):
     assert list(mem)[:5] == ["object_generalizations", "interaction_generalizations", "entity_memories",
                              "correlation_frontier", "prior_states"]
     assert all("observed_today" in s for s in view["subentities"])
+    # each value's scale (Oct 17), so the canvas can show a move in sd in the value's own unit
+    assert all(s["scale"] > 0 for s in view["subentities"])
     fr = client.get("/api/frontier").json()
     series = client.get(f"/api/frontier/{fr[0]['id']}/series").json()
     assert "pairs" in series and series["lag_days"] == fr[0]["lag_days"]
