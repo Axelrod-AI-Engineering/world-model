@@ -50,7 +50,7 @@ uv run axelrod export-trace ...                            # copy a recorded tra
 
 | Variable | Effect |
 |---|---|
-| `WORLD_MODEL_BASIC_AUTH_USERNAME`, `WORLD_MODEL_BASIC_AUTH_PASSWORD` | When both are set, every page, API call, and WebSocket requires Basic Auth. Setting only one stops the server from starting. |
+| `WORLD_MODEL_BASIC_AUTH_USERNAME`, `WORLD_MODEL_BASIC_AUTH_PASSWORD` | The main login. When both are set, every page, API call, and WebSocket requires signing in (the variables keep their old name). Setting only one stops the server from starting. |
 | `WORLD_MODEL_REQUIRE_BASIC_AUTH=1` | Refuse to start without both credentials. On Railway this is automatic. |
 
-Without these variables, the local demos need no login. [deployment.md](deployment.md#sign-in) covers the hosted setup.
+Without these variables, the local demos need no login. [deployment.md](deployment.md#sign-in) covers the hosted setup and the other logins (`WORLD_MODEL_LOGINS`); the API's variables (keys, trusted issuers, the lakehouse, the embedder, the LLM step) are in [the API reference](../api/README.md#configuration).

@@ -4,8 +4,9 @@ Every boundary in the system, in one place, from the inside out:
 
 - the **slots** algorithms plug into;
 - the **service commands** the product runs;
-- the **API** the web app and scripts call;
-- the **context layer** agents call;
+- the **internal API** the web app calls (`/api/*` and `/ws`);
+- the **outward API** other services and agents call (`/v1` and `/mcp`);
+- the **context layer** agents will call;
 - the **formats** that cross the system's edges: import bundles, the ledger, traces, and config.
 
 The data these exchange is in [data-model.md](data-model.md).
@@ -80,7 +81,10 @@ The product's commands ([M13](modules/M13-services.md)). Each one runs under the
 
 ## REST and the stream
 
-The FastAPI app ([M14](modules/M14-interfaces.md)) serves `/api/*`, `/ws`, `/login`, and the static front end.
+The FastAPI app ([M14](modules/M14-interfaces.md)) serves `/api/*`, `/ws`, `/login`, and the static front end: the
+demo's internal API, behind the sign-in. Other services and agents use the outward API instead, REST under
+`/v1/world-models/{id}` and MCP at `/mcp`. Its design is [api.md](api.md), its contract
+[../api/openapi.yaml](../api/openapi.yaml), and its reference [../api/README.md](../api/README.md).
 
 | Group | Routes (abridged) |
 |---|---|
@@ -102,6 +106,8 @@ The front end renders views and applies trace payloads; it never computes model 
 ## Context layer (planned)
 
 Six verbs over MCP and REST ([M15](modules/M15-context-layer.md)). Reads are free; writes are only ever proposals.
+Today agents reach the model through the outward API's v1 routes and MCP tools ([../api/README.md](../api/README.md)),
+which already keep this rule; the verbs below are the planned layer on top.
 
 | Verb | Returns |
 |---|---|

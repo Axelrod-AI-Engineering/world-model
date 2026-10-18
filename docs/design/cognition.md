@@ -30,7 +30,7 @@ Why the world model organizes memory the way a cognitive architecture does, inst
 | F11 | An open world | Closed-world entity linking (top-1) | Hedge vague mentions across candidates plus an open share; commit at a bound | "A US carrier" stays uncertain until evidence settles it; no false precision | Built (counts) |
 | F12 | Local, incremental revision, judged by a person | Re-extract and overwrite in batch | Each event revises a staged copy; a person judges the consequences, ripple included | Every change is small, inspectable, and reversible | Built |
 
-**Status:** *Built* means in the code. *Partial* means a simpler version is built. *Planned* means designed, with the slot ready ([ml-roadmap](../ml-roadmap.md) R5, R18, R2).
+**Status:** *Built* means in the code. *Partial* means a simpler version is built. *Planned* means designed, with the slot ready ([ml-roadmap](../ml/roadmap.md) R5, R18, R2).
 
 ## The difference in one picture
 
@@ -138,7 +138,7 @@ The standard stack answers "which text is like this text". The world model answe
 
 ## Where standard tools still fit
 
-- **Text in, text out.** Text embeddings and language models are right for text: a vague mention's wording, an article's spans, and search over headlines. A language model translates an article into operations, held to the operation schema. It never computes an effect or a forecast. Each such step uses the smallest model that does the job, with a large LLM as the logged fallback ([ml-stack.md, Small models first](../ml-stack.md#small-models-first)).
+- **Text in, text out.** Text embeddings and language models are right for text: a vague mention's wording, an article's spans, and search over headlines. A language model translates an article into operations, held to the operation schema. It never computes an effect or a forecast. Each such step uses the smallest model that does the job, with a large LLM as the logged fallback ([../ml/stack.md, Small models first](../ml/stack.md#small-models-first)).
 - **Find.** The `find` view is a semantic filter for people navigating the canvas. It is a navigation aid, not the model's memory.
 - **An upstream research memory.** Cognee, or a plain vector store, can hold the documents a research agent reads ([frameworks.md](frameworks.md#recommendation)). What reaches the world model is a reviewed import, sorted into the trees above.
 

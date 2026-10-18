@@ -20,7 +20,7 @@
 
 ## Purpose
 
-The browser app. It renders the server's views and replays trace events, and it **never computes model results**. There is no build step: plain HTML, CSS, and ES modules, with d3 v7 vendored. The user guide is [../../interface.md](../../interface.md).
+The browser app. It renders the server's views and replays trace events, and it **never computes model results**. There is no build step: plain HTML, CSS, and ES modules, with d3 v7 vendored. The user guide is [../../guides/gui.md](../../guides/gui.md).
 
 ## Owns
 

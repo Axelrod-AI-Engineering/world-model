@@ -1,10 +1,14 @@
 # The ML stack: a formal specification (as built)
 
-This page states, in mathematical terms, what the code computes today: every model, update, test, and constant, with the file that implements it. It describes the implementation, not the intent. Where the implementation is a heuristic, or where it is unsound, the page says so; [ml-roadmap.md](ml-roadmap.md) proposes what replaces it. Paths are relative to `src/axelrod_wm/`. Two sections are plans rather than descriptions: [Small models first](#small-models-first), on which model each step should use, and [§14](#14-fine-tuning-to-own-the-structure), on fine-tuning models on the structure we own.
+This page states, in mathematical terms, what the code computes today: every model, update, test, and constant, with the file that implements it. It describes the implementation, not the intent. Where the implementation is a heuristic, or where it is unsound, the page says so; [roadmap.md](roadmap.md) proposes what replaces it. Paths are relative to `src/axelrod_wm/`. Two sections are plans rather than descriptions: [Small models first](#small-models-first), on which model each step should use, and [§14](#14-fine-tuning-to-own-the-structure), on fine-tuning models on the structure we own.
 
 <!-- toc -->
 **Contents**
 
+- [Small models first](#small-models-first)
+  - [Decision models (Jev-type)](#decision-models-jev-type)
+  - [Step by step](#step-by-step)
+  - [Why](#why)
 - [1. Objects and notation](#1-objects-and-notation)
 - [2. An interaction](#2-an-interaction)
 - [3. The state-space model of working memory](#3-the-state-space-model-of-working-memory)
@@ -28,6 +32,14 @@ This page states, in mathematical terms, what the code computes today: every mod
 - [13. Adversarial review](#13-adversarial-review)
   - [What changed on this page](#what-changed-on-this-page)
   - [What the review found wrong with the model](#what-the-review-found-wrong-with-the-model)
+- [14. Fine-tuning to own the structure](#14-fine-tuning-to-own-the-structure)
+  - [What we own that no general model has](#what-we-own-that-no-general-model-has)
+  - [Phases](#phases)
+  - [P0 · Collect and version the datasets](#p0--collect-and-version-the-datasets)
+  - [P1 · Our own decision models](#p1--our-own-decision-models)
+  - [P2 · A small model that emits our schema](#p2--a-small-model-that-emits-our-schema)
+  - [P3 · A JEPA-style predictor of world-model state](#p3--a-jepa-style-predictor-of-world-model-state)
+  - [How a model is swapped in](#how-a-model-is-swapped-in)
 <!-- /toc -->
 
 This page went through an adversarial review on fidelity, statistics, and finance (§13). Its corrections are folded in; the review's verdict, summarized there, is that **the forecasting core is a defensible linear-Gaussian design, but the stack is not yet sound for its stated purpose**: its evaluation is circular, two learners partly confirm themselves, several components count the same data more than once, and the design has no layer for what markets have already priced in.
@@ -42,7 +54,7 @@ This page went through an adversarial review on fidelity, statistics, and financ
 
 1. **Rules and templates**: regular expressions, lookup tables, the operation schema.
 2. **Classical ML** over features the model already holds: logistic regression, gradient-boosted trees, conditional random fields (CRFs).
-3. **Small embedders** (sentence-transformer class, about 100M parameters), with nearest-neighbour lookup or by sorting down a Cobweb concept tree ([cognition.md F3](design/cognition.md#in-one-table)).
+3. **Small embedders** (sentence-transformer class, about 100M parameters), with nearest-neighbour lookup or by sorting down a Cobweb concept tree ([cognition.md F3](../design/cognition.md#in-one-table)).
 4. **Small finetuned classifiers, taggers, and rankers** (encoders of 100–400M parameters).
 5. **Decision models** (Jev-type, "System One"; [below](#decision-models-jev-type)): state in, typed decisions with calibrated probabilities out, in one pass and with no free text. Our own, finetuned on the ledger, or a hosted one such as TypeSafe's Jev where a client allows it.
 6. **A large LLM**, only for the long tail, as the last entry of a fallback chain.
@@ -119,12 +131,12 @@ Jev is trained by *reinforcement learning for calibrated decisions* (RLCD), whic
 | **Find** | Lexical: stemming, a hand-written synonym table, concepts and their ancestors, filters (`api/find.py`) | Hybrid: BM25 plus a small embedder over names, aliases, and descriptions, grouped by concept-tree node | Aliases and concepts today; logged queries and the hits opened (planned: find does not log) | Lexical |
 | **Brief writing** | Templates over the forecast, its explanation, the folds, and the deviations (`api/brief.py`); no language model | Stays templated. Optionally a small instruction model (≤ 8B) rewrites the prose only, under a check that every number and name it writes appears in the template's facts. | Reader notes on briefs (`ANNOTATION` ledger entries) | The template text |
 | **Agent-context export** | Deterministic mapping into a client's format (`context/v4.py`) | No model. A new client format is a new mapping, written and reviewed once. | None needed | None |
-| **Review confidence and auto-apply** | `DefaultReviewPolicy` rules: structure, deletions, text translations, large reweightings, and confidence below 0.8 go to a person (`repo/review.py`). Confidence is fixed per translator (template 0.6, data feed 1.0) or is the agent's own. | A decision model's Noul, "would a reviewer keep this operation unchanged?", recalibrated by isotonic regression (gradient-boosted trees as the baseline). It orders the queue and preselects operations in staging. It does not widen what applies without review; that stays a policy decision ([decisions.md](design/decisions.md)). | `REVIEW_DECISION` ledger entries; per-operation keep and confidence from staging; edits | The rules |
+| **Review confidence and auto-apply** | `DefaultReviewPolicy` rules: structure, deletions, text translations, large reweightings, and confidence below 0.8 go to a person (`repo/review.py`). Confidence is fixed per translator (template 0.6, data feed 1.0) or is the agent's own. | A decision model's Noul, "would a reviewer keep this operation unchanged?", recalibrated by isotonic regression (gradient-boosted trees as the baseline). It orders the queue and preselects operations in staging. It does not widen what applies without review; that stays a policy decision ([decisions.md](../design/decisions.md)). | `REVIEW_DECISION` ledger entries; per-operation keep and confidence from staging; edits | The rules |
 
 ### Why
 
 - **Client data stays on the client's premises.** Models of 100M–8B parameters run on a CPU or one GPU inside the client's environment, so articles, positions, and research never go to a third-party API.
-- **Determinism and replay.** Fixed weights with greedy or constrained decoding give the same output for the same input, so a version still reproduces from (seed, version) ([design invariant 5](design/README.md#invariants)), and an ablation compares like with like.
+- **Determinism and replay.** Fixed weights with greedy or constrained decoding give the same output for the same input, so a version still reproduces from (seed, version) ([data-model invariant 5](../design/data-model.md#invariants)), and an ablation compares like with like.
 - **Auditability.** A tagger's spans and a classifier's features explain each operation in the review; a fallback call is marked as one in the ledger.
 - **Cost per import item.** A classical or small-encoder step costs microseconds to milliseconds on a CPU; a large-LLM call costs orders of magnitude more per item. With the LLM only on the tail, the cost of a 50-name daily feed is set by the tail's share, which the logged fallbacks drive down.
 - **Owned structure.** Models trained on our ids and our reviewers' decisions encode the graph's schema, which a general model has to be told in every prompt (§14).
@@ -588,7 +600,7 @@ Each finding has a roadmap item.
 
 ## 14. Fine-tuning to own the structure
 
-*A plan; nothing in this section is built.* It sequences as R20 in [ml-roadmap.md](ml-roadmap.md#r20-small-models-first-and-fine-tuning-to-own-the-structure).
+*A plan; nothing in this section is built.* It sequences as R20 in [roadmap.md](roadmap.md#r20-small-models-first-and-fine-tuning-to-own-the-structure).
 
 ### What we own that no general model has
 
@@ -664,7 +676,7 @@ The open counterpart of a hosted System One model, trained on structure only we 
 
 ### How a model is swapped in
 
-Every phase lands behind a slot, chosen by config, so it can be compared by ablation on the same history and seed ([cognition.md](design/cognition.md#how-to-test-the-claim)):
+Every phase lands behind a slot, chosen by config, so it can be compared by ablation on the same history and seed ([cognition.md](../design/cognition.md#how-to-test-the-claim)):
 
 ```yaml
 translators:

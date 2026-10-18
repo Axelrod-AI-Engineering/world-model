@@ -93,7 +93,7 @@ Every write takes this path. It is modeled on Semantica's decision lifecycle.
 
 ![The hosted deployment](diagrams/deployment.svg)
 
-The table of components is on the [design front page](README.md#10-infrastructure); operations are in [../deployment.md](../deployment.md).
+The table of components is on the [design front page](README.md#10-infrastructure); operations are in [../guides/deployment.md](../guides/deployment.md).
 
 ## Detail diagrams
 

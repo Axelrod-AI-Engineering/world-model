@@ -38,10 +38,10 @@ Neither computes model results, and neither holds business logic.
 
 **API.** Routes are grouped one file per group: state, entities, proposals, theses, updates, structure, examples, import, repo, trace, and context (new). They are adapters over services and views.
 - `/ws` replays traces since `since_seq`, then streams them live.
-- **Auth:** an HMAC session cookie; `/api/health` is open; there is one engine per login ([../../deployment.md](../../deployment.md)).
+- **Auth:** an HMAC session cookie; `/api/health` is open; there is one engine per login ([../../guides/deployment.md](../../guides/deployment.md)).
 - **New `Session` protocol:** services, views, tracer, lock, and `capabilities` (examples, import, scripted_story). It replaces today's `hasattr(runner, …)` probes.
 
-**CLI.** The commands are in [../../cli.md](../../cli.md). New: `axelrod mcp`, which serves the context layer.
+**CLI.** The commands are in [../../guides/cli.md](../../guides/cli.md). New: `axelrod mcp`, which serves the context layer.
 
 ## Depends on
 
@@ -52,7 +52,7 @@ Neither computes model results, and neither holds business logic.
 - **Views are pure.** They never write, never emit a trace, and never call a slot.
 - **Routes are adapters,** each under about 15 lines.
 - **Work runs off the event loop**, under the session lock.
-- **Canonical terms in every label** ([glossary](../glossary.md)).
+- **Canonical terms in every label** ([glossary](../../vocab.md)).
 
 ## Done when
 

@@ -1,6 +1,8 @@
 # Decisions
 
-One row per decision. To change a decision, add a new row and mark the old one *Superseded by D-nn*; don't edit it.
+The architecture's decisions, one row each. To change a decision, add a new row and mark the old one *Superseded by
+D-nn*; don't edit it. Two other logs sit with what they govern: the API's in [api.md §9](api.md#9-decisions), and
+business construction's in [specificity.md, Decisions](specificity.md#decisions).
 
 <!-- toc -->
 <!-- /toc -->
@@ -22,9 +24,9 @@ One row per decision. To change a decision, add a new row and mark the old one *
 | D-08 | Read releases as surprises against expectation nodes | Releases read as levels (today, F-C1) | Prices move on surprises (pricing in) | Planned (R13) |
 | D-09 | Scenario weights by leave-future-out stacking | support × in-sample fit × track × p (today) | In-sample fit flatters itself (S-M5) | Planned (R7) |
 | D-10 | Score against raw observations or the true state | Scores against filtered values (today, S-C1) | Today's scores are circular | Planned (R0, first) |
-| D-11 | Learning has five stages; inference has six (from `flows/`, under test) | literature §3.2 (five other steps), §3.3 (seven), §5.5 (four) | One source of truth | Accepted |
+| D-11 | Learning has five stages; inference has six (from `flows/`, under test) | literature §3.2 (five other steps), §3.3 (seven), §5.5 (four) | One source of truth | Accepted; inference's count superseded by D-17 |
 | D-12 | Nothing is deleted. Retire by review; corrections carry `superseded_by`. | Cognee's `forget`; newest-wins resolution | The ledger is the audit trail, and a newer claim is not automatically truer | Proposed |
-| D-13 | Agents write only by proposal | Agents writing facts directly | Vetted learning (D-03) | Proposed |
+| D-13 | Agents write only by proposal | Agents writing facts directly | Vetted learning (D-03) | Accepted (v1: decisions are human-only) |
 | D-14 | Bind a mention only when it is named; otherwise hedge it, plus an open share | Score and margin binding (plan §7.5; `bind_score` is now unread) | No false precision ([cognition.md F11](cognition.md#f11--an-open-world)) | Accepted |
 | D-15 | Learn is internal; Predict is external, opens blank, and shows only what a forecast reaches | One view for everyone | Clients see their answer and its causal story, not the whole internal graph | Accepted |
 | D-16 | Organize memory as a cognitive architecture (F1–F12), each framing behind a slot and tested by ablation | Chunks, embeddings, a vector index, and top-k recall | A forecast needs concepts, schemas, analogs, and known unknowns, not similar text ([cognition.md](cognition.md)) | Proposed |

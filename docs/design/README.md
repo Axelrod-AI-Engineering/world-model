@@ -48,7 +48,7 @@ General AI assistants don't solve this. They have no persistent, quantitative mo
 | Learning from vetted news, data releases, research bundles, and analysts' own knowledge | Learning anything unreviewed; live market data feeds | Vintage-aware data feeds, still reviewed |
 | What-if forecasts by name, sector, and superentity, with orders and transmission paths | Trading signals, execution, portfolio optimization, intraday or high-frequency use | Decision support tied to the PM's positions |
 | Version control: staged review, the ledger, restore any version | Editing history (it is append-only) | Point-in-time queries (bitemporal) |
-| A hosted demo per login; synthetic data | Client data in the repository | A context layer for agents (MCP) |
+| A hosted demo per login; synthetic data; an outward API (REST `/v1` and MCP) for other services and agents | Client data in the repository | The context layer's verbs for agents ([M15](modules/M15-context-layer.md)) |
 
 ## 4. Design principles
 
@@ -90,7 +90,7 @@ Events from the world are read into the model; a person reviews every change; th
 | **Working memory · long-term memory** | The world now · what generalizes (concepts, Entity memories, the correlation frontier, superentity patterns, episodes) |
 | **Graph update event · thesis** | What an article is read into (learned from, after review) · a what-if question (asked, never learned from) |
 
-The full data model is in [data-model.md](data-model.md), and every term is in [glossary.md](glossary.md).
+The full data model is in [data-model.md](data-model.md), and every term is in [../vocab.md](../vocab.md).
 
 ## 8. Dependency graph
 
@@ -127,11 +127,11 @@ There are 17 modules in six layers. Every arrow points up, to what a module depe
 | Storage | Ledger (JSONL) and gzip snapshots on a volume (`var/`) | Append-only columnar tables |
 | Front end | Static HTML, CSS, and ES modules; d3 v7; no build step | Same |
 | Hosting | Railway, one replica, Dockerfile, IaC in `.railway/railway.ts`; a push to `main` is a release | More replicas, by login |
-| Auth | Sign-in page, HMAC session cookie, logins per scenario | Accounts and roles |
+| Auth | Sign-in page, HMAC session cookie, logins per scenario; for `/v1` and `/mcp`, core-minted service tokens and scoped keys ([core-mcp-auth.md](core-mcp-auth.md)) | Accounts and roles |
 | Tests and checks | pytest (unit, integration, scenario, UI), ruff; GitHub Actions on pull requests | Same, plus nightly backtests |
 | Docs tooling | `axelrod flows --svg` (the README picture), `scripts/docs/diagrams.py` (these diagrams), `scripts/docs/toc.py` (contents) | Same |
 
-The deployment is drawn in [../deployment.md](../deployment.md).
+The deployment is drawn in [../guides/deployment.md](../guides/deployment.md).
 
 ## 11. Data model and interfaces
 
@@ -140,6 +140,11 @@ The deployment is drawn in [../deployment.md](../deployment.md).
   - **Slots:** the swappable algorithms, with their signatures.
   - **Service commands, REST and `/ws`, context-layer verbs.**
   - **The import bundle, the ledger, and the trace format.**
+- [api.md](api.md): the outward API's design (domain model, conventions, routes, decisions), with its contract
+  ([../api/openapi.yaml](../api/openapi.yaml)) and reference ([../api/README.md](../api/README.md)).
+- [core-mcp-auth.md](core-mcp-auth.md): how core's MCP server and other callers authenticate to it.
+- [specificity.md](specificity.md): the rules a model must meet to be specific enough (R1–R16), and where each is
+  enforced.
 
 ## 12. Modules
 
@@ -170,6 +175,7 @@ The deployment is drawn in [../deployment.md](../deployment.md).
 | The processes, drawn | [architecture.md](architecture.md) |
 | Why memory works like a mind, not a search index | [cognition.md](cognition.md) |
 | Why not just use Cognee or Semantica | [frameworks.md](frameworks.md) |
-| Why a choice was made | [decisions.md](decisions.md) |
+| Why a choice was made | [decisions.md](decisions.md) (architecture), [api.md §9](api.md#9-decisions) (the API), [specificity.md](specificity.md#decisions) (business construction) |
 | What to code next | [migration.md](migration.md) |
-| The math | [../ml-stack.md](../ml-stack.md) and [../ml-roadmap.md](../ml-roadmap.md) |
+| The math | [../ml/stack.md](../ml/stack.md) and [../ml/roadmap.md](../ml/roadmap.md) |
+| A term | [../vocab.md](../vocab.md) |

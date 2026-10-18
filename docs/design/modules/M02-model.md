@@ -17,7 +17,7 @@
 
 ## Purpose
 
-The data model: pure pydantic types with indexes and no inference. Everything the system knows is one of these types, and everything it writes is a change to one of them. Terms follow the [glossary](../glossary.md).
+The data model: pure pydantic types with indexes and no inference. Everything the system knows is one of these types, and everything it writes is a change to one of them. Terms follow the [glossary](../../vocab.md).
 
 ## Owns
 
@@ -36,7 +36,7 @@ The data model: pure pydantic types with indexes and no inference. Everything th
 | `Thesis` | question, mode, event (hypothetical), horizon_days (182), targets, target_groups, posed_by, pinned |
 | Records | `Evidence`, `Explanation`, `Forecast` (based_on_version, seed, config_hash, scenarios, densities, paths), `ForecastScenario` |
 
-The data model as a diagram: [architecture.md §7](../data-model.md).
+The data model as a diagram: [../data-model.md §7](../data-model.md).
 
 ## Additions this design makes
 
