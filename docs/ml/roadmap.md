@@ -1,6 +1,6 @@
 # The ML roadmap: from heuristics to methods we can defend
 
-[ml-stack.md](ml-stack.md) states what the code computes today and what an adversarial review found wrong with it (§13 there). This page is the plan: for each problem, the method that replaces it, why it is sound, what it assumes, and the test that says it works. It was revised after the same review, which corrected several of its first claims; those corrections are noted where they apply. Nothing here is in the front end yet.
+[stack.md](stack.md) states what the code computes today and what an adversarial review found wrong with it (§13 there). This page is the plan: for each problem, the method that replaces it, why it is sound, what it assumes, and the test that says it works. It was revised after the same review, which corrected several of its first claims; those corrections are noted where they apply. Nothing here is in the front end yet.
 
 <!-- toc -->
 **Contents**
@@ -11,6 +11,7 @@
 - [Phase 2: discovery with error control](#phase-2-discovery-with-error-control)
 - [Phase 3: one model, with honest uncertainty](#phase-3-one-model-with-honest-uncertainty)
 - [Phase 4: structure and inference](#phase-4-structure-and-inference)
+- [A parallel track: small models and owned structure](#a-parallel-track-small-models-and-owned-structure)
 - [Phases](#phases)
 - [How this was reviewed](#how-this-was-reviewed)
 <!-- /toc -->
@@ -308,7 +309,7 @@ Review findings F-M2, F-M3, and F-M5 are about the demo world's economics rather
 
 **Problem.** The only language model in the code is a stub (`translator: llm`). Text is read by fixtures and regular expressions, which cover only what someone wrote a rule for. Filling the gap with a large LLM on every call would put client text on a third party's servers, make readings non-deterministic, and cost per item what a small model costs per thousand. It would also leave our structure in prompts rather than in models we own.
 
-**Method.** [ml-stack.md, Small models first](ml-stack.md#small-models-first) assigns each step its smallest adequate model, with a large LLM last and logged; [ml-stack.md §14](ml-stack.md#14-fine-tuning-to-own-the-structure) gives the fine-tuning plan. Its milestones, in order:
+**Method.** [stack.md, Small models first](stack.md#small-models-first) assigns each step its smallest adequate model, with a large LLM last and logged; [stack.md §14](stack.md#14-fine-tuning-to-own-the-structure) gives the fine-tuning plan. Its milestones, in order:
 
 | Milestone | Delivers | Needs first | Done when |
 |---|---|---|---|
@@ -335,12 +336,12 @@ Review findings F-M2, F-M3, and F-M5 are about the demo world's economics rather
 
 ## How this was reviewed
 
-Three adversarial reviewers, each an independent agent, read [ml-stack.md](ml-stack.md), this page, and the code, with instructions to break them:
+Three adversarial reviewers, each an independent agent, read [stack.md](stack.md), this page, and the code, with instructions to break them:
 1. **Fidelity**: does every formula and constant match the code?
 2. **Statistics**: are the methods and these proposals sound, and are their claims and citations right?
 3. **Finance**: are the assumptions grounded in how markets and economic data behave, and would a practitioner trust the outputs?
 
-Their findings are in [ml-stack.md §13](ml-stack.md#13-adversarial-review).
+Their findings are in [stack.md §13](stack.md#13-adversarial-review).
 
 The statistics reviewer corrected six of this page's first claims; the corrections are marked in R1, R2, R4, R7, R8, and R12. The other citations, both reviewers confirmed, are correct:
 - Granger and Newbold, 1974;

@@ -12,7 +12,7 @@ One file per module, 17 in all. Each can be handed to an engineer or a coding ag
 - **Depends on:** the only modules it may import.
 - **Diagrams:** the module's own flowcharts, sequences, and lifecycles.
 - **Invariants:** what must always hold; a test checks each one.
-- **Planned:** known issues and their fixes, citing [ml-stack](../../ml-stack.md) findings (S-, F-) and [ml-roadmap](../../ml-roadmap.md) items (R#).
+- **Planned:** known issues and their fixes, citing [ml-stack](../../ml/stack.md) findings (S-, F-) and [ml-roadmap](../../ml/roadmap.md) items (R#).
 - **Done when:** the tests that define the module as built.
 
 The module list, by layer, is on the [design front page](../README.md#12-modules).

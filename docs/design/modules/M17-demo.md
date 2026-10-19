@@ -15,7 +15,7 @@
 
 ## Purpose
 
-The demos and their synthetic world. The user guide is [../../demos.md](../../demos.md).
+The demos and their synthetic world. The user guide is [../../guides/demos.md](../../guides/demos.md).
 - **Small:** a blank canvas, built by 24 examples.
 - **Production:** the same examples in the oil-shock world.
 - **Full:** 53 actors and ideas, 18 scripted steps.

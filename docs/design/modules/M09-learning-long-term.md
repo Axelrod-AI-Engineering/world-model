@@ -84,7 +84,7 @@ A superentity's lifecycle:
 - S-C2: induction confirms itself → R2.
 - S-M6: the frontier has no valid inference → R2.
 - Analog over-counting → R18.
-- A JEPA-style state encoder (planned slot `state_encoder`) may order the frontier's candidates and recall analogs; it never decides a promotion → R20.4 ([ml-stack.md §14](../../ml-stack.md#14-fine-tuning-to-own-the-structure)).
+- A JEPA-style state encoder (planned slot `state_encoder`) may order the frontier's candidates and recall analogs; it never decides a promotion → R20.4 ([../../ml/stack.md §14](../../ml/stack.md#14-fine-tuning-to-own-the-structure)).
 
 ## Done when
 

@@ -142,7 +142,7 @@ Each task lists: **Do**, the change; **Keep**, what must not change; **Test**, h
 
 ### Methods (parallel track)
 
-The method upgrades are independent of the moves above, because each lands behind its slot: R0, R18, R3, R13, R14, R15, R16, R10, R2, R11, R1, R17, R4, R6, R9, R5, R7, R8, R12, R19. [../ml-roadmap.md](../ml-roadmap.md) orders them in phases 0–4, and the reviewers' first fixes are in [../ml-stack.md](../ml-stack.md) (end of §13). Start with **R0** (score against raw observations): every later method is judged by the evaluation.
+The method upgrades are independent of the moves above, because each lands behind its slot: R0, R18, R3, R13, R14, R15, R16, R10, R2, R11, R1, R17, R4, R6, R9, R5, R7, R8, R12, R19. [../ml/roadmap.md](../ml/roadmap.md) orders them in phases 0–4, and the reviewers' first fixes are in [../ml/stack.md](../ml/stack.md) (end of §13). Start with **R0** (score against raw observations): every later method is judged by the evaluation.
 
 ## How to hand a task to a coding agent
 

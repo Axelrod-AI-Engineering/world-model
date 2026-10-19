@@ -1,6 +1,6 @@
 # M15 · Context layer
 
-**Layer** 5 · **Package** `context/` · **Status** new. Pieces exist: `find`, briefs, the ledger, the import bundle, and the v4 export (`context/v4.py`).
+**Layer** 5 · **Package** `context/` · **Status** new. Pieces exist: `find`, briefs, the ledger, the import bundle, the v4 export (`context/v4.py`), and the outward API's v1 routes and MCP tools (`api/v1/`, `api/mcp.py`; [reference](../../api/README.md)).
 
 <!-- toc -->
 **Contents**
@@ -40,12 +40,18 @@ There is no `forget`. Retiring an item is a reviewed proposal, and history stays
 
 ### Export in a client's own format (Oct 15)
 
-Some clients' agents already load a world model of their own before they reason. `context/v4.py` exports ours in the v4.1.4 format one client's agents read: a numbered 03x domain pack loaded after their 000, 010, and 020, a registry entry for their 020, and evidence packs for the current state and each forecast, with a manifest of their load order, so the agents take our model as their context layer without changing. Their core contract files are named, never copied. The export adds what their schema lacks under an `axelrod` key on each edge: effect size, existence probability, timing, and evidence count. It grounds the agent and never concludes: no ratings, no sizing. `GET /api/context/v4[?forecast=<id>]`; the Agent context dialog shows it beside the card it fills ([demos.md](../../demos.md#sallys-demo)).
+Some clients' agents already load a world model of their own before they reason. `context/v4.py` exports ours in the v4.1.4 format one client's agents read: a numbered 03x domain pack loaded after their 000, 010, and 020, a registry entry for their 020, and evidence packs for the current state and each forecast, with a manifest of their load order, so the agents take our model as their context layer without changing. Their core contract files are named, never copied. The export adds what their schema lacks under an `axelrod` key on each edge: effect size, existence probability, timing, and evidence count. It grounds the agent and never concludes: no ratings, no sizing. `GET /api/context/v4[?forecast=<id>]`; the Agent context dialog shows it beside the card it fills ([demos.md](../../guides/demos.md#sallys-demo)).
 
 ```python
 context_pack(wm, ltm, *, scenario_id, title, book, version, state_hash, forecast=None, explanation=None, pack_cfg=None) -> dict
 # {"manifest", "domain_pack", "registry_entry", "evidence", "forecast"?}; pack_cfg from scenario.yaml context_pack
 ```
+
+### The service, built (Oct 17)
+
+The verbs are served now, over REST (`/v1/world-models/{id}/*`, [api/openapi.yaml](../../api/openapi.yaml)) and MCP (`/mcp`, 27 tools), with a service token or a scoped key per caller ([../../api/](../../api/README.md)). Read: `state`, `query` (pinned by `version` or `as_of`, Erid-compatible nodes and edges), `entities` and their `attributes`, `taxonomy`, `search` (RAG over ingested documents, below). Propose: upload files (`documents`) or bundles, then `import` them for review. Review: `proposals` approve and reject. Ask: `forecasts` and their briefs. Every answer names its state (`version`, `state_hash`). Code: `api/service.py`, `api/mcp.py`, `api/keys.py`. `recall` is `query` plus `search`; `trace` and `feedback` are not yet served.
+
+Retrieval is the lakehouse's search (`lake/search.py`): keyword (BM25), prefix, semantic (bge-small), graph (named nodes, their neighbours, the chunks that mention them), and hybrid (reciprocal-rank fusion). See [ingestion.md](../../guides/ingestion.md#search).
 
 ## Interface
 
@@ -64,7 +70,7 @@ Each MCP tool is one verb, and its schema is generated from these types.
 **Slot:** `context_retriever`.
 - **Default:** `find_plus_neighborhood`.
 - **Planned:** `concept_tree` (F3), and `cognee_adapter`, which also recalls across an upstream research memory.
-- **Models behind the verbs:** small embedders, classifiers, and decision models (typed, calibrated answers, Jev-type) first, a large LLM only as a logged fallback; the v4 export stays a deterministic mapping. See [ml-stack.md, Small models first](../../ml-stack.md#small-models-first).
+- **Models behind the verbs:** small embedders, classifiers, and decision models (typed, calibrated answers, Jev-type) first, a large LLM only as a logged fallback; the v4 export stays a deterministic mapping. See [../../ml/stack.md, Small models first](../../ml/stack.md#small-models-first).
 
 ## Depends on
 
