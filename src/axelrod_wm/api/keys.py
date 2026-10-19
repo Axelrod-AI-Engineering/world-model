@@ -1,10 +1,13 @@
-"""API keys for the outward service (Oct 17): how other services (MCP tools, the LLM harness, core) call the world model.
+"""Static scoped keys for the outward service (Oct 18; docs/design/core-mcp-auth.md): how non-core callers (the LLM
+harness, scripts, our own /mcp) call the world model.
 
-WORLD_MODEL_API_KEYS holds comma-separated `caller:key:login` entries. A request with `Authorization: Bearer <key>`
-is that caller, acting as that login: it reaches that login's engine and that login's partition of the lakehouse
-(its tenant), never another's. A key opens only the service's paths (/api/world-model/... and /mcp), never the
-pages or the UI's API. Keys live in the environment (Railway), never in the repository; each is at least 24
-characters, and every key is compared on every check, so the time taken does not say which matched.
+WORLD_MODEL_API_KEYS holds comma-separated `caller:key:org[:scope+scope…]` entries. A request with
+`Authorization: Bearer <key>` is that caller (a service, never a person) acting in that organization: it reaches that
+organization's world models and documents, never another's. With no scopes listed, a key may read and propose
+(`read documents:write changes:write simulations:write`); `admin` may be added; `changes:review` is refused, so a key
+can never approve a change. A caller may hold two keys at once, so a key rotates by overlap. A key opens only the
+service's paths (/v1/... and /mcp). Keys live in the environment (Railway), never in the repository; each is at least
+24 characters, and every key is compared on every check, so the time taken does not say which matched.
 """
 
 from __future__ import annotations
@@ -13,15 +16,19 @@ import os
 import secrets
 from dataclasses import dataclass
 
-SERVICE_PREFIXES = ("/api/world-model", "/mcp")
+from axelrod_wm.api.tokens import PROPOSE, REVIEW, SCOPES
+
+SERVICE_PREFIXES = ("/v1", "/mcp")
 MIN_KEY = 24
+MAX_KEYS_PER_CALLER = 2
 
 
 @dataclass(frozen=True)
 class ApiKey:
     caller: str
     key: str
-    login: str
+    org: str
+    scopes: frozenset[str] = PROPOSE
 
 
 def api_keys(raw: str | None = None) -> list[ApiKey]:
@@ -30,15 +37,26 @@ def api_keys(raw: str | None = None) -> list[ApiKey]:
     for entry in (e.strip() for e in raw.split(",")):
         if not entry:
             continue
-        parts = entry.split(":")
-        if len(parts) != 3 or not parts[0] or not parts[1]:
-            raise RuntimeError("WORLD_MODEL_API_KEYS entries are caller:key:login")
+        parts = entry.split(":", 3)            # scopes hold colons (documents:write)
+        if len(parts) not in (3, 4) or not all(parts[:3]):
+            raise RuntimeError("WORLD_MODEL_API_KEYS entries are caller:key:org[:scope+scope]")
         if len(parts[1]) < MIN_KEY:
             raise RuntimeError(f"API key for {parts[0]} is shorter than {MIN_KEY} characters")
-        out.append(ApiKey(*parts))
-    callers = [k.caller for k in out]
-    if len(set(callers)) != len(callers):
-        raise RuntimeError("WORLD_MODEL_API_KEYS names a caller twice")
+        scopes = frozenset(s for s in parts[3].split("+") if s) if len(parts) == 4 else PROPOSE
+        unknown = sorted(scopes - set(SCOPES))
+        if unknown or not scopes:
+            raise RuntimeError(f"API key for {parts[0]} names unknown scopes: {', '.join(unknown) or '(none)'}")
+        if REVIEW in scopes:
+            raise RuntimeError(f"API key for {parts[0]} asks for {REVIEW}: only a person may approve a change")
+        out.append(ApiKey(parts[0], parts[1], parts[2], scopes))
+    for caller in {k.caller for k in out}:
+        mine = [k for k in out if k.caller == caller]
+        if len(mine) > MAX_KEYS_PER_CALLER:
+            raise RuntimeError(f"WORLD_MODEL_API_KEYS names {caller} more than twice (two keys rotate by overlap)")
+        if len({k.org for k in mine}) > 1:
+            raise RuntimeError(f"WORLD_MODEL_API_KEYS gives {caller} two organizations")
+    if len({k.key for k in out}) != len(out):
+        raise RuntimeError("WORLD_MODEL_API_KEYS lists one key twice")
     return out
 
 

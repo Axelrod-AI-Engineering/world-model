@@ -18,9 +18,9 @@ from axelrod_wm.api.app import create_app
 from axelrod_wm.context.construction import construction_view, trace
 from axelrod_wm.model.construction import model_levels, reconcile, reconcile_identities, validate_construction
 from axelrod_wm.repo.snapshots import MemoryBackend
+from tests.scenario import v1_reads as v1
 
 SBK = "softbank_corp"
-B = "/api/world-model"
 OP, PRETAX, NI = "softbank_corp.operating_profit", "softbank_corp.pretax_income", "softbank_corp.net_income"
 BOJ, JGB10 = "boj.policy_rate", "jgbs.yield_10y"
 
@@ -384,7 +384,7 @@ def test_generalization_trace_a_yen_carry_unwind(g):
 
 # -- delivery: export and API ---------------------------------------------------------------------------------------------
 def test_new_objects_reach_the_export(client):
-    pack = client.get(f"{B}/context/v4").json()["domain_pack"]
+    pack = v1.pack(client)
     bridge = {b["composition_id"]: b for b in pack["domain_specific_support_objects"]["financial_bridge"]}
     assert set(COMPOSITIONS) <= set(bridge)
     paths = {p["axelrod"]["path_id"] for p in pack["transmission_paths"] if p.get("path_kind") == "business_construction"}
@@ -399,10 +399,10 @@ def test_new_objects_reach_the_export(client):
 
 def test_new_objects_reach_the_api(client):
     ids = "softbank_corp.mobile_arpu,softbank_corp.consumer_op,softbank_corp.interest_expense,softbank_corp.dividend_per_share"
-    body = client.get(f"{B}/query", params={"node_ids": ids, "depth": 1}).json()
-    got = {v["id"] for v in body["values"]}
+    body = v1.graph(client, ids)
+    got = {a["id"] for e in body["entities"] for a in e["attributes"]}
     assert set(ids.split(",")) <= got and "softbank_corp.consumer_mobile_revenue" in got
-    view = client.get(f"{B}/construction/{SBK}").json()["construction"]
+    view = v1.construction(client, SBK)
     assert {c["id"] for c in view["compositions"]} == set(COMPOSITIONS) and not view["problems"]
-    tr = client.get(f"{B}/construction/{SBK}/trace", params={"start": BOJ}).json()["trace"]
+    tr = v1.trace(client, SBK, BOJ)
     assert tr["reaches_endpoint"]

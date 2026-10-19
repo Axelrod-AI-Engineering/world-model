@@ -45,6 +45,16 @@ def _session_lake(tmp_path_factory):
     mp.undo()
 
 
+@pytest.fixture(autouse=True, scope="module")
+def _module_lake(tmp_path_factory):
+    """A module-scoped app gets a lakehouse of its module's own, so no module sees documents another one uploaded
+    (autouse, so it is set before the module's own fixtures build their apps)."""
+    mp = pytest.MonkeyPatch()
+    mp.setenv("WORLD_MODEL_LAKE_DIR", str(tmp_path_factory.mktemp("module") / "lake"))
+    yield
+    mp.undo()
+
+
 @pytest.fixture(autouse=True)
 def _isolated_lake(tmp_path, monkeypatch):
     """Every test gets its own lakehouse and the hashing embedder (exact, and no model download), and no LLM step."""

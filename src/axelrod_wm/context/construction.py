@@ -88,14 +88,15 @@ def _terms(graph: Any, x: Any, target: str, edge: str) -> list[dict]:
 
 
 def construction_view(graph: Any, entity_id: str) -> dict:
-    """The construction of one company: values (with their view), compositions, named paths, links, and problems."""
+    """The construction of one company: its attributes (with their view), compositions, named paths, links, and
+    problems."""
     if entity_id not in graph.entities:
         raise KeyError(entity_id)
     ent = graph.entities[entity_id]
     own = [graph.subentities[s] for s in ent.subentity_ids if s in graph.subentities]
-    values = [{"id": s.id, "name": s.name, "attribute_kind": s.attribute_kind, **_level(s),
-               "view": s.features.get("view", ""), "basis": s.features.get("basis", ""),
-               "proxy_for": s.features.get("proxy_for", "")} for s in own]
+    attributes = [{"id": s.id, "key": s.id.removeprefix(f"{entity_id}."), "name": s.name, "concept": s.attribute_kind,
+                   **_level(s), "view": s.features.get("view", ""), "basis": s.features.get("basis", ""),
+                   "proxy_for": s.features.get("proxy_for", "")} for s in own]
     comps = [{"id": c.id, "view": c.view, "basis": c.basis, "unit": c.unit, "period": c.period, "additive": c.additive,
               "total": c.total, "members": list(c.members), "residual": c.residual, "eliminations": c.eliminations,
               "note": c.note, "role": composition_role(graph, c.id)}
@@ -125,7 +126,7 @@ def construction_view(graph: Any, entity_id: str) -> dict:
     links = [i for i in graph.active_interactions() if i.source_id in sids or i.target_id in sids]
     mine = [x["id"] for x in [*comps, *paths, *identities, *stock_flows, *matrices]]
     problems = [p for p in validate_construction(graph) if entity_id in p or any(x in p for x in mine)]
-    return {"entity_id": entity_id, "name": ent.name, "values": values, "compositions": comps,
+    return {"entity_id": entity_id, "name": ent.name, "attributes": attributes, "compositions": comps,
             "identities": identities, "stock_flows": stock_flows, "matrices": matrices, "paths": paths,
             "links": {"total": len(links), "calibrated": sum(1 for i in links if i.quantified),
                       "uncalibrated": sum(1 for i in links if not i.quantified),
@@ -201,7 +202,7 @@ def to_markdown(view: dict) -> str:
               f"(represented, size unknown), {lk['accounting']} accounting, {lk['identity']} identity, "
               f"{lk['stock_flow']} stock-flow; {lk['state_dependent']} state-dependent; {lk['with_transition']} carry a "
               "transition.", ""]
-    names = {v["id"]: v["name"] for v in view["values"]}
+    names = {a["id"]: a["name"] for a in view["attributes"]}
     if view["compositions"]:
         lines += ["## Business composition", ""]
         for c in view["compositions"]:

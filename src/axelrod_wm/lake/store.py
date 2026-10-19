@@ -96,13 +96,39 @@ class ImportRecord(_R):
     by: str = ""
 
 
+class WorldModelRecord(_R):
+    """One world model and the organization that owns it (Oct 18: the registry; docs/design/core-mcp-auth.md)."""
+
+    id: str
+    org_id: str
+    name: str
+    created_at: datetime
+
+
+class AuditRecord(_R):
+    """One write to a world model: who (a structured actor), when, what, and the answer's status. Append-only."""
+
+    org: str
+    id: str
+    at: datetime
+    request_id: str
+    world_model_id: str
+    method: str
+    route: str
+    status: int
+    actor: dict[str, Any]
+    scopes: list[str]
+    resource_ids: list[str]
+
+
 class Hit(_R):
     """One search result: a chunk (or an entity, for graph search) with its score and why it matched."""
 
-    kind: str                                 # chunk | entity | value
+    kind: str                                 # chunk | entity | attribute
     doc_id: str | None = None
     ord: int | None = None
-    ref: str | None = None                    # entity or value id, for graph hits
+    ref: str | None = None                    # entity or attribute id, for name and graph hits
+    entity_id: str | None = None              # the entity a name or graph hit is (or belongs to)
     score: float
     text: str
     title: str = ""
@@ -189,6 +215,22 @@ class LakeStore(ABC):
 
     @abstractmethod
     def cache_put(self, key: str, provider: str, model: str, value: dict) -> None: ...
+
+    # -- the world model registry and the audit log (Oct 18) ----------------------------------------------
+    @abstractmethod
+    def register_world_model(self, rec: WorldModelRecord) -> WorldModelRecord:
+        """Record a world model and its owner (the deployment's configuration decides it); one registered before
+        keeps its created_at. Returns the record as stored."""
+
+    @abstractmethod
+    def world_models(self, org_id: str | None = None) -> list[WorldModelRecord]: ...
+
+    @abstractmethod
+    def put_audit(self, rec: AuditRecord) -> None: ...
+
+    @abstractmethod
+    def list_audit(self, org: str, world_model_id: str) -> list[AuditRecord]:
+        """Newest first."""
 
     # -- housekeeping -----------------------------------------------------------------------------------------
     @abstractmethod

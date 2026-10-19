@@ -21,9 +21,9 @@ from axelrod_wm.model.construction import (
     validate_construction,
 )
 from axelrod_wm.repo.snapshots import MemoryBackend
+from tests.scenario import v1_reads as v1
 
 AIB = "aib_group"
-B = "/api/world-model"
 NII, TOI = "aib_group.net_interest_income", "aib_group.total_operating_income"
 PBT, PAT = "aib_group.profit_before_tax", "aib_group.profit_after_tax"
 ECB, BUND = "ecb.policy_rate", "bunds.yield_10y"
@@ -363,7 +363,7 @@ def test_generalization_trace_an_oil_shock(g):
 
 # -- delivery: export and API ---------------------------------------------------------------------------------------------
 def test_new_objects_reach_the_export(client):
-    pack = client.get(f"{B}/context/v4").json()["domain_pack"]
+    pack = v1.pack(client)
     bridge = {b["composition_id"]: b for b in pack["domain_specific_support_objects"]["financial_bridge"]}
     assert set(COMPOSITIONS) <= set(bridge)
     paths = {p["axelrod"]["path_id"] for p in pack["transmission_paths"] if p.get("path_kind") == "business_construction"}
@@ -380,12 +380,12 @@ def test_new_objects_reach_the_export(client):
 
 def test_new_objects_reach_the_api(client):
     ids = "aib_group.deposit_cost,aib_group.structural_hedge_income,aib_group.cet1_capital,aib_group.total_operating_income"
-    body = client.get(f"{B}/query", params={"node_ids": ids, "depth": 1}).json()
-    got = {v["id"] for v in body["values"]}
+    body = v1.graph(client, ids)
+    got = {a["id"] for e in body["entities"] for a in e["attributes"]}
     assert set(ids.split(",")) <= got and "aib_group.deposit_interest_expense" in got
-    view = client.get(f"{B}/construction/{AIB}").json()["construction"]
+    view = v1.construction(client, AIB)
     assert {c["id"] for c in view["compositions"]} == set(COMPOSITIONS) and not view["problems"]
-    tr = client.get(f"{B}/construction/{AIB}/trace", params={"start": ECB}).json()["trace"]
+    tr = v1.trace(client, AIB, ECB)
     assert tr["reaches_endpoint"]
 
 
@@ -393,9 +393,7 @@ def test_an_ecb_cut_reports_its_calculation_coverage(client):
     """An ECB cut: NII moves only through the reduced form (a summary link); the ECB entries are excluded as
     uncalibrated with their signs, and the long end (ECB -> Bund -> the peer-sized hedge roll -> exact identities) is
     the own-step route that carries a size."""
-    body = client.post(f"{B}/forecasts", json={"question": "What if the ECB cut rates by 25bp next quarter?",
-                                               "horizon_days": 365}).json()
-    cov = body["forecast"]["coverage"]
+    cov = v1.simulate(client, "What if the ECB cut rates by 25bp next quarter?", 365)
     got = {c["interaction_id"] for c in cov["contributed"]}
     assert {"s32", "aib-c-bund-hedgeyield", "aib.id.hedge_income:aib_group.hedge_spread"} <= got
     ex = {c["interaction_id"]: c for c in cov["excluded"]}

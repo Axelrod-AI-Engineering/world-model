@@ -23,9 +23,9 @@ from axelrod_wm.model.construction import (
     validate_construction,
 )
 from axelrod_wm.repo.snapshots import MemoryBackend
+from tests.scenario import v1_reads as v1
 
 JPM = "jpmorgan"
-B = "/api/world-model"
 NII, REV, NI = "jpmorgan.net_interest_income", "jpmorgan.net_revenue", "jpmorgan.net_income"
 FED, UST10 = "federal_reserve.policy_rate", "us_treasuries.yield_10y"
 
@@ -361,7 +361,7 @@ def test_generalization_trace_an_oil_shock(g):
 
 # -- delivery: export and API ---------------------------------------------------------------------------------------------
 def test_new_objects_reach_the_export(client):
-    pack = client.get(f"{B}/context/v4").json()["domain_pack"]
+    pack = v1.pack(client)
     bridge = {b["composition_id"]: b for b in pack["domain_specific_support_objects"]["financial_bridge"]}
     assert set(COMPOSITIONS) <= set(bridge)
     paths = {p["axelrod"]["path_id"] for p in pack["transmission_paths"] if p.get("path_kind") == "business_construction"}
@@ -375,10 +375,10 @@ def test_new_objects_reach_the_export(client):
 
 def test_new_objects_reach_the_api(client):
     ids = "jpmorgan.ib_deposit_cost,jpmorgan.card_reserve_build,jpmorgan.cet1_capital,jpmorgan.net_revenue"
-    body = client.get(f"{B}/query", params={"node_ids": ids, "depth": 1}).json()
-    got = {v["id"] for v in body["values"]}
+    body = v1.graph(client, ids)
+    got = {a["id"] for e in body["entities"] for a in e["attributes"]}
     assert set(ids.split(",")) <= got and "jpmorgan.deposit_interest_expense" in got
-    view = client.get(f"{B}/construction/{JPM}").json()["construction"]
+    view = v1.construction(client, JPM)
     assert {c["id"] for c in view["compositions"]} == set(COMPOSITIONS) and not view["problems"]
-    tr = client.get(f"{B}/construction/{JPM}/trace", params={"start": FED}).json()["trace"]
+    tr = v1.trace(client, JPM, FED)
     assert tr["reaches_endpoint"]

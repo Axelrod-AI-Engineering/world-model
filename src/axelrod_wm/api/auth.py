@@ -55,6 +55,39 @@ def extra_logins(raw: str | None = None) -> list[Login]:
     return out
 
 
+def owners(raw: str | None = None) -> dict[str, str]:
+    """WORLD_MODEL_OWNERS: `login=org` entries, the organization whose world model a login's engine is (default: the
+    login's own name; `default` for the main engine of a run with no logins)."""
+    raw = os.environ.get("WORLD_MODEL_OWNERS", "") if raw is None else raw
+    out = {}
+    for entry in (e.strip() for e in raw.split(",")):
+        if not entry:
+            continue
+        login, sep, org = (x.strip() for x in entry.partition("="))
+        if not sep or not login or not org:
+            raise RuntimeError("WORLD_MODEL_OWNERS entries are login=org")
+        out[login] = org
+    return out
+
+
+def main_login() -> str:
+    return os.environ.get("WORLD_MODEL_BASIC_AUTH_USERNAME", "")
+
+
+def org_of(login: str | None) -> str:
+    """The organization a login (None or "": the main engine) belongs to."""
+    name = login or main_login()
+    return owners().get(name, name or "default")
+
+
+def login_of(org: str) -> str | None:
+    """The login whose engine an organization's credential opens (None: the main engine, or no engine)."""
+    for login in [main_login(), *(x.username for x in extra_logins())]:
+        if org_of(login) == org:
+            return login or None
+    return None
+
+
 class BasicAuthMiddleware:
     def __init__(self, app):
         self.app = app
@@ -66,8 +99,11 @@ class BasicAuthMiddleware:
             raise RuntimeError("Basic Auth requires both username and password")
         self.required = required
         self.extra = extra_logins()
-        # Oct 17: the outward service's API keys (api/keys.py), each acting as one login
+        # the outward service's static scoped keys (api/keys.py) and its trusted token issuers (api/tokens.py)
+        from axelrod_wm.api.tokens import Verifier, deny_list, trusted_issuers
+
         self.keys = api_keys()
+        self.verifier = Verifier(trusted_issuers(), deny_list())
         if self.extra and not self.username:
             raise RuntimeError("WORLD_MODEL_LOGINS needs the main Basic Auth login as well")
         self.logins = [(self.username, self.password), *((x.username, x.password) for x in self.extra)]
@@ -161,36 +197,59 @@ class BasicAuthMiddleware:
         await resp(scope, receive, send)
 
     async def service(self, scope, receive, send):
-        token = bearer(dict(scope.get("headers", [])))
-        key = match(self.keys, token)
-        known = {u for u, _ in self.logins}
-        if key is not None and (not self.username or key.login in known):
-            scope["axelrod_login"] = key.login if self.username else None
-            scope["axelrod_caller"] = key.caller
-            return await self.app(scope, receive, send)
-        if not self.keys and not self.username and not self.required:
-            # a local run with no keys and no logins: the service is open, as the demo is
-            scope["axelrod_caller"] = "local"
-            return await self.app(scope, receive, send)
-        login = self.authorized(scope) if scope["type"] == "http" else None
-        if login is not None and token is None:
-            # a signed-in browser (e.g. the API docs page) may call the service as its login
-            scope["axelrod_login"] = login
-            scope["axelrod_caller"] = f"session:{login}"
-            return await self.app(scope, receive, send)
-        if scope["type"] == "websocket":
-            await send({"type": "websocket.close", "code": 1008})
-            return
-        await JSONResponse({"error": {"code": "authentication_required",
-                                      "message": "Send Authorization: Bearer <API key>."}},
-                           status_code=401, headers={"Cache-Control": "no-store", "WWW-Authenticate": "Bearer",
-                                                     "X-Axelrod-API-Version": "1"})(scope, receive, send)
+        """The outward service (/v1, /mcp): the request's principal (api/tokens.py) from a verified credential: a
+        core-minted service token, a static scoped key, or our own session; open as `local` when nothing is
+        configured. Failures answer as RFC 9457 problems."""
+        from axelrod_wm.api.tokens import ADMIN, SCOPES, Principal, TokenError, looks_like_jwt
+
+        headers = dict(scope.get("headers", []))
+        token = bearer(headers)
+        principal = None
+        if token is not None:
+            if looks_like_jwt(token) and self.verifier:
+                try:
+                    principal = self.verifier.verify(token)
+                except TokenError as err:
+                    return await self.refuse(scope, receive, send, 503 if err.code == "issuer_unavailable" else 401,
+                                             err.code, err.detail)
+            else:
+                key = match(self.keys, token)
+                if key is not None:
+                    principal = Principal(kind="key", org=key.org, sub=key.caller, scopes=key.scopes)
+        elif scope["type"] == "http" and (login := self.authorized(scope)) is not None:
+            # a person signed in to this service (the review UI, /docs): every scope
+            principal = Principal(kind="session", org=org_of(login), sub=login, scopes=frozenset(SCOPES))
+        elif not self.keys and not self.username and not self.required and not self.verifier:
+            # a local run with nothing configured: open, as the demo is, but never deciding a change
+            principal = Principal(kind="local", org=org_of(None), sub="local",
+                                  scopes=frozenset(SCOPES) - {"changes:review"} | {ADMIN})
+        if principal is None:
+            if scope["type"] == "websocket":
+                await send({"type": "websocket.close", "code": 1008})
+                return
+            code = "invalid_token" if token is not None else "authentication_required"
+            return await self.refuse(scope, receive, send, 401, code,
+                                     "Send Authorization: Bearer <service token or API key>." if token is None
+                                     else "The credential is not a valid service token or API key.")
+        scope["axelrod_principal"] = principal
+        scope["axelrod_login"] = login_of(principal.org)
+        return await self.app(scope, receive, send)
+
+    @staticmethod
+    async def refuse(scope, receive, send, status: int, code: str, detail: str):
+        from axelrod_wm.api.v1.problems import problem_body, request_id_of
+
+        rid = request_id_of(dict(scope.get("headers", [])))
+        await JSONResponse(problem_body(status, code, detail, scope.get("path", ""), rid), status_code=status,
+                           media_type="application/problem+json",
+                           headers={"Cache-Control": "no-store", "WWW-Authenticate": "Bearer",
+                                    "X-Axelrod-API-Version": "1", "X-Request-Id": rid})(scope, receive, send)
 
     async def __call__(self, scope, receive, send):
         if scope["type"] not in ("http", "websocket"):
             return await self.app(scope, receive, send)
         path = scope.get("path", "")
-        # the outward service (/api/world-model, /mcp) takes an API key: its caller acts as the key's login
+        # the outward service (/v1, /mcp) takes a service token, an API key, or a session
         if is_service_path(path):
             return await self.service(scope, receive, send)
         if not self.username:

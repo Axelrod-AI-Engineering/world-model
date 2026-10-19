@@ -10,10 +10,10 @@ import pytest
 
 from axelrod_wm.ingest import EXTRACTOR_VERSION
 from axelrod_wm.ingest.gazetteer import Gazetteer
-from axelrod_wm.ingest.pipeline import KIND_OF, SOURCE_TYPES, Ingestor, _utc
+from axelrod_wm.ingest.pipeline import KIND_OF, SOURCE_TYPES, Ingestor, _utc, bundle_id
 from axelrod_wm.intake.bundle import ImportBundle
 from axelrod_wm.lake.embed import HashingEmbedder
-from axelrod_wm.lake.store import content_id, digest
+from axelrod_wm.lake.store import content_id
 from tests.ingest.conftest import NOW
 
 T = "acme"
@@ -113,7 +113,7 @@ def test_ingest_markdown_end_to_end(ingestor, lake, graph):
     ms = lake.mentions_of(T, doc_id=doc.id)
     assert res.mentions == len(ms) and {m.entity_id for m in ms} == {"boj", "jgbs", "tokio_marine"}
     rec = res.bundle
-    assert rec.id == digest(rec.bundle)[:24] and rec.doc_ids == [doc.id] and rec.created_at == NOW
+    assert rec.id == bundle_id(rec.bundle) and rec.doc_ids == [doc.id] and rec.created_at == NOW
     assert rec.extractor_version == EXTRACTOR_VERSION and lake.get_bundle(T, rec.id) == rec
     b = rec.bundle
     assert b["title"] == "BoJ watch" and b["collected_by"] == f"axelrod ingest {EXTRACTOR_VERSION}"
@@ -184,7 +184,7 @@ def test_an_import_bundle_is_passed_through(ingestor, lake, graph):
     assert res.new and res.document.status == "extracted" and res.document.title == "Agent bundle"
     assert res.document.meta == {"format": "bundle"} and res.chunks == 1 and res.signals == 1 and res.mentions == 0
     assert res.bundle.bundle == ImportBundle.model_validate(bundle).model_dump(mode="json")
-    assert res.bundle.items == 1 and res.bundle.id == digest(res.bundle.bundle)[:24]
+    assert res.bundle.items == 1 and res.bundle.id == bundle_id(res.bundle.bundle)
     assert res.document.event_time == NOW                         # no date in its text
     quotes_hold(res.bundle.bundle)
 

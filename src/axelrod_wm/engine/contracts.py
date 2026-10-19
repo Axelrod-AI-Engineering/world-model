@@ -211,7 +211,7 @@ def contracts_by_process() -> dict[str, list[Contract]]:
 
 
 def contracts_table() -> str:
-    """The contracts as a Markdown table, for docs/components.md."""
+    """The contracts as a Markdown table, as `axelrod contracts` prints them."""
     rows = ["| Slot | Process | Cadence | Inputs | Outputs | Writes | Runs |", "|---|---|---|---|---|---|---|"]
     order = ["intake", "review", "shared", "dynamics", "learning.working", "learning.long_term", "inference",
              "evaluation", "repo"]

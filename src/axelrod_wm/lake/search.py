@@ -1,9 +1,9 @@
 """Search and retrieval over the lakehouse and the world model (Oct 17).
 
     keyword   words in the documents' text (FTS5, ranked by BM25); every word first, any word when that finds nothing
-    prefix    the same with the last word as a prefix, plus the world model's entities and values whose names start so
+    prefix    the same with the last word as a prefix, plus the world model's entities and attributes whose names start so
     semantic  the query's embedding against every chunk's, by cosine similarity
-    graph     the entities and values the query names, their neighbours through the model's interactions, and the
+    graph     the entities and attributes the query names, their neighbours through the model's interactions, and the
               chunks that mention them
     hybrid    keyword, semantic, and graph, fused by reciprocal rank
 
@@ -47,7 +47,7 @@ class Searcher:
         return hits[:limit]
 
     def names(self, q: str, limit: int = 20) -> list[Hit]:
-        """The model's entities and values whose name (or an alias) starts with the query."""
+        """The model's entities and attributes whose name (or an alias) starts with the query."""
         if self.graph is None or not q.strip():
             return []
         p = q.strip().lower()
@@ -55,10 +55,11 @@ class Searcher:
         for eid, e in sorted(self.graph.entities.items()):
             names = [e.name, *e.aliases]
             if any(n.lower().startswith(p) for n in names):
-                out.append(Hit(kind="entity", ref=eid, score=1.0, text=e.name, why=["name prefix"]))
+                out.append(Hit(kind="entity", ref=eid, entity_id=eid, score=1.0, text=e.name, why=["name prefix"]))
         for sid, s in sorted(self.graph.subentities.items()):
             if any(n.lower().startswith(p) for n in (s.name, *s.aliases)):
-                out.append(Hit(kind="value", ref=sid, score=0.9, text=s.name, why=["name prefix"]))
+                out.append(Hit(kind="attribute", ref=sid, entity_id=s.entity_id, score=0.9, text=s.name,
+                               why=["name prefix"]))
         return out[:limit]
 
     def semantic(self, tenant: str, q: str, limit: int = 20) -> list[Hit]:
@@ -83,10 +84,13 @@ class Searcher:
         vals = sorted({s for _e, s in named if s})
         out: list[Hit] = []
         for eid in ents:
-            out.append(Hit(kind="entity", ref=eid, score=1.0, text=self.graph.entities[eid].name, why=["named"]))
+            out.append(Hit(kind="entity", ref=eid, entity_id=eid, score=1.0, text=self.graph.entities[eid].name,
+                           why=["named"]))
+        subs = self.graph.subentities
         for sid in vals:
-            out.append(Hit(kind="value", ref=sid, score=1.0, text=self.graph.subentities[sid].name, why=["named"]))
-        # neighbours: values one interaction away from what was named
+            out.append(Hit(kind="attribute", ref=sid, entity_id=subs[sid].entity_id, score=1.0, text=subs[sid].name,
+                           why=["named"]))
+        # neighbours: attributes one interaction away from what was named
         seeds = set(vals) or {s for e in ents for s in self.graph.entities[e].subentity_ids}
         near: dict[str, str] = {}
         for i in sorted(self.graph.active_interactions(), key=lambda x: x.id):
@@ -95,7 +99,8 @@ class Searcher:
             if i.target_id in seeds and i.source_id not in seeds:
                 near.setdefault(i.source_id, f"drives {self.graph.subentities[i.target_id].name}")
         for sid, why in sorted(near.items()):
-            out.append(Hit(kind="value", ref=sid, score=0.5, text=self.graph.subentities[sid].name, why=["neighbour", why]))
+            out.append(Hit(kind="attribute", ref=sid, entity_id=subs[sid].entity_id, score=0.5, text=subs[sid].name,
+                           why=["neighbour", why]))
         # the chunks that mention what was named, most mentions first
         counts: dict[tuple[str, int], int] = {}
         for eid in ents:

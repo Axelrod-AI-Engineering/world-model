@@ -1,23 +1,26 @@
-From 15302f1e2aa2c8557b51e5096ef8e2f420bf41fc Mon Sep 17 00:00:00 2001
+From 129bcf9a9660175fcfadc6d4c21d3e928c27e58d Mon Sep 17 00:00:00 2001
 From: Karthik Singaravadivelan <karthik@axelrod-ai.com>
 Date: Sat, 17 Oct 2026 22:18:49 -0400
-Subject: [PATCH] World model service tools in the MCP catalog
+Subject: [PATCH] World model service tools in the MCP catalog (the service's
+ v1 API)
 
-The world_model_* tools reach the Axelrod world model service (the causal model) for the signed-in org user:
-reads pinned to a state version, a company's business construction and traces, forecasts, ingesting a project
-source, and proposing a bundle's graph updates for human review. No tool approves a world model change.
+The world_model_* tools reach the Axelrod world model service's v1 API (/v1/world-models/{id}/...) for the
+signed-in org user's organization: reads pinned to a version, a company's construction and traces, simulations,
+ingesting a project source, and proposing a bundle's changes for human review. Each tool takes a world_model_id
+(default: the organization's only world model). No tool approves a world model change, and the service refuses a
+decision from a key.
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
  docs/mcp/SETUP.md                  |   4 +-
- src/axelrod_app/config.py          |   9 ++
- src/axelrod_app/mcp_catalog.py     |  24 +++
- src/axelrod_app/mcp_world_model.py | 234 ++++++++++++++++++++++++++++-
- tests/backend/test_mcp_server.py   | 177 ++++++++++++++++++++++
- 5 files changed, 444 insertions(+), 4 deletions(-)
+ src/axelrod_app/config.py          |   9 +
+ src/axelrod_app/mcp_catalog.py     |  26 +++
+ src/axelrod_app/mcp_world_model.py | 287 ++++++++++++++++++++++++++++-
+ tests/backend/test_mcp_server.py   | 220 ++++++++++++++++++++++
+ 5 files changed, 542 insertions(+), 4 deletions(-)
 
 diff --git a/docs/mcp/SETUP.md b/docs/mcp/SETUP.md
-index 17466c6..525c575 100644
+index 17466c69..fff2f939 100644
 --- a/docs/mcp/SETUP.md
 +++ b/docs/mcp/SETUP.md
 @@ -10,7 +10,7 @@ Every tool is listed on that same site at `/mcp/documentation`. Locally, open [h
@@ -25,7 +28,7 @@ index 17466c6..525c575 100644
  - run: owner-only `run_analysis` (required `analysis_id`; it starts the run and returns `run_id` immediately; optional `selected_source_ids` replaces the analysis file selection before the run), `stop_run`, `list_runs`, `get_run`, `get_research_trail`
  - sources: owner-only `sources_list`, `sources_search_files`, `sources_read_file_excerpt`; creator `sources_create_upload`, `sources_download`, `sources_delete`
 -- world model: `search_canonical`
-+- world model: `search_canonical`; the causal world model service: `world_model_state`, `world_model_query`, `world_model_search_nodes`, `world_model_get_entity`, `world_model_get_value`, `world_model_taxonomy`, `world_model_search`, `world_model_construction`, `world_model_construction_markdown`, `world_model_trace`, `world_model_forecast`, `world_model_get_forecast`, `world_model_forecast_brief`, `world_model_context_v4`, `world_model_list_documents`, `world_model_get_bundle`, `world_model_list_proposals`, `world_model_ingest_source`, `world_model_import_bundle`
++- world model: `search_canonical`; the causal world model service: `world_model_list_world_models`, `world_model_get_world_model`, `world_model_graph`, `world_model_list_entities`, `world_model_get_entity`, `world_model_get_attribute`, `world_model_list_concepts`, `world_model_search`, `world_model_construction`, `world_model_construction_markdown`, `world_model_trace`, `world_model_simulate`, `world_model_get_simulation`, `world_model_simulation_brief`, `world_model_export_v4`, `world_model_list_documents`, `world_model_get_bundle`, `world_model_list_changes`, `world_model_ingest_source`, `world_model_propose_changes`
  - simulation canvas: `simulation_list`, `simulation_create`, `simulation_read`, `simulation_inspect`, `simulation_preview`, `simulation_apply`, `simulation_evaluate`, `simulation_undo`, `simulation_redo`, `simulation_delete`, `simulation_find_threshold`, `simulation_analyze_grid`
  
  Simulation Canvas MCP tools operate on the same analysis-owned experiments as the
@@ -33,13 +36,13 @@ index 17466c6..525c575 100644
  lists access, required inputs and results for all twelve tools. The adjacent
  [HTTP API table](../../API_CONTRACTS.md#http-apis) covers the workspace routes.
  
-+The `world_model_*` tools reach the Axelrod world model service (entities, values, causal links with effects and timing, forecasts, and business construction) at `AXELROD_WORLD_MODEL_SERVICE_URL`, with the key for your organization from `AXELROD_WORLD_MODEL_SERVICE_KEYS` (`org_id=key` entries; `*=key` for every other organization). Each call names you to the service, which records you on every import. Every read names the state version it was served from; pass `version` to reproduce a cited answer. Writes only propose: `world_model_ingest_source` sends a project source you uploaded to the world model's ingestion, and `world_model_import_bundle` proposes its graph updates, which wait for a person to approve them in the world model's review. No MCP tool approves a world model change. Without the two settings, these tools return `world_model_unavailable`.
++The `world_model_*` tools reach the Axelrod world model service's v1 API (`/v1/world-models/{id}/...`: entities with their attributes, relationships between attributes with their evidence, simulations, and business construction) at `AXELROD_WORLD_MODEL_SERVICE_URL`, with the key for your organization from `AXELROD_WORLD_MODEL_SERVICE_KEYS` (`org_id=key` entries; `*=key` for every other organization). Each tool takes a `world_model_id`, which defaults to your organization's only world model. Every read names the version it was served from; pass `version` to reproduce a cited answer. Writes only propose: `world_model_ingest_source` sends a project source you uploaded to the world model's ingestion, and `world_model_propose_changes` proposes its changes, which wait for a person to approve them in the world model's review. No MCP tool approves a world model change, and the service refuses a decision from a key. Without the two settings, these tools return `world_model_unavailable`.
 +
  `run_analysis` returns as soon as the run exists. Poll `get_run` with that `run_id`. An empty `terminal_state` means it is still running, and `activity_log` is what has already happened. `assistant_output_final` is the memo once `terminal_state` is `completed`. `stopped` and `error` are finished too. If another `run_analysis` on that same analysis returns `session_busy`, poll `get_run` with the `run_id` in the error. Call `stop_run` with that `run_id` only when you want to cancel the ongoing run. Glossary: [CONTEXT.md](CONTEXT.md).
  
  To upload a file, call `sources_create_upload` with the folder and file name, then send the file from your shell to the returned URL:
 diff --git a/src/axelrod_app/config.py b/src/axelrod_app/config.py
-index 76ccca5..e87bd27 100644
+index 76ccca55..e87bd276 100644
 --- a/src/axelrod_app/config.py
 +++ b/src/axelrod_app/config.py
 @@ -352,6 +352,7 @@ class Settings(BaseModel):
@@ -66,67 +69,70 @@ index 76ccca5..e87bd27 100644
          default_factory=lambda: _env_bool("AXELROD_WORLD_MODEL_EVENTS_ENABLED", False)
      )
 diff --git a/src/axelrod_app/mcp_catalog.py b/src/axelrod_app/mcp_catalog.py
-index 2bb5636..0ed7f48 100644
+index 2bb5636c..cc99325d 100644
 --- a/src/axelrod_app/mcp_catalog.py
 +++ b/src/axelrod_app/mcp_catalog.py
-@@ -83,9 +83,14 @@ _READ_ONLY_TOOLS = frozenset({
+@@ -83,9 +83,15 @@ _READ_ONLY_TOOLS = frozenset({
      "get_research_trail", "search_canonical", "simulation_list", "simulation_read", "simulation_inspect",
      "simulation_preview", "simulation_evaluate",
      "simulation_find_threshold", "simulation_analyze_grid",
-+    "world_model_state", "world_model_query", "world_model_search_nodes", "world_model_get_entity",
-+    "world_model_get_value", "world_model_taxonomy", "world_model_search", "world_model_construction",
-+    "world_model_construction_markdown", "world_model_trace", "world_model_get_forecast", "world_model_forecast_brief",
-+    "world_model_context_v4", "world_model_list_documents", "world_model_get_bundle", "world_model_list_proposals",
++    "world_model_list_world_models", "world_model_get_world_model", "world_model_graph", "world_model_list_entities",
++    "world_model_get_entity", "world_model_get_attribute", "world_model_list_concepts", "world_model_search",
++    "world_model_construction", "world_model_construction_markdown", "world_model_trace", "world_model_get_simulation",
++    "world_model_simulation_brief", "world_model_export_v4", "world_model_list_documents", "world_model_get_bundle",
++    "world_model_list_changes",
  })
  _ADDITIVE_TOOLS = frozenset({
      "create_folder", "create_analysis", "sources_create_upload", "simulation_create",
-+    "world_model_forecast", "world_model_ingest_source", "world_model_import_bundle",
++    "world_model_simulate", "world_model_ingest_source", "world_model_propose_changes",
  })
  _CLOSED_WORLD_TOOLS = _READ_ONLY_TOOLS | _ADDITIVE_TOOLS | frozenset({
      "rename_folder", "update_analysis", "delete_analysis", "sources_delete", "stop_run",
-@@ -105,6 +110,25 @@ _TOOL_TITLES = {
+@@ -105,6 +111,26 @@ _TOOL_TITLES = {
      "simulation_undo": "Undo model change",
      "simulation_redo": "Redo model change",
      "simulation_delete": "Delete simulation model",
-+    "world_model_state": "World model state",
-+    "world_model_query": "Query the world model",
-+    "world_model_search_nodes": "Find world model nodes",
++    "world_model_list_world_models": "List world models",
++    "world_model_get_world_model": "Read a world model",
++    "world_model_graph": "Read a world model subgraph",
++    "world_model_list_entities": "Find world model entities",
 +    "world_model_get_entity": "Read a world model entity",
-+    "world_model_get_value": "Read a world model value",
-+    "world_model_taxonomy": "World model taxonomy",
++    "world_model_get_attribute": "Read a world model attribute",
++    "world_model_list_concepts": "World model taxonomy",
 +    "world_model_search": "Search world model documents",
 +    "world_model_construction": "Read a company's construction",
 +    "world_model_construction_markdown": "Read a company's construction as a page",
 +    "world_model_trace": "Trace a change into a company",
-+    "world_model_forecast": "Forecast a what-if",
-+    "world_model_get_forecast": "Read a world model forecast",
-+    "world_model_forecast_brief": "Read a forecast's brief",
-+    "world_model_context_v4": "Export world model context (v4.1.4)",
++    "world_model_simulate": "Simulate a what-if",
++    "world_model_get_simulation": "Read a world model simulation",
++    "world_model_simulation_brief": "Read a simulation's brief",
++    "world_model_export_v4": "Export the world model (v4.1.4)",
 +    "world_model_list_documents": "List world model documents",
-+    "world_model_get_bundle": "Read an import bundle",
-+    "world_model_list_proposals": "List proposed graph updates",
++    "world_model_get_bundle": "Read a world model bundle",
++    "world_model_list_changes": "List proposed world model changes",
 +    "world_model_ingest_source": "Send a source to the world model",
-+    "world_model_import_bundle": "Propose a bundle's graph updates",
++    "world_model_propose_changes": "Propose a bundle's changes",
  }
  
  
 diff --git a/src/axelrod_app/mcp_world_model.py b/src/axelrod_app/mcp_world_model.py
-index 2e53cd1..85e7973 100644
+index 2e53cd19..ddd34341 100644
 --- a/src/axelrod_app/mcp_world_model.py
 +++ b/src/axelrod_app/mcp_world_model.py
-@@ -1,17 +1,87 @@
+@@ -1,17 +1,99 @@
 -"""MCP adapter for World Model reads."""
 +"""MCP adapter for World Model reads.
 +
 +`search_canonical` searches the canonical identities core stores. The `world_model_*` tools reach the Axelrod world
-+model service (the causal model: entities, values, causal links with effects and timing, forecasts, and business
-+construction), over its REST API at `Settings.world_model_service_url`. Each call carries the key for the caller's
-+organization and names the org user it is made for (`X-Axelrod-On-Behalf-Of`), so the service records the person
-+on every import. The service's own MCP server publishes the same tools; core re-publishes them so a host connected
-+to core sees one catalog under one sign-in.
++model service (the causal model: entities with their attributes, relationships between attributes with their evidence,
++simulations, and business construction), over its v1 API (`/v1/world-models/{id}/...`) at
++`Settings.world_model_service_url`. Each call carries the key for the caller's organization; every tool takes a
++`world_model_id`, which defaults to the organization's only world model. The service's own MCP server publishes the
++same nouns; core re-publishes them so a host connected to core sees one catalog under one sign-in.
 +
-+Writes stay behind review: ingesting a project source and importing a bundle only propose graph updates, which wait
-+for a person to approve them in the world model's review. No tool here approves or rejects a proposal.
++Writes stay behind review: ingesting a project source and proposing a bundle's changes only propose, and each change
++waits for a person to approve it in the world model's review. No tool here approves or rejects a change, and the
++service refuses a decision from a key or from any agent-driven token.
 +"""
  
  from __future__ import annotations
@@ -146,7 +152,7 @@ index 2e53cd1..85e7973 100644
  from axelrod_app.routers.deps import EdgeDeps
  from axelrod_app.simulation_service import SimulationError, service_for_principal
  
-+WORLD_MODEL_API = "/api/world-model"
++WORLD_MODEL_API = "/v1"
 +WORLD_MODEL_TIMEOUT_SECONDS = 120.0
 +
 +# A project source's type, as the world model's ingestion names it (its `source_type`).
@@ -156,31 +162,42 @@ index 2e53cd1..85e7973 100644
 +                               "client_model", "other"]
 +
 +Version = Annotated[int | None, Field(ge=1, description="Pin the read to this committed state version.")]
++WorldModelId = Annotated[str, Field(description="The world model (default: the organization's only one).")]
 +AsOf = Annotated[datetime | None, Field(description="Pin the read to the state at the last day closed at or before this time.")]
 +
 +# Replaced in tests with an httpx.MockTransport; None uses the network.
 +transport: httpx.AsyncBaseTransport | None = None
 +
 +
-+class WorldModelState(BaseModel):
-+    """The state a world-model answer was served from. Pin a later read to it with `version`."""
++class WorldModelVersion(BaseModel):
++    """The version a world-model answer was read from. Pin a later read to it with `version`."""
 +
 +    model_config = ConfigDict(extra="allow")
 +
-+    scenario: str
-+    version: int
++    number: int
 +    state_hash: str | None = None
-+    as_of: str | None = None
-+    latest_version: int | None = None
++    committed_at: str | None = None
++    latest: int | None = None
 +    clock: str | None = None
 +
 +
-+class WorldModelResult(BaseModel):
-+    """A world-model service answer, as the service returns it. Every read names its `state`."""
++class WorldModelMeta(BaseModel):
++    """About an answer: its request id, the version it was read from, and a list's next cursor."""
 +
 +    model_config = ConfigDict(extra="allow")
 +
-+    state: WorldModelState | None = None
++    request_id: str | None = None
++    version: WorldModelVersion | None = None
++    next_cursor: str | None = None
++
++
++class WorldModelResult(BaseModel):
++    """A world-model service answer, as the service returns it: `data`, and `meta` naming the version read."""
++
++    model_config = ConfigDict(extra="allow")
++
++    data: Any = None
++    meta: WorldModelMeta | None = None
 +
 +
 +class WorldModelMarkdown(BaseModel):
@@ -204,7 +221,7 @@ index 2e53cd1..85e7973 100644
  
  def register_mcp_world_model_tools(
      *,
-@@ -19,7 +89,8 @@ def register_mcp_world_model_tools(
+@@ -19,7 +101,8 @@ def register_mcp_world_model_tools(
      session_store: IdentityStore,
      get_edge_deps: Callable[[], EdgeDeps],
  ) -> None:
@@ -214,7 +231,7 @@ index 2e53cd1..85e7973 100644
  
      def search(analysis_id: str, query: str) -> CanonicalSearchResult:
          try:
-@@ -34,3 +105,160 @@ def register_mcp_world_model_tools(
+@@ -34,3 +117,201 @@ def register_mcp_world_model_tools(
      @register_tool(description="Search World Model canonical identities in an analysis the caller can view. Does not pin or write. Further World Model reads can extend this tool.")
      def search_canonical(analysis_id: str, query: str = "") -> CanonicalSearchResult:
          return search(analysis_id, query)
@@ -228,7 +245,7 @@ index 2e53cd1..85e7973 100644
 +        key = keys.get(user.org_id) or keys.get("*")
 +        if not base or not key:
 +            raise ToolError("world_model_unavailable: the world model service is not configured for this organization")
-+        return base, {"Authorization": f"Bearer {key}", "X-Axelrod-On-Behalf-Of": f"{user.org_id}/{user.org_user_id}"}
++        return base, {"Authorization": f"Bearer {key}"}
 +
 +    async def request(method: str, path: str, **kw: Any) -> httpx.Response:
 +        base, headers = connection()
@@ -240,8 +257,8 @@ index 2e53cd1..85e7973 100644
 +            raise ToolError(f"world_model_unavailable: {type(exc).__name__}") from exc
 +        if r.status_code >= 400:
 +            try:
-+                err = r.json()["error"]
-+                code, message = err["code"], err["message"]
++                err = r.json()
++                code, message = err["code"], err["detail"]
 +            except (ValueError, KeyError, TypeError):
 +                code, message = "world_model_error", f"HTTP {r.status_code}"
 +            raise ToolError(f"{code}: {message}")
@@ -254,104 +271,144 @@ index 2e53cd1..85e7973 100644
 +    def params(**kw: Any) -> dict[str, Any]:
 +        return {k: v.isoformat() if isinstance(v, datetime) else v for k, v in kw.items() if v not in (None, "")}
 +
-+    @register_tool(description="The world model state that reads are served from: version, state hash, the model's clock, and counts of entities, values, links and stored documents.")
-+    async def world_model_state() -> WorldModelResult:
-+        return await call("GET", "/state")
++    async def model_path(world_model_id: str) -> str:
++        """`/world-models/{id}`: the one named, or the organization's only world model."""
++        if world_model_id.strip():
++            return f"/world-models/{world_model_id.strip()}"
++        ids = [m["id"] for m in (await call("GET", "/world-models")).data or []]
++        if len(ids) != 1:
++            raise ToolError(f"invalid_request: name a world_model_id (this organization has {len(ids)})")
++        return f"/world-models/{ids[0]}"
 +
-+    @register_tool(description="Entities, values (levels with spreads, in their units) and causal edges (effect, existence probability, timing, evidence) for the named node ids or names in q, and their neighbours up to `depth` links. Pin with version or as_of to reproduce a cited answer.")
-+    async def world_model_query(
-+        node_ids: list[str] | None = None,
++    @register_tool(description="The organization's world models: each one's latest version, clock, and counts.")
++    async def world_model_list_world_models() -> WorldModelResult:
++        return await call("GET", "/world-models")
++
++    @register_tool(description="One world model: its latest version, the model's clock, and counts of entities, attributes, relationships, groups, documents and bundles. Pin later reads with that version to reproduce a cited answer.")
++    async def world_model_get_world_model(world_model_id: WorldModelId = "") -> WorldModelResult:
++        return await call("GET", await model_path(world_model_id))
++
++    @register_tool(description="A subgraph for context: entities with the attributes reached nested (levels with spreads, in their units; an attribute's id is `<entity id>.<key>`, e.g. toyota.operating_profit) and the relationships between them (effect, confidence, timing), for the named entities or attributes or names in q, and their neighbours up to `depth` relationships. Pin with version or as_of to reproduce a cited answer.")
++    async def world_model_graph(
++        world_model_id: WorldModelId = "",
++        entities: list[str] | None = None,
++        attributes: list[str] | None = None,
 +        q: str = "",
 +        depth: Annotated[int, Field(ge=0, le=4)] = 1,
 +        version: Version = None,
 +        as_of: AsOf = None,
-+        limit: Annotated[int, Field(ge=1, le=1000)] = 200,
++        limit: Annotated[int, Field(ge=1, le=2000)] = 200,
 +    ) -> WorldModelResult:
-+        return await call("GET", "/query", params=params(node_ids=",".join(node_ids or []), q=q, depth=depth,
-+                                                          version=version, as_of=as_of, limit=limit))
++        return await call("GET", await model_path(world_model_id) + "/graph", params=params(
++            entities=",".join(entities or []), attributes=",".join(attributes or []), q=q, depth=depth,
++            version=version, as_of=as_of, limit=limit))
 +
-+    @register_tool(description="World model entities and values whose names contain q, prefix matches first.")
-+    async def world_model_search_nodes(q: str = "", limit: Annotated[int, Field(ge=1, le=500)] = 50) -> WorldModelResult:
-+        return await call("GET", "/nodes", params=params(q=q, limit=limit))
++    @register_tool(description="World model entities by name (q also matches their attributes' names), type or concept, prefix matches first; an entity matched through its attributes nests just those.")
++    async def world_model_list_entities(
++        world_model_id: WorldModelId = "",
++        q: str = "",
++        type: str = "",
++        concept: str = "",
++        limit: Annotated[int, Field(ge=1, le=200)] = 50,
++        cursor: str = "",
++        version: Version = None,
++    ) -> WorldModelResult:
++        return await call("GET", await model_path(world_model_id) + "/entities", params=params(
++            q=q, type=type, concept=concept, limit=limit, cursor=cursor, version=version))
 +
-+    @register_tool(description="One world model entity: its values, concepts, and the causal links in and out.")
-+    async def world_model_get_entity(entity_id: str) -> WorldModelResult:
-+        return await call("GET", f"/entities/{entity_id}")
++    @register_tool(description="One world model entity: all its attributes, its concepts and groups.")
++    async def world_model_get_entity(entity_id: str, world_model_id: WorldModelId = "", version: Version = None) -> WorldModelResult:
++        return await call("GET", await model_path(world_model_id) + f"/entities/{entity_id}", params=params(version=version))
 +
-+    @register_tool(description="One world model value: its level and spread in its unit, whether it was observed, its drivers and its effects.")
-+    async def world_model_get_value(value_id: str) -> WorldModelResult:
-+        return await call("GET", f"/values/{value_id}")
++    @register_tool(description="One attribute of a world model entity: its level and spread in its unit, whether it is observed, and its latest observation. `attribute` is its key in the entity (operating_profit) or its full id (toyota.operating_profit).")
++    async def world_model_get_attribute(entity_id: str, attribute: str, world_model_id: WorldModelId = "", version: Version = None) -> WorldModelResult:
++        return await call("GET", await model_path(world_model_id) + f"/entities/{entity_id}/attributes/{attribute}",
++                          params=params(version=version))
 +
-+    @register_tool(description="The world model's static taxonomy: concepts, their parents, and the entities under each.")
-+    async def world_model_taxonomy() -> WorldModelResult:
-+        return await call("GET", "/taxonomy")
++    @register_tool(description="The world model's taxonomy: concepts, their parents, and the entities under each.")
++    async def world_model_list_concepts(world_model_id: WorldModelId = "", limit: Annotated[int, Field(ge=1, le=200)] = 200, cursor: str = "") -> WorldModelResult:
++        return await call("GET", await model_path(world_model_id) + "/concepts", params=params(limit=limit, cursor=cursor))
 +
-+    @register_tool(description="Search documents ingested into the world model, and its names: keyword, prefix, semantic, graph, or hybrid. Each hit cites its document and chunk.")
++    @register_tool(description="Search documents ingested into the world model, and its names: keyword, prefix, semantic, graph, or hybrid. Each hit cites its document and passage, or names an entity or attribute.")
 +    async def world_model_search(
 +        q: str,
++        world_model_id: WorldModelId = "",
 +        mode: Literal["keyword", "prefix", "semantic", "graph", "hybrid"] = "hybrid",
 +        limit: Annotated[int, Field(ge=1, le=100)] = 20,
 +    ) -> WorldModelResult:
-+        return await call("GET", "/search", params=params(q=q, mode=mode, limit=limit))
++        return await call("GET", await model_path(world_model_id) + "/search", params=params(q=q, mode=mode, limit=limit))
 +
-+    @register_tool(description="How a company is built in the world model: its business composition (segments, regions and other views, with residuals and eliminations), its named operating and financial paths with each transition (mechanism, condition, observable, timing, evidence, breaker, calibration), and any structural problems.")
-+    async def world_model_construction(entity_id: str, version: Version = None) -> WorldModelResult:
-+        return await call("GET", f"/construction/{entity_id}", params=params(version=version))
++    @register_tool(description="How a company is built in the world model: its attributes, its business compositions (driving or reconciling views of a total), identities, stock-flows, its named operating and financial paths with each transition (mechanism, condition, observable, timing, evidence, breaker, calibration), link counts, and any structural problems.")
++    async def world_model_construction(entity_id: str, world_model_id: WorldModelId = "", version: Version = None) -> WorldModelResult:
++        return await call("GET", await model_path(world_model_id) + f"/entities/{entity_id}/construction",
++                          params=params(version=version))
 +
 +    @register_tool(description="A company's business construction as a readable markdown page: composition tables, and each path as a chain with its transition table. Steps whose size is unknown are marked.")
-+    async def world_model_construction_markdown(entity_id: str) -> WorldModelMarkdown:
-+        r = await request("GET", f"/construction/{entity_id}", params={"format": "markdown"})
++    async def world_model_construction_markdown(entity_id: str, world_model_id: WorldModelId = "") -> WorldModelMarkdown:
++        r = await request("GET", await model_path(world_model_id) + f"/entities/{entity_id}/construction",
++                          params={"format": "markdown"})
 +        return WorldModelMarkdown(markdown=r.text)
 +
-+    @register_tool(description="Follow a change in one world model value through every link, calibrated or not, to a company's financial endpoints: each route, where it stops, and which steps are uncalibrated (sign known, size unknown) or lack a transition.")
-+    async def world_model_trace(entity_id: str, start: str) -> WorldModelResult:
-+        return await call("GET", f"/construction/{entity_id}/trace", params={"start": start})
++    @register_tool(description="Follow a change in one world model attribute (`start`: a full attribute id, or a key of the company's own attributes) through every relationship, calibrated or not, to a company's financial endpoints: each route, where it stops, and which steps are uncalibrated (sign known, size unknown) or lack a transition.")
++    async def world_model_trace(entity_id: str, start: str, world_model_id: WorldModelId = "") -> WorldModelResult:
++        return await call("GET", await model_path(world_model_id) + f"/entities/{entity_id}/traces", params={"from": start})
 +
-+    @register_tool(description="Pose a what-if to the world model (a question, or a ready thesis id) and forecast it: targets with ranges, transmission by order, and the scenario table. `unquantified` lists links the shock reaches whose size is unknown: report them as represented but unsized, never as zero.")
-+    async def world_model_forecast(
++    @register_tool(description="Pose a what-if to the world model (a question, or a ready thesis template_id) and run it as a simulation on the latest version: the answer is the thesis and the finished job, whose result names the simulation. Report `unquantified_relationships` (read with world_model_get_simulation) as represented but unsized, never as zero.")
++    async def world_model_simulate(
++        world_model_id: WorldModelId = "",
 +        question: str = "",
-+        thesis_id: str = "",
++        template_id: str = "",
 +        horizon_days: Annotated[int, Field(ge=7, le=1095)] = 182,
 +    ) -> WorldModelResult:
-+        if bool(question.strip()) == bool(thesis_id.strip()):
-+            raise ToolError("invalid_request: give exactly one of question and thesis_id")
-+        return await call("POST", "/forecasts", json=params(question=question.strip(), thesis_id=thesis_id.strip(),
-+                                                             horizon_days=horizon_days))
++        if bool(question.strip()) == bool(template_id.strip()):
++            raise ToolError("invalid_request: give exactly one of question and template_id")
++        path = await model_path(world_model_id)
++        thesis = await call("POST", path + "/theses", json=params(question=question.strip(), template_id=template_id.strip(),
++                                                                horizon_days=horizon_days))
++        job = await call("POST", path + f"/theses/{thesis.data['id']}/simulations", json={"horizon_days": horizon_days})
++        return WorldModelResult(data={"thesis": thesis.data, "job": job.data}, meta=job.meta)
 +
-+    @register_tool(description="One world model forecast, with the state it was based on.")
-+    async def world_model_get_forecast(forecast_id: str) -> WorldModelResult:
-+        return await call("GET", f"/forecasts/{forecast_id}")
++    @register_tool(description="One world model simulation, with the version it ran on: targets with ranges, the scenario table, and the uncalibrated relationships it reached.")
++    async def world_model_get_simulation(simulation_id: str, world_model_id: WorldModelId = "") -> WorldModelResult:
++        return await call("GET", await model_path(world_model_id) + f"/simulations/{simulation_id}")
 +
-+    @register_tool(description="A world model forecast's brief: summary, expected timing, exposures, indicators to watch, and evidence.")
-+    async def world_model_forecast_brief(forecast_id: str) -> WorldModelResult:
-+        return await call("GET", f"/forecasts/{forecast_id}/brief")
++    @register_tool(description="A world model simulation's brief: summary, expected timing, exposures, indicators to watch, evidence, and calculation coverage.")
++    async def world_model_simulation_brief(simulation_id: str, world_model_id: WorldModelId = "") -> WorldModelResult:
++        return await call("GET", await model_path(world_model_id) + f"/simulations/{simulation_id}/brief")
 +
-+    @register_tool(description="The world model, and a forecast when one is named, in the client's v4.1.4 world-model format (domain pack, registry entry, evidence packs, load order), for agents that read that format.")
-+    async def world_model_context_v4(forecast_id: str = "") -> WorldModelResult:
-+        return await call("GET", "/context/v4", params=params(forecast=forecast_id))
++    @register_tool(description="The world model, and a simulation when one is named, in the client's v4.1.4 world-model format (domain pack, registry entry, evidence packs, load order), for agents that read that format.")
++    async def world_model_export_v4(world_model_id: WorldModelId = "", simulation_id: str = "") -> WorldModelResult:
++        return await call("GET", await model_path(world_model_id) + "/exports/v4.1.4", params=params(simulation=simulation_id))
 +
 +    @register_tool(description="Documents stored in the world model's lakehouse, by event time or ingestion time.")
 +    async def world_model_list_documents(
++        world_model_id: WorldModelId = "",
 +        order: Literal["event_time", "ingested_at"] = "event_time",
-+        limit: Annotated[int, Field(ge=1, le=1000)] = 100,
-+        offset: Annotated[int, Field(ge=0)] = 0,
++        limit: Annotated[int, Field(ge=1, le=200)] = 50,
++        cursor: str = "",
 +    ) -> WorldModelResult:
-+        return await call("GET", "/documents", params=params(order=order, limit=limit, offset=offset))
++        return await call("GET", await model_path(world_model_id) + "/documents", params=params(order=order, limit=limit, cursor=cursor))
 +
-+    @register_tool(description="One world model import bundle: its dated items, the signals each claims, and the quotes they came from.")
-+    async def world_model_get_bundle(bundle_id: str) -> WorldModelResult:
-+        return await call("GET", f"/bundles/{bundle_id}")
++    @register_tool(description="One world model bundle: research read into dated items, each with the signals it claims and the quotes they came from.")
++    async def world_model_get_bundle(bundle_id: str, world_model_id: WorldModelId = "") -> WorldModelResult:
++        path = await model_path(world_model_id) + f"/bundles/{bundle_id}"
++        bundle = await call("GET", path)
++        items = await call("GET", path + "/items", params={"limit": 200})
++        return WorldModelResult(data={**(bundle.data or {}), "items": items.data}, meta=bundle.meta)
 +
-+    @register_tool(description="Proposed world model graph updates, pending review by default.")
-+    async def world_model_list_proposals(
++    @register_tool(description="Proposed world model changes, pending review by default, each with who proposed and who decided it.")
++    async def world_model_list_changes(
++        world_model_id: WorldModelId = "",
 +        status: Literal["pending", "approved", "rejected", "all"] = "pending",
-+        limit: Annotated[int, Field(ge=1, le=1000)] = 100,
++        limit: Annotated[int, Field(ge=1, le=200)] = 50,
++        cursor: str = "",
 +    ) -> WorldModelResult:
-+        return await call("GET", "/proposals", params=params(status=status, limit=limit))
++        return await call("GET", await model_path(world_model_id) + "/changes", params=params(status=status, limit=limit, cursor=cursor))
 +
-+    @register_tool(description="Send a project source you created to the world model: it is stored, parsed and indexed, and read into an import bundle of proposed graph updates. The same file is stored once. Nothing in the model changes until the bundle is imported and a person approves each update.")
++    @register_tool(description="Send a project source you created to the world model: it is stored, parsed and indexed, and read into a bundle of proposed updates. The answer is the finished job, naming the document and its bundle. The same file is stored once. Nothing in the model changes until its changes are proposed and a person approves each.")
 +    async def world_model_ingest_source(
 +        source_id: str,
++        world_model_id: WorldModelId = "",
 +        source_type: WorldModelSourceType | None = None,
 +        published_at: datetime | None = None,
 +    ) -> WorldModelResult:
@@ -370,42 +427,44 @@ index 2e53cd1..85e7973 100644
 +        form = params(source=source.display_name, source_type=source_type or SOURCE_TYPES.get(source.source_type, "other"),
 +                      published_at=published_at)
 +        name = source.original_filename or source.display_name
-+        return await call("POST", "/documents", files=[("files", (name, data, source.mime_type))], data=form)
++        return await call("POST", await model_path(world_model_id) + "/documents",
++                          files=[("files", (name, data, source.mime_type))], data=form)
 +
-+    @register_tool(description="Propose a world model import bundle's items as graph updates, in event-time order. Each update waits for a person to approve or reject it in the world model's review; this tool never approves.")
-+    async def world_model_import_bundle(bundle_id: str, item_ids: list[str] | None = None) -> WorldModelResult:
-+        return await call("POST", f"/bundles/{bundle_id}/import", json=params(review="queue", item_ids=item_ids))
++    @register_tool(description="Propose a world model bundle's items as changes, one per item, in event-time order. Each change waits for a person to approve or reject it in the world model's review; this tool never approves.")
++    async def world_model_propose_changes(bundle_id: str, world_model_id: WorldModelId = "", item_ids: list[str] | None = None) -> WorldModelResult:
++        return await call("POST", await model_path(world_model_id) + "/changes", json=params(bundle_id=bundle_id, item_ids=item_ids))
 diff --git a/tests/backend/test_mcp_server.py b/tests/backend/test_mcp_server.py
-index 3d11722..0da3bc1 100644
+index 3d117225..2907062f 100644
 --- a/tests/backend/test_mcp_server.py
 +++ b/tests/backend/test_mcp_server.py
-@@ -116,6 +116,25 @@ MCP_CATALOG = [
+@@ -116,6 +116,26 @@ MCP_CATALOG = [
      "get_run",
      "get_research_trail",
      "search_canonical",
-+    "world_model_state",
-+    "world_model_query",
-+    "world_model_search_nodes",
++    "world_model_list_world_models",
++    "world_model_get_world_model",
++    "world_model_graph",
++    "world_model_list_entities",
 +    "world_model_get_entity",
-+    "world_model_get_value",
-+    "world_model_taxonomy",
++    "world_model_get_attribute",
++    "world_model_list_concepts",
 +    "world_model_search",
 +    "world_model_construction",
 +    "world_model_construction_markdown",
 +    "world_model_trace",
-+    "world_model_forecast",
-+    "world_model_get_forecast",
-+    "world_model_forecast_brief",
-+    "world_model_context_v4",
++    "world_model_simulate",
++    "world_model_get_simulation",
++    "world_model_simulation_brief",
++    "world_model_export_v4",
 +    "world_model_list_documents",
 +    "world_model_get_bundle",
-+    "world_model_list_proposals",
++    "world_model_list_changes",
 +    "world_model_ingest_source",
-+    "world_model_import_bundle",
++    "world_model_propose_changes",
      "simulation_list",
      "simulation_create",
      "simulation_read",
-@@ -2619,3 +2638,161 @@ def test_mcp_consent_explains_access_and_docs_describe_tool_effects(client, endp
+@@ -2619,3 +2639,203 @@ def test_mcp_consent_explains_access_and_docs_describe_tool_effects(client, endp
      assert 'Input schema' in section and 'Result schema' in section
      assert 'expected_revision: 1' in section
      assert 'request: {}' in section
@@ -413,13 +472,14 @@ index 3d11722..0da3bc1 100644
 +
 +# -- the world model service (mcp_world_model.py) ----------------------------------------------------------------
 +WM_KEY = "wm-test-key-" + "k" * 24
-+WM_STATE = {"scenario": "demo", "version": 7, "state_hash": "abc", "as_of": "2026-10-17T00:00:00Z",
-+            "latest_version": 7, "clock": "2026-10-17"}
++WM_VERSION = {"number": 7, "state_hash": "abc", "committed_at": "2026-10-17T00:00:00Z", "latest": 7,
++              "clock": "2026-10-17T00:00:00Z"}
++WM = "/world-models/sally_demo"
 +
 +
 +@pytest.fixture
 +def world_model_service(monkeypatch):
-+    """A stand-in world model service: it records each request and answers like the real one."""
++    """A stand-in world model service (its v1 API): it records each request and answers in the v1 envelope."""
 +    import httpx
 +
 +    from axelrod_app import mcp_world_model
@@ -428,21 +488,28 @@ index 3d11722..0da3bc1 100644
 +
 +    def answer(request: httpx.Request) -> httpx.Response:
 +        seen.append(request)
-+        path = request.url.path.removeprefix("/api/world-model")
-+        if path == "/entities/nobody":
-+            return httpx.Response(404, json={"error": {"code": "node_not_found", "message": "no entity 'nobody'"}})
-+        if path == "/values/broken":
++        path = request.url.path.removeprefix("/v1")
++        meta = {"request_id": "req_1", "version": WM_VERSION}
++        if path == "/world-models":
++            return httpx.Response(200, json={"data": [{"id": "sally_demo"}], "meta": {**meta, "next_cursor": None}})
++        if path == f"{WM}/entities/nobody":
++            return httpx.Response(404, json={"type": "https://docs.axelrod.ai/problems/entity_not_found",
++                                             "title": "Entity not found", "status": 404, "code": "entity_not_found",
++                                             "detail": "no entity nobody", "instance": path, "request_id": "req_1"})
++        if path == f"{WM}/entities/toyota/attributes/broken":
 +            return httpx.Response(502, text="<html>bad gateway</html>")
-+        if path == "/values/down":
++        if path == f"{WM}/entities/toyota/attributes/down":
 +            raise httpx.ConnectError("refused", request=request)
-+        if path.startswith("/construction/") and request.url.params.get("format") == "markdown":
++        if path.endswith("/construction") and request.url.params.get("format") == "markdown":
 +            return httpx.Response(200, text="# Toyota: business construction\n")
-+        if path == "/proposals":
++        if path == f"{WM}/theses":
++            return httpx.Response(201, json={"data": {"id": "T-Q1", "body": request.content.decode()}, "meta": meta})
++        if path == f"{WM}/changes" and request.method == "GET":
 +            return httpx.Response(200, json=[{"id": "p1"}])
-+        body = {"state": WM_STATE, "path": path, "params": dict(request.url.params)}
++        body = {"path": path, "params": dict(request.url.params)}
 +        if request.method == "POST":
 +            body["body"] = request.content.decode(errors="replace")[:4000]
-+        return httpx.Response(201 if request.method == "POST" else 200, json=body)
++        return httpx.Response(202 if request.method == "POST" else 200, json={"data": body, "meta": meta})
 +
 +    monkeypatch.setattr(mcp_world_model, "transport", httpx.MockTransport(answer))
 +    monkeypatch.setattr(main.settings, "world_model_service_url", "https://world-model.test/")
@@ -454,68 +521,80 @@ index 3d11722..0da3bc1 100644
 +    return _mcp_result(_call_tool(client, token, name, arguments or {}))
 +
 +
-+def test_world_model_tools_reach_the_service_as_the_org_user(client, endpoints, world_model_service) -> None:
++def test_world_model_tools_reach_the_service_as_the_org(client, endpoints, world_model_service) -> None:
 +    token = _complete_oauth_flow(client, endpoints)
 +    schemas = _output_schemas(client, token)
-+    state = _wm(client, token, "world_model_state")
-+    _assert_matches_output_schema(schemas["world_model_state"], state)
-+    assert state["structuredContent"]["state"]["version"] == 7
++    got = _wm(client, token, "world_model_get_world_model")
++    _assert_matches_output_schema(schemas["world_model_get_world_model"], got)
++    assert got["structuredContent"]["meta"]["version"]["number"] == 7
++    assert got["structuredContent"]["data"]["path"] == WM          # the org's only model, found by listing
 +    sent = world_model_service[-1]
-+    assert sent.url.host == "world-model.test" and sent.url.path == "/api/world-model/state"
-+    assert sent.headers["authorization"] == f"Bearer {WM_KEY}"
-+    org, _, org_user_id = sent.headers["x-axelrod-on-behalf-of"].partition("/")
-+    assert org == TEST_ORG_ID and main.session_store.get_org_user(org_user_id).user_id == "axelrod"
++    assert sent.url.host == "world-model.test" and sent.url.path == f"/v1{WM}"
++    assert sent.headers["authorization"] == f"Bearer {WM_KEY}" and "x-axelrod-on-behalf-of" not in sent.headers
 +
-+    q = _wm(client, token, "world_model_query", {"node_ids": ["toyota", "boj"], "depth": 2, "version": 3,
-+                                                 "as_of": "2026-10-01T00:00:00Z"})
-+    params = q["structuredContent"]["params"]
-+    assert params["node_ids"] == "toyota,boj" and params["depth"] == "2" and params["version"] == "3"
++    g = _wm(client, token, "world_model_graph", {"world_model_id": "sally_demo", "entities": ["toyota", "boj"],
++                                                 "depth": 2, "version": 3, "as_of": "2026-10-01T00:00:00Z"})
++    params = g["structuredContent"]["data"]["params"]
++    assert params["entities"] == "toyota,boj" and params["depth"] == "2" and params["version"] == "3"
 +    assert params["as_of"].startswith("2026-10-01T00:00:00") and params["limit"] == "200" and "q" not in params
 +    for name, args, path in (
-+        ("world_model_search_nodes", {"q": "toy"}, "/nodes"),
-+        ("world_model_get_entity", {"entity_id": "toyota"}, "/entities/toyota"),
-+        ("world_model_get_value", {"value_id": "toyota.operating_income"}, "/values/toyota.operating_income"),
-+        ("world_model_taxonomy", {}, "/taxonomy"),
-+        ("world_model_search", {"q": "yen", "mode": "keyword"}, "/search"),
-+        ("world_model_construction", {"entity_id": "toyota", "version": 2}, "/construction/toyota"),
-+        ("world_model_trace", {"entity_id": "toyota", "start": "dollar_yen.usd_jpy"}, "/construction/toyota/trace"),
-+        ("world_model_get_forecast", {"forecast_id": "F1"}, "/forecasts/F1"),
-+        ("world_model_forecast_brief", {"forecast_id": "F1"}, "/forecasts/F1/brief"),
-+        ("world_model_context_v4", {"forecast_id": "F1"}, "/context/v4"),
-+        ("world_model_list_documents", {"order": "ingested_at"}, "/documents"),
-+        ("world_model_get_bundle", {"bundle_id": "B1"}, "/bundles/B1"),
++        ("world_model_list_world_models", {}, "/world-models"),
++        ("world_model_list_entities", {"q": "toy"}, f"{WM}/entities"),
++        ("world_model_get_entity", {"entity_id": "toyota"}, f"{WM}/entities/toyota"),
++        ("world_model_get_attribute", {"entity_id": "toyota", "attribute": "operating_profit"},
++         f"{WM}/entities/toyota/attributes/operating_profit"),
++        ("world_model_list_concepts", {}, f"{WM}/concepts"),
++        ("world_model_search", {"q": "yen", "mode": "keyword"}, f"{WM}/search"),
++        ("world_model_construction", {"entity_id": "toyota", "version": 2}, f"{WM}/entities/toyota/construction"),
++        ("world_model_trace", {"entity_id": "toyota", "start": "dollar_yen.usd_jpy"}, f"{WM}/entities/toyota/traces"),
++        ("world_model_get_simulation", {"simulation_id": "F1"}, f"{WM}/simulations/F1"),
++        ("world_model_simulation_brief", {"simulation_id": "F1"}, f"{WM}/simulations/F1/brief"),
++        ("world_model_export_v4", {"simulation_id": "F1"}, f"{WM}/exports/v4.1.4"),
++        ("world_model_list_documents", {"order": "ingested_at"}, f"{WM}/documents"),
 +    ):
 +        result = _wm(client, token, name, args)
 +        _assert_matches_output_schema(schemas[name], result)
-+        assert result["structuredContent"]["path"] == path, name
-+    exported = next(r for r in world_model_service if r.url.path.endswith("/context/v4"))
-+    assert exported.url.params["forecast"] == "F1"
++        data = result["structuredContent"]["data"]
++        assert (data[0]["id"] == "sally_demo") if path == "/world-models" else data["path"] == path, name
++    traced = next(r for r in world_model_service if r.url.path.endswith("/traces"))
++    assert traced.url.params["from"] == "dollar_yen.usd_jpy"
++    exported = next(r for r in world_model_service if r.url.path.endswith("/exports/v4.1.4"))
++    assert exported.url.params["simulation"] == "F1"
 +
++    pinned = _wm(client, token, "world_model_get_attribute", {"entity_id": "toyota", "attribute": "toyota.operating_profit",
++                                                              "version": 4})
++    assert pinned["structuredContent"]["data"]["path"] == f"{WM}/entities/toyota/attributes/toyota.operating_profit"
++    assert pinned["structuredContent"]["data"]["params"] == {"version": "4"}
++    bundle = _wm(client, token, "world_model_get_bundle", {"bundle_id": "B1"})
++    _assert_matches_output_schema(schemas["world_model_get_bundle"], bundle)
++    assert bundle["structuredContent"]["data"]["path"] == f"{WM}/bundles/B1"
++    assert bundle["structuredContent"]["data"]["items"]["path"] == f"{WM}/bundles/B1/items"
 +    md = _wm(client, token, "world_model_construction_markdown", {"entity_id": "toyota"})
 +    _assert_matches_output_schema(schemas["world_model_construction_markdown"], md)
 +    assert md["structuredContent"]["markdown"].startswith("# Toyota")
-+    listed = _wm(client, token, "world_model_list_proposals")
++    listed = _wm(client, token, "world_model_list_changes")
 +    assert listed["structuredContent"]["items"] == [{"id": "p1"}]
 +
 +
 +def test_world_model_writes_only_propose_and_never_approve(client, endpoints, world_model_service) -> None:
 +    token = _complete_oauth_flow(client, endpoints)
-+    forecast = _wm(client, token, "world_model_forecast", {"question": "What if the BoJ hiked by 25bp?"})
-+    assert forecast["structuredContent"]["path"] == "/forecasts"
-+    assert json.loads(forecast["structuredContent"]["body"]) == {"question": "What if the BoJ hiked by 25bp?",
-+                                                                 "horizon_days": 182}
-+    for bad in ({}, {"question": "q", "thesis_id": "S-T3"}):
-+        refused = _wm(client, token, "world_model_forecast", bad)
++    sim = _wm(client, token, "world_model_simulate", {"question": "What if the BoJ hiked by 25bp?"})
++    data = sim["structuredContent"]["data"]
++    assert json.loads(data["thesis"]["body"]) == {"question": "What if the BoJ hiked by 25bp?", "horizon_days": 182}
++    assert data["job"]["path"] == f"{WM}/theses/T-Q1/simulations"
++    for bad in ({}, {"question": "q", "template_id": "S-T3"}):
++        refused = _wm(client, token, "world_model_simulate", bad)
 +        assert refused.get("isError") is True and "invalid_request" in _tool_error_text(refused)
-+    imported = _wm(client, token, "world_model_import_bundle", {"bundle_id": "B1", "item_ids": ["i1"]})
-+    assert json.loads(imported["structuredContent"]["body"]) == {"review": "queue", "item_ids": ["i1"]}
++    proposed = _wm(client, token, "world_model_propose_changes", {"bundle_id": "B1", "item_ids": ["i1"]})
++    assert proposed["structuredContent"]["data"]["path"] == f"{WM}/changes"
++    assert json.loads(proposed["structuredContent"]["data"]["body"]) == {"bundle_id": "B1", "item_ids": ["i1"]}
 +    tools = {tool["name"]: tool for tool in _mcp_result(_tools_list(client, token))["tools"]}
-+    assert not any("decide" in n or "approve" in n for n in tools)
-+    assert "world_model_import_bundle" in tools and "review" not in tools["world_model_import_bundle"]["inputSchema"]["properties"]
-+    for name in ("world_model_forecast", "world_model_ingest_source", "world_model_import_bundle"):
++    assert not any("decide" in n or "approve" in n or "reject" in n for n in tools)
++    assert "review" not in tools["world_model_propose_changes"]["inputSchema"]["properties"]
++    for name in ("world_model_simulate", "world_model_ingest_source", "world_model_propose_changes"):
 +        hints = tools[name]["annotations"]
 +        assert hints["readOnlyHint"] is False and hints["destructiveHint"] is False and hints["openWorldHint"] is False
-+    for name in ("world_model_state", "world_model_query", "world_model_trace", "world_model_construction"):
++    for name in ("world_model_get_world_model", "world_model_graph", "world_model_trace", "world_model_construction"):
 +        assert tools[name]["annotations"]["readOnlyHint"] is True, name
 +
 +
@@ -531,31 +610,53 @@ index 3d11722..0da3bc1 100644
 +    source_id = stored.json()["source_id"]
 +    sent = _wm(client, token, "world_model_ingest_source", {"source_id": source_id})
 +    assert sent.get("isError") is not True, sent
-+    body = sent["structuredContent"]["body"]
++    data = sent["structuredContent"]["data"]
++    assert data["path"] == f"{WM}/documents"
++    body = data["body"]
 +    assert "The BoJ raised its policy rate." in body and 'name="source_type"' in body and "other" in body
 +    assert 'filename="note.md"' in body and "Rates note" in body
 +    typed = _wm(client, token, "world_model_ingest_source", {"source_id": source_id, "source_type": "broker_research",
-+                                                              "published_at": "2026-10-01T00:00:00Z"})
-+    assert "broker_research" in typed["structuredContent"]["body"] and "2026-10-01" in typed["structuredContent"]["body"]
++                                                              "published_at": "2026-10-01T00:00:00Z",
++                                                              "world_model_id": "sally_demo"})
++    body = typed["structuredContent"]["data"]["body"]
++    assert "broker_research" in body and "2026-10-01" in body
 +    missing = _wm(client, token, "world_model_ingest_source", {"source_id": "source-missing"})
 +    assert missing.get("isError") is True and "source_not_found" in _tool_error_text(missing)
 +
 +
 +def test_world_model_errors_come_back_as_tool_errors(client, endpoints, world_model_service, monkeypatch) -> None:
 +    token = _complete_oauth_flow(client, endpoints)
-+    for args, name, code in (({"entity_id": "nobody"}, "world_model_get_entity", "node_not_found: no entity 'nobody'"),
-+                             ({"value_id": "broken"}, "world_model_get_value", "world_model_error: HTTP 502"),
-+                             ({"value_id": "down"}, "world_model_get_value", "world_model_unavailable: ConnectError")):
++    for args, name, code in (({"entity_id": "nobody"}, "world_model_get_entity", "entity_not_found: no entity nobody"),
++                             ({"entity_id": "toyota", "attribute": "broken"}, "world_model_get_attribute",
++                              "world_model_error: HTTP 502"),
++                             ({"entity_id": "toyota", "attribute": "down"}, "world_model_get_attribute",
++                              "world_model_unavailable: ConnectError")):
 +        result = _wm(client, token, name, args)
 +        assert result.get("isError") is True and code in _tool_error_text(result), name
 +    outsider = _complete_oauth_flow(client, endpoints, username="outsider", org_id=OTHER_ORG_ID)
-+    result = _wm(client, outsider, "world_model_state")
++    result = _wm(client, outsider, "world_model_list_world_models")
 +    assert result.get("isError") is True and "world_model_unavailable" in _tool_error_text(result)
 +    monkeypatch.setattr(main.settings, "world_model_service_keys_raw", "*=" + WM_KEY)
-+    assert _wm(client, outsider, "world_model_state").get("isError") is not True
++    assert _wm(client, outsider, "world_model_list_world_models").get("isError") is not True
 +    monkeypatch.setattr(main.settings, "world_model_service_url", "")
-+    unset = _wm(client, token, "world_model_state")
++    unset = _wm(client, token, "world_model_list_world_models")
 +    assert unset.get("isError") is True and "world_model_unavailable" in _tool_error_text(unset)
++
++
++def test_world_model_tools_need_a_model_when_the_org_has_several(client, endpoints, world_model_service,
++                                                                 monkeypatch) -> None:
++    import httpx
++
++    from axelrod_app import mcp_world_model
++
++    token = _complete_oauth_flow(client, endpoints)
++
++    def two(request: httpx.Request) -> httpx.Response:
++        return httpx.Response(200, json={"data": [{"id": "a"}, {"id": "b"}], "meta": {"request_id": "r"}})
++
++    monkeypatch.setattr(mcp_world_model, "transport", httpx.MockTransport(two))
++    result = _wm(client, token, "world_model_get_world_model")
++    assert result.get("isError") is True and "name a world_model_id" in _tool_error_text(result)
 +
 +
 +def test_world_model_service_keys_parse_strictly() -> None:

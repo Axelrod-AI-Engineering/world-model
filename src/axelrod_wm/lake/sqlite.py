@@ -18,7 +18,17 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from axelrod_wm.lake.store import BundleRecord, Chunk, Document, Hit, ImportRecord, LakeStore, Mention
+from axelrod_wm.lake.store import (
+    AuditRecord,
+    BundleRecord,
+    Chunk,
+    Document,
+    Hit,
+    ImportRecord,
+    LakeStore,
+    Mention,
+    WorldModelRecord,
+)
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS documents (
@@ -53,6 +63,12 @@ CREATE TABLE IF NOT EXISTS bundles (
 CREATE TABLE IF NOT EXISTS imports (
   tenant TEXT NOT NULL, bundle_id TEXT NOT NULL, imported_at TEXT NOT NULL, update_id TEXT, item_ids TEXT NOT NULL,
   by TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS world_models (
+  id TEXT PRIMARY KEY, org_id TEXT NOT NULL, name TEXT NOT NULL, created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS audit_events (
+  org TEXT NOT NULL, id TEXT NOT NULL, at TEXT NOT NULL, request_id TEXT NOT NULL, world_model_id TEXT NOT NULL,
+  method TEXT NOT NULL, route TEXT NOT NULL, status INTEGER NOT NULL, actor TEXT NOT NULL, scopes TEXT NOT NULL,
+  resource_ids TEXT NOT NULL, PRIMARY KEY (org, id));
 CREATE TABLE IF NOT EXISTS llm_cache (
   key TEXT PRIMARY KEY, provider TEXT NOT NULL, model TEXT NOT NULL, value TEXT NOT NULL);
 """
@@ -308,6 +324,37 @@ class SQLiteLake(LakeStore):
             rows = self.db.execute(sql, (tenant, bundle_id) if bundle_id else (tenant,)).fetchall()
         return [ImportRecord(tenant=r[0], bundle_id=r[1], imported_at=_dt(r[2]), update_id=r[3],
                              item_ids=json.loads(r[4]), by=r[5]) for r in rows]
+
+    # -- the world model registry and the audit log ---------------------------------------------------------
+    def register_world_model(self, rec: WorldModelRecord) -> WorldModelRecord:
+        with self.lock:
+            self.db.execute("INSERT INTO world_models VALUES (?,?,?,?) ON CONFLICT(id) DO UPDATE SET "
+                            "org_id=excluded.org_id, name=excluded.name", (rec.id, rec.org_id, rec.name,
+                                                                          _iso(rec.created_at)))
+            self.db.commit()
+            row = self.db.execute("SELECT * FROM world_models WHERE id=?", (rec.id,)).fetchone()
+        return WorldModelRecord(id=row[0], org_id=row[1], name=row[2], created_at=_dt(row[3]))
+
+    def world_models(self, org_id: str | None = None) -> list[WorldModelRecord]:
+        sql = "SELECT * FROM world_models" + (" WHERE org_id=?" if org_id is not None else "") + " ORDER BY id"
+        with self.lock:
+            rows = self.db.execute(sql, (org_id,) if org_id is not None else ()).fetchall()
+        return [WorldModelRecord(id=r[0], org_id=r[1], name=r[2], created_at=_dt(r[3])) for r in rows]
+
+    def put_audit(self, rec: AuditRecord) -> None:
+        with self.lock:
+            self.db.execute("INSERT INTO audit_events VALUES (?,?,?,?,?,?,?,?,?,?,?)", (
+                rec.org, rec.id, _iso(rec.at), rec.request_id, rec.world_model_id, rec.method, rec.route, rec.status,
+                json.dumps(rec.actor, sort_keys=True), json.dumps(rec.scopes), json.dumps(rec.resource_ids)))
+            self.db.commit()
+
+    def list_audit(self, org: str, world_model_id: str) -> list[AuditRecord]:
+        with self.lock:
+            rows = self.db.execute("SELECT * FROM audit_events WHERE org=? AND world_model_id=? ORDER BY at DESC, id DESC",
+                                   (org, world_model_id)).fetchall()
+        return [AuditRecord(org=r[0], id=r[1], at=_dt(r[2]), request_id=r[3], world_model_id=r[4], method=r[5],
+                            route=r[6], status=r[7], actor=json.loads(r[8]), scopes=json.loads(r[9]),
+                            resource_ids=json.loads(r[10])) for r in rows]
 
     # -- the LLM step's replay cache --------------------------------------------------------------------------
     def cache_get(self, key: str) -> dict | None:

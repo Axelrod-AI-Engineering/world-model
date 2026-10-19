@@ -19,8 +19,8 @@ def graph(tmp_path):
 
 def test_the_view_holds_compositions_paths_transitions_and_link_counts(graph):
     v = construction_view(graph, "acme")
-    assert v["name"] == "Acme" and {x["id"] for x in v["values"]} >= {"acme.auto", "acme.landed_cost"}
-    auto = next(x for x in v["values"] if x["id"] == "acme.auto")
+    assert v["name"] == "Acme" and {x["id"] for x in v["attributes"]} >= {"acme.auto", "acme.landed_cost"}
+    auto = next(x for x in v["attributes"] if x["id"] == "acme.auto")
     assert auto["view"] == "reporting_segments" and auto["unit"] == "bn/yr" and auto["mean"] == pytest.approx(10.0)
     assert [c["id"] for c in v["compositions"]] == ["C1", "C2"] and v["compositions"][0]["eliminations"] == "acme.elims"
     p = v["paths"][0]
@@ -52,7 +52,7 @@ def test_a_level_without_a_mean_still_shows_its_unit(graph):
     g = graph.model_copy(deep=True)
     sub = g.subentities["acme.auto"]
     g.subentities["acme.auto"] = sub.model_copy(update={"posterior": NS(mean=lambda: 1 / 0)})
-    auto = next(x for x in construction_view(g, "acme")["values"] if x["id"] == "acme.auto")
+    auto = next(x for x in construction_view(g, "acme")["attributes"] if x["id"] == "acme.auto")
     assert auto["mean"] is None and auto["unit"] == "bn/yr"
 
 
@@ -72,7 +72,7 @@ def test_the_readable_view(graph):
 
 
 def test_the_readable_view_of_bare_structure():
-    view = {"name": "X", "values": [], "links": {"total": 0, "calibrated": 0, "uncalibrated": 0, "accounting": 0,
+    view = {"name": "X", "attributes": [], "links": {"total": 0, "calibrated": 0, "uncalibrated": 0, "accounting": 0,
                                                   "identity": 0, "stock_flow": 0, "state_dependent": 0,
                                                   "with_transition": 0},
             "compositions": [{"id": "C", "view": "products", "basis": "b", "unit": "u", "period": "FY", "additive": False,

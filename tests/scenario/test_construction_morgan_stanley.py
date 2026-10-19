@@ -22,9 +22,9 @@ from axelrod_wm.model.construction import (
     reconcile_stock_flows,
     validate_construction,
 )
+from tests.scenario import v1_reads as v1
 
 MS = "morgan_stanley"
-B = "/api/world-model"
 P = "morgan_stanley."
 REV, PRETAX, NI = P + "net_revenue", P + "pretax_income", P + "net_income"
 WM, ISG, IM = P + "wealth_revenue", P + "isg_revenue", P + "im_revenue"
@@ -375,7 +375,7 @@ def test_generalization_trace_a_yen_carry_unwind(g):
 
 # -- delivery: export and API ---------------------------------------------------------------------------------------------
 def test_new_objects_reach_the_export(client):
-    pack = client.get(f"{B}/context/v4").json()["domain_pack"]
+    pack = v1.pack(client)
     bridge = {b["composition_id"]: b for b in pack["domain_specific_support_objects"]["financial_bridge"]}
     assert set(COMPOSITIONS) <= set(bridge)
     paths = {p["axelrod"]["path_id"] for p in pack["transmission_paths"] if p.get("path_kind") == "business_construction"}
@@ -389,10 +389,10 @@ def test_new_objects_reach_the_export(client):
 
 def test_new_objects_reach_the_api(client):
     ids = f"{P}wm_sweep_deposits,{P}wm_fee_based_assets,{P}cet1_capital,{P}net_revenue"
-    body = client.get(f"{B}/query", params={"node_ids": ids, "depth": 1}).json()
-    got = {v["id"] for v in body["values"]}
+    body = v1.graph(client, ids)
+    got = {a["id"] for e in body["entities"] for a in e["attributes"]}
     assert set(ids.split(",")) <= got and P + "wm_deposits" in got
-    view = client.get(f"{B}/construction/{MS}").json()["construction"]
+    view = v1.construction(client, MS)
     assert {c["id"] for c in view["compositions"]} == set(COMPOSITIONS) and not view["problems"]
-    tr = client.get(f"{B}/construction/{MS}/trace", params={"start": FED}).json()["trace"]
+    tr = v1.trace(client, MS, FED)
     assert tr["reaches_endpoint"]

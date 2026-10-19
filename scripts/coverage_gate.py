@@ -23,8 +23,8 @@ import xml.etree.ElementTree as ET
 from collections import defaultdict
 from pathlib import Path
 
-STRICT = ("src/axelrod_wm/lake/*.py", "src/axelrod_wm/ingest/*.py", "src/axelrod_wm/api/service.py",
-          "src/axelrod_wm/api/mcp.py", "src/axelrod_wm/api/keys.py")
+STRICT = ("src/axelrod_wm/lake/*.py", "src/axelrod_wm/ingest/*.py", "src/axelrod_wm/api/v1/*.py",
+          "src/axelrod_wm/api/tokens.py", "src/axelrod_wm/api/mcp.py", "src/axelrod_wm/api/keys.py")
 FLOOR = Path("coverage-floor.json")
 TOLERANCE = 0.05          # percentage points: platform noise in branch counting, nothing more
 START, END = "<!-- tests:start -->", "<!-- tests:end -->"

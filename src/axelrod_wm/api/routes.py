@@ -1406,18 +1406,26 @@ async def run_import(request: Request, body: ImportBody) -> dict:
 
 
 # -- a document through ingestion, and the graph update it would make (Oct 17, api/ingest_view.py) ----------------
+def _tenant(request: Request) -> str:
+    """The lakehouse partition of a request's login: its organization, as /v1 names it."""
+    from axelrod_wm.api.auth import org_of
+
+    return org_of(request.scope.get("axelrod_login"))
+
 async def _document_view(request: Request, st: AppState, read: Any) -> dict:
     """Run `read(ingestor, tenant, graph)` (the service's ingestion path) and draw the update its bundle would make."""
     from axelrod_wm.api.ingest_view import document_view
-    from axelrod_wm.api.service import _ingestor_for, lake, tenant_of
+    from axelrod_wm.api.v1.routes_work import inverted_surfaces
 
-    tenant = tenant_of(request)
+    tenant = _tenant(request)
 
     def run() -> dict:
         runner = _importer(st)
         graph = st.controller.engine.wm.graph
-        res = read(_ingestor_for(request, st), tenant, graph)
-        return document_view(res, graph, runner, lake(request.app).get_chunks(tenant, res.document.id))
+        ing = request.app.state.ingestor
+        ing.inverted = frozenset(inverted_surfaces(st))
+        res = read(ing, tenant, graph)
+        return document_view(res, graph, runner, request.app.state.lake.get_chunks(tenant, res.document.id))
 
     return await st.call(run)
 
@@ -1427,7 +1435,7 @@ async def import_document(request: Request, file: UploadFile = File(...), source
                           source_type: str = Form("other"), published_at: datetime | None = Form(None)) -> dict:
     """A raw document (PDF, DOCX, XLSX, HTML, CSV, Markdown, text, or a JSON bundle) stored in the lakehouse, read
     into an import bundle, and drawn as the graph update each item would make. Nothing in the model changes."""
-    from axelrod_wm.api.service import MAX_UPLOAD, caller_of
+    from axelrod_wm.api.v1.routes_work import MAX_UPLOAD
     from axelrod_wm.ingest.pipeline import SOURCE_TYPES
 
     st = S(request)
@@ -1438,7 +1446,7 @@ async def import_document(request: Request, file: UploadFile = File(...), source
         raise HTTPException(422, "the file is empty")
     if len(data) > MAX_UPLOAD:
         raise HTTPException(413, f"{file.filename} is over {MAX_UPLOAD // (1024 * 1024)} MB")
-    name, by = file.filename or "upload.bin", caller_of(request)
+    name, by = file.filename or "upload.bin", request.scope.get("axelrod_login") or "local"
     return await _document_view(request, st, lambda ing, tenant, graph: ing.ingest_file(
         tenant, data, name, graph, source=source, source_type=source_type, published_at=published_at, uploaded_by=by))
 
@@ -1446,9 +1454,7 @@ async def import_document(request: Request, file: UploadFile = File(...), source
 @router.get("/import/documents")
 async def import_documents(request: Request) -> list[dict]:
     """Documents already in the lakehouse, newest first, to read again against the model as it is now."""
-    from axelrod_wm.api.service import lake, tenant_of
-
-    docs = lake(request.app).list_documents(tenant_of(request), order="ingested_at", limit=1000)
+    docs = request.app.state.lake.list_documents(_tenant(request), order="ingested_at", limit=1000)
     return [{"id": d.id, "filename": d.filename, "title": d.title, "event_time": d.event_time.isoformat(),
              "status": d.status} for d in reversed(docs)]
 
@@ -1456,10 +1462,8 @@ async def import_documents(request: Request) -> list[dict]:
 @router.post("/import/documents/{doc_id}")
 async def import_stored_document(request: Request, doc_id: str) -> dict:
     """A stored document read again against the model as it is now, and the graph update it would make."""
-    from axelrod_wm.api.service import lake, tenant_of
-
     st = S(request)
-    if lake(request.app).get_document(tenant_of(request), doc_id) is None:
+    if request.app.state.lake.get_document(_tenant(request), doc_id) is None:
         raise HTTPException(404, f"no document {doc_id}")
     return await _document_view(request, st, lambda ing, tenant, graph: ing.process(tenant, doc_id, graph))
 
