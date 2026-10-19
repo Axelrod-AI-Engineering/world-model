@@ -7,7 +7,6 @@ import base64
 import hashlib
 import json
 import secrets
-import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -20,9 +19,7 @@ from pydantic import BaseModel
 from axelrod_wm.api.app import AppState
 from axelrod_wm.api.tokens import Principal
 from axelrod_wm.api.v1.problems import ApiError, as_api_error, problem_body
-from axelrod_wm.lake.store import AuditRecord, LakeStore, WorldModelRecord
-
-IDEMPOTENCY_TTL_S = 86400
+from axelrod_wm.lake.store import AuditRecord, IdempotencyRecord, LakeStore, WorldModelRecord
 
 
 @dataclass
@@ -32,6 +29,7 @@ class Model:
     id: str
     org: str
     st: AppState
+    compartment: Any = None              # a read of the unified model (erid) narrowed to a compartment
 
 
 # -- the registry -----------------------------------------------------------------------------------------------------
@@ -72,14 +70,39 @@ def models_of(request: Request, org: str) -> list[Model]:
     return [m for _i, m in sorted(request.app.state.world_models.items()) if m.org == org]
 
 
-def model(request: Request, world_model_id: str, scope: str) -> Model:
-    """The world model in the path, if it belongs to the credential's organization (else 404), and the scope."""
+def model(request: Request, world_model_id: str, scope: str | None) -> Model:
+    """The world model in the path, if it belongs to the credential's organization (else 404), and the scope (None: the
+    route checks it itself)."""
     p = principal(request)
+    erid = request.scope.get("axelrod_erid")
+    if erid is not None:
+        return unified(request, erid, scope)
     m = request.app.state.world_models.get(world_model_id)
     if m is None or m.org != p.org:
         raise ApiError("world_model_not_found", f"no world model {world_model_id}")
-    require(request, scope)
+    if scope is not None:
+        require(request, scope)
     return m
+
+
+def unified(request: Request, compartment: str, scope: str) -> Model:
+    """The unified world model (erid; api/v1/compartments.py): whole for an internal organization, or narrowed to a
+    compartment for an internal organization or the one the compartment is assigned to (else 404). Only reads reach
+    it, so the scope is always one to check."""
+    from dataclasses import replace
+
+    p = principal(request)
+    require(request, scope)
+    erid = request.app.state.erid
+    internal = p.org in erid.internal
+    if not compartment:
+        if not internal:
+            raise ApiError("internal_only", "the whole unified world model is for internal staff; name a compartment")
+        return erid.model
+    comp = erid.compartments.get(compartment)
+    if comp is None or not (internal or erid.owners.get(compartment) == p.org):
+        raise ApiError("compartment_not_found", f"no compartment {compartment}")
+    return replace(erid.model, compartment=comp)
 
 
 # -- the state a read is of -------------------------------------------------------------------------------------------
@@ -176,27 +199,37 @@ def fingerprint(*parts: Any) -> str:
     return hashlib.sha256(json.dumps(parts, sort_keys=True, default=str).encode()).hexdigest()
 
 
-async def idempotent(request: Request, m: Model, fp: str, make: Callable[[], Awaitable[JSONResponse]]) -> JSONResponse:
-    """With an Idempotency-Key, the first answer to (organization, world model, route, key) is kept for a day: a retry
-    with the same request gets it again; another request with the key is refused."""
+async def idempotent(request: Request, m: Model, fp: str, make: Callable[[], Awaitable[JSONResponse]],
+                     content: str | None = None) -> JSONResponse:
+    """The first answer to a create, kept forever in the lakehouse catalog (Oct 19, with Manav: no expiry; storage is
+    negligible and determinism comes first), per organization, world model, operation, and key.
+
+    - With an Idempotency-Key: a retry with the same request gets the first answer again; another request under the key
+      is refused (422 idempotency_key_reused).
+    - With `content` (document uploads and bundles): the content is a key of its own, `content:<hash>`, so the same
+      content gets the same answer whoever sends it and whenever, with or without a header.
+
+    A request that fails raises before anything is kept, so its retry runs again. (Later, several articles about one
+    event may share a key; not built.)"""
     key = request.headers.get("idempotency-key")
-    if key is None:
-        return await make()
-    if not 0 < len(key) <= 255:
+    if key is not None and not 0 < len(key) <= 255:
         raise ApiError("invalid_request", "Idempotency-Key is 1-255 characters")
-    store: dict = request.app.state.idempotency
-    now = time.monotonic()
-    for k in [k for k, v in store.items() if now - v[3] > IDEMPOTENCY_TTL_S]:
-        del store[k]
-    slot = (m.org, m.id, request.scope["route"].path, key)
-    if slot in store:
-        old_fp, status, body, _at, headers = store[slot]
-        if old_fp != fp:
+    store = lake(request.app)
+    operation = request.scope["route"].path
+    slots = [(k, f) for k, f in ((key, fp), (None if content is None else f"content:{content}", content)) if k]
+    for k, f in slots:
+        rec = store.get_idempotency(m.org, m.id, operation, k)
+        if rec is None:
+            continue
+        if rec.fingerprint != f:
             raise ApiError("idempotency_key_reused", "this Idempotency-Key was used for another request")
-        return JSONResponse(json.loads(body), status_code=status, headers=headers)
+        return JSONResponse(json.loads(rec.body), status_code=rec.status, headers=rec.headers)
     resp = await make()                  # a failure raises, so only a success is kept
     headers = {k: v for k, v in resp.headers.items() if k.lower() in ("location", "etag")}
-    store[slot] = (fp, resp.status_code, bytes(resp.body), now, headers)
+    for k, f in slots:
+        store.put_idempotency(IdempotencyRecord(
+            org=m.org, world_model_id=m.id, operation=operation, key=k, fingerprint=f, status=resp.status_code,
+            body=bytes(resp.body).decode(), headers=headers, created_at=datetime.now(UTC)))
     return resp
 
 
@@ -213,11 +246,10 @@ def audit(request: Request, m: Model, status: int, resource_ids: list[str]) -> N
 async def run_job(request: Request, m: Model, kind: str, work: Callable[[], Awaitable[dict]]) -> JSONResponse:
     """Record a job, run it, and answer 202 with it. The work runs before the answer; the contract has the client
     poll, so moving it to a queue later changes no client."""
-    jobs: dict = request.app.state.jobs.setdefault((m.org, m.id), {})
     jid = f"job_{secrets.token_hex(8)}"
     job = {"id": jid, "type": kind, "status": "running", "created_at": datetime.now(UTC).isoformat(),
            "finished_at": None, "result": None, "error": None}
-    jobs[jid] = job
+    lake(request.app).put_job(m.org, m.id, job)
     try:
         job["result"] = await work()
         job["status"] = "succeeded"
@@ -229,6 +261,7 @@ async def run_job(request: Request, m: Model, kind: str, work: Callable[[], Awai
         job["error"] = problem_body(err.status, err.code, err.detail, request.url.path, request.state.request_id,
                                     err.errors)
     job["finished_at"] = datetime.now(UTC).isoformat()
+    lake(request.app).put_job(m.org, m.id, job)            # jobs are kept, like the answers that name them
     result = job["result"] or {}
     linked = [v for k, v in sorted((result.get("detail") or {}).items()) if k.endswith("_id") and isinstance(v, str)]
     audit(request, m, 202, [jid, *result.get("ids", []), *linked])
@@ -236,7 +269,7 @@ async def run_job(request: Request, m: Model, kind: str, work: Callable[[], Awai
 
 
 def job_of(request: Request, m: Model, job_id: str) -> dict:
-    job = request.app.state.jobs.get((m.org, m.id), {}).get(job_id)
+    job = lake(request.app).get_job(m.org, m.id, job_id)
     if job is None:
         raise ApiError("job_not_found", f"no job {job_id}")
     return job

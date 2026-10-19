@@ -20,6 +20,7 @@ def install(app: Any) -> None:
     """Mount v1 on the app: its routes, its registry of world models, and its in-memory stores."""
     from fastapi.exception_handlers import http_exception_handler
 
+    from axelrod_wm.api.v1 import routes_erid
     from axelrod_wm.api.v1.context import build_registry
     from axelrod_wm.api.v1.problems import not_found_handler
     from axelrod_wm.api.v1.routes_model import router as model_router
@@ -27,9 +28,10 @@ def install(app: Any) -> None:
 
     app.include_router(model_router)
     app.include_router(work_router)
+    app.include_router(routes_erid.router)
     app.state.world_models = build_registry(app)
-    app.state.idempotency = {}
-    app.state.jobs = {}
+    # the unified world model (erid) is the main engine's: a deployment runs its fullest scenario there
+    app.state.erid = routes_erid.build(app.state.world_models, app.state.axelrod.first_scenario)
     app.state.theses = {}
     app.state.proposing = set()             # world models with a proposal starting (POST .../changes)
     app.add_exception_handler(StarletteHTTPException, not_found_handler(http_exception_handler))

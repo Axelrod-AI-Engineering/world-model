@@ -102,6 +102,8 @@ def test_read_again_and_delete(c):
     r = c.delete(f"{WM}/documents/{res['document_id']}")
     assert r.status_code == 204 and not r.content and r.headers["x-request-id"]
     problem(c.delete(f"{WM}/documents/{res['document_id']}"), 404, "document_not_found")
+    # the kept answers that named it are forgotten, so the same content uploads afresh
+    assert upload(c, b"Oct 2, 2026. The ECB cut its deposit rate by 25bp.", "again.txt")["new"] is True
 
 
 def test_a_failed_read_is_a_failed_job(c, monkeypatch):
@@ -195,8 +197,8 @@ def test_propose_review_and_decide(c, note):
     assert diff["operations"] and all(op["summary"] and op["op"] for op in diff["operations"])
     # human only, against the version reviewed
     url = f"{WM}/changes/{first}/approvals"
-    problem(c.post(url, json={}), 403, "insufficient_scope")                       # the key has no review scope
-    problem(c.post(url, json={}, headers=reviewer(act={"sub": "mcp-client:x"}, scope="changes:review")), 403,
+    problem(c.post(url, json={}), 403, "human_approval_required")                  # a key: a person decides
+    problem(c.post(url, json={}, headers=reviewer(act={"sub": "mcp-client:x"}, scope="changes:approve")), 403,
             "human_approval_required")
     problem(c.post(url, json={}, headers=reviewer(azp="core-mcp")), 403, "human_approval_required")
     problem(c.post(url, json={}, headers=reviewer()), 428, "precondition_required")
@@ -409,9 +411,27 @@ def test_a_retry_with_the_same_key_gets_the_first_answer(c, monkeypatch):
     bad = {"Idempotency-Key": "thesis-2"}
     problem(c.post(f"{WM}/theses", json={"template_id": "S-nope"}, headers=bad), 404, "thesis_not_found")
     problem(c.post(f"{WM}/theses", json={"template_id": "S-nope"}, headers=bad), 404, "thesis_not_found")
-    # keys expire after a day
-    import axelrod_wm.api.v1.context as ctx
+    # keys never expire: they are rows in the lakehouse catalog, with no time on them
+    kept = c.app.state.lake.get_idempotency("default", "sally_demo", "/v1/world-models/{world_model_id}/documents",
+                                            "upload-1")
+    assert kept.status == 202 and kept.headers["location"] == first.headers["location"]
+    assert c.post(f"{WM}/documents", files=files, headers=h).json() == first.json()
 
-    monkeypatch.setattr(ctx, "IDEMPOTENCY_TTL_S", -1)
-    fresh = c.post(f"{WM}/documents", files=other, headers=h)
-    assert fresh.status_code == 202
+
+def test_the_same_content_gets_the_same_answer_whoever_sends_it(c):
+    """Documents and bundles are keyed on their content too: with no header, from another caller, with other
+    metadata, the same files (names and bytes) get the first answer, and its job stays readable."""
+    files = [("files", ("same.txt", b"Content note: Oct 11, 2026. The BoJ held.", "text/plain"))]
+    first = c.post(f"{WM}/documents", files=files, data={"source": "Desk"})
+    assert first.status_code == 202 and first.json()["data"]["result"]["detail"]["results"][0]["new"] is True
+    person = SIGNER.bearer(scope="world_model:read documents:create")
+    again = c.post(f"{WM}/documents", files=files, data={"source": "Another desk"}, headers=person)
+    assert again.json() == first.json() and again.headers["location"] == first.headers["location"]
+    with_key = c.post(f"{WM}/documents", files=files, headers={"Idempotency-Key": "fresh-key"})
+    assert with_key.json() == first.json()
+    assert data(c.get(first.headers["location"]))["id"] == first.json()["data"]["id"]
+    renamed = [("files", ("other-name.txt", files[0][1][1], "text/plain"))]
+    assert c.post(f"{WM}/documents", files=renamed).json()["data"]["id"] != first.json()["data"]["id"]
+    b1 = c.post(f"{WM}/bundles", json={**SUPPORT, "title": "Content-keyed"})
+    b2 = c.post(f"{WM}/bundles", json={**SUPPORT, "title": "Content-keyed"}, headers=person)
+    assert b1.status_code == b2.status_code == 201 and b1.json() == b2.json()

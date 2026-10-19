@@ -73,11 +73,22 @@ def test_what_looks_like_a_jwt():
 
 # -- a good token -----------------------------------------------------------------------------------------------------------------
 def test_a_good_token_is_its_principal(signer, clock):
-    act = {"sub": "mcp-client:claude", "name": "Claude"}
-    p = verifier(clock).verify(signer.token(scope="read changes:write telepathy", act=act, jti="j1"))
-    assert p == Principal(kind="token", org="default", sub="org_user_9", scopes=frozenset({"read", "changes:write"}),
-                          name="Sally Reviewer", azp="core-web", act=act, jti="j1")
-    assert not p.human and p.actor()["act"] == act
+    p = verifier(clock).verify(signer.token(scope="world_model:read changes:create telepathy", jti="j1"))
+    assert p == Principal(kind="token", org="default", sub="org_user_9",
+                          scopes=frozenset({"world_model:read", "changes:create"}), name="Sally Reviewer",
+                          azp="core-web", act=None, jti="j1")
+    assert p.human and p.actor()["jti"] == "j1"
+
+
+ALL = "world_model:read documents:create changes:create simulations:create changes:approve admin"
+
+
+@pytest.mark.parametrize("claims", [{"azp": "core-mcp"}, {"act": {"sub": "mcp-client:claude", "name": "Claude"}}])
+def test_core_mcp_and_any_agent_read_only(signer, clock, claims):
+    """The access boundary (Oct 19): core's backend MCP channel and any agent-driven token read only, whatever the
+    token says."""
+    p = verifier(clock).verify(signer.token(scope=ALL, **claims))
+    assert p.scopes == frozenset({"world_model:read"}) and not p.human
 
 
 def test_who_counts_as_a_person(signer, clock):

@@ -10,7 +10,7 @@ from axelrod_wm.api import tokens
 from axelrod_wm.api.app import create_app
 from axelrod_wm.api.auth import extra_logins, login_of, org_of, owners
 from axelrod_wm.api.keys import ApiKey, api_keys, bearer, is_service_path, match
-from axelrod_wm.api.tokens import PROPOSE
+from axelrod_wm.api.tokens import READ
 from axelrod_wm.repo.snapshots import MemoryBackend
 from tests.service.helpers import Signer, problem, service
 
@@ -19,9 +19,9 @@ KEY_S = "s" * 32
 
 
 def test_keys_parse_from_the_environment_format():
-    keys = api_keys(f" zsolt:{KEY_A}:acme , kedar:{KEY_S}:sally:read+admin ,")
-    assert keys == [ApiKey("zsolt", KEY_A, "acme", PROPOSE),
-                    ApiKey("kedar", KEY_S, "sally", frozenset({"read", "admin"}))]
+    keys = api_keys(f" zsolt:{KEY_A}:acme , kedar:{KEY_S}:sally:world_model:read+admin ,")
+    assert keys == [ApiKey("zsolt", KEY_A, "acme", frozenset({READ})),
+                    ApiKey("kedar", KEY_S, "sally", frozenset({"world_model:read", "admin"}))]
     assert api_keys("") == []
     two = api_keys(f"z:{KEY_A}:acme,z:{KEY_S}:acme")
     assert [k.key for k in two] == [KEY_A, KEY_S]
@@ -31,9 +31,9 @@ def test_keys_parse_from_the_environment_format():
     ("zsolt:short:acme", "shorter"),
     ("zsolt:" + KEY_A, "caller:key:org"),
     (":" + KEY_A + ":acme", "caller:key:org"),
-    (f"z:{KEY_A}:a:read+telepathy", "unknown scopes: telepathy"),
+    (f"z:{KEY_A}:a:world_model:read+telepathy", "unknown scopes: telepathy"),
     (f"z:{KEY_A}:a:+", r"unknown scopes: \(none\)"),
-    (f"z:{KEY_A}:a:read+changes:review", "only a person"),
+    (f"z:{KEY_A}:a:world_model:read+changes:approve", "only a person"),
     (f"z:{KEY_A}:a,z:{KEY_S}:a,z:{'c' * 32}:a", "more than twice"),
     (f"z:{KEY_A}:a,z:{KEY_S}:b", "two organizations"),
     (f"z:{KEY_A}:a,y:{KEY_A}:a", "one key twice"),
@@ -153,7 +153,7 @@ def test_a_signed_in_browser_may_call_the_service_as_its_login(hosted):
         me = hosted.get("/v1/me").json()["data"]
         assert me["actor"] == {"kind": "session", "org": "sally", "sub": "sally", "name": None, "azp": None,
                                "act": None, "jti": None}
-        assert "changes:review" in me["scopes"]
+        assert "changes:approve" in me["scopes"]
     finally:
         hosted.cookies.clear()
 

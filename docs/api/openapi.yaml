@@ -6,34 +6,245 @@ info:
   summary: 'The causal world model as a service: entities, attributes, relationships and evidence, read at a stated version;
     documents into reviewed changes; theses run as simulations.'
   description: 'Every path below is under `/v1`. The organization comes from the credential, never from the request; a world
-    model id in the path must belong to it.
+    model id in the path must belong to it. Direct access is for internal staff and backend services only: a signed-in person
+    (the web interface), the data-ingestion pipeline (a scoped static key), and core''s backend MCP (Model Context Protocol)
+    server, which reads only.
 
 
     - **Envelope.** A resource answers `{"data": {...}, "meta": {"request_id", "version"}}`; a collection answers `{"data":
     [...], "meta": {"request_id", "version", "limit", "next_cursor"}}`.
 
-    - **Errors** are RFC 9457 problem details (`application/problem+json`) with a stable `code`.
+    - **Errors** are RFC 9457 problem details (Request for Comments 9457, "Problem Details for HTTP APIs": `application/problem+json`)
+    with a stable `code`.
 
     - **Pinning.** Reads of the model take `version` or `as_of`; `meta.version` names what was served.
 
     - **Pagination** is by cursor: `limit` and the previous page''s `meta.next_cursor`.
 
-    - **Writes.** POSTs that create take `Idempotency-Key`; long work answers `202` with a job. A decision on a change needs
-    `If-Match` with the ETag of the version it was reviewed against.
+    - **Writes.** POSTs that create take `Idempotency-Key`. Keys are permanent (kept in the lakehouse catalog, no expiry),
+    and document and bundle creation is also keyed on content, so the same content always gives the same answer. Long work
+    answers `202` with a job. A decision on a change needs `If-Match` with the ETag (entity tag: an opaque version identifier,
+    here the state hash) of the version it was reviewed against; ETag and If-Match are under review (Manav).
 
-    - **Identity and tenancy.** The organization and the person come from a verified credential: a core-minted service token,
-    a static scoped key, or a session. A world model of another organization answers 404. Each operation''s `x-required-scope`
-    names its scope. Approval is human-only: a static key, or a token with `act` or `azp: core-mcp`, gets 403 human_approval_required
-    on a decision. Every write is recorded with its actor (org, sub, azp, act, jti) in the audit log.
+    - **Identity and tenancy.** The organization and the person come from a verified credential: a core-minted service token
+    (a JWT, JSON Web Token), a static scoped key, or a session. A world model of another organization answers 404. Each operation''s
+    `x-required-scope` names its scope (`resource:action`: world_model:read, documents:create, changes:create, simulations:create,
+    changes:approve; and admin). Core''s MCP channel (`azp: core-mcp`) and any token with `act` read only. Approval is human-only:
+    a static key, or a token with `act` or `azp: core-mcp`, gets 403 human_approval_required on a decision.
+
+    - **Audit.** Every write is recorded with its actor (org, sub, azp, act, jti) in the audit log, which is kept forever:
+    there is no route that deletes it and no expiry.
 
     - **Facts and inferences.** Every claim carries an `epistemic_type`; theses and simulations never write facts; a change
     becomes fact only when a person approves it.
 
-    - **Headers.** Every response carries `X-Request-Id` and `X-Axelrod-API-Version: 1`; `traceparent` is echoed.
+    - **Headers.** Every response carries `X-Request-Id` and `X-Axelrod-API-Version: 1`; `traceparent` (W3C Trace Context)
+    is echoed.
 
     '
   contact:
     name: Axelrod AI Engineering
+  x-terms:
+  - term: API
+    full_name: Application Programming Interface
+    meaning: The routes other programs call to use the world model.
+    example: '`GET /v1/world-models`'
+  - term: v1
+    full_name: version 1 of this API
+    meaning: The major version, in every path. Additive changes stay in v1; a breaking change is v2.
+    example: '`/v1/…`'
+  - term: World model
+    full_name: ''
+    meaning: 'One causal model: entities, their attributes, the relationships between attributes, its history and documents.
+      An organization may own several.'
+    example: '`sally_demo`'
+  - term: erid
+    full_name: the unified world model (core's name for the world model state)
+    meaning: The whole graph, served beside the per-client world models. Its reads take a compartment; the whole graph is
+      for internal staff.
+    example: '`GET /v1/erid`'
+  - term: Compartment
+    full_name: ''
+    meaning: 'A client''s view of the unified world model: its companies, every player upstream of their values, and one link
+      downstream (as a focused world is defined).'
+    example: '`sally_focus`'
+  - term: Organization (`org`)
+    full_name: ''
+    meaning: 'Owns world models, documents and credentials: Axelrod or a client firm. It comes from the credential, never
+      from the request.'
+    example: '`default`, `acme`'
+  - term: Internal staff
+    full_name: ''
+    meaning: People and services of an internal organization (`WORLD_MODEL_INTERNAL_ORGS`). Only they read the whole unified
+      world model.
+    example: Axelrod engineers
+  - term: Person
+    full_name: ''
+    meaning: A human, signed in to the web interface (a session) or named by a core-minted token without an agent. Only a
+      person approves a change.
+    example: an analyst reviewing changes
+  - term: Service
+    full_name: ''
+    meaning: 'A program with a static key: the data-ingestion pipeline, a script. Never approves a change.'
+    example: '`ingest-pipeline`'
+  - term: Agent
+    full_name: ''
+    meaning: An AI client acting for a person through MCP. Recorded in `act`; reads only.
+    example: Claude in core's MCP
+  - term: Principal
+    full_name: ''
+    meaning: 'The verified identity a request acts as: its kind, organization, subject, scopes and, for a token, `azp`, `act`
+      and `jti`.'
+    example: '`{kind: token, org: acme, sub: org_user_9}`'
+  - term: '`kind`'
+    full_name: actor kind
+    meaning: 'How the principal was verified: `token` (core-minted), `key` (static), `session` (signed in here), `local` (an
+      open local run), `system` (the engine itself).'
+    example: '`token`'
+  - term: Scope
+    full_name: ''
+    meaning: A permission, named `resource:action` with three actions (read, create, approve), plus `admin`.
+    example: '`changes:approve`'
+  - term: RBAC
+    full_name: Role-Based Access Control
+    meaning: Granting permissions by role. Here scopes are granted per credential; finer roles (approvers, admins) come later.
+    example: ''
+  - term: JWT
+    full_name: JSON Web Token (RFC 7519)
+    meaning: A signed set of claims. Core mints one per call as a service token.
+    example: '`eyJhbGciOiJFUzI1NiIs…`'
+  - term: JSON
+    full_name: JavaScript Object Notation
+    meaning: The text format of every request and response body.
+    example: '`{"data": …}`'
+  - term: JWKS
+    full_name: JSON Web Key Set (RFC 7517)
+    meaning: The issuer's public signing keys, by key id, at a URL this service fetches and caches.
+    example: '`https://core…/.well-known/jwks.json`'
+  - term: ES256
+    full_name: ECDSA using P-256 and SHA-256 (RFC 7518)
+    meaning: The only signature algorithm accepted on a service token.
+    example: 'header `alg: ES256`'
+  - term: ECDSA
+    full_name: Elliptic Curve Digital Signature Algorithm
+    meaning: The signature family ES256 belongs to.
+    example: ''
+  - term: '`at+jwt`'
+    full_name: OAuth 2.0 access token in JWT form (RFC 9068)
+    meaning: The `typ` header a service token must carry.
+    example: 'header `typ: at+jwt`'
+  - term: OAuth
+    full_name: Open Authorization (OAuth 2.0, RFC 6749)
+    meaning: The authorization framework whose access tokens a service token follows.
+    example: ''
+  - term: MCP
+    full_name: Model Context Protocol
+    meaning: The protocol AI clients use to call tools. Core runs an MCP server (its backend MCP); this service runs one at
+      `/mcp`.
+    example: '`world_model_get_entity`'
+  - term: '`core-mcp`, `core-web`'
+    full_name: core's channels
+    meaning: 'The part of core that asked, in a token''s `azp`: its MCP server (reads only) or its web interface (a person).'
+    example: '`azp: core-web`'
+  - term: '`iss`'
+    full_name: issuer
+    meaning: Who minted the token; must be a trusted issuer.
+    example: '`https://core.axelrod.ai`'
+  - term: '`aud`'
+    full_name: audience
+    meaning: 'Who the token is for: this service.'
+    example: '`https://world-model.axelrod.ai`'
+  - term: '`sub`'
+    full_name: subject
+    meaning: 'Who the token speaks for: the organization user (a person) or the key''s caller.'
+    example: '`org_user_9`'
+  - term: '`azp`'
+    full_name: authorized party
+    meaning: The part of core that asked (OpenID Connect).
+    example: '`core-mcp`'
+  - term: '`act`'
+    full_name: actor (RFC 8693)
+    meaning: The agent acting for the person, `{sub, name}`. A token with `act` reads only and never decides.
+    example: '`{sub: mcp-client:claude}`'
+  - term: '`jti`'
+    full_name: JWT ID
+    meaning: 'A token''s unique id: the join key between core''s log and this audit log.'
+    example: '`5f1c…`'
+  - term: '`exp`, `iat`, `nbf`'
+    full_name: expiration time, issued at, not before
+    meaning: A token's validity window, checked with 60 seconds of leeway.
+    example: '`exp` = issue + 5 minutes'
+  - term: '`kid`'
+    full_name: key ID
+    meaning: Which key of the JWKS signed the token.
+    example: '`core-2026-10`'
+  - term: TTL
+    full_name: time to live
+    meaning: 'How long something is kept before it expires. Idempotency keys and the audit log have none: they are kept forever.'
+    example: 'the JWKS cache: 10 minutes'
+  - term: RFC
+    full_name: Request for Comments
+    meaning: An Internet standard published by the IETF (Internet Engineering Task Force).
+    example: RFC 9457
+  - term: RFC 9457
+    full_name: Problem Details for HTTP APIs
+    meaning: 'The error format: `application/problem+json` with `type`, `title`, `status`, `detail`, `instance`, and our `code`.'
+    example: '`404 entity_not_found`'
+  - term: HTTP
+    full_name: Hypertext Transfer Protocol
+    meaning: 'The protocol of every call. Status codes used: 200 OK, 201 Created, 202 Accepted, 204 No Content, 304 Not Modified,
+      4xx client errors, 5xx server errors.'
+    example: '`202 Accepted`'
+  - term: ETag
+    full_name: entity tag (RFC 9110)
+    meaning: An opaque version identifier of a response; here the model's state hash. Under review (Manav).
+    example: '`"9c1f…"`'
+  - term: If-Match, If-None-Match
+    full_name: conditional request headers (RFC 9110)
+    meaning: 'If-Match: act only if the model is still at this ETag (412 if it moved; 428 without it). If-None-Match: 304
+      if unchanged. Under review (Manav).'
+    example: '`If-Match: "9c1f…"`'
+  - term: Idempotency-Key
+    full_name: ''
+    meaning: 'A client''s key that makes a create safe to retry: the same key and request return the first answer. Kept forever.'
+    example: '`Idempotency-Key: upload-42`'
+  - term: Cursor
+    full_name: ''
+    meaning: An opaque position in a list, returned as `meta.next_cursor`; it keeps the version it started on.
+    example: '`eyJvIjo1MCwidiI6M30`'
+  - term: Job
+    full_name: ''
+    meaning: Long work answered `202 Accepted` with a job to poll.
+    example: '`job_8f2a…`'
+  - term: '`traceparent`'
+    full_name: W3C Trace Context header
+    meaning: Distributed-tracing context, accepted and echoed. W3C is the World Wide Web Consortium.
+    example: '`00-4bf9…-00f0…-01`'
+  - term: OpenAPI
+    full_name: the OpenAPI Specification 3.1
+    meaning: The machine-readable contract of this API, docs/api/openapi.yaml.
+    example: ''
+  - term: CRUD
+    full_name: create, read, update, delete
+    meaning: The plain operations; actions that are not CRUD create a resource instead.
+    example: '`POST …/approvals`'
+  - term: Lakehouse catalog
+    full_name: ''
+    meaning: The service's store of documents, chunks, bundles, the registry, the audit log, idempotency keys and jobs (SQLite).
+    example: ''
+  - term: Bitemporal
+    full_name: ''
+    meaning: 'Two times on every fact: when it applies (`valid_at`) and when the model learned it (`observed_at`).'
+    example: ''
+  - term: sd
+    full_name: standard deviation
+    meaning: 'The unit of an effect size: a move in the target, in its standard deviations, per standard deviation of the
+      source.'
+    example: '`effect: 0.4`'
+  - term: LLM
+    full_name: large language model
+    meaning: An optional extraction step in ingestion.
+    example: ''
 servers:
 - url: https://world-model-dev.up.railway.app/v1
   description: The dev deploy
@@ -46,6 +257,10 @@ security:
 tags:
 - name: World models
   description: The organization's world models and the credential's identity.
+- name: Unified world model
+  description: 'erid: the unified world model, the whole graph, beside the per-client world models. Its reads take an optional
+    `compartment` (a client''s view, defined as a focused world is). The whole graph is for internal staff only; a compartment
+    is read by internal staff or the organization it is assigned to.'
 - name: Versions
   description: Committed, immutable versions.
 - name: Entities
@@ -83,7 +298,7 @@ paths:
       summary: 'Who the credential is: organization, caller, scopes, world models'
       tags:
       - World models
-      x-required-scope: read
+      x-required-scope: world_model:read
       security:
       - serviceToken: []
       - apiKey: []
@@ -119,7 +334,7 @@ paths:
       summary: The organization's world models
       tags:
       - World models
-      x-required-scope: read
+      x-required-scope: world_model:read
       security:
       - serviceToken: []
       - apiKey: []
@@ -160,7 +375,7 @@ paths:
       summary: 'One world model: its latest version, clock and counts'
       tags:
       - World models
-      x-required-scope: read
+      x-required-scope: world_model:read
       security:
       - serviceToken: []
       - apiKey: []
@@ -197,7 +412,7 @@ paths:
       summary: Committed versions, newest first
       tags:
       - Versions
-      x-required-scope: read
+      x-required-scope: world_model:read
       security:
       - serviceToken: []
       - apiKey: []
@@ -237,7 +452,7 @@ paths:
       summary: One committed version (`latest` for the newest)
       tags:
       - Versions
-      x-required-scope: read
+      x-required-scope: world_model:read
       security:
       - serviceToken: []
       - apiKey: []
@@ -276,7 +491,7 @@ paths:
       summary: Entities, filtered by type, concept, group or name
       tags:
       - Entities
-      x-required-scope: read
+      x-required-scope: world_model:read
       security:
       - serviceToken: []
       - apiKey: []
@@ -326,7 +541,7 @@ paths:
       summary: One entity, with its attributes (and relationships)
       tags:
       - Entities
-      x-required-scope: read
+      x-required-scope: world_model:read
       security:
       - serviceToken: []
       - apiKey: []
@@ -369,7 +584,7 @@ paths:
       summary: An entity's attributes
       tags:
       - Entities
-      x-required-scope: read
+      x-required-scope: world_model:read
       security:
       - serviceToken: []
       - apiKey: []
@@ -412,7 +627,7 @@ paths:
       summary: 'One attribute: level, spread, unit, view, basis, and its latest observation'
       tags:
       - Entities
-      x-required-scope: read
+      x-required-scope: world_model:read
       security:
       - serviceToken: []
       - apiKey: []
@@ -455,7 +670,7 @@ paths:
       summary: An attribute's dated observations (valid_at, observed_at)
       tags:
       - Entities
-      x-required-scope: read
+      x-required-scope: world_model:read
       security:
       - serviceToken: []
       - apiKey: []
@@ -501,7 +716,7 @@ paths:
       summary: The model's state of an attribute over time, oldest first
       tags:
       - Entities
-      x-required-scope: read
+      x-required-scope: world_model:read
       security:
       - serviceToken: []
       - apiKey: []
@@ -547,7 +762,7 @@ paths:
       summary: An entity's business views
       tags:
       - Construction
-      x-required-scope: read
+      x-required-scope: world_model:read
       security:
       - serviceToken: []
       - apiKey: []
@@ -590,7 +805,7 @@ paths:
       summary: One business view
       tags:
       - Construction
-      x-required-scope: read
+      x-required-scope: world_model:read
       security:
       - serviceToken: []
       - apiKey: []
@@ -630,7 +845,7 @@ paths:
       summary: An entity's named paths
       tags:
       - Construction
-      x-required-scope: read
+      x-required-scope: world_model:read
       security:
       - serviceToken: []
       - apiKey: []
@@ -673,7 +888,7 @@ paths:
       summary: One named path, each step a relationship
       tags:
       - Construction
-      x-required-scope: read
+      x-required-scope: world_model:read
       security:
       - serviceToken: []
       - apiKey: []
@@ -713,7 +928,7 @@ paths:
       summary: A company's whole construction in one read (JSON, or markdown)
       tags:
       - Construction
-      x-required-scope: read
+      x-required-scope: world_model:read
       security:
       - serviceToken: []
       - apiKey: []
@@ -758,7 +973,7 @@ paths:
       summary: Every route from a change in one attribute to a company's accounts
       tags:
       - Construction
-      x-required-scope: read
+      x-required-scope: world_model:read
       security:
       - serviceToken: []
       - apiKey: []
@@ -801,7 +1016,7 @@ paths:
       summary: Relationships, filtered
       tags:
       - Relationships
-      x-required-scope: read
+      x-required-scope: world_model:read
       security:
       - serviceToken: []
       - apiKey: []
@@ -849,7 +1064,7 @@ paths:
       summary: One relationship
       tags:
       - Relationships
-      x-required-scope: read
+      x-required-scope: world_model:read
       security:
       - serviceToken: []
       - apiKey: []
@@ -890,7 +1105,7 @@ paths:
       summary: A relationship's evidence
       tags:
       - Relationships
-      x-required-scope: read
+      x-required-scope: world_model:read
       security:
       - serviceToken: []
       - apiKey: []
@@ -933,7 +1148,7 @@ paths:
       summary: One evidence record
       tags:
       - Relationships
-      x-required-scope: read
+      x-required-scope: world_model:read
       security:
       - serviceToken: []
       - apiKey: []
@@ -972,7 +1187,7 @@ paths:
       summary: The taxonomy's concepts
       tags:
       - Taxonomy
-      x-required-scope: read
+      x-required-scope: world_model:read
       security:
       - serviceToken: []
       - apiKey: []
@@ -1014,7 +1229,7 @@ paths:
       summary: One concept and its entities
       tags:
       - Taxonomy
-      x-required-scope: read
+      x-required-scope: world_model:read
       security:
       - serviceToken: []
       - apiKey: []
@@ -1053,7 +1268,7 @@ paths:
       summary: Recurring configurations of entities
       tags:
       - Taxonomy
-      x-required-scope: read
+      x-required-scope: world_model:read
       security:
       - serviceToken: []
       - apiKey: []
@@ -1095,7 +1310,7 @@ paths:
       summary: One group
       tags:
       - Taxonomy
-      x-required-scope: read
+      x-required-scope: world_model:read
       security:
       - serviceToken: []
       - apiKey: []
@@ -1134,7 +1349,7 @@ paths:
       summary: Market events, by publication time
       tags:
       - Events
-      x-required-scope: read
+      x-required-scope: world_model:read
       security:
       - serviceToken: []
       - apiKey: []
@@ -1178,7 +1393,7 @@ paths:
       summary: One market event
       tags:
       - Events
-      x-required-scope: read
+      x-required-scope: world_model:read
       security:
       - serviceToken: []
       - apiKey: []
@@ -1215,7 +1430,7 @@ paths:
       summary: 'What an event did: the attributes it moves, directly and one relationship on'
       tags:
       - Events
-      x-required-scope: read
+      x-required-scope: world_model:read
       security:
       - serviceToken: []
       - apiKey: []
@@ -1255,7 +1470,7 @@ paths:
       summary: 'Upload files: store, parse, chunk, index, and read each into a bundle'
       tags:
       - Documents
-      x-required-scope: documents:write
+      x-required-scope: documents:create
       security:
       - serviceToken: []
       - apiKey: []
@@ -1311,7 +1526,7 @@ paths:
                     type: string
                     contentMediaType: application/octet-stream
                   description: At most 20 files of at most 50 MB each
-                source: &id018
+                source: &id019
                   type: string
                 source_type:
                   $ref: '#/components/schemas/SourceType'
@@ -1324,7 +1539,7 @@ paths:
       summary: Stored documents
       tags:
       - Documents
-      x-required-scope: read
+      x-required-scope: world_model:read
       security:
       - serviceToken: []
       - apiKey: []
@@ -1367,7 +1582,7 @@ paths:
       summary: One document
       tags:
       - Documents
-      x-required-scope: read
+      x-required-scope: world_model:read
       security:
       - serviceToken: []
       - apiKey: []
@@ -1433,7 +1648,7 @@ paths:
       summary: A document's passages and the names in each
       tags:
       - Documents
-      x-required-scope: read
+      x-required-scope: world_model:read
       security:
       - serviceToken: []
       - apiKey: []
@@ -1474,7 +1689,7 @@ paths:
       summary: One passage
       tags:
       - Documents
-      x-required-scope: read
+      x-required-scope: world_model:read
       security:
       - serviceToken: []
       - apiKey: []
@@ -1512,7 +1727,7 @@ paths:
       summary: The extracted text, or the file as uploaded
       tags:
       - Documents
-      x-required-scope: read
+      x-required-scope: world_model:read
       security:
       - serviceToken: []
       - apiKey: []
@@ -1556,7 +1771,7 @@ paths:
       summary: Read a stored document again, against the model as it is now
       tags:
       - Documents
-      x-required-scope: documents:write
+      x-required-scope: documents:create
       security:
       - serviceToken: []
       - apiKey: []
@@ -1597,7 +1812,7 @@ paths:
       summary: Store a bundle an agent wrote (axelrod.import/v1)
       tags:
       - Bundles
-      x-required-scope: documents:write
+      x-required-scope: documents:create
       security:
       - serviceToken: []
       - apiKey: []
@@ -1645,7 +1860,7 @@ paths:
       summary: Stored bundles, oldest first
       tags:
       - Bundles
-      x-required-scope: read
+      x-required-scope: world_model:read
       security:
       - serviceToken: []
       - apiKey: []
@@ -1686,7 +1901,7 @@ paths:
       summary: One bundle
       tags:
       - Bundles
-      x-required-scope: read
+      x-required-scope: world_model:read
       security:
       - serviceToken: []
       - apiKey: []
@@ -1722,7 +1937,7 @@ paths:
       summary: A bundle's dated items and their signals
       tags:
       - Bundles
-      x-required-scope: read
+      x-required-scope: world_model:read
       security:
       - serviceToken: []
       - apiKey: []
@@ -1763,7 +1978,7 @@ paths:
       summary: Search passages and the model's names
       tags:
       - Search
-      x-required-scope: read
+      x-required-scope: world_model:read
       security:
       - serviceToken: []
       - apiKey: []
@@ -1802,7 +2017,7 @@ paths:
       summary: Propose one change per bundle item, in event-time order
       tags:
       - Changes
-      x-required-scope: changes:write
+      x-required-scope: changes:create
       security:
       - serviceToken: []
       - apiKey: []
@@ -1837,8 +2052,8 @@ paths:
           $ref: '#/components/responses/Unprocessable'
         '503':
           $ref: '#/components/responses/ServiceUnavailable'
-      description: Returns 202 and a job whose result names the changes proposed, each pending a person's review. Items
-        dated before the model's last closed day are folded into the next day.
+      description: Returns 202 and a job whose result names the changes proposed, each pending a person's review. Items dated
+        before the model's last closed day are folded into the next day.
       requestBody:
         required: true
         content:
@@ -1850,7 +2065,7 @@ paths:
       summary: Proposed changes, pending by default
       tags:
       - Changes
-      x-required-scope: read
+      x-required-scope: world_model:read
       security:
       - serviceToken: []
       - apiKey: []
@@ -1891,7 +2106,7 @@ paths:
       summary: One change; its ETag is the model's current version
       tags:
       - Changes
-      x-required-scope: read
+      x-required-scope: world_model:read
       security:
       - serviceToken: []
       - apiKey: []
@@ -1929,7 +2144,7 @@ paths:
       summary: What approving the change would do
       tags:
       - Changes
-      x-required-scope: read
+      x-required-scope: world_model:read
       security:
       - serviceToken: []
       - apiKey: []
@@ -1964,7 +2179,7 @@ paths:
       summary: 'Approve a change: commits a version'
       tags:
       - Changes
-      x-required-scope: changes:review
+      x-required-scope: changes:approve
       security:
       - serviceToken: []
       - session: []
@@ -2015,7 +2230,7 @@ paths:
       summary: Reject a change, with a reason
       tags:
       - Changes
-      x-required-scope: changes:review
+      x-required-scope: changes:approve
       security:
       - serviceToken: []
       - session: []
@@ -2065,7 +2280,7 @@ paths:
       summary: Ready theses the world model ships with
       tags:
       - Theses
-      x-required-scope: read
+      x-required-scope: world_model:read
       security:
       - serviceToken: []
       - apiKey: []
@@ -2105,7 +2320,7 @@ paths:
       summary: 'Pose a what-if: a question, or a ready thesis'
       tags:
       - Theses
-      x-required-scope: simulations:write
+      x-required-scope: simulations:create
       security:
       - serviceToken: []
       - apiKey: []
@@ -2149,7 +2364,7 @@ paths:
       summary: Theses posed so far
       tags:
       - Theses
-      x-required-scope: read
+      x-required-scope: world_model:read
       security:
       - serviceToken: []
       - apiKey: []
@@ -2189,7 +2404,7 @@ paths:
       summary: One thesis
       tags:
       - Theses
-      x-required-scope: read
+      x-required-scope: world_model:read
       security:
       - serviceToken: []
       - apiKey: []
@@ -2225,7 +2440,7 @@ paths:
       summary: Run a thesis on the latest version
       tags:
       - Theses
-      x-required-scope: simulations:write
+      x-required-scope: simulations:create
       security:
       - serviceToken: []
       - apiKey: []
@@ -2272,7 +2487,7 @@ paths:
       summary: Simulations run so far, oldest first
       tags:
       - Simulations
-      x-required-scope: read
+      x-required-scope: world_model:read
       security:
       - serviceToken: []
       - apiKey: []
@@ -2312,7 +2527,7 @@ paths:
       summary: 'One simulation: targets with ranges, scenario table'
       tags:
       - Simulations
-      x-required-scope: read
+      x-required-scope: world_model:read
       security:
       - serviceToken: []
       - apiKey: []
@@ -2350,7 +2565,7 @@ paths:
       summary: The shock's path, by order
       tags:
       - Simulations
-      x-required-scope: read
+      x-required-scope: world_model:read
       security:
       - serviceToken: []
       - apiKey: []
@@ -2391,7 +2606,7 @@ paths:
       summary: What the simulation's numbers are made of
       tags:
       - Simulations
-      x-required-scope: read
+      x-required-scope: world_model:read
       security:
       - serviceToken: []
       - apiKey: []
@@ -2426,7 +2641,7 @@ paths:
       summary: A reader's summary of a simulation
       tags:
       - Simulations
-      x-required-scope: read
+      x-required-scope: world_model:read
       security:
       - serviceToken: []
       - apiKey: []
@@ -2462,7 +2677,7 @@ paths:
       summary: A subgraph for an agent's context window
       tags:
       - Graph
-      x-required-scope: read
+      x-required-scope: world_model:read
       security:
       - serviceToken: []
       - apiKey: []
@@ -2507,7 +2722,7 @@ paths:
       summary: The world model in the client's v4.1.4 format
       tags:
       - Exports
-      x-required-scope: read
+      x-required-scope: world_model:read
       security:
       - serviceToken: []
       - apiKey: []
@@ -2584,7 +2799,7 @@ paths:
       summary: One job
       tags:
       - Jobs
-      x-required-scope: read
+      x-required-scope: world_model:read
       security:
       - serviceToken: []
       - apiKey: []
@@ -2613,23 +2828,1025 @@ paths:
           $ref: '#/components/responses/NotFound'
         '503':
           $ref: '#/components/responses/ServiceUnavailable'
+  /erid:
+    get:
+      operationId: getUnifiedWorldModel
+      summary: 'The unified world model: the whole graph (internal staff)'
+      tags:
+      - Unified world model
+      x-required-scope: world_model:read
+      security:
+      - serviceToken: []
+      - apiKey: []
+      - session: []
+      parameters:
+      - &id018
+        $ref: '#/components/parameters/TraceParent'
+      responses:
+        '200':
+          description: 'The unified world model: the whole graph (internal staff)'
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+            X-Axelrod-API-Version:
+              $ref: '#/components/headers/X-Axelrod-API-Version'
+            traceparent:
+              $ref: '#/components/headers/traceparent'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnifiedWorldModelResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      description: Its scenario, version, clock, counts, and compartments. Internal staff only (403 internal_only).
+  /erid/compartments:
+    get:
+      operationId: listCompartments
+      summary: The compartments of the unified model the credential may read
+      tags:
+      - Unified world model
+      x-required-scope: world_model:read
+      security:
+      - serviceToken: []
+      - apiKey: []
+      - session: []
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - *id018
+      responses:
+        '200':
+          description: The compartments of the unified model the credential may read
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+            X-Axelrod-API-Version:
+              $ref: '#/components/headers/X-Axelrod-API-Version'
+            traceparent:
+              $ref: '#/components/headers/traceparent'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompartmentPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      description: Every compartment for internal staff; for another organization, those assigned to it.
+  /erid/compartments/{compartment_id}:
+    get:
+      operationId: getCompartment
+      summary: 'One compartment: its companies and size'
+      tags:
+      - Unified world model
+      x-required-scope: world_model:read
+      security:
+      - serviceToken: []
+      - apiKey: []
+      - session: []
+      parameters:
+      - $ref: '#/components/parameters/CompartmentId'
+      - *id018
+      responses:
+        '200':
+          description: 'One compartment: its companies and size'
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+            X-Axelrod-API-Version:
+              $ref: '#/components/headers/X-Axelrod-API-Version'
+            traceparent:
+              $ref: '#/components/headers/traceparent'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompartmentResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      description: 404 compartment_not_found for one that does not exist or is not the credential's to read.
+  /erid/versions:
+    get:
+      operationId: unifiedListVersions
+      summary: Committed versions, newest first (the unified model, or a compartment)
+      tags:
+      - Unified world model
+      x-required-scope: world_model:read
+      security:
+      - serviceToken: []
+      - apiKey: []
+      - session: []
+      parameters:
+      - $ref: '#/components/parameters/Compartment'
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/TraceParent'
+      responses:
+        '200':
+          description: Committed versions, newest first
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+            X-Axelrod-API-Version:
+              $ref: '#/components/headers/X-Axelrod-API-Version'
+            traceparent:
+              $ref: '#/components/headers/traceparent'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VersionPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      description: 'On erid: the unified model, or the `compartment` named (internal staff for the whole graph).'
+  /erid/versions/{version_ref}:
+    get:
+      operationId: unifiedGetVersion
+      summary: One committed version (`latest` for the newest) (the unified model, or a compartment)
+      tags:
+      - Unified world model
+      x-required-scope: world_model:read
+      security:
+      - serviceToken: []
+      - apiKey: []
+      - session: []
+      parameters:
+      - $ref: '#/components/parameters/Compartment'
+      - $ref: '#/components/parameters/VersionRefPath'
+      - $ref: '#/components/parameters/TraceParent'
+      responses:
+        '200':
+          description: One committed version (`latest` for the newest)
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+            X-Axelrod-API-Version:
+              $ref: '#/components/headers/X-Axelrod-API-Version'
+            ETag:
+              $ref: '#/components/headers/ETag'
+            traceparent:
+              $ref: '#/components/headers/traceparent'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VersionResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      description: 'On erid: the unified model, or the `compartment` named (internal staff for the whole graph).'
+  /erid/entities:
+    get:
+      operationId: unifiedListEntities
+      summary: Entities, filtered by type, concept, group or name (the unified model, or a compartment)
+      tags:
+      - Unified world model
+      x-required-scope: world_model:read
+      security:
+      - serviceToken: []
+      - apiKey: []
+      - session: []
+      parameters:
+      - $ref: '#/components/parameters/Compartment'
+      - $ref: '#/components/parameters/EntityTypeFilter'
+      - $ref: '#/components/parameters/ConceptFilter'
+      - $ref: '#/components/parameters/GroupFilter'
+      - $ref: '#/components/parameters/NameQuery'
+      - $ref: '#/components/parameters/Version'
+      - $ref: '#/components/parameters/AsOf'
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/TraceParent'
+      responses:
+        '200':
+          description: Entities, filtered by type, concept, group or name
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+            X-Axelrod-API-Version:
+              $ref: '#/components/headers/X-Axelrod-API-Version'
+            traceparent:
+              $ref: '#/components/headers/traceparent'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EntityPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      description: '`q` matches names, aliases, ids, and the entity''s attributes'' names and keys; an entity matched only
+        through its attributes nests just those attributes. On erid: the unified model, or the `compartment` named (internal
+        staff for the whole graph).'
+  /erid/entities/{entity_id}:
+    get:
+      operationId: unifiedGetEntity
+      summary: One entity, with its attributes (and relationships) (the unified model, or a compartment)
+      tags:
+      - Unified world model
+      x-required-scope: world_model:read
+      security:
+      - serviceToken: []
+      - apiKey: []
+      - session: []
+      parameters:
+      - $ref: '#/components/parameters/Compartment'
+      - $ref: '#/components/parameters/EntityId'
+      - $ref: '#/components/parameters/Include'
+      - $ref: '#/components/parameters/Version'
+      - $ref: '#/components/parameters/AsOf'
+      - $ref: '#/components/parameters/TraceParent'
+      responses:
+        '200':
+          description: One entity, with its attributes (and relationships)
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+            X-Axelrod-API-Version:
+              $ref: '#/components/headers/X-Axelrod-API-Version'
+            ETag:
+              $ref: '#/components/headers/ETag'
+            traceparent:
+              $ref: '#/components/headers/traceparent'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EntityResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      description: 'On erid: the unified model, or the `compartment` named (internal staff for the whole graph).'
+  /erid/entities/{entity_id}/attributes:
+    get:
+      operationId: unifiedListAttributes
+      summary: An entity's attributes (the unified model, or a compartment)
+      tags:
+      - Unified world model
+      x-required-scope: world_model:read
+      security:
+      - serviceToken: []
+      - apiKey: []
+      - session: []
+      parameters:
+      - $ref: '#/components/parameters/Compartment'
+      - $ref: '#/components/parameters/EntityId'
+      - $ref: '#/components/parameters/Version'
+      - $ref: '#/components/parameters/AsOf'
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/TraceParent'
+      responses:
+        '200':
+          description: An entity's attributes
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+            X-Axelrod-API-Version:
+              $ref: '#/components/headers/X-Axelrod-API-Version'
+            traceparent:
+              $ref: '#/components/headers/traceparent'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttributePage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      description: 'On erid: the unified model, or the `compartment` named (internal staff for the whole graph).'
+  /erid/entities/{entity_id}/attributes/{attribute_key}:
+    get:
+      operationId: unifiedGetAttribute
+      summary: 'One attribute: level, spread, unit, view, basis, and its latest observation (the unified model, or a compartment)'
+      tags:
+      - Unified world model
+      x-required-scope: world_model:read
+      security:
+      - serviceToken: []
+      - apiKey: []
+      - session: []
+      parameters:
+      - $ref: '#/components/parameters/Compartment'
+      - $ref: '#/components/parameters/EntityId'
+      - $ref: '#/components/parameters/AttributeKey'
+      - $ref: '#/components/parameters/Version'
+      - $ref: '#/components/parameters/AsOf'
+      - $ref: '#/components/parameters/TraceParent'
+      responses:
+        '200':
+          description: 'One attribute: level, spread, unit, view, basis, and its latest observation'
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+            X-Axelrod-API-Version:
+              $ref: '#/components/headers/X-Axelrod-API-Version'
+            ETag:
+              $ref: '#/components/headers/ETag'
+            traceparent:
+              $ref: '#/components/headers/traceparent'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttributeResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      description: 'On erid: the unified model, or the `compartment` named (internal staff for the whole graph).'
+  /erid/entities/{entity_id}/attributes/{attribute_key}/observations:
+    get:
+      operationId: unifiedListObservations
+      summary: An attribute's dated observations (valid_at, observed_at) (the unified model, or a compartment)
+      tags:
+      - Unified world model
+      x-required-scope: world_model:read
+      security:
+      - serviceToken: []
+      - apiKey: []
+      - session: []
+      parameters:
+      - $ref: '#/components/parameters/Compartment'
+      - $ref: '#/components/parameters/EntityId'
+      - $ref: '#/components/parameters/AttributeKey'
+      - $ref: '#/components/parameters/ValidFrom'
+      - $ref: '#/components/parameters/ValidTo'
+      - $ref: '#/components/parameters/Version'
+      - $ref: '#/components/parameters/AsOf'
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/TraceParent'
+      responses:
+        '200':
+          description: An attribute's dated observations (valid_at, observed_at)
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+            X-Axelrod-API-Version:
+              $ref: '#/components/headers/X-Axelrod-API-Version'
+            traceparent:
+              $ref: '#/components/headers/traceparent'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ObservationPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      description: 'On erid: the unified model, or the `compartment` named (internal staff for the whole graph).'
+  /erid/entities/{entity_id}/attributes/{attribute_key}/states:
+    get:
+      operationId: unifiedListAttributeStates
+      summary: The model's state of an attribute over time, oldest first (the unified model, or a compartment)
+      tags:
+      - Unified world model
+      x-required-scope: world_model:read
+      security:
+      - serviceToken: []
+      - apiKey: []
+      - session: []
+      parameters:
+      - $ref: '#/components/parameters/Compartment'
+      - $ref: '#/components/parameters/EntityId'
+      - $ref: '#/components/parameters/AttributeKey'
+      - $ref: '#/components/parameters/From'
+      - $ref: '#/components/parameters/To'
+      - $ref: '#/components/parameters/Version'
+      - $ref: '#/components/parameters/AsOf'
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/TraceParent'
+      responses:
+        '200':
+          description: The model's state of an attribute over time, oldest first
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+            X-Axelrod-API-Version:
+              $ref: '#/components/headers/X-Axelrod-API-Version'
+            traceparent:
+              $ref: '#/components/headers/traceparent'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttributeStatePage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      description: 'On erid: the unified model, or the `compartment` named (internal staff for the whole graph).'
+  /erid/entities/{entity_id}/compositions:
+    get:
+      operationId: unifiedListCompositions
+      summary: An entity's business views (the unified model, or a compartment)
+      tags:
+      - Unified world model
+      x-required-scope: world_model:read
+      security:
+      - serviceToken: []
+      - apiKey: []
+      - session: []
+      parameters:
+      - $ref: '#/components/parameters/Compartment'
+      - $ref: '#/components/parameters/EntityId'
+      - $ref: '#/components/parameters/Version'
+      - $ref: '#/components/parameters/AsOf'
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/TraceParent'
+      responses:
+        '200':
+          description: An entity's business views
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+            X-Axelrod-API-Version:
+              $ref: '#/components/headers/X-Axelrod-API-Version'
+            traceparent:
+              $ref: '#/components/headers/traceparent'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompositionPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      description: 'On erid: the unified model, or the `compartment` named (internal staff for the whole graph).'
+  /erid/entities/{entity_id}/compositions/{composition_id}:
+    get:
+      operationId: unifiedGetComposition
+      summary: One business view (the unified model, or a compartment)
+      tags:
+      - Unified world model
+      x-required-scope: world_model:read
+      security:
+      - serviceToken: []
+      - apiKey: []
+      - session: []
+      parameters:
+      - $ref: '#/components/parameters/Compartment'
+      - $ref: '#/components/parameters/EntityId'
+      - $ref: '#/components/parameters/CompositionId'
+      - $ref: '#/components/parameters/Version'
+      - $ref: '#/components/parameters/AsOf'
+      - $ref: '#/components/parameters/TraceParent'
+      responses:
+        '200':
+          description: One business view
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+            X-Axelrod-API-Version:
+              $ref: '#/components/headers/X-Axelrod-API-Version'
+            traceparent:
+              $ref: '#/components/headers/traceparent'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompositionResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      description: 'On erid: the unified model, or the `compartment` named (internal staff for the whole graph).'
+  /erid/entities/{entity_id}/paths:
+    get:
+      operationId: unifiedListPaths
+      summary: An entity's named paths (the unified model, or a compartment)
+      tags:
+      - Unified world model
+      x-required-scope: world_model:read
+      security:
+      - serviceToken: []
+      - apiKey: []
+      - session: []
+      parameters:
+      - $ref: '#/components/parameters/Compartment'
+      - $ref: '#/components/parameters/EntityId'
+      - $ref: '#/components/parameters/Version'
+      - $ref: '#/components/parameters/AsOf'
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/TraceParent'
+      responses:
+        '200':
+          description: An entity's named paths
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+            X-Axelrod-API-Version:
+              $ref: '#/components/headers/X-Axelrod-API-Version'
+            traceparent:
+              $ref: '#/components/headers/traceparent'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PathPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      description: 'On erid: the unified model, or the `compartment` named (internal staff for the whole graph).'
+  /erid/entities/{entity_id}/paths/{path_id}:
+    get:
+      operationId: unifiedGetPath
+      summary: One named path, each step a relationship (the unified model, or a compartment)
+      tags:
+      - Unified world model
+      x-required-scope: world_model:read
+      security:
+      - serviceToken: []
+      - apiKey: []
+      - session: []
+      parameters:
+      - $ref: '#/components/parameters/Compartment'
+      - $ref: '#/components/parameters/EntityId'
+      - $ref: '#/components/parameters/PathId'
+      - $ref: '#/components/parameters/Version'
+      - $ref: '#/components/parameters/AsOf'
+      - $ref: '#/components/parameters/TraceParent'
+      responses:
+        '200':
+          description: One named path, each step a relationship
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+            X-Axelrod-API-Version:
+              $ref: '#/components/headers/X-Axelrod-API-Version'
+            traceparent:
+              $ref: '#/components/headers/traceparent'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PathResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      description: 'On erid: the unified model, or the `compartment` named (internal staff for the whole graph).'
+  /erid/entities/{entity_id}/construction:
+    get:
+      operationId: unifiedGetConstruction
+      summary: A company's whole construction in one read (JSON, or markdown) (the unified model, or a compartment)
+      tags:
+      - Unified world model
+      x-required-scope: world_model:read
+      security:
+      - serviceToken: []
+      - apiKey: []
+      - session: []
+      parameters:
+      - $ref: '#/components/parameters/Compartment'
+      - $ref: '#/components/parameters/EntityId'
+      - $ref: '#/components/parameters/ConstructionFormat'
+      - $ref: '#/components/parameters/Version'
+      - $ref: '#/components/parameters/AsOf'
+      - $ref: '#/components/parameters/TraceParent'
+      responses:
+        '200':
+          description: A company's whole construction in one read (JSON, or markdown)
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+            X-Axelrod-API-Version:
+              $ref: '#/components/headers/X-Axelrod-API-Version'
+            traceparent:
+              $ref: '#/components/headers/traceparent'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConstructionResponse'
+            text/markdown:
+              schema:
+                type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      description: 'Workflow read: attributes, compositions, identities, stock-flows, matrices, paths, link counts and problems.
+        `Accept: text/markdown` (or format=markdown) gives the readable view. On erid: the unified model, or the `compartment`
+        named (internal staff for the whole graph).'
+  /erid/entities/{entity_id}/traces:
+    get:
+      operationId: unifiedTraceIntoEntity
+      summary: Every route from a change in one attribute to a company's accounts (the unified model, or a compartment)
+      tags:
+      - Unified world model
+      x-required-scope: world_model:read
+      security:
+      - serviceToken: []
+      - apiKey: []
+      - session: []
+      parameters:
+      - $ref: '#/components/parameters/Compartment'
+      - $ref: '#/components/parameters/EntityId'
+      - $ref: '#/components/parameters/TraceFrom'
+      - $ref: '#/components/parameters/TraceThroughTotals'
+      - $ref: '#/components/parameters/TraceMaxDepth'
+      - $ref: '#/components/parameters/Version'
+      - $ref: '#/components/parameters/AsOf'
+      - $ref: '#/components/parameters/TraceParent'
+      responses:
+        '200':
+          description: Every route from a change in one attribute to a company's accounts
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+            X-Axelrod-API-Version:
+              $ref: '#/components/headers/X-Axelrod-API-Version'
+            traceparent:
+              $ref: '#/components/headers/traceparent'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TraceResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      description: 'Workflow read: each route, where it stops, and which steps are uncalibrated or lack a transition. On erid:
+        the unified model, or the `compartment` named (internal staff for the whole graph).'
+  /erid/relationships:
+    get:
+      operationId: unifiedListRelationships
+      summary: Relationships, filtered (the unified model, or a compartment)
+      tags:
+      - Unified world model
+      x-required-scope: world_model:read
+      security:
+      - serviceToken: []
+      - apiKey: []
+      - session: []
+      parameters:
+      - $ref: '#/components/parameters/Compartment'
+      - $ref: '#/components/parameters/SourceFilter'
+      - $ref: '#/components/parameters/TargetFilter'
+      - $ref: '#/components/parameters/EntityFilter'
+      - $ref: '#/components/parameters/RelationshipTypeFilter'
+      - $ref: '#/components/parameters/CalibrationFilter'
+      - $ref: '#/components/parameters/RelationshipStatusFilter'
+      - $ref: '#/components/parameters/Version'
+      - $ref: '#/components/parameters/AsOf'
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/TraceParent'
+      responses:
+        '200':
+          description: Relationships, filtered
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+            X-Axelrod-API-Version:
+              $ref: '#/components/headers/X-Axelrod-API-Version'
+            traceparent:
+              $ref: '#/components/headers/traceparent'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RelationshipPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      description: 'On erid: the unified model, or the `compartment` named (internal staff for the whole graph).'
+  /erid/relationships/{relationship_id}:
+    get:
+      operationId: unifiedGetRelationship
+      summary: One relationship (the unified model, or a compartment)
+      tags:
+      - Unified world model
+      x-required-scope: world_model:read
+      security:
+      - serviceToken: []
+      - apiKey: []
+      - session: []
+      parameters:
+      - $ref: '#/components/parameters/Compartment'
+      - $ref: '#/components/parameters/RelationshipId'
+      - $ref: '#/components/parameters/Version'
+      - $ref: '#/components/parameters/AsOf'
+      - $ref: '#/components/parameters/TraceParent'
+      responses:
+        '200':
+          description: One relationship
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+            X-Axelrod-API-Version:
+              $ref: '#/components/headers/X-Axelrod-API-Version'
+            ETag:
+              $ref: '#/components/headers/ETag'
+            traceparent:
+              $ref: '#/components/headers/traceparent'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RelationshipResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      description: 'On erid: the unified model, or the `compartment` named (internal staff for the whole graph).'
+  /erid/relationships/{relationship_id}/evidence:
+    get:
+      operationId: unifiedListRelationshipEvidence
+      summary: A relationship's evidence (the unified model, or a compartment)
+      tags:
+      - Unified world model
+      x-required-scope: world_model:read
+      security:
+      - serviceToken: []
+      - apiKey: []
+      - session: []
+      parameters:
+      - $ref: '#/components/parameters/Compartment'
+      - $ref: '#/components/parameters/RelationshipId'
+      - $ref: '#/components/parameters/Version'
+      - $ref: '#/components/parameters/AsOf'
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/TraceParent'
+      responses:
+        '200':
+          description: A relationship's evidence
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+            X-Axelrod-API-Version:
+              $ref: '#/components/headers/X-Axelrod-API-Version'
+            traceparent:
+              $ref: '#/components/headers/traceparent'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvidencePage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      description: 'On erid: the unified model, or the `compartment` named (internal staff for the whole graph).'
+  /erid/evidence/{evidence_id}:
+    get:
+      operationId: unifiedGetEvidence
+      summary: One evidence record (the unified model, or a compartment)
+      tags:
+      - Unified world model
+      x-required-scope: world_model:read
+      security:
+      - serviceToken: []
+      - apiKey: []
+      - session: []
+      parameters:
+      - $ref: '#/components/parameters/Compartment'
+      - $ref: '#/components/parameters/EvidenceId'
+      - $ref: '#/components/parameters/Version'
+      - $ref: '#/components/parameters/AsOf'
+      - $ref: '#/components/parameters/TraceParent'
+      responses:
+        '200':
+          description: One evidence record
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+            X-Axelrod-API-Version:
+              $ref: '#/components/headers/X-Axelrod-API-Version'
+            traceparent:
+              $ref: '#/components/headers/traceparent'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvidenceResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      description: 'On erid: the unified model, or the `compartment` named (internal staff for the whole graph).'
+  /erid/graph:
+    get:
+      operationId: unifiedGetGraph
+      summary: A subgraph for an agent's context window (the unified model, or a compartment)
+      tags:
+      - Unified world model
+      x-required-scope: world_model:read
+      security:
+      - serviceToken: []
+      - apiKey: []
+      - session: []
+      parameters:
+      - $ref: '#/components/parameters/Compartment'
+      - $ref: '#/components/parameters/GraphEntities'
+      - $ref: '#/components/parameters/GraphAttributes'
+      - $ref: '#/components/parameters/GraphQuery'
+      - $ref: '#/components/parameters/Depth'
+      - $ref: '#/components/parameters/GraphLimit'
+      - $ref: '#/components/parameters/Version'
+      - $ref: '#/components/parameters/AsOf'
+      - $ref: '#/components/parameters/TraceParent'
+      responses:
+        '200':
+          description: A subgraph for an agent's context window
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+            X-Axelrod-API-Version:
+              $ref: '#/components/headers/X-Axelrod-API-Version'
+            traceparent:
+              $ref: '#/components/headers/traceparent'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GraphResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      description: 'Workflow read: the named entities and attributes (or the names in q) and their neighbours up to `depth`
+        relationships, with the relationships between them. No entities, attributes or q: the whole model. On erid: the unified
+        model, or the `compartment` named (internal staff for the whole graph).'
 components:
   securitySchemes:
     serviceToken:
       type: http
       scheme: bearer
       bearerFormat: JWT
-      description: 'A short-lived token core mints per call (docs/design/core-mcp-auth.md): ES256, `typ: at+jwt`, verified
-        against the issuer''s JWKS. Claims: `iss` (a trusted issuer), `aud` (this service), `exp` (5 minutes), `iat`, `jti`,
-        `sub` (the org user), `org` (the organization: the tenant), `scope` (space-separated), `azp` (core-mcp or core-web),
-        `name` (optional), and `act` ({sub, name}) when an agent host drives the call. A token with `act` or `azp: core-mcp`
-        never decides a change.'
+      description: 'A short-lived service token that core mints per call (docs/design/core-mcp-auth.md): a JWT (JSON Web Token,
+        RFC 7519) signed with ES256 (ECDSA, the Elliptic Curve Digital Signature Algorithm, on the P-256 curve with SHA-256),
+        header `typ: at+jwt` (an OAuth 2.0 access token, RFC 9068), verified against the issuer''s JWKS (JSON Web Key Set:
+        the issuer''s public signing keys, by key id `kid`). Claims: `iss` (issuer: a trusted issuer), `aud` (audience: this
+        service), `exp` (expiry: 5 minutes after issue), `iat` (issued at), `nbf` (not before, optional), `jti` (JWT id: unique
+        per token, the audit join key), `sub` (subject: the organization user), `org` (the organization: the tenant), `scope`
+        (space-separated scopes), `azp` (authorized party: the part of core that asked, core-mcp or core-web), `name` (optional),
+        and `act` (actor: {sub, name} of the agent host) when an agent drives the call. A token with `act` or `azp: core-mcp`
+        reads only (world_model:read) and never decides a change.'
     apiKey:
       type: http
       scheme: bearer
       bearerFormat: static key
-      description: 'A static scoped credential for a non-core caller (WORLD_MODEL_API_KEYS: `caller:key:org:scope+scope`).
-        It names a service, not a person, and never carries changes:review.'
+      description: 'A static scoped key for a backend service (WORLD_MODEL_API_KEYS: `caller:key:org[:scope+scope]`), such
+        as the data-ingestion pipeline. It names a service, not a person; with no scopes listed it holds world_model:read
+        only, and it never carries changes:approve.'
     session:
       type: apiKey
       in: cookie
@@ -2724,8 +3941,7 @@ components:
       - reconciling
       - non_additive
       description: 'driving: its parts'' accounting relationships carry changes into the total; reconciling: observed and
-        reconciled against the total, never propagating into it; non_additive: its parts overlap (a view that is not a
-        sum).'
+        reconciled against the total, never propagating into it; non_additive: its parts overlap (a view that is not a sum).'
     EventType:
       type: string
       enum:
@@ -2866,14 +4082,17 @@ components:
     Scope:
       type: string
       enum:
-      - read
-      - documents:write
-      - changes:write
-      - simulations:write
-      - changes:review
+      - world_model:read
+      - documents:create
+      - changes:create
+      - simulations:create
+      - changes:approve
       - admin
-      description: 'What a credential may do, in four tiers: read (read); propose (documents:write, changes:write, simulations:write);
-        approve (changes:review: human only, never on a static key or an agent-driven token); admin (admin).'
+      description: 'What a credential may do, named `resource:action` with three actions (read, create, approve) and `admin`.
+        world_model:read reads a world model and everything in it; documents:create uploads documents and creates bundles;
+        changes:create proposes changes; simulations:create poses theses and runs simulations; changes:approve approves or
+        rejects a change (a person only: never a static key or an agent-driven token); admin deletes documents and reads the
+        audit log.'
     ActorKind:
       type: string
       enum:
@@ -2929,6 +4148,8 @@ components:
       - question_not_understood
       - thesis_unbound
       - precondition_required
+      - internal_only
+      - compartment_not_found
       description: A stable, machine-readable error code; `type` is https://docs.axelrod.ai/problems/{code}.
     FieldError:
       type: object
@@ -2941,8 +4162,8 @@ components:
             - string
             - integer
           description: 'where: body, query, path or header, then the field'
-        message: *id018
-        type: *id018
+        message: *id019
+        type: *id019
       required:
       - location
       - message
@@ -2969,7 +4190,7 @@ components:
           description: The request path
         code:
           $ref: '#/components/schemas/ProblemCode'
-        request_id: *id018
+        request_id: *id019
         errors:
           type: array
           items:
@@ -3030,7 +4251,7 @@ components:
       type: object
       additionalProperties: false
       properties:
-        request_id: *id018
+        request_id: *id019
         version:
           $ref: '#/components/schemas/VersionRef'
       required:
@@ -3040,7 +4261,7 @@ components:
       type: object
       additionalProperties: false
       properties:
-        request_id: *id018
+        request_id: *id019
         version:
           $ref: '#/components/schemas/VersionRef'
         limit:
@@ -3060,7 +4281,7 @@ components:
       type: object
       additionalProperties: false
       properties:
-        sub: *id018
+        sub: *id019
         name:
           type:
           - string
@@ -3128,9 +4349,9 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Scope'
-        world_model_ids: &id022
+        world_model_ids: &id023
           type: array
-          items: *id018
+          items: *id019
       required:
       - actor
       - scopes
@@ -3147,20 +4368,20 @@ components:
           jti: null
         scopes:
         - read
-        - documents:write
+        - documents:create
         world_model_ids:
         - sally_demo
     Counts:
       type: object
       additionalProperties: false
       properties:
-        entities: &id019
+        entities: &id020
           type: integer
-        attributes: *id019
-        relationships: *id019
-        groups: *id019
-        documents: *id019
-        bundles: *id019
+        attributes: *id020
+        relationships: *id020
+        groups: *id020
+        documents: *id020
+        bundles: *id020
       required:
       - entities
       - attributes
@@ -3173,11 +4394,11 @@ components:
       type: object
       additionalProperties: false
       properties:
-        id: *id018
-        name: *id018
-        organization: *id018
-        latest_version: *id019
-        clock: &id020
+        id: *id019
+        name: *id019
+        organization: *id019
+        latest_version: *id020
+        clock: &id021
           type: string
           format: date-time
         counts:
@@ -3207,15 +4428,15 @@ components:
       type: object
       additionalProperties: false
       properties:
-        number: *id019
-        state_hash: *id018
-        committed_at: *id020
+        number: *id020
+        state_hash: *id019
+        committed_at: *id021
         cause:
           type: string
           description: 'What committed it: a change, a day''s close, a consolidation'
         change_ids:
           type: array
-          items: *id018
+          items: *id019
           description: The changes whose approval committed this version
       required:
       - number
@@ -3262,7 +4483,7 @@ components:
         id:
           type: string
           description: A content hash
-        attribute_id: *id018
+        attribute_id: *id019
         value:
           type: number
           description: The observed value, in the attribute's unit
@@ -3285,8 +4506,8 @@ components:
           - string
           - 'null'
           format: date-time
-          description: When the observed fact occurred, e.g. a reported figure's period end; null when the update did
-            not say
+          description: When the observed fact occurred, e.g. a reported figure's period end; null when the update did not
+            say
       required:
       - id
       - attribute_id
@@ -3308,11 +4529,11 @@ components:
       type: object
       additionalProperties: false
       properties:
-        valid_at: *id020
-        recorded_at: *id020
-        mean: &id021
+        valid_at: *id021
+        recorded_at: *id021
+        mean: &id022
           type: number
-        sd: *id021
+        sd: *id022
         z:
           type:
           - number
@@ -3345,10 +4566,10 @@ components:
         key:
           type: string
           description: The attribute's key within its entity
-        entity_id: *id018
-        name: *id018
-        aliases: *id022
-        unit: *id018
+        entity_id: *id019
+        name: *id019
+        aliases: *id023
+        unit: *id019
         concept:
           type: string
           description: 'The kind of quantity: policy_rate, revenue_flow, share_price, ...'
@@ -3413,8 +4634,8 @@ components:
       type: object
       additionalProperties: false
       properties:
-        id: *id018
-        name: *id018
+        id: *id019
+        name: *id019
       required:
       - id
       - name
@@ -3428,13 +4649,13 @@ components:
           description: A stable internal id, never a ticker
         type:
           $ref: '#/components/schemas/EntityType'
-        name: *id018
-        aliases: *id022
+        name: *id019
+        aliases: *id023
         identifiers:
           type: object
-          additionalProperties: *id018
+          additionalProperties: *id019
           description: Tickers, ISINs and the like
-        description: *id018
+        description: *id019
         concepts:
           type: array
           items:
@@ -3442,8 +4663,8 @@ components:
           description: From the taxonomy's root to the entity's own concept
         features:
           type: object
-          additionalProperties: *id018
-        group_ids: *id022
+          additionalProperties: *id019
+        group_ids: *id023
         attribute_count:
           type: integer
           description: How many attributes it has
@@ -3459,7 +4680,7 @@ components:
           description: 'With include=relationships: the links into and out of its attributes'
         origin:
           $ref: '#/components/schemas/Origin'
-        created_at: *id020
+        created_at: *id021
       required:
       - id
       - type
@@ -3521,14 +4742,14 @@ components:
       type: object
       additionalProperties: false
       properties:
-        id: *id018
-        source_attribute_id: *id018
-        target_attribute_id: *id018
-        source_entity_id: *id018
-        target_entity_id: *id018
+        id: *id019
+        source_attribute_id: *id019
+        target_attribute_id: *id019
+        source_entity_id: *id019
+        target_entity_id: *id019
         type:
           $ref: '#/components/schemas/RelationshipType'
-        label: *id018
+        label: *id019
         direction:
           $ref: '#/components/schemas/Direction'
         sign:
@@ -3556,13 +4777,13 @@ components:
           type:
           - object
           - 'null'
-          description: 'What a reader retrieves about the step: exposure, unit, date, hedge or pass-through, financial
-            endpoint, calculation and source; null without a transition'
+          description: 'What a reader retrieves about the step: exposure, unit, date, hedge or pass-through, financial endpoint,
+            calculation and source; null without a transition'
         identity_id:
           type:
           - string
           - 'null'
-        state_dependent: &id023
+        state_dependent: &id024
           type: boolean
         origin:
           $ref: '#/components/schemas/Origin'
@@ -3570,13 +4791,13 @@ components:
           $ref: '#/components/schemas/EpistemicType'
         status:
           $ref: '#/components/schemas/RelationshipStatus'
-        valid_from: *id020
+        valid_from: *id021
         valid_to:
           type:
           - string
           - 'null'
           format: date-time
-        evidence_count: *id019
+        evidence_count: *id020
       required:
       - id
       - source_attribute_id
@@ -3631,8 +4852,8 @@ components:
       type: object
       additionalProperties: false
       properties:
-        id: *id018
-        relationship_id: *id018
+        id: *id019
+        relationship_id: *id019
         evidence_type:
           $ref: '#/components/schemas/EvidenceType'
         epistemic_type:
@@ -3646,7 +4867,7 @@ components:
           type:
           - string
           - 'null'
-        observed_at: *id020
+        observed_at: *id021
         strength:
           type: number
           minimum: 0
@@ -3680,17 +4901,17 @@ components:
       type: object
       additionalProperties: false
       properties:
-        id: *id018
-        entity_id: *id018
-        view: *id018
-        basis: *id018
-        unit: *id018
-        period: *id018
+        id: *id019
+        entity_id: *id019
+        view: *id019
+        basis: *id019
+        unit: *id019
+        period: *id019
         role:
           $ref: '#/components/schemas/CompositionRole'
-        additive: *id023
-        total_attribute_id: *id018
-        member_attribute_ids: *id022
+        additive: *id024
+        total_attribute_id: *id019
+        member_attribute_ids: *id023
         residual_attribute_id:
           type:
           - string
@@ -3699,7 +4920,7 @@ components:
           type:
           - string
           - 'null'
-        note: *id018
+        note: *id019
       required:
       - id
       - entity_id
@@ -3734,13 +4955,13 @@ components:
       type: object
       additionalProperties: false
       properties:
-        relationship_id: *id018
+        relationship_id: *id019
         branch:
           type:
           - string
           - 'null'
-        source_attribute_id: *id018
-        target_attribute_id: *id018
+        source_attribute_id: *id019
+        target_attribute_id: *id019
         type:
           $ref: '#/components/schemas/RelationshipType'
         calibration:
@@ -3770,19 +4991,19 @@ components:
       type: object
       additionalProperties: false
       properties:
-        id: *id018
-        entity_id: *id018
-        name: *id018
-        trigger: *id018
-        endpoint_attribute_id: *id018
-        description: *id018
-        active_when: *id018
+        id: *id019
+        entity_id: *id019
+        name: *id019
+        trigger: *id019
+        endpoint_attribute_id: *id019
+        description: *id019
+        active_when: *id019
         steps:
           type: array
           items:
             $ref: '#/components/schemas/PathStep'
-        uncalibrated_steps: *id019
-        steps_without_transition: *id019
+        uncalibrated_steps: *id020
+        steps_without_transition: *id020
       required:
       - id
       - entity_id
@@ -3799,14 +5020,14 @@ components:
       type: object
       additionalProperties: false
       properties:
-        total: *id019
-        calibrated: *id019
-        uncalibrated: *id019
-        accounting: *id019
-        identity: *id019
-        stock_flow: *id019
-        state_dependent: *id019
-        with_transition: *id019
+        total: *id020
+        calibrated: *id020
+        uncalibrated: *id020
+        accounting: *id020
+        identity: *id020
+        stock_flow: *id020
+        state_dependent: *id020
+        with_transition: *id020
       required:
       - total
       - calibrated
@@ -3821,8 +5042,8 @@ components:
       type: object
       additionalProperties: false
       properties:
-        entity_id: *id018
-        name: *id018
+        entity_id: *id019
+        name: *id019
         attributes:
           type: array
           items:
@@ -3852,7 +5073,7 @@ components:
           $ref: '#/components/schemas/LinkCounts'
         problems:
           type: array
-          items: *id018
+          items: *id019
           description: Structural problems found
       required:
       - entity_id
@@ -3870,14 +5091,14 @@ components:
       type: object
       additionalProperties: false
       properties:
-        relationship_id: *id018
-        source_attribute_id: *id018
-        target_attribute_id: *id018
+        relationship_id: *id019
+        source_attribute_id: *id019
+        target_attribute_id: *id019
         type:
           $ref: '#/components/schemas/RelationshipType'
         calibration:
           $ref: '#/components/schemas/Calibration'
-        has_transition: *id023
+        has_transition: *id024
       required:
       - relationship_id
       - source_attribute_id
@@ -3894,10 +5115,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/TraceStep'
-        ends_at: *id018
-        reaches_endpoint: *id023
-        uncalibrated_steps: *id022
-        steps_without_transition: *id022
+        ends_at: *id019
+        reaches_endpoint: *id024
+        uncalibrated_steps: *id023
+        steps_without_transition: *id023
       required:
       - steps
       - ends_at
@@ -3909,8 +5130,8 @@ components:
       type: object
       additionalProperties: false
       properties:
-        from_attribute_id: *id018
-        entity_id: *id018
+        from_attribute_id: *id019
+        entity_id: *id019
         through_totals:
           type: boolean
           description: Whether routes went on through the totals they reached
@@ -3918,10 +5139,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/TraceRoute'
-        reaches_endpoint: *id023
+        reaches_endpoint: *id024
         stops:
           type: array
-          items: *id018
+          items: *id019
           description: Where routes stop short of an endpoint
       required:
       - from_attribute_id
@@ -3935,13 +5156,13 @@ components:
       type: object
       additionalProperties: false
       properties:
-        id: *id018
-        name: *id018
+        id: *id019
+        name: *id019
         parent_id:
           type:
           - string
           - 'null'
-        entity_ids: *id022
+        entity_ids: *id023
       required:
       - id
       - name
@@ -3959,15 +5180,15 @@ components:
       type: object
       additionalProperties: false
       properties:
-        id: *id018
-        pattern_id: *id018
-        name: *id018
+        id: *id019
+        pattern_id: *id019
+        name: *id019
         bindings:
           type: object
-          additionalProperties: *id018
-        relationship_ids: *id022
-        absent_relationship_ids: *id022
-        child_group_ids: *id022
+          additionalProperties: *id019
+        relationship_ids: *id023
+        absent_relationship_ids: *id023
+        child_group_ids: *id023
         activation:
           type: number
           minimum: 0
@@ -3986,14 +5207,14 @@ components:
       type: object
       additionalProperties: false
       properties:
-        id: *id018
+        id: *id019
         type:
           $ref: '#/components/schemas/EventType'
         channel:
           $ref: '#/components/schemas/EventChannel'
-        source: *id018
-        headline: *id018
-        body: *id018
+        source: *id019
+        headline: *id019
+        body: *id019
         published_at:
           type: string
           format: date-time
@@ -4008,12 +5229,12 @@ components:
           - 'null'
         data:
           type: object
-          additionalProperties: *id021
+          additionalProperties: *id022
           description: 'Data events: series id to value'
-        mentions: *id022
-        tags: *id022
-        synthetic: *id023
-        change_ids: *id022
+        mentions: *id023
+        tags: *id023
+        synthetic: *id024
+        change_ids: *id023
       required:
       - id
       - type
@@ -4051,8 +5272,8 @@ components:
       type: object
       additionalProperties: false
       properties:
-        entity_id: *id018
-        attribute_id: *id018
+        entity_id: *id019
+        attribute_id: *id019
         direction:
           $ref: '#/components/schemas/ImpactDirection'
         size_sd:
@@ -4069,7 +5290,7 @@ components:
           description: '0: the event moves it directly; 1: one relationship away'
         causal_path_ids:
           type: array
-          items: *id018
+          items: *id019
           description: The relationships it passes through
       required:
       - entity_id
@@ -4084,10 +5305,10 @@ components:
       type: object
       additionalProperties: false
       properties:
-        event_id: *id018
+        event_id: *id019
         status:
           $ref: '#/components/schemas/ImpactStatus'
-        model_version: *id019
+        model_version: *id020
         impacts:
           type: array
           items:
@@ -4105,12 +5326,12 @@ components:
         id:
           type: string
           description: A content hash of the bytes
-        filename: *id018
-        media_type: *id018
-        size: *id019
-        sha256: *id018
-        title: *id018
-        source: *id018
+        filename: *id019
+        media_type: *id019
+        size: *id020
+        sha256: *id019
+        title: *id019
+        source: *id019
         source_type:
           $ref: '#/components/schemas/SourceType'
         status:
@@ -4132,7 +5353,7 @@ components:
         uploaded_by:
           type: string
           description: The uploader's sub
-        error: *id018
+        error: *id019
         meta:
           type: object
       required:
@@ -4172,12 +5393,12 @@ components:
       type: object
       additionalProperties: false
       properties:
-        entity_id: *id018
+        entity_id: *id019
         attribute_id:
           type:
           - string
           - 'null'
-        surface: *id018
+        surface: *id019
       required:
       - entity_id
       - attribute_id
@@ -4187,16 +5408,16 @@ components:
       type: object
       additionalProperties: false
       properties:
-        document_id: *id018
-        ordinal: *id019
-        start: *id019
-        end: *id019
+        document_id: *id019
+        ordinal: *id020
+        start: *id020
+        end: *id020
         page:
           type:
           - integer
           - 'null'
-        section: *id018
-        text: *id018
+        section: *id019
+        text: *id019
         mentions:
           type: array
           items:
@@ -4215,9 +5436,9 @@ components:
       type: object
       additionalProperties: false
       properties:
-        document_id: *id018
-        parser: *id018
-        text: *id018
+        document_id: *id019
+        parser: *id019
+        text: *id019
       required:
       - document_id
       - parser
@@ -4227,13 +5448,13 @@ components:
       type: object
       additionalProperties: false
       properties:
-        id: *id018
-        title: *id018
-        document_ids: *id022
-        created_at: *id020
-        extractor_version: *id018
-        item_count: *id019
-        signal_count: *id019
+        id: *id019
+        title: *id019
+        document_ids: *id023
+        created_at: *id021
+        extractor_version: *id019
+        item_count: *id020
+        signal_count: *id020
       required:
       - id
       - title
@@ -4247,23 +5468,23 @@ components:
       type: object
       additionalProperties: true
       properties:
-        id: *id018
-        published_at: *id020
+        id: *id019
+        published_at: *id021
         occurred_at:
           type:
           - string
           - 'null'
           format: date-time
-        source: *id018
-        source_type: *id018
-        kind: *id018
-        headline: *id018
-        summary: *id018
+        source: *id019
+        source_type: *id019
+        kind: *id019
+        headline: *id019
+        summary: *id019
         url:
           type:
           - string
           - 'null'
-        entities: *id022
+        entities: *id023
         signals:
           type: array
           items:
@@ -4283,15 +5504,15 @@ components:
       properties:
         format:
           const: axelrod.import/v1
-        title: *id018
-        collected_by: *id018
+        title: *id019
+        collected_by: *id019
         collected_at:
           type:
           - string
           - 'null'
           format: date-time
-        description: *id018
-        synthetic: *id023
+        description: *id019
+        synthetic: *id024
         items:
           type: array
           items:
@@ -4302,9 +5523,9 @@ components:
       properties:
         kind:
           $ref: '#/components/schemas/HitKind'
-        score: *id021
-        text: *id018
-        why: *id022
+        score: *id022
+        text: *id019
+        why: *id023
         document_id:
           type:
           - string
@@ -4313,8 +5534,8 @@ components:
           type:
           - integer
           - 'null'
-        title: *id018
-        filename: *id018
+        title: *id019
+        filename: *id019
         event_time:
           type:
           - string
@@ -4350,7 +5571,7 @@ components:
         resource:
           type: string
           description: The kind of resource the job produced
-        ids: *id022
+        ids: *id023
         detail:
           type: object
       required:
@@ -4361,12 +5582,12 @@ components:
       type: object
       additionalProperties: false
       properties:
-        id: *id018
+        id: *id019
         type:
           $ref: '#/components/schemas/JobType'
         status:
           $ref: '#/components/schemas/JobStatus'
-        created_at: *id020
+        created_at: *id021
         finished_at:
           type:
           - string
@@ -4405,12 +5626,12 @@ components:
       type: object
       additionalProperties: false
       properties:
-        bundle_id: *id018
+        bundle_id: *id019
         item_ids:
           type:
           - array
           - 'null'
-          items: *id018
+          items: *id019
           description: 'Only these items (default: all)'
       required:
       - bundle_id
@@ -4420,7 +5641,7 @@ components:
       type: object
       additionalProperties: false
       properties:
-        id: *id018
+        id: *id019
         kind:
           $ref: '#/components/schemas/ChangeKind'
         status:
@@ -4429,8 +5650,8 @@ components:
           type:
           - string
           - 'null'
-        created_at: *id020
-        operation_count: *id019
+        created_at: *id021
+        operation_count: *id020
         proposed_by:
           anyOf:
           - $ref: '#/components/schemas/Actor'
@@ -4483,7 +5704,7 @@ components:
       type: object
       additionalProperties: true
       properties:
-        op: *id018
+        op: *id019
         attribute_id:
           type:
           - string
@@ -4503,7 +5724,7 @@ components:
       type: object
       additionalProperties: false
       properties:
-        change_id: *id018
+        change_id: *id019
         operations:
           type: array
           items:
@@ -4516,13 +5737,13 @@ components:
       type: object
       additionalProperties: false
       properties:
-        id: *id018
-        at: *id020
-        request_id: *id018
-        world_model_id: *id018
-        method: *id018
-        route: *id018
-        status: *id019
+        id: *id019
+        at: *id021
+        request_id: *id019
+        world_model_id: *id019
+        method: *id019
+        route: *id019
+        status: *id020
         actor:
           $ref: '#/components/schemas/Actor'
         scopes:
@@ -4531,7 +5752,7 @@ components:
             $ref: '#/components/schemas/Scope'
         resource_ids:
           type: array
-          items: *id018
+          items: *id019
           description: 'What the write touched: documents, bundles, changes, theses, ...'
       required:
       - id
@@ -4549,7 +5770,7 @@ components:
       type: object
       additionalProperties: false
       properties:
-        change_id: *id018
+        change_id: *id019
         status:
           $ref: '#/components/schemas/ChangeStatus'
         decided_by:
@@ -4601,7 +5822,7 @@ components:
           type: string
           minLength: 1
           maxLength: 500
-        template_id: *id018
+        template_id: *id019
         horizon_days:
           type: integer
           minimum: 7
@@ -4618,16 +5839,16 @@ components:
       type: object
       additionalProperties: false
       properties:
-        id: *id018
-        question: *id018
+        id: *id019
+        question: *id019
         mode:
           $ref: '#/components/schemas/ThesisMode'
-        horizon_days: *id019
-        target_attribute_ids: *id022
-        operation_count: *id019
-        posed_by: *id018
-        posed_at: *id020
-        simulation_ids: *id022
+        horizon_days: *id020
+        target_attribute_ids: *id023
+        operation_count: *id020
+        posed_by: *id019
+        posed_at: *id021
+        simulation_ids: *id023
       required:
       - id
       - question
@@ -4653,9 +5874,9 @@ components:
       type: object
       additionalProperties: false
       properties:
-        id: *id018
-        question: *id018
-        horizon_days: *id019
+        id: *id019
+        question: *id019
+        horizon_days: *id020
       required:
       - id
       - question
@@ -4674,9 +5895,9 @@ components:
       type: object
       additionalProperties: false
       properties:
-        q05: *id021
-        q50: *id021
-        q95: *id021
+        q05: *id022
+        q50: *id022
+        q95: *id022
       required:
       - q05
       - q50
@@ -4686,9 +5907,9 @@ components:
       type: object
       additionalProperties: false
       properties:
-        attribute_id: *id018
-        entity_id: *id018
-        name: *id018
+        attribute_id: *id019
+        entity_id: *id019
+        name: *id019
         effect_sd:
           anyOf:
           - $ref: '#/components/schemas/Effect'
@@ -4703,18 +5924,18 @@ components:
       type: object
       additionalProperties: false
       properties:
-        id: *id018
-        thesis_id: *id018
-        question: *id018
+        id: *id019
+        thesis_id: *id019
+        question: *id019
         status:
           $ref: '#/components/schemas/SimulationStatus'
         version:
           type: integer
           description: The version it ran on
-        seed: *id019
-        config_hash: *id018
-        horizon_days: *id019
-        created_at: *id020
+        seed: *id020
+        config_hash: *id019
+        horizon_days: *id020
+        created_at: *id021
         targets:
           type: array
           items:
@@ -4757,16 +5978,16 @@ components:
       type: object
       additionalProperties: false
       properties:
-        attribute_id: *id018
-        entity_id: *id018
-        name: *id018
-        order: *id019
-        peak_sd: *id021
-        peak_day: *id019
-        arrives_day: *id019
-        effect_sd: *id021
-        material: *id023
-        relationship_ids: *id022
+        attribute_id: *id019
+        entity_id: *id019
+        name: *id019
+        order: *id020
+        peak_sd: *id022
+        peak_day: *id020
+        arrives_day: *id020
+        effect_sd: *id022
+        material: *id024
+        relationship_ids: *id023
       required:
       - attribute_id
       - entity_id
@@ -4801,7 +6022,7 @@ components:
             type: object
         summary:
           type: object
-        max_route_depth: *id019
+        max_route_depth: *id020
       required:
       - contributed
       - excluded
@@ -5549,25 +6770,135 @@ components:
       - data
       - meta
       description: A job.
+    CompartmentCounts:
+      type: object
+      additionalProperties: false
+      properties:
+        entities: &id025
+          type: integer
+        attributes: *id025
+        relationships: *id025
+      required:
+      - entities
+      - attributes
+      - relationships
+      description: How many of each object it holds now.
+    Compartment:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        base:
+          type: string
+          description: The unified scenario it narrows
+        companies:
+          type: array
+          items:
+            type: string
+          description: The covered companies in scope
+        counts:
+          $ref: '#/components/schemas/CompartmentCounts'
+      required:
+      - id
+      - title
+      - base
+      - companies
+      - counts
+      description: 'A client''s view of the unified world model: its companies, every player upstream of their values, and
+        one link downstream (as engine/focus.py defines a focused world).'
+    UnifiedWorldModel:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          enum:
+          - erid
+        scenario:
+          type: string
+          description: The scenario that backs it
+        world_model_id:
+          type: string
+          description: 'The world model it is (`/world-models/{id}`): its writes, review and audit'
+        latest_version: *id025
+        clock:
+          type: string
+          format: date-time
+        counts:
+          $ref: '#/components/schemas/CompartmentCounts'
+        compartment_ids:
+          type: array
+          items:
+            type: string
+      required:
+      - id
+      - scenario
+      - world_model_id
+      - latest_version
+      - clock
+      - counts
+      - compartment_ids
+      description: 'erid: the unified world model, the whole graph.'
+    UnifiedWorldModelResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/UnifiedWorldModel'
+        meta:
+          $ref: '#/components/schemas/Meta'
+      required:
+      - data
+      - meta
+      description: The unified world model, with its meta.
+    CompartmentResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/Compartment'
+        meta:
+          $ref: '#/components/schemas/Meta'
+      required:
+      - data
+      - meta
+      description: A compartment, with its meta.
+    CompartmentPage:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Compartment'
+        meta:
+          $ref: '#/components/schemas/ListMeta'
+      required:
+      - data
+      - meta
+      description: A page of Compartment records.
   parameters:
     WorldModelId:
       name: world_model_id
       in: path
       required: true
       description: The world model's id (GET /v1/world-models lists them)
-      schema: *id018
+      schema: *id019
     EntityId:
       name: entity_id
       in: path
       required: true
       description: The entity's id
-      schema: *id018
+      schema: *id019
     AttributeKey:
       name: attribute_key
       in: path
       required: true
       description: The attribute's key (`operating_profit`) or its full id (`toyota.operating_profit`)
-      schema: *id018
+      schema: *id019
     Version:
       name: version
       in: query
@@ -5581,7 +6912,7 @@ components:
       in: query
       required: false
       description: Read the state at the last day closed at or before this time (UTC when no zone)
-      schema: *id020
+      schema: *id021
     Limit:
       name: limit
       in: query
@@ -5597,12 +6928,16 @@ components:
       in: query
       required: false
       description: The `meta.next_cursor` of the previous page
-      schema: *id018
+      schema: *id019
     IdempotencyKey:
       name: Idempotency-Key
       in: header
       required: false
-      description: 'Makes a retry safe: the same key with the same body returns the first answer; with another body, 422 idempotency_key_reused'
+      description: 'Makes a retry safe: the same key with the same body returns the first answer; with another body, 422 idempotency_key_reused.
+        Keys are permanent: stored in the lakehouse catalog per organization, world model and operation, with no expiry, so
+        they survive a restart. Document uploads and bundles are also keyed on their content (with or without this header):
+        the same content gives the same answer whoever sends it and whenever. A request that fails is not stored, so its retry
+        runs again.'
       schema:
         type: string
         minLength: 1
@@ -5612,13 +6947,13 @@ components:
       in: header
       required: true
       description: The ETag of the version the change was reviewed against (`"<state_hash>"`); required
-      schema: *id018
+      schema: *id019
     TraceParent:
       name: traceparent
       in: header
       required: false
       description: A W3C trace context; echoed on the response
-      schema: *id018
+      schema: *id019
     Include:
       name: include
       in: query
@@ -5650,13 +6985,13 @@ components:
       in: query
       required: false
       description: Only entities under this concept (id)
-      schema: *id018
+      schema: *id019
     GroupFilter:
       name: group
       in: query
       required: false
       description: Only entities bound in this group (id)
-      schema: *id018
+      schema: *id019
     NameQuery:
       name: q
       in: query
@@ -5670,37 +7005,37 @@ components:
       in: query
       required: false
       description: Only those valid at or after
-      schema: *id020
+      schema: *id021
     ValidTo:
       name: valid_to
       in: query
       required: false
       description: Only those valid at or before
-      schema: *id020
+      schema: *id021
     From:
       name: from
       in: query
       required: false
       description: Only states valid at or after
-      schema: *id020
+      schema: *id021
     To:
       name: to
       in: query
       required: false
       description: Only states valid at or before
-      schema: *id020
+      schema: *id021
     CompositionId:
       name: composition_id
       in: path
       required: true
       description: The composition's id
-      schema: *id018
+      schema: *id019
     PathId:
       name: path_id
       in: path
       required: true
       description: The path's id
-      schema: *id018
+      schema: *id019
     ConstructionFormat:
       name: format
       in: query
@@ -5744,19 +7079,19 @@ components:
       in: query
       required: false
       description: Only from this attribute (full id)
-      schema: *id018
+      schema: *id019
     TargetFilter:
       name: target
       in: query
       required: false
       description: Only into this attribute (full id)
-      schema: *id018
+      schema: *id019
     EntityFilter:
       name: entity
       in: query
       required: false
       description: Only touching this entity's attributes
-      schema: *id018
+      schema: *id019
     RelationshipTypeFilter:
       name: type
       in: query
@@ -5788,25 +7123,25 @@ components:
       in: path
       required: true
       description: The relationship's id
-      schema: *id018
+      schema: *id019
     EvidenceId:
       name: evidence_id
       in: path
       required: true
       description: The evidence record's id
-      schema: *id018
+      schema: *id019
     ConceptId:
       name: concept_id
       in: path
       required: true
       description: The concept's id
-      schema: *id018
+      schema: *id019
     GroupId:
       name: group_id
       in: path
       required: true
       description: The group's id
-      schema: *id018
+      schema: *id019
     EventTypeFilter:
       name: type
       in: query
@@ -5819,25 +7154,25 @@ components:
       in: query
       required: false
       description: Published at or after
-      schema: *id020
+      schema: *id021
     PublishedTo:
       name: published_to
       in: query
       required: false
       description: Published at or before
-      schema: *id020
+      schema: *id021
     MentionFilter:
       name: entity
       in: query
       required: false
       description: Only those mentioning this entity
-      schema: *id018
+      schema: *id019
     EventId:
       name: event_id
       in: path
       required: true
       description: The event's id
-      schema: *id018
+      schema: *id019
     DocumentOrder:
       name: order
       in: query
@@ -5854,19 +7189,19 @@ components:
       in: query
       required: false
       description: Event time at or after
-      schema: *id020
+      schema: *id021
     DocTo:
       name: published_to
       in: query
       required: false
       description: Event time at or before
-      schema: *id020
+      schema: *id021
     DocumentId:
       name: document_id
       in: path
       required: true
       description: The document's id
-      schema: *id018
+      schema: *id019
     Ordinal:
       name: ordinal
       in: path
@@ -5887,13 +7222,13 @@ components:
       in: query
       required: false
       description: Only bundles read from this document
-      schema: *id018
+      schema: *id019
     BundleId:
       name: bundle_id
       in: path
       required: true
       description: The bundle's id
-      schema: *id018
+      schema: *id019
     SearchQuery:
       name: q
       in: query
@@ -5940,31 +7275,31 @@ components:
       in: path
       required: true
       description: The change's id
-      schema: *id018
+      schema: *id019
     ThesisId:
       name: thesis_id
       in: path
       required: true
       description: The thesis's id
-      schema: *id018
+      schema: *id019
     SimulationId:
       name: simulation_id
       in: path
       required: true
       description: The simulation's id
-      schema: *id018
+      schema: *id019
     GraphEntities:
       name: entities
       in: query
       required: false
       description: Comma-separated entity ids
-      schema: *id018
+      schema: *id019
     GraphAttributes:
       name: attributes
       in: query
       required: false
       description: Comma-separated attribute ids
-      schema: *id018
+      schema: *id019
     GraphQuery:
       name: q
       in: query
@@ -5998,17 +7333,34 @@ components:
       in: query
       required: false
       description: Add this simulation's evidence pack
-      schema: *id018
+      schema: *id019
     JobId:
       name: job_id
       in: path
       required: true
       description: The job's id
-      schema: *id018
+      schema: *id019
+    Compartment:
+      name: compartment
+      in: query
+      required: false
+      description: 'A compartment of the unified world model (a client''s view, e.g. `sally_focus`): the read sees only its
+        companies, the players upstream of their values, and one link downstream. Without it, the read is of the whole graph
+        (internal staff only).'
+      schema:
+        type: string
+        minLength: 1
+    CompartmentId:
+      name: compartment_id
+      in: path
+      required: true
+      description: A compartment's id
+      schema:
+        type: string
   headers:
     X-Request-Id:
       description: The request's id (yours, if you sent one)
-      schema: *id018
+      schema: *id019
     X-Axelrod-API-Version:
       description: The API's major version
       schema:
@@ -6016,17 +7368,17 @@ components:
         const: '1'
     ETag:
       description: The state hash of the version read, quoted; send it as If-Match on a decision
-      schema: *id018
+      schema: *id019
     Location:
       description: The created resource, or the job to poll
-      schema: *id018
+      schema: *id019
     traceparent:
       description: The W3C trace context you sent
-      schema: *id018
+      schema: *id019
   responses:
     BadRequest:
       description: The request cannot be used (invalid_request, invalid_json, invalid_cursor)
-      headers: &id024
+      headers: &id026
         X-Request-Id: *id002
         X-Axelrod-API-Version: *id003
       content:
@@ -6035,7 +7387,7 @@ components:
             $ref: '#/components/schemas/Problem'
     Unauthorized:
       description: No credential, or not a valid one (authentication_required, invalid_token)
-      headers: *id024
+      headers: *id026
       content:
         application/problem+json:
           schema:
@@ -6043,42 +7395,42 @@ components:
     Forbidden:
       description: The credential lacks the scope (insufficient_scope), or a decision came from a static key or an agent-driven
         token (human_approval_required)
-      headers: *id024
+      headers: *id026
       content:
         application/problem+json:
           schema:
             $ref: '#/components/schemas/Problem'
     NotFound:
       description: The world model, version or resource does not exist (…_not_found)
-      headers: *id024
+      headers: *id026
       content:
         application/problem+json:
           schema:
             $ref: '#/components/schemas/Problem'
     Conflict:
       description: The state forbids it now (update_in_progress, already_decided, not_parsed, conflict)
-      headers: *id024
+      headers: *id026
       content:
         application/problem+json:
           schema:
             $ref: '#/components/schemas/Problem'
     PreconditionFailed:
       description: If-Match names a version the model has moved past (version_moved)
-      headers: *id024
+      headers: *id026
       content:
         application/problem+json:
           schema:
             $ref: '#/components/schemas/Problem'
     PayloadTooLarge:
       description: Too many files or too large a file (too_many_files, payload_too_large)
-      headers: *id024
+      headers: *id026
       content:
         application/problem+json:
           schema:
             $ref: '#/components/schemas/Problem'
     UnsupportedMediaType:
       description: The body's media type is not accepted (unsupported_media_type)
-      headers: *id024
+      headers: *id026
       content:
         application/problem+json:
           schema:
@@ -6086,21 +7438,21 @@ components:
     Unprocessable:
       description: The body or query failed validation (invalid_request, with errors), or cannot be acted on (note_required,
         question_not_understood, thesis_unbound, idempotency_key_reused)
-      headers: *id024
+      headers: *id026
       content:
         application/problem+json:
           schema:
             $ref: '#/components/schemas/Problem'
     PreconditionRequired:
       description: A decision needs If-Match (precondition_required)
-      headers: *id024
+      headers: *id026
       content:
         application/problem+json:
           schema:
             $ref: '#/components/schemas/Problem'
     ServiceUnavailable:
       description: A token names a signing key and the issuer's JWKS cannot be reached (issuer_unavailable)
-      headers: *id024
+      headers: *id026
       content:
         application/problem+json:
           schema:

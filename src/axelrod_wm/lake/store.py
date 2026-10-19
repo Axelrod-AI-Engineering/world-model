@@ -121,6 +121,22 @@ class AuditRecord(_R):
     resource_ids: list[str]
 
 
+class IdempotencyRecord(_R):
+    """The first answer to a create, kept forever (Oct 19, with Manav: storage is negligible, determinism first): per
+    organization, world model, operation, and key (a client's Idempotency-Key, or `content:<sha256>` for documents and
+    bundles). The fingerprint is the request's; another request under the key is refused."""
+
+    org: str
+    world_model_id: str
+    operation: str
+    key: str
+    fingerprint: str
+    status: int
+    body: str
+    headers: dict[str, str]
+    created_at: datetime
+
+
 class Hit(_R):
     """One search result: a chunk (or an entity, for graph search) with its score and why it matched."""
 
@@ -231,6 +247,26 @@ class LakeStore(ABC):
     @abstractmethod
     def list_audit(self, org: str, world_model_id: str) -> list[AuditRecord]:
         """Newest first."""
+
+    # -- idempotency keys and jobs (Oct 19): kept forever ------------------------------------------------------
+    @abstractmethod
+    def get_idempotency(self, org: str, world_model_id: str, operation: str, key: str) -> IdempotencyRecord | None: ...
+
+    @abstractmethod
+    def put_idempotency(self, rec: IdempotencyRecord) -> None:
+        """Keep the first answer under its key; a later one under the same key is ignored."""
+
+    @abstractmethod
+    def forget_idempotency(self, org: str, world_model_id: str, naming: str) -> int:
+        """Drop the kept answers that name `naming` (a deleted document's id); how many were dropped. The only removal:
+        keys otherwise never expire."""
+
+    @abstractmethod
+    def put_job(self, org: str, world_model_id: str, job: dict[str, Any]) -> None:
+        """Record a job (by its `id`), replacing what was recorded for it."""
+
+    @abstractmethod
+    def get_job(self, org: str, world_model_id: str, job_id: str) -> dict[str, Any] | None: ...
 
     # -- housekeeping -----------------------------------------------------------------------------------------
     @abstractmethod

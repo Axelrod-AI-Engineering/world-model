@@ -54,11 +54,11 @@ def test_the_reference_in_docs_api_readme_is_current():
 def served(app) -> set[tuple[str, str]]:
     """Every route the app serves under /v1, from the app's own generated schema (what is mounted, as FastAPI sees it),
     and from the v1 routers themselves (so no route hides from the schema)."""
-    from axelrod_wm.api.v1 import routes_model, routes_work
+    from axelrod_wm.api.v1 import routes_erid, routes_model, routes_work
 
     mounted = {(m, p.removeprefix(V1)) for p, ops in app.openapi()["paths"].items() if p.startswith(V1 + "/")
                for m in ops}
-    routed = {(m.lower(), r.path.removeprefix(V1)) for router in (routes_model.router, routes_work.router)
+    routed = {(m.lower(), r.path.removeprefix(V1)) for router in (routes_model.router, routes_work.router, routes_erid.router)
               for r in router.routes for m in r.methods if m != "HEAD"}
     assert mounted == routed
     return mounted
@@ -129,7 +129,7 @@ def ids(c):
         "concept_id": data(c.get(f"{WM}/concepts"))[0]["id"], "group_id": data(c.get(f"{WM}/groups"))[0]["id"],
         "event_id": data(c.get(f"{WM}/events"))[0]["id"], "document_id": res["document_id"], "ordinal": "0",
         "bundle_id": res["bundle_id"], "change_id": data(c.get(f"{WM}/changes", params={"status": "all"}))[0]["id"],
-        "thesis_id": thesis, "simulation_id": job["result"]["ids"][0], "job_id": job["id"],
+        "thesis_id": thesis, "compartment_id": "sally_focus", "simulation_id": job["result"]["ids"][0], "job_id": job["id"],
     }
 
 
@@ -214,4 +214,4 @@ def test_refusals_answer_as_declared(c):
     check(op, c.get(f"{WM}/entities", params={"limit": 0}))
     check(op, c.get(f"{WM}/entities", params={"cursor": "!!"}))
     check(op_of("get", "/world-models/{world_model_id}/audit-events"),
-          c.get(f"{WM}/audit-events", headers=SIGNER.bearer(scope="read")))
+          c.get(f"{WM}/audit-events", headers=SIGNER.bearer(scope="world_model:read")))

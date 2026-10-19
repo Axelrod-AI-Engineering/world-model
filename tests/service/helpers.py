@@ -25,7 +25,7 @@ ROOT = Path(__file__).resolve().parents[2]
 V1 = "/v1"
 WM = "/v1/world-models/sally_demo"
 KEY = "k" * 32
-ALL_BUT_REVIEW = "read+documents:write+changes:write+simulations:write+admin"
+ALL_BUT_APPROVE = "world_model:read+documents:create+changes:create+simulations:create+admin"
 ISSUER, AUDIENCE, JWKS_URL = "https://core.test", "https://world-model.test", "https://core.test/.well-known/jwks.json"
 # synthetic research notes (made up for the tests; no real event is reported)
 NOTE = (b"Rates note, October 5, 2026.\n\n"
@@ -57,7 +57,7 @@ class Signer:
 
         return httpx.MockTransport(answer)
 
-    def token(self, *, sub: str = "org_user_9", org: str = "default", scope: str = "read changes:review",
+    def token(self, *, sub: str = "org_user_9", org: str = "default", scope: str = "world_model:read changes:approve",
               azp: str | None = "core-web", act: dict | None = None, name: str | None = "Sally Reviewer",
               ttl: int = 300, headers: dict | None = None, key: Any = None, **claims: Any) -> str:
         now = int(time.time())
@@ -71,7 +71,7 @@ class Signer:
         return {"Authorization": f"Bearer {self.token(**kw)}"}
 
 
-def env(keys: str = f"tester:{KEY}:default:{ALL_BUT_REVIEW}", **extra: str) -> dict[str, str]:
+def env(keys: str = f"tester:{KEY}:default:{ALL_BUT_APPROVE}", **extra: str) -> dict[str, str]:
     return {"WORLD_MODEL_API_KEYS": keys, "WORLD_MODEL_TRUSTED_ISSUERS": f"{ISSUER};{JWKS_URL};{AUDIENCE}", **extra}
 
 
@@ -137,7 +137,7 @@ def etag_now(c: TestClient, headers: dict | None = None) -> str:
 
 
 def decide_all(c: TestClient, reviewer: Signer, approve: bool = True, note: str = "checked", **claims: Any) -> list[dict]:
-    """Decide every pending change as a person (a core-web token with changes:review), round after round."""
+    """Decide every pending change as a person (a core-web token with changes:approve), round after round."""
     out = []
     while pending := data(c.get(f"{WM}/changes")):
         for ch in pending:

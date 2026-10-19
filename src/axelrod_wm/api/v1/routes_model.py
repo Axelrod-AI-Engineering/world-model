@@ -42,6 +42,10 @@ async def read_at(m: Model, version: int | None, as_of: datetime | None, cursor:
 
     def run():
         wm, ltm, v = pinned(m.st, version or cv, as_of)
+        if m.compartment is not None:
+            from axelrod_wm.api.v1.compartments import narrow
+
+            wm = narrow(wm, m.compartment)
         return wm, ltm, vref(m.st, v)
 
     wm, ltm, ref = await m.st.call(run)

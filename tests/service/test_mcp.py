@@ -14,11 +14,13 @@ from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 
 from axelrod_wm.api.mcp import _headers
-from tests.service.helpers import ALL_BUT_REVIEW, KEY, NOTE, Signer, decide_all, service
+from tests.service.helpers import ALL_BUT_APPROVE, KEY, NOTE, Signer, decide_all, service
 
 SIGNER = Signer()
-GHOST = "g" * 32
+GHOST, READER = "g" * 32, "r" * 32
 TOOLS = {
+    "world_model_get_unified", "world_model_list_compartments", "world_model_list_states",
+    "world_model_list_compositions", "world_model_list_paths",
     "world_model_list_world_models", "world_model_get_world_model", "world_model_list_versions", "world_model_graph",
     "world_model_list_entities", "world_model_get_entity", "world_model_get_attribute", "world_model_list_observations",
     "world_model_list_relationships", "world_model_get_relationship", "world_model_list_concepts",
@@ -31,7 +33,7 @@ TOOLS = {
 
 @pytest.fixture(scope="module")
 def client():
-    keys = f"harness:{KEY}:default:{ALL_BUT_REVIEW},ghost:{GHOST}:nobody"
+    keys = f"harness:{KEY}:default:{ALL_BUT_APPROVE},ghost:{GHOST}:nobody,reader:{READER}:default"
     with service(SIGNER, WORLD_MODEL_API_KEYS=keys) as c:
         yield c
 
@@ -111,6 +113,84 @@ def test_reads_default_to_the_organizations_world_model(client):
     assert ok(att)["data"]["id"] == "toyota.operating_profit" and "data" in ok(obs)
     assert ok(rels)["data"] and ok(rel)["data"]["id"] == "m29" and isinstance(ok(rel)["evidence"], list)
     assert ok(concepts)["data"]
+
+
+def test_the_golden_test_reads(client):
+    """What the golden-test responder reads (construction, relationships with their retrieval profiles, traces through
+    totals, observations with occurred_at), plus states, compositions and paths, through the tools."""
+    rels, deep, obs, att, states, comps, paths = calls(
+        client, ("world_model_list_relationships", {"entity": "toyota", "limit": 200}),
+        ("world_model_trace", {"entity_id": "toyota", "start": "dollar_yen.usd_jpy", "through_totals": True,
+                               "max_depth": 12}),
+        ("world_model_list_observations", {"entity_id": "oil", "attribute": "brent", "limit": 200}),
+        ("world_model_get_attribute", {"entity_id": "oil", "attribute": "brent"}),
+        ("world_model_list_states", {"entity_id": "oil", "attribute": "brent", "start": "2000-01-01T00:00:00Z",
+                                     "end": "2100-01-01T00:00:00Z", "limit": 5}),
+        ("world_model_list_compositions", {"entity_id": "toyota"}),
+        ("world_model_list_paths", {"entity_id": "toyota", "limit": 200}))
+    assert ok(rels)["data"] and all("profile" in r for r in ok(rels)["data"])
+    assert any(r["profile"] for r in ok(rels)["data"])
+    assert ok(deep)["data"]["through_totals"] is True and ok(deep)["data"]["routes"]
+    assert all("occurred_at" in o for o in ok(obs)["data"])
+    latest = ok(att)["data"]["latest_observation"]
+    assert latest is None or "occurred_at" in latest
+    assert ok(states)["meta"]["limit"] == 5 and all("sd" in x for x in ok(states)["data"])
+    assert ok(comps)["data"] and {c["role"] for c in ok(comps)["data"]} <= {"driving", "reconciling", "non_additive"}
+    assert ok(paths)["data"] and all(st["relationship_id"] for x in ok(paths)["data"] for st in x["steps"])
+
+
+def test_the_unified_world_model_and_its_compartments(client):
+    u, comps, whole, narrowed, ent, gone, rel, md, tr, graph, att, obs, states, cs, ps, versions = calls(
+        client, ("world_model_get_unified", {}), ("world_model_list_compartments", {}),
+        ("world_model_list_entities", {"world_model_id": "erid", "limit": 200}),
+        ("world_model_list_entities", {"world_model_id": "erid", "compartment": "sally_focus", "limit": 200}),
+        ("world_model_get_entity", {"entity_id": "toyota", "world_model_id": "erid", "compartment": "sally_focus"}),
+        ("world_model_get_entity", {"entity_id": "jpmorgan", "world_model_id": "erid", "compartment": "sally_focus"}),
+        ("world_model_get_relationship", {"relationship_id": "m29", "world_model_id": "erid"}),
+        ("world_model_construction", {"entity_id": "toyota", "world_model_id": "erid", "compartment": "sally_focus",
+                                      "format": "markdown"}),
+        ("world_model_trace", {"entity_id": "toyota", "start": "dollar_yen.usd_jpy", "world_model_id": "erid",
+                               "compartment": "sally_focus"}),
+        ("world_model_graph", {"world_model_id": "erid", "compartment": "sally_focus", "entities": ["toyota"]}),
+        ("world_model_get_attribute", {"entity_id": "toyota", "attribute": "operating_profit", "world_model_id": "erid",
+                                       "compartment": "sally_focus"}),
+        ("world_model_list_observations", {"entity_id": "oil", "attribute": "brent", "world_model_id": "erid",
+                                           "compartment": "sally_focus"}),
+        ("world_model_list_states", {"entity_id": "oil", "attribute": "brent", "world_model_id": "erid"}),
+        ("world_model_list_compositions", {"entity_id": "toyota", "world_model_id": "erid",
+                                           "compartment": "sally_focus"}),
+        ("world_model_list_paths", {"entity_id": "toyota", "world_model_id": "erid", "compartment": "sally_focus"}),
+        ("world_model_list_versions", {"world_model_id": "erid"}))
+    assert ok(u)["data"]["id"] == "erid" and [c["id"] for c in ok(comps)["data"]] == ["sally_focus"]
+    assert len(ok(narrowed)["data"]) < len(ok(whole)["data"]) and ok(ent)["data"]["id"] == "toyota"
+    assert gone[0] and code_of(gone[1]) == "entity_not_found"
+    assert ok(rel)["data"]["id"] == "m29" and not md[0] and md[1].startswith("# Toyota Motor")
+    assert ok(tr)["data"]["reaches_endpoint"] and "jpmorgan" not in {e["id"] for e in ok(graph)["data"]["entities"]}
+    assert ok(att)["data"]["id"] == "toyota.operating_profit" and "data" in ok(obs) and "data" in ok(states)
+    assert ok(cs)["data"] and ok(ps)["data"] and ok(versions)["data"]
+    ((is_error, text),) = calls(client, ("world_model_list_entities", {"compartment": "sally_focus"}))
+    assert is_error and code_of(text) == "invalid_request" and "erid" in text
+    ((is_error, text),) = calls(client, ("world_model_list_entities", {"world_model_id": "erid",
+                                                                       "compartment": "nope"}))
+    assert is_error and code_of(text) == "compartment_not_found"
+
+
+def test_the_access_boundary_holds_through_the_tools(client):
+    """A key with no scopes reads only; a token on core's MCP channel, or driven by an agent, reads only whatever it
+    asks for (Oct 19)."""
+    (read,) = calls(client, ("world_model_get_world_model", {}), key=READER)
+    assert ok(read)["data"]["id"] == "sally_demo"
+    refused = calls(client, ("world_model_ingest_document", {"filename": "x.txt", "text": "a note"}),
+                    ("world_model_propose_changes", {"bundle_id": "x"}),
+                    ("world_model_simulate", {"template_id": "S-T1"}), key=READER)
+    assert all(e and code_of(t) == "insufficient_scope" for e, t in refused)
+    everything = "world_model:read documents:create changes:create simulations:create admin"
+    for claims in ({"azp": "core-mcp"}, {"act": {"sub": "mcp-client:claude"}}):
+        token = SIGNER.token(scope=everything, **claims)
+        (got,) = calls(client, ("world_model_get_world_model", {}), key=token)
+        assert ok(got)["data"]["id"] == "sally_demo"
+        ((is_error, text),) = calls(client, ("world_model_simulate", {"template_id": "S-T1"}), key=token)
+        assert is_error and code_of(text) == "insufficient_scope"
 
 
 def test_construction_trace_search_and_export(client):

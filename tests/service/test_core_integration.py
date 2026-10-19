@@ -55,19 +55,20 @@ def calls() -> list[tuple[str, str]]:
 
 def test_every_route_the_patch_calls_is_specified_and_served():
     made = calls()
-    assert len(made) >= 20
+    assert len(made) >= 18 and {m for m, _p in made} == {"GET"}          # read only (the API review, Oct 19)
     served, specified = _served(), _specified()
     for method, path in made:
         assert (method, path) in specified, (method, path, "not in docs/api/openapi.yaml")
         assert (method, path) in served, (method, path, "not served")
 
 
-def test_the_patch_publishes_reads_and_proposals_but_never_a_decision():
+def test_the_patch_publishes_reads_only():
+    """Core's backend MCP reads the world model and nothing else: no tool ingests, proposes, simulates or decides."""
     tools = set(re.findall(r"^\+    async def (world_model_\w+)\(", PATCH, re.M))
     assert {"world_model_get_world_model", "world_model_graph", "world_model_get_attribute", "world_model_construction",
-            "world_model_trace", "world_model_simulate", "world_model_ingest_source",
-            "world_model_propose_changes"} <= tools and len(tools) == 20
-    assert not {t for t in tools if re.search("decide|approv|reject", t)}
+            "world_model_trace", "world_model_get_simulation", "world_model_list_changes"} <= tools and len(tools) == 17
+    assert not {t for t in tools if re.search("decide|approv|reject|simulate|ingest|propose", t)}
+    assert '"POST"' not in PATCH.split("+++ b/src/axelrod_app/mcp_world_model.py", 1)[1].split("diff --git", 1)[0]
     assert "/approvals" not in PATCH and "/rejections" not in PATCH and '"auto"' not in PATCH
     assert "X-Axelrod-On-Behalf-Of" not in PATCH.split("+++ b/src/axelrod_app/mcp_world_model.py", 1)[1]
     assert "/api/world-model" not in PATCH and 'WORLD_MODEL_API = "/v1"' in PATCH

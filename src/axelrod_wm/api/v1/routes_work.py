@@ -3,6 +3,7 @@ their review (human only), theses and simulations, and jobs."""
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from datetime import UTC, datetime
@@ -14,7 +15,7 @@ from fastapi import APIRouter, File, Form, Query, Request, UploadFile
 from fastapi import Path as FPath
 from fastapi.responses import Response
 
-from axelrod_wm.api.tokens import ADMIN, CHANGES, DOCUMENTS, READ, REVIEW, SIMULATIONS
+from axelrod_wm.api.tokens import ADMIN, APPROVE, CHANGES, DOCUMENTS, READ, SIMULATIONS
 from axelrod_wm.api.v1 import project as pj
 from axelrod_wm.api.v1 import schemas as s
 from axelrod_wm.api.v1.context import (
@@ -32,6 +33,7 @@ from axelrod_wm.api.v1.context import (
     one,
     page,
     principal,
+    require,
     run_job,
 )
 from axelrod_wm.api.v1.context import version_ref as vref
@@ -204,8 +206,9 @@ async def create_documents(request: Request, world_model_id: str,
 
         return await run_job(request, m, "document_ingestion", work)
 
-    fp = fingerprint([(b[1], len(b[0]), hash(b[0])) for b in blobs], source, source_type, str(published_at))
-    return await idempotent(request, m, fp, make)
+    content = fingerprint([(name, hashlib.sha256(data).hexdigest()) for data, name in blobs])
+    fp = fingerprint(content, source, source_type, str(published_at))
+    return await idempotent(request, m, fp, make, content=content)
 
 
 @router.get(W + "/documents", summary="Stored documents")
@@ -239,6 +242,8 @@ async def delete_document(request: Request, world_model_id: str, document_id: st
     m = model(request, world_model_id, ADMIN)
     doc_of(request, m, document_id)
     lake(request.app).delete_document(m.org, document_id)
+    # the answers that named it would name a document that is gone: the same content uploads afresh
+    lake(request.app).forget_idempotency(m.org, m.id, document_id)
     audit(request, m, 204, [document_id])
     return Response(status_code=204)
 
@@ -337,7 +342,8 @@ async def create_bundle(request: Request, world_model_id: str) -> Response:
         audit(request, m, 201, [res.document.id, res.bundle.id])
         return one(request, bundle_view(res.bundle), status=201, location=f"{base(m)}/bundles/{res.bundle.id}")
 
-    return await idempotent(request, m, fingerprint(body), make)
+    content = fingerprint(body)
+    return await idempotent(request, m, content, make, content=content)
 
 
 @router.get(W + "/bundles", summary="Stored bundles, oldest first")
@@ -513,11 +519,13 @@ async def get_change_diff(request: Request, world_model_id: str, change_id: str)
 async def decide(request: Request, world_model_id: str, change_id: str, approve: bool, note: str) -> Response:
     from axelrod_wm.api.routes import _resume_if_awaited
 
-    m = model(request, world_model_id, REVIEW)
+    # who before what: a key or an agent is told a person decides, whatever its scopes; a person needs the scope
+    m = model(request, world_model_id, None)
     p = principal(request)
     if not p.human:
         raise ApiError("human_approval_required", "a change is decided by a person: not by a static key, and not "
                                                   "through an agent")
+    require(request, APPROVE)
     want = request.headers.get("if-match")
     if want is None:
         raise ApiError("precondition_required", "send If-Match with the ETag of the version you reviewed")
