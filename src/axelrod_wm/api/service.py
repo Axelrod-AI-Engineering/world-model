@@ -82,14 +82,14 @@ class ServiceRoute(APIRoute):
                 return envelope(422, "invalid_request", "the request is not valid", json.loads(e.json()))
             except HTTPException as e:
                 return envelope(e.status_code, CODES.get(e.status_code, "error"), str(e.detail))
-            except ControllerError as e:
-                return envelope(409, "conflict", str(e))
-            except RestoreError as e:
-                return envelope(404, "version_not_found", str(e))
+            except ControllerError:
+                return envelope(409, "conflict", "request conflicts with current state")
+            except RestoreError:
+                return envelope(404, "version_not_found", "requested version was not found")
             except KeyError as e:
                 return envelope(404, "not_found", f"not found: {e.args[0] if e.args else ''}")
-            except ValueError as e:
-                return envelope(400, "invalid_request", str(e))
+            except ValueError:
+                return envelope(400, "invalid_request", "the request is invalid")
             resp.headers["X-Axelrod-API-Version"] = API_VERSION
             return resp
 
