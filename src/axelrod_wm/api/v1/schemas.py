@@ -81,6 +81,30 @@ class WorldModel(Api):
     counts: Counts
 
 
+class CompartmentCounts(Api):
+    entities: int
+    attributes: int
+    relationships: int
+
+
+class Compartment(Api):
+    id: str
+    title: str
+    base: str
+    companies: list[str]
+    counts: CompartmentCounts
+
+
+class UnifiedWorldModel(Api):
+    id: Literal["erid"]
+    scenario: str
+    world_model_id: str
+    latest_version: int
+    clock: datetime
+    counts: CompartmentCounts
+    compartment_ids: list[str]
+
+
 class Version(Api):
     number: int
     state_hash: str

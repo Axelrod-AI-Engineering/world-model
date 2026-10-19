@@ -1,4 +1,4 @@
-"""docs/api/README.md's route reference, generated from the contract, docs/api/openapi.yaml.
+"""docs/api/README.md's route reference, and the terms table in every API document, generated from the contract.
 
 The reference sits between `<!-- reference:start -->` and `<!-- reference:end -->` in docs/api/README.md: every
 operation by tag (method, path, summary, scope, pinning, statuses), the error codes, and the schemas. The prose around
@@ -19,6 +19,9 @@ ROOT = Path(__file__).resolve().parents[2]
 SPEC = ROOT / "docs" / "api" / "openapi.yaml"
 DOC = ROOT / "docs" / "api" / "README.md"
 START, END = "<!-- reference:start -->", "<!-- reference:end -->"
+# the terms and acronyms (the contract's info.x-terms), in every API document that carries the markers
+TERMS_START, TERMS_END = "<!-- terms:start -->", "<!-- terms:end -->"
+TERMS_DOCS = (DOC, ROOT / "docs" / "design" / "api.md", ROOT / "docs" / "design" / "core-mcp-auth.md")
 METHODS = ("get", "post", "patch", "put", "delete")
 
 
@@ -74,22 +77,36 @@ def _statuses(spec: dict) -> dict[int, tuple[str, str]]:
     return out
 
 
-def rewrite(doc: str, body: str) -> str:
-    head, rest = doc.split(START, 1)
-    _old, tail = rest.split(END, 1)
-    return f"{head}{START}\n{body}{END}{tail}"
+def render_terms(spec: dict) -> str:
+    """The terms and acronyms table: each term's full name, its meaning, and an example."""
+    lines = ["| Term | Full name | Meaning | Example |", "|---|---|---|---|"]
+    for t in spec["info"]["x-terms"]:
+        lines.append(f"| {_cell(t['term'])} | {_cell(t['full_name'])} | {_cell(t['meaning'])} | {_cell(t['example'])} |")
+    return "\n".join(lines) + "\n"
+
+
+def rewrite(doc: str, body: str, start: str = START, end: str = END) -> str:
+    head, rest = doc.split(start, 1)
+    _old, tail = rest.split(end, 1)
+    return f"{head}{start}\n{body}{end}{tail}"
 
 
 def main(argv: list[str]) -> int:
     spec = yaml.safe_load(SPEC.read_text())
-    doc = DOC.read_text()
-    new = rewrite(doc, render(spec))
-    if "--check" in argv:
+    terms = render_terms(spec)
+    stale = []
+    for path in TERMS_DOCS:
+        doc = path.read_text()
+        new = rewrite(doc, terms, TERMS_START, TERMS_END)
+        if path == DOC:
+            new = rewrite(new, render(spec))
         if new != doc:
-            print("docs/api/README.md's reference is stale: run uv run python scripts/api/reference.py")
-            return 1
-        return 0
-    DOC.write_text(new)
+            stale.append(path.relative_to(ROOT))
+            if "--check" not in argv:
+                path.write_text(new)
+    if "--check" in argv and stale:
+        print(f"stale: {', '.join(map(str, stale))}: run uv run python scripts/api/reference.py")
+        return 1
     return 0
 
 

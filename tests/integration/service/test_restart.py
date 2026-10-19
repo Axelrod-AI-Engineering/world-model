@@ -2,7 +2,7 @@
 
 What it proves today:
 - The lakehouse survives whole: documents, their text, chunks and raw bytes, bundles, the audit log, the world model
-  registry, and search.
+  registry, idempotency keys and jobs (kept forever), and search.
 - The model does not: a service loads its scenario from the initial snapshot and resets the snapshot store
   (sim/runner.py, `_session_storage`), so the versions committed before the restart are gone (404 version_not_found).
 - Replaying the stored bundle, with the same decisions, reproduces the lost state exactly: the same version and state
@@ -54,16 +54,26 @@ def test_the_lakehouse_survives_a_restart_and_a_replay_rebuilds_the_model(tmp_pa
         review_all(c, note="matches the release")
         moved = version(c)
         brent = attribute(c, "oil", "brent")["data"]
+        keyed = c.post(f"{WM}/documents", files=[("files", ("keyed.txt", b"Oct 9, 2026. The ECB held.", "text/plain"))],
+                       headers={"Idempotency-Key": "restart-1"})
+        assert keyed.status_code == 202
         kept = kept_of(c, res)
-        assert moved["number"] > start["number"] and kept["counts"] == {"documents": 1, "bundles": 1}
+        assert moved["number"] > start["number"] and kept["counts"] == {"documents": 2, "bundles": 2}
         assert {a["route"].rsplit("/", 1)[-1] for a in kept["audit"]} >= {"documents", "changes", "approvals"}
 
     with service(SIGNER, tmp_path) as c:
         # the lakehouse: all of it, unchanged
         assert kept_of(c, res) == kept and kept["raw"] == RATES_NOTE
         assert [m.id for m in c.app.state.lake.world_models()] == ["sally_demo"]
+        # idempotency keys and jobs are permanent: the same key, and the same content, get the first answers
+        replayed = c.post(f"{WM}/documents", files=[("files", ("keyed.txt", b"Oct 9, 2026. The ECB held.",
+                                                                "text/plain"))], headers={"Idempotency-Key": "restart-1"})
+        assert replayed.json() == keyed.json() and replayed.headers["location"] == keyed.headers["location"]
+        assert data(c.get(keyed.headers["location"]))["status"] == "succeeded"
+        problem(c.post(f"{WM}/documents", files=[("files", ("other.txt", b"Other.", "text/plain"))],
+                       headers={"Idempotency-Key": "restart-1"}), 422, "idempotency_key_reused")
         again = upload(c, RATES_NOTE, "2026-09-01_data.txt")
-        assert again["new"] is False and again["bundle_id"] == res["bundle_id"]
+        assert again["new"] is True and again["bundle_id"] == res["bundle_id"]     # the first upload's answer
 
         # the model: back at its initial state; the versions before the restart are gone
         now = version(c)

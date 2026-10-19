@@ -1,13 +1,20 @@
-"""The world model's MCP server (Oct 18): the v1 API as tools, at /mcp, for engineers, the LLM harness, and core.
+"""The world model's MCP (Model Context Protocol) server: the v1 API as tools, at /mcp, for engineers, the LLM harness,
+and the data-ingestion pipeline (Oct 18; brought current Oct 19).
 
 It follows core's MCP conventions (Axelrod-AI-Engineering/core, src/axelrod_app/mcp_server.py): the official `mcp`
 2.x SDK (`MCPServer`, not FastMCP), stateless Streamable HTTP at /mcp on the same FastAPI app, snake_case tool names
 with read-only / destructive / idempotent annotations, and errors as `ToolError("<code>: <detail>")`.
 
 A tool calls the v1 routes in process (api/v1), forwarding the caller's `Authorization`, so MCP and REST share one
-implementation: the same credentials, scopes, validation, tenancy, and answers. Every tool takes `world_model_id`,
-which defaults to the organization's only world model. No tool decides a change: approval is a person's step in a
-review UI (docs/design/core-mcp-auth.md).
+implementation: the same credentials, scopes, validation, tenancy, and answers.
+
+- **World models.** Every tool takes `world_model_id`, which defaults to the organization's only world model.
+  `world_model_id="erid"` reads the unified world model (internal staff), and `compartment` narrows those reads to a
+  client's view (docs/design/api.md §4).
+- **Scopes** are the REST ones: reads need `world_model:read`; `world_model_ingest_document` needs `documents:create`,
+  `world_model_propose_changes` `changes:create`, `world_model_simulate` `simulations:create`. A static key with no
+  scopes listed reads only, and a token from core's MCP channel or driven by an agent (`act`) reads only, whatever it
+  asks for (the access boundary, Oct 19). No tool decides a change: approval is a person's step in a review UI.
 """
 
 from __future__ import annotations
@@ -29,6 +36,9 @@ READ = ToolAnnotations(readOnlyHint=True, destructiveHint=False, idempotentHint=
 WRITE = ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False)
 PROPOSE = ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=False)
 BASE = "/v1"
+UNIFIED = "erid"
+COMPARTMENT = ("`compartment` narrows the read to a compartment of the unified world model (world_model_id='erid'): "
+               "a client's companies, the players upstream of them, and one link downstream.")
 
 
 def _headers(ctx: Context | None) -> dict[str, str]:
@@ -44,9 +54,11 @@ def build_mcp(app: FastAPI) -> MCPServer:
     server = MCPServer(name="axelrod-world-model", title="Axelrod World Model",
                        instructions="The Axelrod world model: entities with their attributes (an entity's measured "
                                     "quantities, e.g. toyota.operating_profit), relationships between attributes with "
-                                    "their evidence, read at a stated version; documents read into proposed changes "
-                                    "that a person reviews; theses run as simulations. Every read names the version "
-                                    "it was served from. No tool approves a change.")
+                                    "their evidence and retrieval profile, read at a stated version; documents read "
+                                    "into proposed changes that a person reviews; theses run as simulations. Every "
+                                    "read names the version it was served from. world_model_id='erid' is the unified "
+                                    "world model (internal staff), narrowed by `compartment`. No tool approves a "
+                                    "change.")
 
     async def request(ctx: Context | None, method: str, path: str, **kw: Any) -> httpx.Response:
         transport = httpx.ASGITransport(app=app)
@@ -69,8 +81,12 @@ def build_mcp(app: FastAPI) -> MCPServer:
         except json.JSONDecodeError as err:
             raise ToolError(f"bad_response: {r.text[:200]}") from err
 
-    async def wm(ctx: Context | None, world_model_id: str) -> str:
-        """The world model's path: the one named, or the organization's only one."""
+    async def wm(ctx: Context | None, world_model_id: str, compartment: str = "") -> str:
+        """The world model's path: the unified one (`erid`), the one named, or the organization's only one."""
+        if world_model_id == UNIFIED:
+            return "/erid"
+        if compartment:
+            raise ToolError("invalid_request: a compartment narrows the unified world model: pass world_model_id='erid'")
         if world_model_id:
             return f"/world-models/{world_model_id}"
         ids = [m["id"] for m in (await call(ctx, "GET", "/world-models"))["data"]]
@@ -85,7 +101,7 @@ def build_mcp(app: FastAPI) -> MCPServer:
     def pin(version: int | None, as_of: datetime | None) -> dict:
         return {"version": version, "as_of": as_of.isoformat() if as_of else None}
 
-    # -- world models and versions -------------------------------------------------------------------------------
+    # -- world models, the unified one, versions -------------------------------------------------------------------
     @server.tool(title="World models", description="The organization's world models: each one's latest version, "
                  "clock, and counts.", annotations=READ)
     async def world_model_list_world_models(ctx: Context) -> dict:
@@ -96,6 +112,17 @@ def build_mcp(app: FastAPI) -> MCPServer:
     async def world_model_get_world_model(ctx: Context, world_model_id: str = "") -> dict:
         return await call(ctx, "GET", await wm(ctx, world_model_id))
 
+    @server.tool(title="The unified world model", description="erid, the unified world model: the whole graph (internal "
+                 "staff only), its scenario, version, counts, and compartments. Read it with world_model_id='erid'.",
+                 annotations=READ)
+    async def world_model_get_unified(ctx: Context) -> dict:
+        return await call(ctx, "GET", "/erid")
+
+    @server.tool(title="Compartments", description="The compartments of the unified world model this credential may "
+                 "read: each one's companies and size.", annotations=READ)
+    async def world_model_list_compartments(ctx: Context, limit: int = 50, cursor: str = "") -> dict:
+        return await call(ctx, "GET", "/erid/compartments", params=p(limit=limit, cursor=cursor))
+
     @server.tool(title="Versions", description="Committed versions, newest first, each with the changes that committed "
                  "it.", annotations=READ)
     async def world_model_list_versions(ctx: Context, world_model_id: str = "", limit: int = 50,
@@ -104,67 +131,88 @@ def build_mcp(app: FastAPI) -> MCPServer:
 
     # -- the model -------------------------------------------------------------------------------------------------
     @server.tool(title="A subgraph", description="Entities with the attributes reached nested (levels with spreads, in "
-                 "their units) and the relationships between them (effect, confidence, timing), for the named "
-                 "entities or attributes or the names in q and their neighbours up to `depth` relationships, at the "
-                 "current version or pinned to a version or date.", annotations=READ)
-    async def world_model_graph(ctx: Context, world_model_id: str = "", entities: list[str] | None = None,
-                                attributes: list[str] | None = None, q: str = "", depth: int = 1, limit: int = 200,
-                                version: int | None = None, as_of: datetime | None = None) -> dict:
-        return await call(ctx, "GET", await wm(ctx, world_model_id) + "/graph", params=p(
-            entities=",".join(entities or []), attributes=",".join(attributes or []), q=q, depth=depth, limit=limit,
-            **pin(version, as_of)))
+                 "their units) and the relationships between them (effect, confidence, timing, retrieval profile), for "
+                 "the named entities or attributes or the names in q and their neighbours up to `depth` relationships, "
+                 "at the current version or pinned to a version or date. " + COMPARTMENT, annotations=READ)
+    async def world_model_graph(ctx: Context, world_model_id: str = "", compartment: str = "",
+                                entities: list[str] | None = None, attributes: list[str] | None = None, q: str = "",
+                                depth: int = 1, limit: int = 200, version: int | None = None,
+                                as_of: datetime | None = None) -> dict:
+        return await call(ctx, "GET", await wm(ctx, world_model_id, compartment) + "/graph", params=p(
+            compartment=compartment, entities=",".join(entities or []), attributes=",".join(attributes or []), q=q,
+            depth=depth, limit=limit, **pin(version, as_of)))
 
     @server.tool(title="Entities", description="Entities by type, concept, group, or name (q matches entity and "
-                 "attribute names; an entity matched through its attributes nests just those).", annotations=READ)
-    async def world_model_list_entities(ctx: Context, world_model_id: str = "", q: str = "", type: str = "",
-                                        concept: str = "", group: str = "", limit: int = 50, cursor: str = "",
-                                        version: int | None = None, as_of: datetime | None = None) -> dict:
-        return await call(ctx, "GET", await wm(ctx, world_model_id) + "/entities", params=p(
-            q=q, type=type, concept=concept, group=group, limit=limit, cursor=cursor, **pin(version, as_of)))
+                 "attribute names; an entity matched through its attributes nests just those). " + COMPARTMENT,
+                 annotations=READ)
+    async def world_model_list_entities(ctx: Context, world_model_id: str = "", compartment: str = "", q: str = "",
+                                        type: str = "", concept: str = "", group: str = "", limit: int = 50,
+                                        cursor: str = "", version: int | None = None,
+                                        as_of: datetime | None = None) -> dict:
+        return await call(ctx, "GET", await wm(ctx, world_model_id, compartment) + "/entities", params=p(
+            compartment=compartment, q=q, type=type, concept=concept, group=group, limit=limit, cursor=cursor,
+            **pin(version, as_of)))
 
     @server.tool(title="An entity", description="One entity with all its attributes nested; include_relationships adds "
-                 "the relationships into and out of them.", annotations=READ)
-    async def world_model_get_entity(ctx: Context, entity_id: str, world_model_id: str = "",
+                 "the relationships into and out of them. " + COMPARTMENT, annotations=READ)
+    async def world_model_get_entity(ctx: Context, entity_id: str, world_model_id: str = "", compartment: str = "",
                                      include_relationships: bool = False, version: int | None = None,
                                      as_of: datetime | None = None) -> dict:
         include = "attributes,relationships" if include_relationships else "attributes"
-        return await call(ctx, "GET", await wm(ctx, world_model_id) + f"/entities/{entity_id}",
-                          params=p(include=include, **pin(version, as_of)))
+        return await call(ctx, "GET", await wm(ctx, world_model_id, compartment) + f"/entities/{entity_id}",
+                          params=p(compartment=compartment, include=include, **pin(version, as_of)))
 
     @server.tool(title="An attribute", description="One attribute of an entity: level, spread, unit, view, basis, and "
-                 "its latest observation. `attribute` is its key in the entity (operating_profit) or its full id "
-                 "(toyota.operating_profit).", annotations=READ)
+                 "its latest observation (with occurred_at). `attribute` is its key in the entity (operating_profit) "
+                 "or its full id (toyota.operating_profit). " + COMPARTMENT, annotations=READ)
     async def world_model_get_attribute(ctx: Context, entity_id: str, attribute: str, world_model_id: str = "",
-                                        version: int | None = None, as_of: datetime | None = None) -> dict:
-        return await call(ctx, "GET", await wm(ctx, world_model_id) + f"/entities/{entity_id}/attributes/{attribute}",
-                          params=p(**pin(version, as_of)))
+                                        compartment: str = "", version: int | None = None,
+                                        as_of: datetime | None = None) -> dict:
+        return await call(ctx, "GET", await wm(ctx, world_model_id, compartment)
+                          + f"/entities/{entity_id}/attributes/{attribute}",
+                          params=p(compartment=compartment, **pin(version, as_of)))
 
-    @server.tool(title="Observations", description="An attribute's dated observations: value in its unit, valid_at "
-                 "(when it applies) and observed_at (when the model learned it).", annotations=READ)
+    @server.tool(title="Observations", description="An attribute's dated observations: value in its unit, occurred_at "
+                 "(when it happened), valid_at (when it applies) and observed_at (when the model learned it). "
+                 + COMPARTMENT, annotations=READ)
     async def world_model_list_observations(ctx: Context, entity_id: str, attribute: str, world_model_id: str = "",
-                                            limit: int = 50, cursor: str = "") -> dict:
-        return await call(ctx, "GET", await wm(ctx, world_model_id)
+                                            compartment: str = "", limit: int = 50, cursor: str = "") -> dict:
+        return await call(ctx, "GET", await wm(ctx, world_model_id, compartment)
                           + f"/entities/{entity_id}/attributes/{attribute}/observations",
-                          params=p(limit=limit, cursor=cursor))
+                          params=p(compartment=compartment, limit=limit, cursor=cursor))
+
+    @server.tool(title="States", description="The model's state of an attribute over time (mean, sd, z), for "
+                 "trajectories; from and to bound the dates. " + COMPARTMENT, annotations=READ)
+    async def world_model_list_states(ctx: Context, entity_id: str, attribute: str, world_model_id: str = "",
+                                      compartment: str = "", start: datetime | None = None,
+                                      end: datetime | None = None, limit: int = 50, cursor: str = "") -> dict:
+        return await call(ctx, "GET", await wm(ctx, world_model_id, compartment)
+                          + f"/entities/{entity_id}/attributes/{attribute}/states",
+                          params=p(**{"from": start.isoformat() if start else None,
+                                      "to": end.isoformat() if end else None},
+                                   compartment=compartment, limit=limit, cursor=cursor))
 
     @server.tool(title="Relationships", description="Relationships between attributes, filtered by source, target, "
-                 "entity, type, or calibration. An uncalibrated one has a sign and no size (effect null, never 0).",
-                 annotations=READ)
-    async def world_model_list_relationships(ctx: Context, world_model_id: str = "", source: str = "",
-                                             target: str = "", entity: str = "", type: str = "", calibration: str = "",
-                                             limit: int = 50, cursor: str = "", version: int | None = None,
-                                             as_of: datetime | None = None) -> dict:
-        return await call(ctx, "GET", await wm(ctx, world_model_id) + "/relationships", params=p(
-            source=source, target=target, entity=entity, type=type, calibration=calibration, limit=limit,
-            cursor=cursor, **pin(version, as_of)))
+                 "entity, type, or calibration, each with its retrieval profile (exposure, unit, date, hedge, "
+                 "pass-through, endpoint, calculation, source). An uncalibrated one has a sign and no size (effect "
+                 "null, never 0). " + COMPARTMENT, annotations=READ)
+    async def world_model_list_relationships(ctx: Context, world_model_id: str = "", compartment: str = "",
+                                             source: str = "", target: str = "", entity: str = "", type: str = "",
+                                             calibration: str = "", limit: int = 50, cursor: str = "",
+                                             version: int | None = None, as_of: datetime | None = None) -> dict:
+        return await call(ctx, "GET", await wm(ctx, world_model_id, compartment) + "/relationships", params=p(
+            compartment=compartment, source=source, target=target, entity=entity, type=type, calibration=calibration,
+            limit=limit, cursor=cursor, **pin(version, as_of)))
 
-    @server.tool(title="A relationship", description="One relationship, with its evidence records (each with its "
-                 "evidence and epistemic type).", annotations=READ)
+    @server.tool(title="A relationship", description="One relationship with its retrieval profile, and its evidence "
+                 "records (each with its evidence and epistemic type). " + COMPARTMENT, annotations=READ)
     async def world_model_get_relationship(ctx: Context, relationship_id: str, world_model_id: str = "",
-                                           version: int | None = None, as_of: datetime | None = None) -> dict:
-        path = await wm(ctx, world_model_id) + f"/relationships/{relationship_id}"
-        rel = await call(ctx, "GET", path, params=p(**pin(version, as_of)))
-        ev = await call(ctx, "GET", path + "/evidence", params=p(limit=200, **pin(version, as_of)))
+                                           compartment: str = "", version: int | None = None,
+                                           as_of: datetime | None = None) -> dict:
+        path = await wm(ctx, world_model_id, compartment) + f"/relationships/{relationship_id}"
+        rel = await call(ctx, "GET", path, params=p(compartment=compartment, **pin(version, as_of)))
+        ev = await call(ctx, "GET", path + "/evidence", params=p(compartment=compartment, limit=200,
+                                                                 **pin(version, as_of)))
         return {**rel, "evidence": ev["data"]}
 
     @server.tool(title="Concepts", description="The taxonomy's concepts and the entities under each.", annotations=READ)
@@ -172,27 +220,45 @@ def build_mcp(app: FastAPI) -> MCPServer:
                                         cursor: str = "") -> dict:
         return await call(ctx, "GET", await wm(ctx, world_model_id) + "/concepts", params=p(limit=limit, cursor=cursor))
 
+    # -- construction ------------------------------------------------------------------------------------------------
     @server.tool(title="A company's construction", description="How a company is built: its attributes, business "
-                 "compositions (driving or reconciling), identities, stock-flows, named paths with each transition, "
-                 "link counts and problems. format=markdown for a readable page.", annotations=READ)
-    async def world_model_construction(ctx: Context, entity_id: str, world_model_id: str = "",
+                 "compositions (driving, reconciling, or not a sum), identities, stock-flows, named paths with each "
+                 "transition, link counts and problems. format=markdown for a readable page. " + COMPARTMENT,
+                 annotations=READ)
+    async def world_model_construction(ctx: Context, entity_id: str, world_model_id: str = "", compartment: str = "",
                                        format: Literal["json", "markdown"] = "json", version: int | None = None,
                                        as_of: datetime | None = None) -> Any:
-        path = await wm(ctx, world_model_id) + f"/entities/{entity_id}/construction"
+        path = await wm(ctx, world_model_id, compartment) + f"/entities/{entity_id}/construction"
         if format == "markdown":
-            return (await request(ctx, "GET", path, params=p(format="markdown", **pin(version, as_of)))).text
-        return await call(ctx, "GET", path, params=p(**pin(version, as_of)))
+            return (await request(ctx, "GET", path, params=p(compartment=compartment, format="markdown",
+                                                             **pin(version, as_of)))).text
+        return await call(ctx, "GET", path, params=p(compartment=compartment, **pin(version, as_of)))
+
+    @server.tool(title="Compositions", description="A company's business views: each total split into parts, its role "
+                 "(driving, reconciling, or non_additive) and basis. " + COMPARTMENT, annotations=READ)
+    async def world_model_list_compositions(ctx: Context, entity_id: str, world_model_id: str = "",
+                                            compartment: str = "", limit: int = 50, cursor: str = "") -> dict:
+        return await call(ctx, "GET", await wm(ctx, world_model_id, compartment) + f"/entities/{entity_id}/compositions",
+                          params=p(compartment=compartment, limit=limit, cursor=cursor))
+
+    @server.tool(title="Named paths", description="A company's named paths: each step a relationship with its "
+                 "calibration and transition. " + COMPARTMENT, annotations=READ)
+    async def world_model_list_paths(ctx: Context, entity_id: str, world_model_id: str = "", compartment: str = "",
+                                     limit: int = 50, cursor: str = "") -> dict:
+        return await call(ctx, "GET", await wm(ctx, world_model_id, compartment) + f"/entities/{entity_id}/paths",
+                          params=p(compartment=compartment, limit=limit, cursor=cursor))
 
     @server.tool(title="Trace a change into a company", description="Every route from a change in one attribute "
                  "(`start`: a full id, or a key of the company's attributes) to the company's accounts, calibrated or "
                  "not: where each stops, and which steps are uncalibrated or lack a transition. through_totals goes "
-                 "on through the totals a route reaches, within max_depth relationships.", annotations=READ)
+                 "on through the totals a route reaches, within max_depth relationships. " + COMPARTMENT,
+                 annotations=READ)
     async def world_model_trace(ctx: Context, entity_id: str, start: str, world_model_id: str = "",
-                                through_totals: bool = False, max_depth: int = 8, version: int | None = None,
-                                as_of: datetime | None = None) -> dict:
-        return await call(ctx, "GET", await wm(ctx, world_model_id) + f"/entities/{entity_id}/traces",
-                          params=p(**{"from": start}, through_totals=through_totals, max_depth=max_depth,
-                                   **pin(version, as_of)))
+                                compartment: str = "", through_totals: bool = False, max_depth: int = 8,
+                                version: int | None = None, as_of: datetime | None = None) -> dict:
+        return await call(ctx, "GET", await wm(ctx, world_model_id, compartment) + f"/entities/{entity_id}/traces",
+                          params=p(**{"from": start}, compartment=compartment, through_totals=through_totals,
+                                   max_depth=max_depth, **pin(version, as_of)))
 
     # -- events ------------------------------------------------------------------------------------------------------
     @server.tool(title="Events", description="Market events by publication time, filtered by type or entity.",
@@ -216,10 +282,10 @@ def build_mcp(app: FastAPI) -> MCPServer:
                                  limit: int = 20) -> dict:
         return await call(ctx, "GET", await wm(ctx, world_model_id) + "/search", params=p(q=q, mode=mode, limit=limit))
 
-    @server.tool(title="Ingest a document", description="Store a file (base64 `content_base64`, or plain `text`), parse "
-                 "and index it, and read it into a bundle of proposed updates. Answers with the finished job. The same "
-                 "bytes are stored once; nothing changes the model until a change is proposed and a person approves "
-                 "it.", annotations=WRITE)
+    @server.tool(title="Ingest a document", description="Needs documents:create (the data-ingestion pipeline). Store a "
+                 "file (base64 `content_base64`, or plain `text`), parse and index it, and read it into a bundle of "
+                 "proposed updates. Answers with the finished job. The same content always gets the same answer; "
+                 "nothing changes the model until a change is proposed and a person approves it.", annotations=WRITE)
     async def world_model_ingest_document(ctx: Context, filename: str, world_model_id: str = "",
                                           content_base64: str = "", text: str = "", source: str = "",
                                           source_type: str = "other", published_at: datetime | None = None) -> dict:
@@ -246,8 +312,9 @@ def build_mcp(app: FastAPI) -> MCPServer:
         return {**bundle, "items": items["data"]}
 
     # -- changes ----------------------------------------------------------------------------------------------------------
-    @server.tool(title="Propose changes", description="Propose one change per bundle item (in event-time order). Each "
-                 "waits for a person's review; this tool never approves.", annotations=PROPOSE)
+    @server.tool(title="Propose changes", description="Needs changes:create (the data-ingestion pipeline). Propose one "
+                 "change per bundle item (in event-time order). Each waits for a person's review; this tool never "
+                 "approves.", annotations=PROPOSE)
     async def world_model_propose_changes(ctx: Context, bundle_id: str, world_model_id: str = "",
                                           item_ids: list[str] | None = None) -> dict:
         return await call(ctx, "POST", await wm(ctx, world_model_id) + "/changes",
@@ -270,9 +337,9 @@ def build_mcp(app: FastAPI) -> MCPServer:
         return {**change, "operations": diff["data"]["operations"]}
 
     # -- theses and simulations --------------------------------------------------------------------------------------------
-    @server.tool(title="Simulate a what-if", description="Pose a thesis (a question, or a ready thesis template_id) and "
-                 "run it as a simulation on the latest version: the finished job names the simulation.",
-                 annotations=PROPOSE)
+    @server.tool(title="Simulate a what-if", description="Needs simulations:create. Pose a thesis (a question, or a "
+                 "ready thesis template_id) and run it as a simulation on the latest version: the finished job names "
+                 "the simulation.", annotations=PROPOSE)
     async def world_model_simulate(ctx: Context, world_model_id: str = "", question: str = "", template_id: str = "",
                                    horizon_days: int = 182) -> dict:
         path = await wm(ctx, world_model_id)

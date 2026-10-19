@@ -243,7 +243,7 @@ In priority order. P0 is needed for core to use the world model at all.
 ### 5.1 P0: the service and its keys
 
 - **Base URL** of the Railway service, plus a credential for each caller: a core-minted service token, or a scoped
-  key (`WORLD_MODEL_API_KEYS`: `caller:key:org[:scopes]`, never `changes:review`). Every write is recorded with its
+  key (`WORLD_MODEL_API_KEYS`: `caller:key:org[:scopes]`, never `changes:approve`). Every write is recorded with its
   actor in the audit log, and the organization decides which world models the credential sees.
 - **REST, v1** (Oct 18) under `/v1/world-models/{id}/*`: 61 operations, written first as an OpenAPI 3.1 contract
   ([api/openapi.yaml](../api/openapi.yaml)) and tested against it. The old `/api/world-model` routes are retired.

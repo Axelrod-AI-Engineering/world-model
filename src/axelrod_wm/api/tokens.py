@@ -25,11 +25,15 @@ from typing import Any
 import httpx
 import jwt
 
-READ, DOCUMENTS, CHANGES, SIMULATIONS, REVIEW, ADMIN = (
-    "read", "documents:write", "changes:write", "simulations:write", "changes:review", "admin")
-SCOPES = (READ, DOCUMENTS, CHANGES, SIMULATIONS, REVIEW, ADMIN)
-PROPOSE = frozenset({READ, DOCUMENTS, CHANGES, SIMULATIONS})
+# Scopes are `resource:action`, with three actions (read, create, approve), plus `admin` (Oct 19, with Manav).
+READ, DOCUMENTS, CHANGES, SIMULATIONS, APPROVE, ADMIN = (
+    "world_model:read", "documents:create", "changes:create", "simulations:create", "changes:approve", "admin")
+SCOPES = (READ, DOCUMENTS, CHANGES, SIMULATIONS, APPROVE, ADMIN)
+CREATE = frozenset({DOCUMENTS, CHANGES, SIMULATIONS})
+# The access boundary (Oct 19): core's backend MCP, and any token an agent drives (`act`), reads only. Writes come
+# from a signed-in person (the web interface) and the data-ingestion pipeline (a scoped static key).
 AGENT_CHANNEL = "core-mcp"
+AGENT_SCOPES = frozenset({READ})
 CACHE_S, REFETCH_S, STALE_S, LEEWAY_S = 600, 60, 86400, 60
 
 # Replaced in tests with an httpx.MockTransport; None uses the network.
@@ -169,6 +173,8 @@ class Verifier:
         if act is not None and not (isinstance(act, dict) and act.get("sub")):
             raise TokenError("invalid_token", "act must be an object with a sub")
         scopes = frozenset(str(claims.get("scope", "")).split()) & frozenset(SCOPES)
+        if claims.get("azp") == AGENT_CHANNEL or act is not None:
+            scopes &= AGENT_SCOPES
         return Principal(kind="token", org=str(claims["org"]), sub=str(claims["sub"]), scopes=scopes,
                          name=claims.get("name"), azp=claims.get("azp"),
                          act=None if act is None else {"sub": str(act["sub"]), "name": act.get("name")},

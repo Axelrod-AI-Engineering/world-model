@@ -45,14 +45,9 @@ The plan that follows from the review is in [architecture-plan.md](architecture-
    `sub`, `azp`, `act`, `jti`) be first-class records in the canonical data model, or stay API metadata?
    ([core-mcp-auth.md §9](core-mcp-auth.md#9-open-questions)) *Deferred until every term is defined: see the terms
    table in [api.md](api.md).*
-2. **Scopes.** We built six scopes in four tiers:
-   - read;
-   - propose: `documents:write`, `changes:write`, `simulations:write`;
-   - approve: `changes:review`;
-   - admin.
-
-   Is that the right contract, or should v1 have the four tiers only? ([api.md §3](api.md#3-api-conventions))
-   *Settled: keep them granular, with one verb per action; they are being renamed.*
+2. **Scopes.** *Settled and built (Oct 19):* kept granular, named `resource:action` with one verb per action:
+   `world_model:read`; `documents:create`, `changes:create`, `simulations:create`; `changes:approve`; and `admin`
+   ([api.md §3](api.md#3-api-conventions)).
 3. **Shared models.** Should a shared base world model (Axelrod's) be readable across organizations? That needs a
    grants table rather than one owning organization per model.
 4. **Audit.** Who may read the audit log? *How long it is kept is settled: forever.*

@@ -36,7 +36,7 @@ def propose(c: TestClient, bundle_id: str, wm: str = WM, headers: dict | None = 
 def review_all(c: TestClient, wm: str = WM, headers: dict | None = None, approve: bool = True, note: str = "checked",
                **claims: Any) -> list[dict]:
     """Decide what waits for review, round after round, as a person in a review UI (a core-web token with
-    changes:review, If-Match on the version reviewed); each decision."""
+    changes:approve, If-Match on the version reviewed); each decision."""
     out = []
     while pending := data(c.get(f"{wm}/changes", headers=headers or {})):
         for ch in pending:

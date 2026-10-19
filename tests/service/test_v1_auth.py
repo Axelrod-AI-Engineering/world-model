@@ -30,8 +30,8 @@ TWO_ORGS = dict(
     WORLD_MODEL_BASIC_AUTH_USERNAME="admin", WORLD_MODEL_BASIC_AUTH_PASSWORD="pw-admin",
     WORLD_MODEL_LOGINS="emily:pw-emily:small_demo,dup:pw-dup:sally_demo",
     WORLD_MODEL_OWNERS="dup=acme",
-    WORLD_MODEL_API_KEYS=(f"tester:{A}:admin:read+documents:write+changes:write+simulations:write+admin,"
-                          f"emily-tool:{B}:emily,reader:{R}:admin:read,ops:{ADM}:admin:admin"),
+    WORLD_MODEL_API_KEYS=(f"tester:{A}:admin:world_model:read+documents:create+changes:create+simulations:create+admin,"
+                          f"emily-tool:{B}:emily,reader:{R}:admin,ops:{ADM}:admin:admin"),
 )
 
 
@@ -85,24 +85,28 @@ def call(c, method, path, op, headers):
 
 # -- scopes ---------------------------------------------------------------------------------------------------------------
 def test_every_route_needs_its_scope(c):
-    """A key holding only `read`, and one holding only `admin`: each route answers 403 to the one without its scope."""
+    """A key holding only `world_model:read` (a key's default), and one holding only `admin`: each route answers 403
+    to the one without its scope; a decision tells a key that a person decides, before any scope."""
     swept = 0
     for method, path, op in operations():
         need = op["x-required-scope"]
-        for key, has in ((R, {"read"}), (ADM, {"admin"})):
+        for key, has in ((R, {"world_model:read"}), (ADM, {"admin"})):
             if need in has:
                 continue
             r = call(c, method, path, op, as_(key))
-            body = problem(r, 403, "insufficient_scope")
-            assert need in body["detail"] and f'scope="{need}"' in r.headers["www-authenticate"], (method, path)
+            if need == "changes:approve":
+                problem(r, 403, "human_approval_required")
+            else:
+                body = problem(r, 403, "insufficient_scope")
+                assert need in body["detail"] and f'scope="{need}"' in r.headers["www-authenticate"], (method, path)
             swept += 1
     assert swept >= 60
 
 
 def test_a_token_carries_only_the_scopes_it_names(c):
-    h = SIGNER.bearer(org="admin", scope="read made:up")
+    h = SIGNER.bearer(org="admin", scope="world_model:read made:up")
     me = data(c.get(f"{V1}/me", headers=h))
-    assert me["scopes"] == ["read"] and me["actor"]["kind"] == "token" and me["actor"]["azp"] == "core-web"
+    assert me["scopes"] == ["world_model:read"] and me["actor"]["kind"] == "token" and me["actor"]["azp"] == "core-web"
     problem(c.post(f"{WM}/theses", json={"template_id": "S-T1"}, headers=h), 403, "insufficient_scope")
 
 
@@ -110,7 +114,7 @@ def test_me_names_the_key_and_its_models(c):
     me = data(c.get(f"{V1}/me"))
     assert me["actor"] == {"kind": "key", "org": "admin", "sub": "tester", "name": None, "azp": None, "act": None,
                            "jti": None}
-    assert "changes:review" not in me["scopes"] and me["world_model_ids"] == ["sally_demo"]
+    assert "changes:approve" not in me["scopes"] and me["world_model_ids"] == ["sally_demo"]
 
 
 # -- organizations ---------------------------------------------------------------------------------------------------------
@@ -147,19 +151,16 @@ def test_only_a_person_decides(c):
     url = f"{WM}/changes/{first}/approvals"
     agent = dict(org="admin", act={"sub": "mcp-client:claude", "name": "Claude"})
     for h in (as_(A), SIGNER.bearer(**agent), SIGNER.bearer(org="admin", azp="core-mcp")):
-        r = c.post(url, json={}, headers={**h, "If-Match": etag_now(c)})
-        assert r.status_code == 403 and r.json()["code"] in ("insufficient_scope", "human_approval_required")
-    problem(c.post(url, json={}, headers={**SIGNER.bearer(**agent), "If-Match": etag_now(c)}), 403,
-            "human_approval_required")
+        problem(c.post(url, json={}, headers={**h, "If-Match": etag_now(c)}), 403, "human_approval_required")
     # a token without the review scope
-    problem(c.post(url, json={}, headers={**SIGNER.bearer(org="admin", scope="read"), "If-Match": etag_now(c)}), 403,
+    problem(c.post(url, json={}, headers={**SIGNER.bearer(org="admin", scope="world_model:read"), "If-Match": etag_now(c)}), 403,
             "insufficient_scope")
     # a person signed in to this service
     c.post("/login", data={"username": "admin", "password": "pw-admin"}, follow_redirects=False)
     try:
         session = {"Authorization": ""}
         me = data(c.get(f"{V1}/me", headers=session))
-        assert me["actor"]["kind"] == "session" and "changes:review" in me["scopes"]
+        assert me["actor"]["kind"] == "session" and "changes:approve" in me["scopes"]
         ok = data(c.post(url, json={"note": "read it"}, headers={**session, "If-Match": etag_now(c)}), 201)
         assert ok["decided_by"]["kind"] == "session" and ok["decided_by"]["sub"] == "admin"
     finally:
@@ -169,17 +170,20 @@ def test_only_a_person_decides(c):
 
 # -- the audit log --------------------------------------------------------------------------------------------------------
 def test_every_write_is_audited_with_who_asked(c):
+    # core's MCP and any agent read only (Oct 19): a write from them is refused, and a person's write is audited
     agent = SIGNER.bearer(org="admin", azp="core-mcp", act={"sub": "mcp-client:claude", "name": "Claude"},
-                          scope="read simulations:write", jti="jti-agent-1")
-    t = data(c.post(f"{WM}/theses", json={"template_id": "S-T1"}, headers=agent), 201)
+                          scope="world_model:read simulations:create")
+    problem(c.post(f"{WM}/theses", json={"template_id": "S-T1"}, headers=agent), 403, "insufficient_scope")
+    person = SIGNER.bearer(org="admin", scope="world_model:read simulations:create", jti="jti-person-1")
+    t = data(c.post(f"{WM}/theses", json={"template_id": "S-T1"}, headers=person), 201)
     rows = data(c.get(f"{WM}/audit-events", params={"limit": 200}, headers=as_(ADM)))
     assert rows and all(r["world_model_id"] == "sally_demo" for r in rows)
     newest = rows[0]
     assert newest["method"] == "POST" and newest["route"] == "/v1/world-models/{world_model_id}/theses"
     assert newest["status"] == 201 and t["id"] in newest["resource_ids"] and newest["request_id"]
-    assert newest["actor"]["act"] == {"sub": "mcp-client:claude", "name": "Claude"}
-    assert newest["actor"]["azp"] == "core-mcp" and newest["actor"]["jti"] == "jti-agent-1"
-    assert newest["actor"]["org"] == "admin" and newest["scopes"] == ["read", "simulations:write"]
+    assert newest["actor"]["act"] is None and newest["actor"]["sub"] == "org_user_9"
+    assert newest["actor"]["azp"] == "core-web" and newest["actor"]["jti"] == "jti-person-1"
+    assert newest["actor"]["org"] == "admin" and newest["scopes"] == ["simulations:create", "world_model:read"]
     routes = {r["route"].rsplit("/", 1)[-1] for r in rows}
     assert {"documents", "changes", "approvals", "theses"} <= routes
     decided = [r for r in rows if r["route"].endswith("/approvals")]
@@ -202,6 +206,6 @@ def test_a_local_run_is_open_but_never_decides():
     with service(headers={"Authorization": ""}, **nothing) as c:
         me = data(c.get(f"{V1}/me"))
         assert me["actor"]["kind"] == "local" and me["actor"]["org"] == "default"
-        assert "admin" in me["scopes"] and "changes:review" not in me["scopes"]
+        assert "admin" in me["scopes"] and "changes:approve" not in me["scopes"]
         problem(c.post(f"{WM}/changes/PR-1/approvals", json={}, headers={"If-Match": '"x"'}), 403,
-                "insufficient_scope")
+                "human_approval_required")

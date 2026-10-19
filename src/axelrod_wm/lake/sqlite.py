@@ -24,6 +24,7 @@ from axelrod_wm.lake.store import (
     Chunk,
     Document,
     Hit,
+    IdempotencyRecord,
     ImportRecord,
     LakeStore,
     Mention,
@@ -69,6 +70,13 @@ CREATE TABLE IF NOT EXISTS audit_events (
   org TEXT NOT NULL, id TEXT NOT NULL, at TEXT NOT NULL, request_id TEXT NOT NULL, world_model_id TEXT NOT NULL,
   method TEXT NOT NULL, route TEXT NOT NULL, status INTEGER NOT NULL, actor TEXT NOT NULL, scopes TEXT NOT NULL,
   resource_ids TEXT NOT NULL, PRIMARY KEY (org, id));
+CREATE TABLE IF NOT EXISTS idempotency_keys (
+  org TEXT NOT NULL, world_model_id TEXT NOT NULL, operation TEXT NOT NULL, key TEXT NOT NULL,
+  fingerprint TEXT NOT NULL, status INTEGER NOT NULL, body TEXT NOT NULL, headers TEXT NOT NULL,
+  created_at TEXT NOT NULL, PRIMARY KEY (org, world_model_id, operation, key));
+CREATE TABLE IF NOT EXISTS jobs (
+  org TEXT NOT NULL, world_model_id TEXT NOT NULL, id TEXT NOT NULL, job TEXT NOT NULL,
+  PRIMARY KEY (org, world_model_id, id));
 CREATE TABLE IF NOT EXISTS llm_cache (
   key TEXT PRIMARY KEY, provider TEXT NOT NULL, model TEXT NOT NULL, value TEXT NOT NULL);
 """
@@ -355,6 +363,41 @@ class SQLiteLake(LakeStore):
         return [AuditRecord(org=r[0], id=r[1], at=_dt(r[2]), request_id=r[3], world_model_id=r[4], method=r[5],
                             route=r[6], status=r[7], actor=json.loads(r[8]), scopes=json.loads(r[9]),
                             resource_ids=json.loads(r[10])) for r in rows]
+
+    # -- idempotency keys and jobs (Oct 19): kept forever ------------------------------------------------------
+    def get_idempotency(self, org: str, world_model_id: str, operation: str, key: str) -> IdempotencyRecord | None:
+        with self.lock:
+            r = self.db.execute("SELECT * FROM idempotency_keys WHERE org=? AND world_model_id=? AND operation=? AND "
+                                "key=?", (org, world_model_id, operation, key)).fetchone()
+        return None if r is None else IdempotencyRecord(
+            org=r[0], world_model_id=r[1], operation=r[2], key=r[3], fingerprint=r[4], status=r[5], body=r[6],
+            headers=json.loads(r[7]), created_at=_dt(r[8]))
+
+    def put_idempotency(self, rec: IdempotencyRecord) -> None:
+        with self.lock:
+            self.db.execute("INSERT OR IGNORE INTO idempotency_keys VALUES (?,?,?,?,?,?,?,?,?)", (
+                rec.org, rec.world_model_id, rec.operation, rec.key, rec.fingerprint, rec.status, rec.body,
+                json.dumps(rec.headers, sort_keys=True), _iso(rec.created_at)))
+            self.db.commit()
+
+    def forget_idempotency(self, org: str, world_model_id: str, naming: str) -> int:
+        with self.lock:
+            n = self.db.execute("DELETE FROM idempotency_keys WHERE org=? AND world_model_id=? AND instr(body, ?) > 0",
+                                (org, world_model_id, naming)).rowcount
+            self.db.commit()
+        return n
+
+    def put_job(self, org: str, world_model_id: str, job: dict) -> None:
+        with self.lock:
+            self.db.execute("INSERT OR REPLACE INTO jobs VALUES (?,?,?,?)",
+                            (org, world_model_id, job["id"], json.dumps(job, sort_keys=True)))
+            self.db.commit()
+
+    def get_job(self, org: str, world_model_id: str, job_id: str) -> dict | None:
+        with self.lock:
+            r = self.db.execute("SELECT job FROM jobs WHERE org=? AND world_model_id=? AND id=?",
+                                (org, world_model_id, job_id)).fetchone()
+        return None if r is None else json.loads(r[0])
 
     # -- the LLM step's replay cache --------------------------------------------------------------------------
     def cache_get(self, key: str) -> dict | None:

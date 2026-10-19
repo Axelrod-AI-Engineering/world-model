@@ -22,7 +22,7 @@ from tests.service.helpers import data, problem, service
 
 pytestmark = pytest.mark.integration
 KA, KB = "a" * 32, "b" * 32
-SCOPES = "read+documents:write+changes:write+simulations:write+admin"
+SCOPES = "world_model:read+documents:create+changes:create+simulations:create+admin"
 A = {"Authorization": f"Bearer {KA}"}
 BB = {"Authorization": f"Bearer {KB}"}
 ENV = {"WORLD_MODEL_BASIC_AUTH_USERNAME": "admin", "WORLD_MODEL_BASIC_AUTH_PASSWORD": "pw-admin",

@@ -200,7 +200,7 @@ class BasicAuthMiddleware:
         """The outward service (/v1, /mcp): the request's principal (api/tokens.py) from a verified credential: a
         core-minted service token, a static scoped key, or our own session; open as `local` when nothing is
         configured. Failures answer as RFC 9457 problems."""
-        from axelrod_wm.api.tokens import ADMIN, SCOPES, Principal, TokenError, looks_like_jwt
+        from axelrod_wm.api.tokens import APPROVE, SCOPES, Principal, TokenError, looks_like_jwt
 
         headers = dict(scope.get("headers", []))
         token = bearer(headers)
@@ -222,7 +222,7 @@ class BasicAuthMiddleware:
         elif not self.keys and not self.username and not self.required and not self.verifier:
             # a local run with nothing configured: open, as the demo is, but never deciding a change
             principal = Principal(kind="local", org=org_of(None), sub="local",
-                                  scopes=frozenset(SCOPES) - {"changes:review"} | {ADMIN})
+                                  scopes=frozenset(SCOPES) - {APPROVE})
         if principal is None:
             if scope["type"] == "websocket":
                 await send({"type": "websocket.close", "code": 1008})

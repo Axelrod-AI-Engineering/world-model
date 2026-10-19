@@ -1,7 +1,8 @@
-"""I2. The review flow with an agent over MCP, through the SDK's own client at /mcp, as an agent (Claude, core) runs it:
-ingest a synthetic note, read its bundle, propose its changes, wait for a person, and read the attribute before and
-after, pinned. Proves the tools compose into the whole flow with the caller's key, that no tool and no key can decide a
-change (a person does, in a review UI), and that the tools' answers are the REST answers."""
+"""I2. The review flow over MCP, through the SDK's own client at /mcp: the data-ingestion pipeline (a static key with
+documents:create and changes:create) ingests a synthetic note, reads its bundle, and proposes its changes; a person
+decides; the tools read the attribute before and after, pinned. Proves the tools compose into the whole flow, that no
+tool and no key can decide a change, that core's MCP channel reads only (the access boundary, Oct 19), and that the
+tools' answers are the REST answers."""
 
 from __future__ import annotations
 
@@ -17,7 +18,7 @@ from tests.service.helpers import problem, service
 
 pytestmark = pytest.mark.integration
 KEY = "m" * 32
-ENV = {"WORLD_MODEL_API_KEYS": f"agent:{KEY}:default"}
+ENV = {"WORLD_MODEL_API_KEYS": f"agent:{KEY}:default:world_model:read+documents:create+changes:create"}
 AS_AGENT = {"Authorization": f"Bearer {KEY}"}
 
 
@@ -60,10 +61,14 @@ def test_an_agent_proposes_over_mcp_and_a_person_decides():
         assert proposed["status"] == "succeeded" and proposed["result"]["detail"]["version_before"] == start["number"]
         assert pending and all(ch["proposed_by"]["sub"] == "agent" for ch in pending)
 
-        # the agent cannot decide: no tool does, and its key has no review scope
+        # core's MCP channel reads only: a core-mcp token is refused a proposal, whatever scopes it names
+        core = SIGNER.bearer(azp="core-mcp", act={"sub": "mcp-client:claude"},
+                             scope="world_model:read documents:create changes:create")
+        problem(c.post(f"{WM}/changes", json={"bundle_id": up["bundle_id"]}, headers=core), 403, "insufficient_scope")
+        # the pipeline cannot decide: no tool does, and a key never approves
         tag = c.get(WM).headers["etag"]
         problem(c.post(f"{WM}/changes/{pending[0]['id']}/approvals", json={}, headers={"If-Match": tag}), 403,
-                "insufficient_scope")
+                "human_approval_required")
         decided = review_all(c, note="checked against the release")
         assert decided and all(d["decided_by"]["kind"] == "token" for d in decided)
 

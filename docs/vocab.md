@@ -240,13 +240,16 @@ Reference: [api/README.md](api/README.md).
 | **Outward API** | REST under `/v1/world-models/{id}/*` on the Railway service, for other agents and core. Its contract is `docs/api/openapi.yaml`. Its nouns differ from the code's: an *attribute* is a subentity, a *relationship* an interaction, an *event* a market event, a *change* a proposal, a *simulation* a forecast. |
 | **Caller** | Who is acting within an organization: the principal's `sub` (an org user, a key's caller name such as `core`, or a login), recorded with its kind, `azp`, `act` and `jti` on every write in the audit log, and as a change's `proposed_by` and `decided_by`. |
 | **Organization** (was *tenant*) | Owns world models, documents and credentials (Axelrod, a client firm), never a user; it comes from the credential (a token's `org`, a key's org, a login). The `world_models` registry names each model's organization; another organization's model answers 404. A login's organization is its username unless `WORLD_MODEL_OWNERS` maps it (`default` with no logins). |
-| **API key** | A static scoped credential: a `caller:key:org[:scope+scope]` entry in `WORLD_MODEL_API_KEYS`, sent as `Authorization: Bearer <key>`. It never carries `changes:review`. |
+| **API key** | A static scoped credential: a `caller:key:org[:scope+scope]` entry in `WORLD_MODEL_API_KEYS`, sent as `Authorization: Bearer <key>`. With no scopes listed it reads only (`world_model:read`); it never carries `changes:approve`. |
 | **Service token** | A short-lived ES256 JWT core mints per call ([design/core-mcp-auth.md](design/core-mcp-auth.md)), verified against a trusted issuer's JWKS (`WORLD_MODEL_TRUSTED_ISSUERS`). |
 | **Principal** | Who a v1 request acts as, from a verified credential: a core-minted service token (a person, maybe through an agent host named by `act`), a static scoped key (a service), or a session (a person signed in here). The old `X-Axelrod-On-Behalf-Of` header is gone. |
-| **Scope** | What a credential may do: `read`; propose (`documents:write`, `changes:write`, `simulations:write`); approve (`changes:review`, people only); `admin`. |
+| **Scope** | What a credential may do, named `resource:action` with three verbs (read, create, approve) plus admin: `world_model:read`; `documents:create`, `changes:create`, `simulations:create`; `changes:approve` (people only); `admin`. |
 | **Envelope** | `{"data", "meta"}` for every answer (`meta`: `request_id`, the `version` read, and a list's `limit` and `next_cursor`); every error an RFC 9457 problem (`application/problem+json`) with a stable `code`. |
 | **Version header** | `X-Axelrod-API-Version: 1` on every response. |
 | **Erid kind** | The node kind core's contracts use: company, kpi, factor. |
+| **erid (the API resource)** | The unified world model, `/v1/erid`: the whole graph, for internal staff, beside the per-client world models (core calls the world model state Erid). |
+| **Compartment** | A client's view of the unified world model, defined as a focused world is: its companies, the players upstream of them, and one link downstream (`sally_focus`). Reads under `/v1/erid` take `compartment`. |
+| **Idempotency key** | A client's `Idempotency-Key`, or a document's or bundle's content: the first answer to a create, kept forever in the lakehouse catalog. |
 | **MCP server** | `/mcp`, `axelrod-world-model`: the same operations as tools over stateless Streamable HTTP, with the same key. |
 | **Tool annotations** | read-only, additive, destructive, idempotent, open-world hints on each tool. |
 

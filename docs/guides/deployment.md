@@ -104,7 +104,7 @@ than a sign-in. Every variable they read is in [the API reference's Configuratio
 and how core authenticates is in [design/core-mcp-auth.md](../design/core-mcp-auth.md). For operations:
 
 - `WORLD_MODEL_API_KEYS` holds comma-separated `caller:key:org[:scope+scope…]` entries. A key acts as a service of
-  that organization and opens only `/v1` and `/mcp`. Keys are at least 24 characters, never carry `changes:review`,
+  that organization and opens only `/v1` and `/mcp`. Keys are at least 24 characters, never carry `changes:approve`,
   and a malformed entry stops the server from starting. A login's organization is its username unless
   `WORLD_MODEL_OWNERS` (`login=org`) maps it. Like the passwords, these variables live in Railway only.
 - To add a caller: generate a key (`python -c "import secrets; print(secrets.token_urlsafe(32))"`), append

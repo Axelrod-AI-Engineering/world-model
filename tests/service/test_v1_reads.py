@@ -46,10 +46,10 @@ def test_me_names_the_principal_and_its_world_models(c):
     me = data(c.get(f"{V1}/me"))
     assert me["actor"] == {"kind": "key", "org": "default", "sub": "tester", "name": None, "azp": None, "act": None,
                            "jti": None}
-    assert "changes:review" not in me["scopes"] and "admin" in me["scopes"] and me["world_model_ids"] == ["sally_demo"]
+    assert "changes:approve" not in me["scopes"] and "admin" in me["scopes"] and me["world_model_ids"] == ["sally_demo"]
     tok = data(c.get(f"{V1}/me", headers=SIGNER.bearer(act={"sub": "mcp-client:x", "name": "Claude"}, azp="core-mcp")))
     assert tok["actor"]["kind"] == "token" and tok["actor"]["act"] == {"sub": "mcp-client:x", "name": "Claude"}
-    assert tok["actor"]["jti"] and tok["scopes"] == ["changes:review", "read"]
+    assert tok["actor"]["jti"] and tok["scopes"] == ["world_model:read"]           # core-mcp reads only
 
 
 def test_world_models_list_and_one(c):

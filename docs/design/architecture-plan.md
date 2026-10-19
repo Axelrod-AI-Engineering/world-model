@@ -26,7 +26,7 @@ also recorded in [decisions.md](decisions.md) as D-20 to D-24. Open questions st
 | Idempotency | Keys are permanent, and creation is keyed on content as well, so the same content always gives the same result. Determinism comes first. Grouping several articles about one event comes later. | D-23 |
 | Acronyms | Every acronym and short field name in the API docs is spelled out and defined | [api.md](api.md) |
 | ETag and If-Match | Kept as built. Manav is reviewing them. | [api.md §3](api.md#3-api-conventions) |
-| A unified endpoint | A separate top-level resource for the unified world model, beside the per-client `/v1/world-models/{id}`, which stays for now. Its name is still to be confirmed (the notes say `/erit`). | [api.md §4](api.md#4-resources-and-routes) (proposal) |
+| A unified endpoint | A separate top-level resource for the unified world model, beside the per-client `/v1/world-models/{id}`, which stays for now. Named `/v1/erid` (the notes' `/erit`; core calls the world model state Erid) and built Oct 19, with compartments defined as focused worlds. | [api.md §4](api.md#the-unified-world-model-erid-built-oct-19) (built) |
 | Onboarding first | The world model goes to the client as its JSON export. Core integration waits: Manav opens a basic integration PR to refine later. | Section 3 below |
 
 ## 2. Needs analysis
@@ -72,7 +72,7 @@ players that reach them, and is recomputed from the full world on every load.
 | Context control and data validity | Simple | Needs explicit rules for what each compartment includes | Hardest |
 | Cost of a new client | A new model built from scratch | A new compartment definition | None |
 | Fit with "the end goal is one model" | Must be merged later | Already is | Already is |
-| Built today | Yes (per-login worlds) | Partly: focus works for one scenario; there is no API resource yet | No |
+| Built today | Yes (per-login worlds) | Yes for reads (Oct 19): `/v1/erid` with `compartment`, narrowed as focus narrows | Yes for internal staff: `/v1/erid` |
 
 **Proposed default: one unified model, served in compartments** (D-20). Each client's view is a compartment of the
 unified graph, defined the way focus defines one today: the companies in scope, and the players they connect to.
@@ -85,6 +85,10 @@ Open points for the analysis:
 
 - Does learning run per compartment or on the whole graph? Running on the whole graph is simpler, but it needs
   review to stop one client's documents silently reshaping another client's companies.
-- How are compartments addressed in the API: the unified endpoint plus a compartment parameter, or
-  `/world-models/{id}` kept as the name of a compartment?
-- How do audit and permissions attach to compartments?
+- How are compartments addressed in the API? **Chosen and built (Oct 19):** the unified endpoint, `/v1/erid`, plus
+  a `compartment` parameter on its graph reads; `/world-models/{id}` stays the per-client resource for now. A
+  compartment is any scenario focused on the unified one, so its definition stays in one place (`engine/focus.py`).
+- How do audit and permissions attach to compartments? **Built:** reads need `world_model:read`; the whole graph is
+  for internal organizations (`WORLD_MODEL_INTERNAL_ORGS`), and a compartment is assigned to a client organization
+  (`WORLD_MODEL_COMPARTMENTS`). Writes go through the backing world model, with its review and its audit log, so the
+  audit attaches to the unified model. Per-compartment audit views are open.
