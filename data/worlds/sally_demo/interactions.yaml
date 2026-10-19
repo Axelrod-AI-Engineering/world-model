@@ -139,8 +139,8 @@ interactions:
     source: dollar_yen.usd_jpy
     target: toyota.operating_profit
     label: a weaker yen lifts
-    note: "R13 netting (Oct 18, pack round): sized by least squares over eight actual periods of the company's total FX effect on operating income less its US dollar transactional line (which ty_yen_transaction now carries, documented), annualized, against the USD/JPY change (ty.fsum, ty.dk). The remainder pools translation, the euro and other currencies, so it is graded inferred"
-    effect: {mu: 0.5419, sigma: 0.0912}
+    note: "R13 netting: the company's total FX effect on operating income less its US dollar transactional line (which ty_yen_transaction carries, documented), against the USD/JPY change; graded inferred (translation, euro and other currencies pooled). Batch 2 (W3): re-solved on six standalone, non-overlapping actual quarters, annualized. Before: eight overlapping windows, effect 0.5419 (sigma 0.0912); after: 0.5365 (sigma 0.2468)"
+    effect: {mu: 0.5365, sigma: 0.2468}
     kernel: {delay_days: 30, lag_days: 90, duration_days: null}
     # Oct 17 (construction review, docs/construction/toyota.md G09): kept calibrated as the aggregate; its transaction,
     # translation and imported-input parts are uncalibrated branches of ty.path.yen, never added to it. Oct 18: the

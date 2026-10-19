@@ -182,7 +182,8 @@ async def list_entities(request: Request, world_model_id: str, type: s.EntityTyp
 
     ids = sorted((eid for eid in g.entities if keep(eid)), key=lambda eid: (0 if starts(eid) else 1, eid))
     chunk, nxt = page(ids, off, limit, ref["number"])
-    rows = [pj.entity(wm, ltm, eid, None if not p or named(g.entities[eid], eid) else attrs[eid]) for eid in chunk]
+    rows = [pj.entity(wm, ltm, eid, None if not p or named(g.entities[eid], eid) else attrs[eid], occurred=occurred_of(m))
+            for eid in chunk]
     return many(request, rows, limit, nxt, ref)
 
 
@@ -196,8 +197,8 @@ async def get_entity(request: Request, world_model_id: str, entity_id: str,
     rels = None
     if "relationships" in include:
         own = set(pj.own_attributes(wm, entity_id))
-        rels = [pj.relationship(i) for i in live(wm.graph) if i.source_id in own or i.target_id in own]
-    return one(request, pj.entity(wm, ltm, entity_id, relationships=rels), ref, tag=True)
+        rels = [pj.relationship(i, wm.graph) for i in live(wm.graph) if i.source_id in own or i.target_id in own]
+    return one(request, pj.entity(wm, ltm, entity_id, relationships=rels, occurred=occurred_of(m)), ref, tag=True)
 
 
 @router.get(W + "/entities/{entity_id}/attributes", summary="An entity's attributes")
@@ -207,7 +208,7 @@ async def list_attributes(request: Request, world_model_id: str, entity_id: str,
     wm, _ltm, ref, off = await read_at(m, version, as_of, cursor)
     entity_of(wm.graph, entity_id)
     chunk, nxt = page(pj.own_attributes(wm, entity_id), off, limit, ref["number"])
-    return many(request, [pj.attribute(wm, x) for x in chunk], limit, nxt, ref)
+    return many(request, [pj.attribute(wm, x, occurred_of(m)) for x in chunk], limit, nxt, ref)
 
 
 @router.get(W + "/entities/{entity_id}/attributes/{attribute_key}", summary="One attribute")
@@ -215,7 +216,7 @@ async def get_attribute(request: Request, world_model_id: str, entity_id: str, a
                         version: Version = None, as_of: AsOf = None) -> Response:
     m = model(request, world_model_id, READ)
     wm, _ltm, ref, _o = await read_at(m, version, as_of)
-    return one(request, pj.attribute(wm, attribute_id(wm.graph, entity_id, attribute_key)), ref, tag=True)
+    return one(request, pj.attribute(wm, attribute_id(wm.graph, entity_id, attribute_key), occurred_of(m)), ref, tag=True)
 
 
 def _window(rows: list, start: datetime | None, end: datetime | None, at) -> list:
@@ -234,7 +235,7 @@ async def list_observations(request: Request, world_model_id: str, entity_id: st
     m = model(request, world_model_id, READ)
     wm, _ltm, ref, off = await read_at(m, version, as_of, cursor)
     sub = wm.graph.subentities[attribute_id(wm.graph, entity_id, attribute_key)]
-    rows = _window(pj.observations(sub), valid_from, valid_to, lambda r: r.valid_at)
+    rows = _window(pj.observations(sub, occurred_of(m)), valid_from, valid_to, lambda r: r.valid_at)
     chunk, nxt = page(rows, off, limit, ref["number"])
     return many(request, chunk, limit, nxt, ref)
 
@@ -350,7 +351,13 @@ async def list_relationships(request: Request, world_model_id: str, source: str 
 
     rows = [i for _k, i in sorted(wm.graph.interactions.items()) if keep(i)]
     chunk, nxt = page(rows, off, limit, ref["number"])
-    return many(request, [pj.relationship(i) for i in chunk], limit, nxt, ref)
+    return many(request, [pj.relationship(i, wm.graph) for i in chunk], limit, nxt, ref)
+
+
+def occurred_of(m) -> dict:
+    """When each update's facts occurred (a reported figure's period end), by event id, from the reviewed changes."""
+    return {pr.event.id: pr.event.occurred_at for pr in m.st.controller.proposals.values()
+            if getattr(pr, "event", None) is not None and getattr(pr.event, "occurred_at", None) is not None}
 
 
 def relationship_of(graph, rid: str):
@@ -365,7 +372,7 @@ async def get_relationship(request: Request, world_model_id: str, relationship_i
                            as_of: AsOf = None) -> Response:
     m = model(request, world_model_id, READ)
     wm, _ltm, ref, _o = await read_at(m, version, as_of)
-    return one(request, pj.relationship(relationship_of(wm.graph, relationship_id)), ref, tag=True)
+    return one(request, pj.relationship(relationship_of(wm.graph, relationship_id), wm.graph), ref, tag=True)
 
 
 @router.get(W + "/relationships/{relationship_id}/evidence", summary="A relationship's evidence")
@@ -467,8 +474,8 @@ async def get_graph(request: Request, world_model_id: str, entities: str = "", a
     for sid in keep:
         by_entity.setdefault(g.subentities[sid].entity_id, []).append(sid)
     kept = set(keep)
-    body = {"entities": [pj.entity(wm, ltm, e, by_entity[e]) for e in sorted(by_entity)],
-            "relationships": [pj.relationship(i).model_dump(mode="json") for i in links
+    body = {"entities": [pj.entity(wm, ltm, e, by_entity[e], occurred=occurred_of(m)) for e in sorted(by_entity)],
+            "relationships": [pj.relationship(i, wm.graph).model_dump(mode="json") for i in links
                               if i.source_id in kept and i.target_id in kept],
             "truncated": len(reach) > limit}
     return one(request, body, ref)

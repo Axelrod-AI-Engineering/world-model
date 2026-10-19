@@ -1315,8 +1315,8 @@ class Rules:
         """The value pairs a causal claim is about: one pair, or one per member of a sector it names as the effect
         ("Japanese insurers"). An entity named for its values stands for the one value a link joins to the other
         side, or, with a stated `sign`, for the one value whose link has that sign ("a weaker yen lifts Toyota"); a
-        link of unknown size has no sign. Where a value and a part of it both qualify, the entity stands for the total.
-        """
+        link of unknown size has no sign. Where a value and a part of it both qualify, the entity stands for the total;
+        where a causal link and an identity or accounting term both qualify, for the causal link."""
         effects = self._members[effect.entity_id] if effect.kind == "group" else [effect]
         out = []
         for e in effects:
@@ -1326,6 +1326,9 @@ class Rules:
             if len(pairs) > 1 and e.kind != "value":
                 # a claim about the company as a whole is on its total, not on a part that adds into it (R11)
                 pairs = [p for p in pairs if not any(q[1] in self._totals_of(p[1]) for q in pairs if q != p)]
+            if len(pairs) > 1 and any(not self.links[p].fixed for p in pairs):
+                # a causal sentence is about a causal link, not an identity or accounting term beside it
+                pairs = [p for p in pairs if not self.links[p].fixed]
             if len(pairs) == 1 and pairs[0][0] != pairs[0][1]:       # not ambiguous, nor one value named twice
                 out.append(pairs[0])
         return out

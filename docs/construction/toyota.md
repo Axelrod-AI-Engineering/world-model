@@ -26,6 +26,12 @@
   - [Part 2. Composition and connected paths](#part-2-composition-and-connected-paths)
   - [Part 3. Evidence and calibration](#part-3-evidence-and-calibration)
   - [Part 4. End-to-end checks](#part-4-end-to-end-checks)
+- [Batch 2](#batch-2)
+  - [A. Before/after record](#a-beforeafter-record)
+  - [B. Corrected baselines and provenance](#b-corrected-baselines-and-provenance)
+  - [C. Connected scoped finance modules and paths](#c-connected-scoped-finance-modules-and-paths)
+  - [D. Seed responses](#d-seed-responses)
+  - [E. Residual data](#e-residual-data)
 - [Readable view](#readable-view)
   - [Business composition](#business-composition)
   - [Identities](#identities)
@@ -599,6 +605,141 @@ construction endpoint an agent reads (`/construction/toyota/trace`), in both wor
 
 In the focused export, each case's links are present with their transitions, calibrated links carry a size and
 uncalibrated ones none, and all 16 Toyota paths and 12 compositions are exported.
+
+## Batch 2
+
+Oct 18: the reviewer's second Toyota batch. It has three parts. The first is workbook repairs (W1–W6). The second is
+builds that answer the open questions (Q7–Q16). The third is a golden bank of 30 seed questions in ten categories,
+meant to test the world model directly, before the scenario agent is attached. Ten seeds were run, one per category.
+Every figure stays local: `data/sally_data/construction/toyota/` holds the workbook check, provenance and ledgers, and
+`data/sally_data/golden/` holds the bank and the graded answer records. This page holds ids, structure and counts.
+
+**The workbook copy.** All eight cells the reviewer quotes match our copy, in both its values and its formulas (local
+`workbook_check.json`, 2,172 cells read). The file hash differs from the one the reviewer cites. The cited content is
+the same, so the likeliest cause is a re-save or a later version of the file; this is one question for the reviewer.
+The workbook was read, never modified, and nothing in it was executed.
+
+### A. Before/after record
+
+| Area | Already owned (reused) | Missing (added) | Modified lightly | Left alone |
+|---|---|---|---|---|
+| W1 baseline and export reconciliation | `ty.comp.reporting_segments`, `ty.comp.regional_operating_income` | each baseline's provenance: raw source, normalized amount, model update, reason (local); an observation's `occurred_at` in v1 (the reported period end, apart from publication and recording) | - | the workbook; actuals are never plugged into "other" |
+| W2 assumption ledger | the input statuses on every link | an assumption ledger of 29 rows, 5 of them unknown-coverage text cells read as zero (local) | - | "fact" labels in the workbook are not taken as facts |
+| W3 sensitivity overlap | `ty_yen_transaction`, m29 | the disclosure files for the re-solve (local) | both re-solved on standalone, non-overlapping quarters; before and after are in their notes | - |
+| W4 broker means | - | a broker comparison view (local), never forced into an identity | - | mean net income is never divided into mean EPS |
+| W5 periods | `ty.sf.shares` | certification, tender, cancellation and authorization as separate dated events; annual controls kept apart from quarter sums (local) | - | - |
+| W6 retrieval | transitions on 196 of 197 links | a retrieval profile on every link, in the export and in v1 (`Relationship.profile`): native slope, exposure, unit, date, hedge, pass-through, financial endpoint, calculation, source | - | - |
+| Q7 customs | `toyota.us_customs_base`, `toyota.us_tariff_cost` | `ty.id.us_duty` (duty = covered value × rate), `ty.comp.us_customs_base_by_origin` (Japan, North America, third country) | `ty_tariff_cost`, `ty_customs_base_cost` became identity terms | - |
+| Q8 transfer price | `ty_tariff_absorb` | `toyota.tariff_transfer_support`; `ty_transfer_support_na` (+1) and `ty_transfer_support_japan` (−1), which net to zero at the group | `ty_tariff_transfer` re-targeted to the support | - |
+| Q9 incentives | `ty_incentive_to_units` (unsized) | `ty.id.na_incentive_cost`, `ty.id.incentive_breakeven`, held in dollars | `ty_incentive_cost_fx` removed: the yen is a stated conversion | - |
+| Q10 dealer days | `toyota.na_dealer_inventory` | `ty.id.dealer_days` (365 × stock / annual sales), `ty.sf.na_dealer_stock` | the inventory links re-targeted to arrivals | no synthetic level is presented as observed |
+| Q11 finance | `toyota.us_finance_subsidiary_earning_assets` | the US module: `ty.id.us_fin_income`, `ty.id.us_fin_expense`, `ty.id.us_fin_nii`, `ty.id.fs_us_scope`, asset and funding clocks, `toyota.fs_income_uncovered`, `ty.comp.fs_by_scope` (reconciling), `ty.path.us_finance_module` | - | the group book is never repriced at US rates |
+| Q12 aggregation | one driving view per total; a total is found once when two routes reach it | - | - | - |
+| Q13 substitution and capacity | `ty.comp.retail_units_by_powertrain`, `ty.path.supply_availability` | - | - | the binding minimum of two constraints is a schema gap (E) |
+| Q14 elimination | `ty.comp.segment_revenue` (reconciling), `ty_incentive_subvention` (unsized) | transfer support that nets to zero (Q8) | - | - |
+| Q15 liquidity | `toyota.industrial_liquidity`, `toyota.buyback_authorization` | `ty.sf.industrial_liquidity`, `toyota.buyback_spend`, `toyota.industrial_other_cash_movements` | `ty_fcf_liquidity`, `ty_dividends_liquidity` became stock-flow terms | buybacks stay a board decision, not a formula |
+| Q16 earlier history | the FY3/26 baselines | FY3/25 annual unit controls and the sum of quarters, kept apart (local) | - | - |
+| Seeds (Part 3) | - | `ty.id.us_brand_units` (US market × brand share, with no link onward to consolidated units); `ty.id.eps` (net income / weighted-average shares, `toyota.weighted_average_shares`); `ty.id.us_translation` (dollar profit × average rate) | `ty.path.production_disruption` gained an inventory-buffer branch (`ty_exports_to_inventory`, `ty_arrivals_stock`) | - |
+
+In total, Toyota now has 197 links: 101 calibrated, 96 uncalibrated, 54 accounting, 43 identity and 7 stock-flow. It
+also has 21 identities, 14 compositions and 17 paths. `check.py` reports no problems and no uncited material claims.
+
+### B. Corrected baselines and provenance
+
+- **Dated actuals.** The FY3/26 baselines are imported through v1 bundles and changes, so they become dated
+  observations, not part of the model state. Each observation now carries its `occurred_at` (the period end) apart
+  from `valid_at` (publication) and `observed_at` (recording). A question about "the baseline" can then name its
+  period.
+- **Views reconcile at that period.** At the period end, the business view and the regional view each reconcile to
+  group operating profit; they differ by one rounding unit. Neither is ever added to the other.
+- **State versus actual.** The model's state of a total differs from its actual, and answers report the two apart.
+- **Provenance.** Each baseline's provenance (source, cell, raw amount, ÷1000, model update, reason) is in local
+  `baseline_provenance.json`. Reconciliation is re-run after each import. The figures stay local.
+
+### C. Connected scoped finance modules and paths
+
+- **US finance module.** `ty.path.us_finance_module` has 9 steps, in two branches:
+  - an asset clock: `ty_ust_us_asset_yield` → `ty_usfin_yield_income`;
+  - a funding clock: `ty_ust_us_funding_rate` → `ty_usfin_rate_expense`.
+
+  Both meet at the margin (`ty.id.us_fin_nii`), which is translated into the segment's US scope
+  (`ty.id.fs_us_scope`). The segment's other income is an explicit residual, `toyota.fs_income_uncovered`; it is
+  never a plug, and the scope view `ty.comp.fs_by_scope` reconciles rather than drives. A rate shock reprices only the
+  share of each balance that resets, for the time it is active. The reset shares are synthetic priors and are listed
+  in E.
+- **Tariffs** (`ty.path.tariffs_sourcing`). The customs base by origin feeds the duty identity, and the duty
+  reaches North America income (`ty_tariff_absorb`). Transfer support moves profit between regions and recovers
+  nothing at the group. Pricing, incentives and re-sourcing are parallel responses that stay unsized.
+- **Production disruption** (`ty.path.production_disruption`). Fewer exports arrive at dealers, and the dealer
+  stock buffers sales through the mass balance.
+- **Group bridge** (`ty.path.group_bridge`). Operating profit → pretax income → tax and minorities → net income;
+  EPS then follows by `ty.id.eps`. Share price is reached only by a default coefficient, which is not a valuation model.
+
+### D. Seed responses
+
+The harness is `src/axelrod_wm/evaluation/golden.py`, with the CLI in `scripts/evaluation/golden.py`.
+
+- **The responder** sees only the question and the fixture. It answers through v1 reads only: search, the
+  construction, relationships with their profiles, traces and observations. Its arithmetic is the model's identities,
+  stock-flows and native slopes, applied to the fixture's inputs, which are given in model ids.
+- **The grader** sees the hidden spec. It scores four outcomes separately and lists critical failures (sign, scope,
+  unit, accounting) on their own. Workbook cell locations are reported as "Not tested", because they are bound in the
+  local provenance, not in the model.
+- **Unit tests** (`tests/unit/evaluation/test_golden.py`) use synthetic cases only.
+- **Records.** The bank (all 30 seeds, verbatim, with hidden reference blocks) and the answer records are local. The
+  seeds were run in `sally_demo` and `sally_focus`, with the same grades in both.
+
+| Seed | Category | Evidence | Mechanism | Calculation | Timing | Why |
+|---|---|---|---|---|---|---|
+| T01A | baseline | Pass | Pass | Pass | Partial | both views reconcile at the period end, and the actual is reported apart from the state; guidance and broker means are not records in the world (local only) |
+| T02A | demand and share | Partial | Pass | Pass | Pass | units = market × share, decomposed into market and share effects; not sent into consolidated units; the North America share link was not retrieved from the question's wording |
+| T03A | pricing | Pass | Pass | Pass | Pass | the direct concession through the incentive identity, converted at the stated rate; the volume response is held constant and named |
+| T04C | supply | Pass | Pass | Pass | Pass | the mass balance per quarter and cumulatively; units only, no profit |
+| T05A | costs | Pass | Pass | Pass | Pass | gross, hedge offset, exposure and recovery stated apart; recovery applies after hedges |
+| T06B | financing | Pass | Pass | Pass | Pass | asset and funding clocks on the US module, for a full year and a half year; the lease book is not scaled |
+| T07B | currency | Pass | Pass | Pass | Pass | a profit and a loss translate with opposite deltas; the aggregate FX total is not added |
+| T08B | tariffs | Pass | Pass | Pass | Pass | North America and Japan move by the allocation, the group by the duty alone; pricing and incentive responses are listed as unsized |
+| T09C | earnings | Pass | Pass | Pass | Pass | operating profit → net income → EPS at the stipulated tax rate and share count; no return is calculated |
+| T10A | unknowns | Pass | Pass | Pass | Pass | operating profit is "unknown or unimplemented", with the unsized links listed; no measured zero |
+
+No critical failure occurred.
+
+The first graded run had four Fails, two from harness defects and two from model gaps:
+
+- T01A: the observations carried no period, and the baselines had not been driven in;
+- T04C: the disruption path had no inventory buffer;
+- T08B: a feedback loop was never resolved (harness);
+- T10A: the market links sat outside the entity filter (harness).
+
+All four were fixed and the seeds re-run.
+
+The other three Part 3 gaps (US brand units, EPS, translation) were found by reading the seeds and added before that
+run. No answer is hardcoded: each arithmetic step is the model's own object.
+
+### E. Residual data
+
+| Field | Scope and date | Where searched | Why it matters | Bounded assumption? |
+|---|---|---|---|---|
+| US industry volume and Toyota brand share on one denominator | US light vehicles, FY3/26 onward | `ty.wb`, `ty.us`, `ty.peer` | units = market × share needs a like-for-like base (T02A) | yes: a fixture |
+| Incremental units per incentive dollar; contribution per incremental unit | North America, FY3/27 | `ty.wb` marketing bridge (aggregate), `ty.fsum` | the net outcome of a promotion (T03A, T03B) | yes: a PM range |
+| Hybrid and ICE contribution per unit, consolidated perimeter | by region, FY3/27 | `ty.wb`, `ty.xc`, `ty.peer` | a mix shift's profit (T04A) | yes |
+| Plant-level loss, usable inventory and catch-up by region | by plant and quarter | `ty.mo`, `ty.cert`, `ty.wb` | delayed versus foregone units (T04B, T04C) | yes: the dealer stock stands in |
+| Purchasing hedge cover and supplier pass-through by input | Japan materials, FY3/27 | `ty.wb` (aggregate proxy only), `ty.f20` | net cost and its timing (T05A, T05B) | yes |
+| Share of US finance assets and debt that reprices within a year; swaps | US subsidiary, FY3/26 | `ty.fs10` (sensitivity, not a schedule) | the clocks are synthetic priors now (T06B) | yes, from the maturity tables |
+| Contract and funding-rate schedule outside the US | Japan and other regions | `ty.f20`, `ty.fsum`, `ty.wb` | the uncovered residual of the finance segment (T06A) | partly |
+| Dollar profit of US subsidiaries apart from the North America segment | US, FY3/26 | `ty.f20` geographic note | translation without the segment's non-dollar parts (T07B) | yes: a fixture |
+| Transfer-price changes actually set | Japan parent to US importer | `ty.f20`, `ty.tt` | the regional split of a duty (T08B) | yes: a scenario allocation |
+| Diluted weighted-average share path; effective tax rate | group, FY3/27 | `ty.f20`, `ty.cap`, `ty.wb` | the NI and EPS bridge (T09A, T09C) | yes |
+| GDP and unemployment elasticities of volume | by region | `ty.wb` (marked not disclosed), `ty.sm` | the unsized macro branch (T10A) | yes: a PM assumption, labelled |
+| Declared customs value by origin, category and entry date | US, FY3/26 onward | `ty.tt`, `ty.mo`, `ty.wb` | the duty identity has no observed base (T08A) | yes |
+
+Schema gaps, flagged rather than built:
+
+- **The minimum of two constraints.** A buyback is capped by both the remaining authorization and what is
+  affordable; a delivery is capped by both orders and capacity. Neither binding minimum can be stated yet.
+- **Guidance and broker estimates as dated non-actual records.** The world has no such record kind, so they stay
+  local (T01A).
+- **Search on question wording.** It does not reach every relevant value (T02A).
 
 ## Readable view
 

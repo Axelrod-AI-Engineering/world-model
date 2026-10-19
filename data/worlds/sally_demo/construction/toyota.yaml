@@ -791,7 +791,7 @@ subentities:
   family: gaussian
   prior:
     family: gaussian
-    mu: 6.0
+    mu: 6.6667
     sigma: 1.0
   scale: 1.0
   features:
@@ -947,6 +947,417 @@ subentities:
   features:
     view: capital
     basis: maximum shares the board has authorized for repurchase in the open program; a resolution, not purchases (R8)
+    prior: synthetic
+- entity: toyota
+  id: toyota.us_customs_base_japan
+  name: 'Toyota US customs value: vehicles and parts from Japan'
+  attribute_kind: trade_flow
+  unit: ¥tn/yr
+  family: gaussian
+  prior:
+    family: gaussian
+    mu: 3.5
+    sigma: 0.6
+  scale: 0.6
+  features:
+    view: operating_state
+    basis: declared customs value of covered vehicles and parts entering the US from Japan (by origin and category, at entry); not disclosed
+    prior: synthetic
+- entity: toyota
+  id: toyota.us_customs_base_north_america
+  name: 'Toyota US customs value: vehicles and parts from Canada and Mexico'
+  attribute_kind: trade_flow
+  unit: ¥tn/yr
+  family: gaussian
+  prior:
+    family: gaussian
+    mu: 2.0
+    sigma: 0.5
+  scale: 0.5
+  features:
+    view: operating_state
+    basis: declared customs value of covered vehicles and parts entering the US from Canada and Mexico, net of USMCA-qualifying content;
+      not disclosed
+    prior: synthetic
+- entity: toyota
+  id: toyota.us_customs_base_third_country
+  name: 'Toyota US customs value: other origins and parts for US plants'
+  attribute_kind: trade_flow
+  unit: ¥tn/yr
+  family: gaussian
+  prior:
+    family: gaussian
+    mu: 1.1667
+    sigma: 0.3
+  scale: 0.3
+  features:
+    view: operating_state
+    basis: covered customs value from other origins, and imported parts for US-built vehicles; the residual of the origin view
+    prior: synthetic
+- entity: toyota
+  id: toyota.tariff_transfer_support
+  name: Toyota internal tariff support from the Japan parent
+  attribute_kind: spending_flow
+  unit: ¥tn/yr
+  family: gaussian
+  prior:
+    family: gaussian
+    mu: 0.0
+    sigma: 0.2
+  scale: 0.2
+  features:
+    view: operating_state
+    basis: an internal transfer (lower intercompany prices) from the Japan parent to the US importer; moves profit between regions,
+      eliminated on consolidation; zero unless management sets it
+    prior: synthetic
+- entity: toyota
+  id: toyota.na_incentive_cost
+  name: Toyota North America incentive cost
+  attribute_kind: spending_flow
+  unit: $bn/yr
+  family: gaussian
+  prior:
+    family: gaussian
+    mu: 4.2
+    sigma: 0.6
+  scale: 0.6
+  features:
+    view: operating_state
+    basis: 'incentive spend per unit x eligible units, in dollars: the direct concession before any volume response (the yen amount is a conversion at a stated rate)'
+    prior: synthetic
+- entity: toyota
+  id: toyota.na_contribution_per_unit
+  name: Toyota North America incremental contribution per vehicle
+  attribute_kind: price
+  unit: $k/unit
+  family: gaussian
+  prior:
+    family: gaussian
+    mu: 5.128
+    sigma: 1.3
+  scale: 1.3
+  features:
+    view: operating_state
+    basis: contribution of one genuinely incremental vehicle after variable costs; not disclosed (average segment margin is not it)
+    prior: synthetic
+- entity: toyota
+  id: toyota.incentive_breakeven_units
+  name: Toyota incentive break-even incremental units
+  attribute_kind: production_flow
+  unit: m units/yr
+  family: gaussian
+  prior:
+    family: gaussian
+    mu: 0.819
+    sigma: 0.25
+  scale: 0.25
+  features:
+    view: operating_state
+    basis: 'incremental retained vehicles that pay for an incentive budget: budget / incremental contribution per vehicle'
+    prior: synthetic
+- entity: toyota
+  id: toyota.na_dealer_stock_units
+  name: Toyota North America dealer stock
+  attribute_kind: balance
+  unit: m units
+  family: lognormal
+  mean: 0.306849
+  scale: 0.15
+  features:
+    view: operating_state
+    basis: new-vehicle units in US dealer stock at the period end; not supplied as a series
+    prior: synthetic
+- entity: toyota
+  id: toyota.na_dealer_arrivals
+  name: Toyota North America arrivals at dealers
+  attribute_kind: production_flow
+  unit: m units/yr
+  family: lognormal
+  mean: 2.8
+  scale: 0.05
+  features:
+    view: operating_state
+    basis: wholesale deliveries to dealers (from North American plants and imports); distinct from retail sales and order backlog
+    prior: synthetic
+- entity: toyota
+  id: toyota.us_fin_asset_rate
+  name: Toyota US finance subsidiary asset rate
+  attribute_kind: rate
+  unit: pct
+  family: gaussian
+  prior:
+    family: gaussian
+    mu: 6.5
+    sigma: 0.4
+  scale: 0.4
+  features:
+    view: financial_services
+    basis: yield on the US finance subsidiary's earning assets (retail, lease and dealer), US GAAP
+    prior: synthetic
+    scope: subsidiary
+- entity: toyota
+  id: toyota.us_fin_interest_income
+  name: Toyota US finance subsidiary financing revenue
+  attribute_kind: revenue_flow
+  unit: $bn/yr
+  family: gaussian
+  prior:
+    family: gaussian
+    mu: 8.45
+    sigma: 0.6
+  scale: 0.6
+  features:
+    view: financial_services
+    basis: earning assets x asset yield; leases earn rentals and carry depreciation, which this product does not scale
+    prior: synthetic
+    scope: subsidiary
+- entity: toyota
+  id: toyota.us_fin_debt
+  name: Toyota US finance subsidiary debt
+  attribute_kind: balance
+  unit: $bn
+  family: lognormal
+  mean: 120.0
+  scale: 0.05
+  features:
+    view: financial_services
+    basis: debt of the US finance subsidiary (unsecured, secured and commercial paper), US GAAP
+    prior: synthetic
+    scope: subsidiary
+- entity: toyota
+  id: toyota.us_fin_funding_rate
+  name: Toyota US finance subsidiary funding rate
+  attribute_kind: borrowing_cost
+  unit: pct
+  family: gaussian
+  prior:
+    family: gaussian
+    mu: 4.2
+    sigma: 0.4
+  scale: 0.4
+  features:
+    view: financial_services
+    basis: weighted average contractual rate on the subsidiary's debt
+    prior: synthetic
+    scope: subsidiary
+- entity: toyota
+  id: toyota.us_fin_interest_expense
+  name: Toyota US finance subsidiary interest expense
+  attribute_kind: spending_flow
+  unit: $bn/yr
+  family: gaussian
+  prior:
+    family: gaussian
+    mu: 5.04
+    sigma: 0.5
+  scale: 0.5
+  features:
+    view: financial_services
+    basis: debt x funding rate
+    prior: synthetic
+    scope: subsidiary
+- entity: toyota
+  id: toyota.us_fin_net_interest_income
+  name: Toyota US finance subsidiary net financing margin
+  attribute_kind: revenue_flow
+  unit: $bn/yr
+  family: gaussian
+  prior:
+    family: gaussian
+    mu: 3.41
+    sigma: 0.6
+  scale: 0.6
+  features:
+    view: financial_services
+    basis: financing revenue less interest expense, before depreciation on leases, provisions and expenses
+    prior: synthetic
+    scope: subsidiary
+- entity: toyota
+  id: toyota.us_fin_asset_reset_share
+  name: Toyota US finance asset repricing share
+  attribute_kind: share
+  unit: fraction/yr
+  family: gaussian
+  prior:
+    family: gaussian
+    mu: 0.3
+    sigma: 0.1
+  scale: 0.1
+  features:
+    view: financial_services
+    basis: 'share of earning assets that reprice within a year (new originations and floating dealer loans): the asset clock'
+    prior: synthetic
+    scope: subsidiary
+    clock_for: toyota.us_fin_asset_rate
+- entity: toyota
+  id: toyota.us_fin_funding_reset_share
+  name: Toyota US finance funding repricing share
+  attribute_kind: share
+  unit: fraction/yr
+  family: gaussian
+  prior:
+    family: gaussian
+    mu: 0.35
+    sigma: 0.1
+  scale: 0.1
+  features:
+    view: financial_services
+    basis: 'share of debt that reprices within a year (maturities, floating and swapped debt): the funding clock'
+    prior: synthetic
+    scope: subsidiary
+    clock_for: toyota.us_fin_funding_rate
+- entity: toyota
+  id: toyota.fs_income_us_scope
+  name: 'Toyota financial services income: US scope'
+  attribute_kind: revenue_flow
+  unit: ¥tn/yr
+  family: gaussian
+  prior:
+    family: gaussian
+    mu: 0.53196
+    sigma: 0.1
+  scale: 0.1
+  features:
+    view: financial_services
+    basis: 'the US module''s net financing margin translated into yen (before GAAP mapping): the covered part of the segment'
+    prior: synthetic
+- entity: toyota
+  id: toyota.fs_income_uncovered
+  name: 'Toyota financial services income: uncovered residual'
+  attribute_kind: revenue_flow
+  unit: ¥tn/yr
+  family: gaussian
+  prior:
+    family: gaussian
+    mu: 0.16804
+    sigma: 0.1
+  scale: 0.1
+  features:
+    view: financial_services
+    basis: 'the segment''s operating income not covered by the US module: Japan and other countries, lease depreciation, provisions,
+      expenses and GAAP and FX mapping; an explicit residual, not a plug'
+    prior: synthetic
+- entity: toyota
+  id: toyota.buyback_spend
+  name: Toyota cash spent on buybacks
+  attribute_kind: spending_flow
+  unit: ¥tn/yr
+  family: gaussian
+  prior:
+    family: gaussian
+    mu: 0.5
+    sigma: 0.4
+  scale: 0.4
+  features:
+    view: capital
+    basis: cash paid for completed repurchases in the period (not the authorization)
+    prior: synthetic
+- entity: toyota
+  id: toyota.industrial_other_cash_movements
+  name: Toyota industrial other cash movements
+  attribute_kind: spending_flow
+  unit: ¥tn/yr
+  family: gaussian
+  prior:
+    family: gaussian
+    mu: 0.0
+    sigma: 1.0
+  scale: 1.0
+  features:
+    view: capital
+    basis: 'identified movements of the industrial businesses'' liquid assets other than free cash flow, dividends and buybacks (debt
+      service, investments in affiliates, securities marks): observed only where disclosed, never solved as a plug'
+    prior: synthetic
+- entity: toyota
+  id: toyota.us_brand_share
+  name: Toyota US light-vehicle brand share
+  attribute_kind: share
+  unit: pct
+  family: gaussian
+  prior:
+    family: gaussian
+    mu: 15.0
+    sigma: 0.6
+  scale: 0.6
+  features:
+    view: operating_state
+    basis: Toyota and Lexus retail sales over the same US light-vehicle industry the selling rate measures (a like-for-like denominator);
+      not the North America consolidated share
+    prior: synthetic
+- entity: toyota
+  id: toyota.us_brand_units
+  name: Toyota US brand retail units
+  attribute_kind: production_flow
+  unit: m units/yr
+  family: gaussian
+  prior:
+    family: gaussian
+    mu: 2.4
+    sigma: 0.15
+  scale: 0.15
+  features:
+    view: operating_state
+    basis: 'US industry volume x Toyota brand share: retail units in the US, not North America consolidated wholesale units (R14: a
+      US retail measure proves nothing about the consolidated perimeter without a scope mapping)'
+    prior: synthetic
+- entity: toyota
+  id: toyota.weighted_average_shares
+  name: Toyota weighted-average shares
+  attribute_kind: structural_level
+  unit: bn shares
+  family: lognormal
+  mean: 13.1
+  scale: 0.02
+  features:
+    view: capital
+    basis: weighted-average common shares outstanding in the period (execution dates of buybacks and issuance weight it), the denominator
+      of earnings per share; not the period-end count
+    prior: synthetic
+- entity: toyota
+  id: toyota.eps
+  name: Toyota earnings per share
+  attribute_kind: revenue_flow
+  unit: ¥/share
+  family: gaussian
+  prior:
+    family: gaussian
+    mu: 244.2748
+    sigma: 30.0
+  scale: 30.0
+  features:
+    view: capital
+    basis: net income attributable to owners / weighted-average shares (basic); one definition, one share path
+    prior: synthetic
+- entity: toyota
+  id: toyota.us_operations_profit_usd
+  name: Toyota US operations profit in dollars
+  attribute_kind: revenue_flow
+  unit: $bn/yr
+  family: gaussian
+  prior:
+    family: gaussian
+    mu: 1.0
+    sigma: 0.5
+  scale: 0.5
+  features:
+    view: regions
+    basis: a dollar profit of US subsidiaries in local currency, before translation
+    prior: synthetic
+- entity: toyota
+  id: toyota.us_operations_profit_translated
+  name: Toyota US operations profit translated into yen
+  attribute_kind: revenue_flow
+  unit: ¥tn/yr
+  family: gaussian
+  prior:
+    family: gaussian
+    mu: 0.156
+    sigma: 0.08
+  scale: 0.08
+  features:
+    view: regions
+    basis: 'the dollar profit at the period''s average rate: pure translation, apart from transaction economics, hedges and balance-sheet
+      translation; held apart from the North America segment''s calibrated proxy (which also carries non-dollar businesses)'
     prior: synthetic
 # --- markets and policy the paths start from ----------------------------------------------------------------
 entities:
@@ -2074,7 +2485,8 @@ interactions:
   source: us_vehicle_tariffs.effective_rate
   target: toyota.us_tariff_cost
   label: raises customs cost on imports
-  effect: {mu: 0.92, sigma: 0.085}
+  edge_type: identity
+  identity: ty.id.us_duty
   note: 'Calibrated Oct 18 (scripts/construction/calibrate.py) from the company''s planned tariff cost at the stated all-in rate,
     read as linear in the rate (the client''s transmission model); the range spans a broker''s lower gross estimate and the
     reading on the incremental rate only. Cost to the importer, gross of pricing and countermeasures: those are the reprice,
@@ -2105,9 +2517,9 @@ interactions:
     - {input: parts tariffs on US-built vehicles, status: not_disclosed_in_reviewed_sources, searched: [ty.wb, ty.bridge, ty.sm, ty.r1, ty.r2, ty.xc, ty.peer, ty.robo, ty.rates, 'corpus: parts tariffs on us-built vehicles', 'corpus: parts', 'corpus: tariff', 'corpus: section 232', ty.f20, ty.f20p, ty.dk, ty.fsum, ty.qa, ty.fs10, ty.mo, ty.us, ty.tt, ty.cert, ty.rt, ty.cap, ty.ir, ty.ja, 'corpus: public document pack (144 files parsed, scripts/construction/inputs.py)'], note: the client's transmission model notes that parts are not separated from vehicle tariffs}
 - id: ty_tariff_base
   source: toyota.na_import_units
-  target: toyota.us_customs_base
+  target: toyota.us_customs_base_third_country
   label: sets the duty base
-  note: 'R14: a measure proves only what it measures. North America sales less North America production is a regional unit gap; it is not the US customs base (Canada and Mexico flows, USMCA content, parts, and the declared value per vehicle are missing). Plan round: re-routed from the tariff cost to the customs base it proxies.'
+  note: 'R14: regional imports (North America sales less production) are not the US customs base. Batch 2: lands in the other-origins part (imports into the region from outside Japan, and parts); Japan-origin and Canada/Mexico parts have their own links.'
   calibration: uncalibrated
   transition:
     mechanism: More vehicles sold in North America but built outside it means a larger dutiable base
@@ -2197,13 +2609,14 @@ interactions:
     unresolved: []
 - id: ty_tariff_transfer
   source: toyota.us_tariff_cost
-  target: toyota.japan_operating_income
+  target: toyota.tariff_transfer_support
   label: is shared through transfer prices
+  note: 'Batch 2 (Q8, Q14): management sets internal support; its two legs (ty_transfer_support_na, ty_transfer_support_japan) move profit between regions and sum to zero at the group.'
   calibration: uncalibrated
   transition:
-    mechanism: 'Counter-path: the parent may support the US subsidiary by lowering intersegment export prices, moving part of the duty
-      into the Japan segment'
-    sign: '-'
+    mechanism: 'Management decides whether the Japan parent supports the US importer through lower intercompany prices; the decision
+      sets the internal support, whose two legs reallocate profit between regions without changing the group'
+    sign: +
     actor: Toyota parent (transfer pricing)
     business_unit: Japan operations
     geography: Japan
@@ -2213,7 +2626,7 @@ interactions:
     timing: {onset: next transfer-price reset, build: unknown, persistence: unknown, recognition: segment results}
     evidence: {existence: assumption, direction: inferred, magnitude: unknown, timing: unknown, sources: [ty.pub]}
     breaker: transfer-pricing rules; no support given
-    next_state: Toyota Japan operating income
+    next_state: Toyota internal tariff support from the Japan parent
     unresolved:
     - {input: transfer-price support from the Japan parent to the US importer, status: not_disclosed_in_reviewed_sources, searched: [ty.wb, ty.bridge, ty.sm, ty.r1, ty.r2, ty.xc, ty.peer, ty.robo, ty.rates, 'corpus: transfer-price support from the japan parent to the us importer', 'corpus: transfer price', 'corpus: support', 'corpus: intercompany', ty.f20, ty.f20p, ty.dk, ty.fsum, ty.qa, ty.fs10, ty.mo, ty.us, ty.tt, ty.cert, ty.rt, ty.cap, ty.ir, ty.ja, 'corpus: public document pack (144 files parsed, scripts/construction/inputs.py)']}
 - id: ty_list_to_rpv
@@ -2398,8 +2811,9 @@ interactions:
   source: toyota.north_america_units
   target: toyota.na_dealer_inventory
   label: draws down dealer stock
+  edge_type: identity
+  identity: ty.id.dealer_days
   note: 'Form check (Oct 18): left uncalibrated; dealer stock is held as days'' supply (a stock-to-sales ratio), not units, so no roll-forward in units applies; a units stock needs a dealer-stock series (not disclosed).'
-  calibration: uncalibrated
   transition:
     mechanism: Sales faster than supply draw dealer inventory down
     sign: '-'
@@ -2454,7 +2868,7 @@ interactions:
     unresolved: []
 - id: ty_exports_to_inventory
   source: toyota.japan_export_units
-  target: toyota.na_dealer_inventory
+  target: toyota.na_dealer_arrivals
   label: supplies dealer stock
   note: 'Form check (Oct 18): left uncalibrated; not a stock-flow term: the share of Japan exports bound for North America is not disclosed, and dealer stock is held as days'' supply.'
   calibration: uncalibrated
@@ -2475,7 +2889,7 @@ interactions:
     - {input: Japan export units by destination region, status: found_not_connected, searched: [ty.wb, ty.bridge, ty.sm, ty.r1, ty.r2, ty.xc, ty.peer, ty.robo, ty.rates, 'corpus: japan export units by destination region', 'corpus: exports to europe', 'corpus: export destination', 'corpus: middle east exports', ty.f20, ty.f20p, ty.dk, ty.fsum, ty.qa, ty.fs10, ty.mo, ty.us, ty.tt, ty.cert, ty.rt, ty.cap, ty.ir, ty.ja, 'corpus: public document pack (144 files parsed, scripts/construction/inputs.py)'], found_in: [ty.mo], note: 'the monthly production, sales and export workbooks give Toyota and Lexus exports from Japan by destination region, by month and fiscal year; not bound: the model holds one export value (all brands), not a destination split'}
 - id: ty_na_prod_to_inventory
   source: toyota.north_america_production
-  target: toyota.na_dealer_inventory
+  target: toyota.na_dealer_arrivals
   label: supplies dealer stock
   note: 'Form check (Oct 18): left uncalibrated; dealer stock is held as days'' supply (a stock-to-sales ratio), not units, so no roll-forward in units applies; a units stock needs a dealer-stock series (not disclosed).'
   calibration: uncalibrated
@@ -3006,8 +3420,8 @@ interactions:
   source: dollar_yen.usd_jpy
   target: toyota.japan_operating_income
   label: a weaker yen lifts export proceeds
-  note: "Pack round (Oct 18): sized by least squares over eight actual periods of the company's US dollar transactional FX line against the average USD/JPY change, annualized (ty.dk; the size in yen per yen is in the local record). R13: m29 now carries only the remainder of the total FX effect"
-  effect: {mu: 1.2229, sigma: 0.0251}
+  note: "Batch 2 (W3, Oct 18): re-solved on six standalone, non-overlapping actual quarters (cumulative half-year, nine-month and full-year windows overlap them and were dropped; forecasts and revisions never used); the dollar transactional line per quarter against the change in that quarter's company average USD/JPY, annualized. Before: eight overlapping windows, effect 1.2229 (sigma 0.0251); after: 1.2407 (sigma 0.0327, wider: fewer independent observations). R13: m29 carries only the remainder of the total FX effect"
+  effect: {mu: 1.2407, sigma: 0.0327}
   transition:
     mechanism: 'Transaction effect: dollar-priced exports from Japan bring in more yen against yen-denominated Japanese costs'
     sign: +
@@ -3774,10 +4188,9 @@ interactions:
 
 - id: ty_exports_customs_base
   source: toyota.japan_export_units
-  target: toyota.us_customs_base
+  target: toyota.us_customs_base_japan
   label: enter the US as covered imports
-  note: 'R14: Japan exports alone do not establish customs value; the declared value per vehicle and the US share of the North America
-    exports are needed. Uncalibrated.'
+  note: 'R14: Japan exports alone do not establish customs value; the declared value per vehicle and the US share are needed. Batch 2: lands in the Japan-origin part of the base.'
   calibration: uncalibrated
   transition:
     mechanism: Vehicles exported from Japan to the US enter at a declared customs value set by the intercompany transfer price; they
@@ -3855,10 +4268,11 @@ interactions:
   source: toyota.us_customs_base
   target: toyota.us_tariff_cost
   label: times the rate is the duty
+  edge_type: identity
+  identity: ty.id.us_duty
   note: 'Plan round: the product (duty = base x rate) is not built as an identity: the base has no level (not disclosed), and the rate''s
     size is carried by the reduced form ty_tariff_cost, sized from the company''s planned cost (R13: one number per effect). The step
     shows who pays and when the duty falls due.'
-  calibration: uncalibrated
   transition:
     mechanism: The duty is the customs value of covered imports times the effective rate; Toyota's US importer of record owes it at
       customs entry and expenses it in cost of sales as the vehicles sell
@@ -4455,9 +4869,10 @@ interactions:
   source: toyota.industrial_free_cash_flow
   target: toyota.industrial_liquidity
   label: adds to liquid assets
+  edge_type: stock_flow
+  identity: ty.sf.industrial_liquidity
   note: 'A roll-forward of liquid assets is not built: investing flows other than capex and market moves on the securities are not split
     out (blocked, not flagged).'
-  calibration: uncalibrated
   transition:
     mechanism: Free cash flow not paid out builds the industrial businesses' liquid assets
     sign: +
@@ -4591,7 +5006,8 @@ interactions:
   source: toyota.dividends_paid
   target: toyota.industrial_liquidity
   label: draws down liquid assets
-  calibration: uncalibrated
+  edge_type: stock_flow
+  identity: ty.sf.industrial_liquidity
   transition:
     mechanism: Dividends are paid from the industrial businesses' cash
     sign: '-'
@@ -4698,6 +5114,1020 @@ interactions:
     next_state: Toyota shares repurchased
     unresolved: []
 
+- id: ty_customs_japan_base
+  source: toyota.us_customs_base_japan
+  target: toyota.us_customs_base
+  label: adds to the customs base
+  edge_type: accounting
+  kernel:
+    delay_days: 0
+    lag_days: 1
+    duration_days: null
+  transition:
+    mechanism: 'Identity: covered customs value from Japan adds to the US customs base'
+    sign: +
+    condition: same period and perimeter (declared customs value at entry)
+    condition_observable: duty records by origin
+    timing:
+      onset: same period
+      build: none
+      persistence: while the definition holds
+      recognition: each period
+    evidence:
+      existence: documented
+      direction: documented
+      magnitude: documented
+      timing: documented
+      sources:
+      - ty.pub
+    breaker: a change of origin rules
+    next_state: US customs base
+    unresolved: []
+  effect:
+    mu: 0.6
+    sigma: 0.001
+- id: ty_customs_na_base
+  source: toyota.us_customs_base_north_america
+  target: toyota.us_customs_base
+  label: adds to the customs base
+  edge_type: accounting
+  kernel:
+    delay_days: 0
+    lag_days: 1
+    duration_days: null
+  transition:
+    mechanism: 'Identity: covered customs value from Canada and Mexico adds to the US customs base'
+    sign: +
+    condition: same period and perimeter
+    condition_observable: duty records by origin
+    timing:
+      onset: same period
+      build: none
+      persistence: while the definition holds
+      recognition: each period
+    evidence:
+      existence: documented
+      direction: documented
+      magnitude: documented
+      timing: documented
+      sources:
+      - ty.pub
+    breaker: USMCA content rules
+    next_state: US customs base
+    unresolved: []
+  effect:
+    mu: 0.5
+    sigma: 0.001
+- id: ty_customs_other_base
+  source: toyota.us_customs_base_third_country
+  target: toyota.us_customs_base
+  label: adds to the customs base
+  edge_type: accounting
+  kernel:
+    delay_days: 0
+    lag_days: 1
+    duration_days: null
+  transition:
+    mechanism: 'Identity: covered customs value from other origins, and imported parts for US plants, adds to the base'
+    sign: +
+    condition: same period and perimeter
+    condition_observable: duty records by origin
+    timing:
+      onset: same period
+      build: none
+      persistence: while the definition holds
+      recognition: each period
+    evidence:
+      existence: documented
+      direction: documented
+      magnitude: documented
+      timing: documented
+      sources:
+      - ty.pub
+    breaker: exemptions by category
+    next_state: US customs base
+    unresolved: []
+  effect:
+    mu: 0.3
+    sigma: 0.001
+- id: ty_na_production_customs
+  source: toyota.north_america_production
+  target: toyota.us_customs_base_north_america
+  label: ships US-bound vehicles
+  note: 'R14: North American production is not a customs value; the US-bound share, qualifying content and declared value are missing.'
+  calibration: uncalibrated
+  transition:
+    mechanism: Vehicles built in Canada and Mexico for the US enter at a declared value; the non-qualifying content is covered
+    sign: +
+    actor: Toyota's Canadian and Mexican plants and the US importer
+    business_unit: North America operations
+    geography: Canada, Mexico to US
+    currency: USD
+    condition: US-bound output; USMCA qualification
+    condition_observable: production by country; customs entries by origin
+    timing:
+      onset: customs entry
+      build: with the plant mix
+      persistence: while sourcing holds
+      recognition: cost of sales when sold
+    evidence:
+      existence: documented
+      direction: inferred
+      magnitude: unknown
+      timing: inferred
+      sources:
+      - ty.mo
+      - ty.pub
+    breaker: USMCA-qualifying content enters duty-free
+    next_state: Toyota US customs value from Canada and Mexico
+    unresolved:
+    - input: US-bound share and qualifying content of Canadian and Mexican output
+      status: not_disclosed_in_reviewed_sources
+      searched:
+      - ty.wb
+      - ty.sm
+      - ty.f20
+      - ty.f20p
+      - ty.dk
+      - ty.fsum
+      - ty.qa
+      - ty.fs10
+      - ty.mo
+      - ty.us
+      - ty.tt
+      - ty.cert
+      - ty.cap
+      - ty.rt
+      - ty.ir
+      - ty.ja
+      - 'corpus: usmca'
+      - 'corpus: mexico'
+      - 'corpus: canada'
+- id: ty_transfer_support_na
+  source: toyota.tariff_transfer_support
+  target: toyota.north_america_operating_income
+  label: relieves the US importer
+  effect: {mu: 1.3333, sigma: 0.0133}
+  note: 'Plan W8/Q8: one for one by definition of an internal transfer; paired with ty_transfer_support_japan so the group effect is
+    zero (reallocation cannot create recovery).'
+  transition:
+    mechanism: Lower intercompany prices from the Japan parent cut the US importer's cost one for one
+    sign: +
+    actor: Toyota parent and US importer (transfer pricing)
+    business_unit: North America operations
+    geography: US
+    currency: JPY
+    condition: an internal price change within tax rules
+    condition_observable: intersegment prices; regional results
+    timing:
+      onset: next transfer-price reset
+      build: none
+      persistence: while set
+      recognition: segment results as the affected stock sells
+    evidence:
+      existence: documented
+      direction: documented
+      magnitude: documented
+      timing: inferred
+      sources:
+      - ty.pub
+    breaker: tax authorities' transfer-pricing limits
+    next_state: Toyota North America operating income
+    unresolved: []
+- id: ty_transfer_support_japan
+  source: toyota.tariff_transfer_support
+  target: toyota.japan_operating_income
+  label: costs the Japan parent
+  effect: {mu: -1, sigma: 0.01}
+  note: Pair of ty_transfer_support_na; the regional identity sums them to zero at the group.
+  transition:
+    mechanism: 'The Japan parent gives up the same amount in lower export prices: Japan operating income falls one for one'
+    sign: '-'
+    actor: Toyota parent (transfer pricing)
+    business_unit: Japan operations
+    geography: Japan
+    currency: JPY
+    condition: an internal price change
+    condition_observable: Japan intersegment revenue and results
+    timing:
+      onset: next transfer-price reset
+      build: none
+      persistence: while set
+      recognition: segment results
+    evidence:
+      existence: documented
+      direction: documented
+      magnitude: documented
+      timing: inferred
+      sources:
+      - ty.pub
+    breaker: none
+    next_state: Toyota Japan operating income
+    unresolved: []
+- id: ty_incentive_cost_rate
+  source: toyota.na_incentive_per_unit
+  target: toyota.na_incentive_cost
+  label: per unit, times units and the rate
+  edge_type: identity
+  identity: ty.id.na_incentive_cost
+  transition:
+    mechanism: 'Identity: incentive cost = incentive per unit x eligible units x the yen rate'
+    sign: +
+    condition: same period and perimeter
+    condition_observable: the defining arithmetic
+    timing:
+      onset: same period
+      build: none
+      persistence: while the definition holds
+      recognition: each period
+    evidence:
+      existence: documented
+      direction: documented
+      magnitude: documented
+      timing: documented
+      sources:
+      - ty.pub
+    breaker: a change of definition or perimeter
+    next_state: na incentive cost
+    unresolved: []
+- id: ty_incentive_cost_units
+  source: toyota.north_america_units
+  target: toyota.na_incentive_cost
+  label: times incentive per unit
+  edge_type: identity
+  identity: ty.id.na_incentive_cost
+  transition:
+    mechanism: 'Identity: incentive cost = incentive per unit x eligible units x the yen rate'
+    sign: +
+    condition: same period and perimeter
+    condition_observable: the defining arithmetic
+    timing:
+      onset: same period
+      build: none
+      persistence: while the definition holds
+      recognition: each period
+    evidence:
+      existence: documented
+      direction: documented
+      magnitude: documented
+      timing: documented
+      sources:
+      - ty.pub
+    breaker: a change of definition or perimeter
+    next_state: na incentive cost
+    unresolved: []
+- id: ty_breakeven_cost
+  source: toyota.na_incentive_cost
+  target: toyota.incentive_breakeven_units
+  label: sets the break-even
+  edge_type: identity
+  identity: ty.id.incentive_breakeven
+  transition:
+    mechanism: 'Identity: break-even incremental units = incentive budget / incremental contribution per vehicle'
+    sign: +
+    condition: same period and perimeter
+    condition_observable: the defining arithmetic
+    timing:
+      onset: same period
+      build: none
+      persistence: while the definition holds
+      recognition: each period
+    evidence:
+      existence: documented
+      direction: documented
+      magnitude: documented
+      timing: documented
+      sources:
+      - ty.pub
+    breaker: a change of definition or perimeter
+    next_state: incentive breakeven units
+    unresolved: []
+- id: ty_breakeven_contribution
+  source: toyota.na_contribution_per_unit
+  target: toyota.incentive_breakeven_units
+  label: lowers the break-even
+  edge_type: identity
+  identity: ty.id.incentive_breakeven
+  transition:
+    mechanism: 'Identity: break-even incremental units = incentive budget / incremental contribution per vehicle'
+    sign: '-'
+    condition: same period and perimeter
+    condition_observable: the defining arithmetic
+    timing:
+      onset: same period
+      build: none
+      persistence: while the definition holds
+      recognition: each period
+    evidence:
+      existence: documented
+      direction: documented
+      magnitude: documented
+      timing: documented
+      sources:
+      - ty.pub
+    breaker: a change of definition or perimeter
+    next_state: incentive breakeven units
+    unresolved: []
+- id: ty_dealer_stock_days
+  source: toyota.na_dealer_stock_units
+  target: toyota.na_dealer_inventory
+  label: over the selling rate is days' supply
+  edge_type: identity
+  identity: ty.id.dealer_days
+  transition:
+    mechanism: 'Identity: days'' supply = dealer stock / daily retail selling rate (365 x stock / annual retail sales)'
+    sign: +
+    condition: same period and perimeter
+    condition_observable: the defining arithmetic
+    timing:
+      onset: same period
+      build: none
+      persistence: while the definition holds
+      recognition: each period
+    evidence:
+      existence: documented
+      direction: documented
+      magnitude: documented
+      timing: documented
+      sources:
+      - ty.pub
+    breaker: a change of definition or perimeter
+    next_state: na dealer inventory
+    unresolved: []
+- id: ty_arrivals_stock
+  source: toyota.na_dealer_arrivals
+  target: toyota.na_dealer_stock_units
+  label: adds to dealer stock
+  edge_type: stock_flow
+  identity: ty.sf.na_dealer_stock
+  transition:
+    mechanism: Vehicles delivered to dealers add to their stock
+    sign: +
+    condition: same period
+    condition_observable: dealer stock roll-forward
+    timing:
+      onset: on delivery
+      build: none
+      persistence: accumulates
+      recognition: dealer stock
+    evidence:
+      existence: documented
+      direction: documented
+      magnitude: documented
+      timing: documented
+      sources:
+      - ty.pub
+    breaker: none
+    next_state: Toyota North America dealer stock
+    unresolved: []
+- id: ty_retail_stock
+  source: toyota.north_america_units
+  target: toyota.na_dealer_stock_units
+  label: draws down dealer stock
+  edge_type: stock_flow
+  identity: ty.sf.na_dealer_stock
+  transition:
+    mechanism: Retail sales leave dealer stock
+    sign: '-'
+    condition: same period; consolidated sales stand in for retail deliveries (approximation)
+    condition_observable: dealer stock roll-forward
+    timing:
+      onset: on retail
+      build: none
+      persistence: accumulates
+      recognition: dealer stock
+    evidence:
+      existence: documented
+      direction: documented
+      magnitude: documented
+      timing: documented
+      sources:
+      - ty.pub
+    breaker: none
+    next_state: Toyota North America dealer stock
+    unresolved: []
+- id: ty_usfin_assets_income
+  source: toyota.us_finance_subsidiary_earning_assets
+  target: toyota.us_fin_interest_income
+  label: earns the asset yield
+  edge_type: identity
+  identity: ty.id.us_fin_income
+  transition:
+    mechanism: 'Identity: financing revenue = earning assets x asset yield'
+    sign: +
+    condition: same period and perimeter
+    condition_observable: the defining arithmetic
+    timing:
+      onset: same period
+      build: none
+      persistence: while the definition holds
+      recognition: each period
+    evidence:
+      existence: documented
+      direction: documented
+      magnitude: documented
+      timing: documented
+      sources:
+      - ty.fs10
+    breaker: a change of definition or perimeter
+    next_state: us fin interest income
+    unresolved: []
+- id: ty_usfin_yield_income
+  source: toyota.us_fin_asset_rate
+  target: toyota.us_fin_interest_income
+  label: times assets is revenue
+  edge_type: identity
+  identity: ty.id.us_fin_income
+  transition:
+    mechanism: 'Identity: financing revenue = earning assets x asset yield'
+    sign: +
+    condition: same period and perimeter
+    condition_observable: the defining arithmetic
+    timing:
+      onset: same period
+      build: none
+      persistence: while the definition holds
+      recognition: each period
+    evidence:
+      existence: documented
+      direction: documented
+      magnitude: documented
+      timing: documented
+      sources:
+      - ty.fs10
+    breaker: a change of definition or perimeter
+    next_state: us fin interest income
+    unresolved: []
+- id: ty_usfin_debt_expense
+  source: toyota.us_fin_debt
+  target: toyota.us_fin_interest_expense
+  label: costs the funding rate
+  edge_type: identity
+  identity: ty.id.us_fin_expense
+  transition:
+    mechanism: 'Identity: interest expense = debt x funding rate'
+    sign: +
+    condition: same period and perimeter
+    condition_observable: the defining arithmetic
+    timing:
+      onset: same period
+      build: none
+      persistence: while the definition holds
+      recognition: each period
+    evidence:
+      existence: documented
+      direction: documented
+      magnitude: documented
+      timing: documented
+      sources:
+      - ty.fs10
+    breaker: a change of definition or perimeter
+    next_state: us fin interest expense
+    unresolved: []
+- id: ty_usfin_rate_expense
+  source: toyota.us_fin_funding_rate
+  target: toyota.us_fin_interest_expense
+  label: times debt is expense
+  edge_type: identity
+  identity: ty.id.us_fin_expense
+  transition:
+    mechanism: 'Identity: interest expense = debt x funding rate'
+    sign: +
+    condition: same period and perimeter
+    condition_observable: the defining arithmetic
+    timing:
+      onset: same period
+      build: none
+      persistence: while the definition holds
+      recognition: each period
+    evidence:
+      existence: documented
+      direction: documented
+      magnitude: documented
+      timing: documented
+      sources:
+      - ty.fs10
+    breaker: a change of definition or perimeter
+    next_state: us fin interest expense
+    unresolved: []
+- id: ty_usfin_income_nii
+  source: toyota.us_fin_interest_income
+  target: toyota.us_fin_net_interest_income
+  label: less expense is the margin
+  edge_type: identity
+  identity: ty.id.us_fin_nii
+  transition:
+    mechanism: 'Identity: net financing margin = financing revenue - interest expense'
+    sign: +
+    condition: same period and perimeter
+    condition_observable: the defining arithmetic
+    timing:
+      onset: same period
+      build: none
+      persistence: while the definition holds
+      recognition: each period
+    evidence:
+      existence: documented
+      direction: documented
+      magnitude: documented
+      timing: documented
+      sources:
+      - ty.fs10
+    breaker: a change of definition or perimeter
+    next_state: us fin net interest income
+    unresolved: []
+- id: ty_usfin_expense_nii
+  source: toyota.us_fin_interest_expense
+  target: toyota.us_fin_net_interest_income
+  label: reduces the margin
+  edge_type: identity
+  identity: ty.id.us_fin_nii
+  transition:
+    mechanism: 'Identity: net financing margin = financing revenue - interest expense'
+    sign: '-'
+    condition: same period and perimeter
+    condition_observable: the defining arithmetic
+    timing:
+      onset: same period
+      build: none
+      persistence: while the definition holds
+      recognition: each period
+    evidence:
+      existence: documented
+      direction: documented
+      magnitude: documented
+      timing: documented
+      sources:
+      - ty.fs10
+    breaker: a change of definition or perimeter
+    next_state: us fin net interest income
+    unresolved: []
+- id: ty_usfin_nii_scope
+  source: toyota.us_fin_net_interest_income
+  target: toyota.fs_income_us_scope
+  label: translates into yen
+  edge_type: identity
+  identity: ty.id.fs_us_scope
+  transition:
+    mechanism: 'Identity: the US module''s contribution in yen = margin x USD/JPY (average rate); GAAP mapping not represented'
+    sign: +
+    condition: same period and perimeter
+    condition_observable: the defining arithmetic
+    timing:
+      onset: same period
+      build: none
+      persistence: while the definition holds
+      recognition: each period
+    evidence:
+      existence: documented
+      direction: documented
+      magnitude: documented
+      timing: documented
+      sources:
+      - ty.fs10
+    breaker: a change of definition or perimeter
+    next_state: fs income us scope
+    unresolved: []
+- id: ty_usfin_fx_scope
+  source: dollar_yen.usd_jpy
+  target: toyota.fs_income_us_scope
+  label: translates the US margin
+  edge_type: identity
+  identity: ty.id.fs_us_scope
+  transition:
+    mechanism: 'Identity: the US module''s contribution in yen = margin x USD/JPY'
+    sign: +
+    condition: same period and perimeter
+    condition_observable: the defining arithmetic
+    timing:
+      onset: same period
+      build: none
+      persistence: while the definition holds
+      recognition: each period
+    evidence:
+      existence: documented
+      direction: documented
+      magnitude: documented
+      timing: documented
+      sources:
+      - ty.fs10
+    breaker: a change of definition or perimeter
+    next_state: fs income us scope
+    unresolved: []
+- id: ty_ust_us_asset_yield
+  source: us_treasuries.yield_2y
+  target: toyota.us_fin_asset_rate
+  label: reprices new contracts
+  note: 'A 100bp shock does not reprice the whole book at once: only the reset share within the period (toyota.us_fin_asset_reset_share).'
+  calibration: uncalibrated
+  transition:
+    mechanism: New retail and lease contracts and floating dealer loans reprice to market rates; the book's yield moves by the share
+      that resets within the period (asset clock)
+    sign: +
+    actor: the US finance subsidiary (pricing)
+    business_unit: financial services (US)
+    geography: US
+    currency: USD
+    condition: competition and subvention allow it; the asset clock is the share resetting per year
+    condition_observable: new-contract APRs; portfolio yield
+    timing:
+      onset: as contracts originate
+      build: the contract term (years)
+      persistence: while rates hold
+      recognition: financing revenue over time
+    evidence:
+      existence: documented
+      direction: documented
+      magnitude: unknown
+      timing: documented
+      sources:
+      - ty.fs10
+    breaker: subvented rates; competitive pressure
+    next_state: Toyota US finance subsidiary asset yield
+    unresolved:
+    - input: share of assets repricing within a year
+      status: found_not_connected
+      searched:
+      - ty.wb
+      - ty.sm
+      - ty.f20
+      - ty.f20p
+      - ty.dk
+      - ty.fsum
+      - ty.qa
+      - ty.fs10
+      - ty.mo
+      - ty.us
+      - ty.tt
+      - ty.cert
+      - ty.cap
+      - ty.rt
+      - ty.ir
+      - ty.ja
+      - 'corpus: repricing'
+      - 'corpus: maturities'
+      found_in:
+      - ty.fs10
+      note: scheduled maturities and floating dealer balances are in the subsidiary's report; the share is a local estimate, not bound
+- id: ty_ust_us_funding_rate
+  source: us_treasuries.yield_2y
+  target: toyota.us_fin_funding_rate
+  label: reprices maturing debt
+  note: Funding resets on its own clock (toyota.us_fin_funding_reset_share), separate from assets.
+  calibration: uncalibrated
+  transition:
+    mechanism: Maturing and floating debt reprices to market rates; the funding rate moves by the share that resets within the period
+      (funding clock)
+    sign: +
+    actor: the US finance subsidiary (treasury)
+    business_unit: financial services (US)
+    geography: US
+    currency: USD
+    condition: swaps as they are; the funding clock is the share resetting per year
+    condition_observable: debt maturities; weighted average contractual rate
+    timing:
+      onset: as debt matures or resets
+      build: years
+      persistence: while rates hold
+      recognition: interest expense over time
+    evidence:
+      existence: documented
+      direction: documented
+      magnitude: unknown
+      timing: documented
+      sources:
+      - ty.fs10
+    breaker: swaps and fixed-rate term debt
+    next_state: Toyota US finance subsidiary funding rate
+    unresolved:
+    - input: share of funding repricing within a year
+      status: found_not_connected
+      searched:
+      - ty.wb
+      - ty.sm
+      - ty.f20
+      - ty.f20p
+      - ty.dk
+      - ty.fsum
+      - ty.qa
+      - ty.fs10
+      - ty.mo
+      - ty.us
+      - ty.tt
+      - ty.cert
+      - ty.cap
+      - ty.rt
+      - ty.ir
+      - ty.ja
+      - 'corpus: maturities'
+      - 'corpus: interest rate swaps'
+      found_in:
+      - ty.fs10
+      note: the maturity ladder and swap use are in the subsidiary's report; the share is a local estimate, not bound
+- id: ty_fs_us_scope_oi
+  source: toyota.fs_income_us_scope
+  target: toyota.financial_services_operating_income
+  label: is the covered part of segment income
+  note: 'Reconciling scope view (drives: false): it carries no size into the segment''s income.'
+  edge_type: accounting
+  calibration: uncalibrated
+  kernel:
+    delay_days: 0
+    lag_days: 1
+    duration_days: null
+  transition:
+    mechanism: 'Identity: the US module''s contribution adds to financial services operating income (scope view)'
+    sign: +
+    condition: same period; US GAAP and translation differences sit in the uncovered residual
+    condition_observable: the segment's income
+    timing:
+      onset: same period
+      build: none
+      persistence: while the definition holds
+      recognition: each period
+    evidence:
+      existence: documented
+      direction: documented
+      magnitude: documented
+      timing: documented
+      sources:
+      - ty.pub
+    breaker: GAAP differences
+    next_state: financial services operating income
+    unresolved: []
+- id: ty_fs_uncovered_oi
+  source: toyota.fs_income_uncovered
+  target: toyota.financial_services_operating_income
+  label: is the uncovered part
+  note: 'Reconciling scope view (drives: false).'
+  edge_type: accounting
+  calibration: uncalibrated
+  kernel:
+    delay_days: 0
+    lag_days: 1
+    duration_days: null
+  transition:
+    mechanism: 'Identity: the uncovered residual (Japan, other countries, leases, provisions, GAAP mapping) adds to segment income'
+    sign: +
+    condition: same period
+    condition_observable: the segment's income
+    timing:
+      onset: same period
+      build: none
+      persistence: while the definition holds
+      recognition: each period
+    evidence:
+      existence: documented
+      direction: documented
+      magnitude: documented
+      timing: documented
+      sources:
+      - ty.pub
+    breaker: none
+    next_state: financial services operating income
+    unresolved: []
+- id: ty_buyback_spend_liquidity
+  source: toyota.buyback_spend
+  target: toyota.industrial_liquidity
+  label: draws down liquid assets
+  edge_type: stock_flow
+  identity: ty.sf.industrial_liquidity
+  transition:
+    mechanism: Cash paid for completed buybacks leaves the industrial businesses' liquid assets
+    sign: '-'
+    condition: paid in cash
+    condition_observable: cash flow statement
+    timing:
+      onset: on payment
+      build: none
+      persistence: accumulates
+      recognition: cash flow statement
+    evidence:
+      existence: documented
+      direction: documented
+      magnitude: documented
+      timing: documented
+      sources:
+      - ty.fsum
+    breaker: none
+    next_state: Toyota industrial liquid assets
+    unresolved: []
+- id: ty_other_cash_liquidity
+  source: toyota.industrial_other_cash_movements
+  target: toyota.industrial_liquidity
+  label: other identified movements
+  edge_type: stock_flow
+  identity: ty.sf.industrial_liquidity
+  transition:
+    mechanism: Identified movements other than free cash flow, dividends and buybacks (debt service, affiliates, securities) change
+      liquid assets
+    sign: +
+    condition: observed only where disclosed
+    condition_observable: cash flow statement lines
+    timing:
+      onset: as they occur
+      build: none
+      persistence: accumulates
+      recognition: balance sheet
+    evidence:
+      existence: documented
+      direction: documented
+      magnitude: documented
+      timing: documented
+      sources:
+      - ty.fsum
+    breaker: none
+    next_state: Toyota industrial liquid assets
+    unresolved: []
+- id: ty_shares_buyback_spend
+  source: toyota.shares_repurchased
+  target: toyota.buyback_spend
+  label: times the price is the cash
+  note: 'A product with the share price is not built: the price is a market value outside the construction; buybacks are bounded by
+    min(authorization remaining, affordable resources), a minimum of two constraints the state form cannot hold yet (flagged).'
+  calibration: uncalibrated
+  transition:
+    mechanism: Shares repurchased times the purchase price is the cash spent
+    sign: +
+    actor: Toyota treasury
+    business_unit: group
+    currency: JPY
+    condition: purchases settle in cash in the period
+    condition_observable: monthly repurchase notices (shares and amount)
+    timing:
+      onset: on settlement
+      build: none
+      persistence: per purchase
+      recognition: cash flow statement
+    evidence:
+      existence: documented
+      direction: documented
+      magnitude: unknown
+      timing: documented
+      sources:
+      - ty.cap
+    breaker: none
+    next_state: Toyota cash spent on buybacks
+    unresolved: []
+
+- id: ty_us_market_brand_units
+  source: us_auto_market.industry_volume
+  target: toyota.us_brand_units
+  label: sizes US brand units
+  edge_type: identity
+  identity: ty.id.us_brand_units
+  transition:
+    mechanism: 'Identity: Toyota US brand units = US industry volume x Toyota brand share'
+    sign: +
+    condition: same period and perimeter
+    condition_observable: the defining arithmetic
+    timing:
+      onset: same period
+      build: none
+      persistence: while the definition holds
+      recognition: each period
+    evidence:
+      existence: documented
+      direction: documented
+      magnitude: documented
+      timing: documented
+      sources:
+      - ty.us
+    breaker: a change of definition or perimeter
+    next_state: us brand units
+    unresolved: []
+- id: ty_us_brand_share_units
+  source: toyota.us_brand_share
+  target: toyota.us_brand_units
+  label: sizes US brand units
+  edge_type: identity
+  identity: ty.id.us_brand_units
+  transition:
+    mechanism: 'Identity: Toyota US brand units = US industry volume x Toyota brand share (share in points, of the same industry)'
+    sign: +
+    condition: same period and perimeter
+    condition_observable: the defining arithmetic
+    timing:
+      onset: same period
+      build: none
+      persistence: while the definition holds
+      recognition: each period
+    evidence:
+      existence: documented
+      direction: documented
+      magnitude: documented
+      timing: documented
+      sources:
+      - ty.us
+    breaker: a change of definition or perimeter
+    next_state: us brand units
+    unresolved: []
+- id: ty_ni_eps
+  source: toyota.net_income
+  target: toyota.eps
+  label: is divided by the share count
+  edge_type: identity
+  identity: ty.id.eps
+  transition:
+    mechanism: 'Identity: earnings per share = net income attributable to owners / weighted-average shares'
+    sign: +
+    condition: same period and perimeter
+    condition_observable: the defining arithmetic
+    timing:
+      onset: same period
+      build: none
+      persistence: while the definition holds
+      recognition: each period
+    evidence:
+      existence: documented
+      direction: documented
+      magnitude: documented
+      timing: documented
+      sources:
+      - ty.f20
+    breaker: a change of definition or perimeter
+    next_state: eps
+    unresolved: []
+- id: ty_shares_eps
+  source: toyota.weighted_average_shares
+  target: toyota.eps
+  label: divides earnings per share
+  edge_type: identity
+  identity: ty.id.eps
+  transition:
+    mechanism: 'Identity: earnings per share = net income attributable to owners / weighted-average shares'
+    sign: '-'
+    condition: same period and perimeter
+    condition_observable: the defining arithmetic
+    timing:
+      onset: same period
+      build: none
+      persistence: while the definition holds
+      recognition: each period
+    evidence:
+      existence: documented
+      direction: documented
+      magnitude: documented
+      timing: documented
+      sources:
+      - ty.f20
+    breaker: a change of definition or perimeter
+    next_state: eps
+    unresolved: []
+- id: ty_usd_profit_translated
+  source: toyota.us_operations_profit_usd
+  target: toyota.us_operations_profit_translated
+  label: is translated
+  edge_type: identity
+  identity: ty.id.us_translation
+  transition:
+    mechanism: 'Identity: translated profit = dollar profit x average yen per dollar (the sign of the profit carries through)'
+    sign: +
+    condition: same period and perimeter
+    condition_observable: the defining arithmetic
+    timing:
+      onset: same period
+      build: none
+      persistence: while the definition holds
+      recognition: each period
+    evidence:
+      existence: documented
+      direction: documented
+      magnitude: documented
+      timing: documented
+      sources:
+      - ty.f20
+    breaker: a change of definition or perimeter
+    next_state: us operations profit translated
+    unresolved: []
+- id: ty_usd_jpy_translated
+  source: dollar_yen.usd_jpy
+  target: toyota.us_operations_profit_translated
+  label: translates
+  edge_type: identity
+  identity: ty.id.us_translation
+  transition:
+    mechanism: 'Identity: translated profit = dollar profit x average yen per dollar; a stronger yen shrinks the magnitude of a profit
+      or a loss'
+    sign: +
+    condition: same period and perimeter
+    condition_observable: the defining arithmetic
+    timing:
+      onset: same period
+      build: none
+      persistence: while the definition holds
+      recognition: each period
+    evidence:
+      existence: documented
+      direction: documented
+      magnitude: documented
+      timing: documented
+      sources:
+      - ty.f20
+    breaker: a change of definition or perimeter
+    next_state: us operations profit translated
+    unresolved: []
+
 # --- compositions: one view each; views of one total overlap and are never added ----------------------------
 # --- identities (Oct 18): exact relationships that are not sums; their links' weights are derived ------------------
 identities:
@@ -4751,6 +6181,119 @@ identities:
   coefficient: 0.001
   unit_check: ¥tn/yr = ¥/share x bn shares x 0.001
   note: Period-end shares outstanding approximate the shares at the two record dates; the gap is a few tenths of a percent.
+- id: ty.id.us_duty
+  entity_id: toyota
+  form: product
+  target: toyota.us_tariff_cost
+  factors:
+  - toyota.us_customs_base
+  - us_vehicle_tariffs.effective_rate
+  coefficient: 0.01
+  unit_check: ¥tn/yr = ¥tn/yr x % x 0.01
+  note: 'Batch 2 (Q7): duty = covered customs value x effective rate, summed over origin by the base''s driving view; paid at entry,
+    expensed as the stock sells. Replaces the rate''s guidance-sized reduced form (R13): the base has no observed level, so the identity
+    is blocked at the baselines and its weights come from the construction levels.'
+- id: ty.id.na_incentive_cost
+  entity_id: toyota
+  form: product
+  target: toyota.na_incentive_cost
+  factors:
+  - toyota.na_incentive_per_unit
+  - toyota.north_america_units
+  coefficient: 1.0
+  unit_check: $bn/yr = $k/unit x m units/yr
+  note: 'Batch 2 (Q9): the direct concession before any volume response; the retained-volume leg is ty_incentive_to_units (unsized).'
+- id: ty.id.incentive_breakeven
+  entity_id: toyota
+  form: ratio
+  target: toyota.incentive_breakeven_units
+  numerator:
+  - toyota.na_incentive_cost
+  denominator:
+  - toyota.na_contribution_per_unit
+  coefficient: 1.0
+  unit_check: m units/yr = $bn/yr / ($k/unit)
+  note: 'Batch 2 (Q9): for a fixed budget; if spending is per unit, solve profit = contribution x incremental units - incentive x all
+    eligible units.'
+- id: ty.id.dealer_days
+  entity_id: toyota
+  form: ratio
+  target: toyota.na_dealer_inventory
+  numerator:
+  - toyota.na_dealer_stock_units
+  denominator:
+  - toyota.north_america_units
+  coefficient: 365.0
+  unit_check: days = 365 x m units / (m units/yr)
+  note: 'Batch 2 (Q10): a metric definition (calendar days, annual selling rate; not seasonally adjusted), not a threshold for incentive
+    changes. The days'' supply level is a synthetic prior, never an observation.'
+- id: ty.id.us_fin_income
+  entity_id: toyota
+  form: product
+  target: toyota.us_fin_interest_income
+  factors:
+  - toyota.us_finance_subsidiary_earning_assets
+  - toyota.us_fin_asset_rate
+  coefficient: 0.01
+  unit_check: $bn/yr = $bn x % x 0.01
+- id: ty.id.us_fin_expense
+  entity_id: toyota
+  form: product
+  target: toyota.us_fin_interest_expense
+  factors:
+  - toyota.us_fin_debt
+  - toyota.us_fin_funding_rate
+  coefficient: 0.01
+  unit_check: $bn/yr = $bn x % x 0.01
+- id: ty.id.us_fin_nii
+  entity_id: toyota
+  form: difference
+  target: toyota.us_fin_net_interest_income
+  of: toyota.us_fin_interest_income
+  minus:
+  - toyota.us_fin_interest_expense
+- id: ty.id.fs_us_scope
+  entity_id: toyota
+  form: product
+  target: toyota.fs_income_us_scope
+  factors:
+  - toyota.us_fin_net_interest_income
+  - dollar_yen.usd_jpy
+  coefficient: 0.001
+  unit_check: ¥tn/yr = $bn/yr x ¥/$ x 0.001
+  note: Translation at the average rate; US GAAP to IFRS mapping is not represented and sits in the uncovered residual.
+- id: ty.id.us_brand_units
+  entity_id: toyota
+  form: product
+  target: toyota.us_brand_units
+  factors:
+  - us_auto_market.industry_volume
+  - toyota.us_brand_share
+  coefficient: 0.01
+  unit_check: m units/yr = m units/yr x pct x 0.01
+  note: 'Batch 2 (T02A): units = market x share on one US industry denominator; a share move is in points, not percent. Kept apart from
+    North America consolidated units (no link onward).'
+- id: ty.id.eps
+  entity_id: toyota
+  form: ratio
+  target: toyota.eps
+  numerator:
+  - toyota.net_income
+  denominator:
+  - toyota.weighted_average_shares
+  coefficient: 1000.0
+  unit_check: ¥/share = 1000 x ¥tn/yr / bn shares
+  note: 'Batch 2 (T09C): one net income definition over one weighted-average share path; never a mean of brokers'' EPS.'
+- id: ty.id.us_translation
+  entity_id: toyota
+  form: product
+  target: toyota.us_operations_profit_translated
+  factors:
+  - toyota.us_operations_profit_usd
+  - dollar_yen.usd_jpy
+  coefficient: 0.001
+  unit_check: ¥tn/yr = $bn/yr x ¥/$ x 0.001
+  note: 'Batch 2 (T07B): average P&L rate; period-end rates belong to balance-sheet translation, not here.'
 stock_flows:
 - id: ty.sf.shares
   entity_id: toyota
@@ -4759,6 +6302,27 @@ stock_flows:
   outflows: [toyota.shares_repurchased]
   basis: 'shares outstanding (issued less treasury): repurchases out; retirements of treasury shares change both issued and treasury
     stock and leave it unchanged; reissuance to the employee trust is not given in shares and stays inside the tolerance'
+- id: ty.sf.na_dealer_stock
+  entity_id: toyota
+  stock: toyota.na_dealer_stock_units
+  period_days: 365
+  inflows:
+  - toyota.na_dealer_arrivals
+  outflows:
+  - toyota.north_america_units
+  basis: 'dealer stock: arrivals in, retail out (consolidated sales stand in for retail; approximation)'
+- id: ty.sf.industrial_liquidity
+  entity_id: toyota
+  stock: toyota.industrial_liquidity
+  period_days: 365
+  inflows:
+  - toyota.industrial_free_cash_flow
+  - toyota.industrial_other_cash_movements
+  outflows:
+  - toyota.dividends_paid
+  - toyota.buyback_spend
+  basis: 'industrial liquid assets: free cash flow and identified other movements in, dividends and buyback cash out; the finance book
+    is funded separately'
 
 compositions:
 - id: ty.comp.reporting_segments
@@ -4899,6 +6463,31 @@ compositions:
   eliminations: toyota.segment_revenue_eliminations
   note: 'Plan round: revenue by business, each segment with its inter-segment sales, and the eliminations that make them external. The
     third view of net revenue beside the selling-company (driving) and customer-location views; never added to them.'
+- id: ty.comp.us_customs_base_by_origin
+  entity_id: toyota
+  view: operating_state
+  basis: declared customs value of covered imports at entry, by origin
+  unit: ¥tn/yr
+  period: fiscal year ending March
+  total: toyota.us_customs_base
+  members:
+  - toyota.us_customs_base_japan
+  - toyota.us_customs_base_north_america
+  residual: toyota.us_customs_base_third_country
+  note: 'Batch 2 (Q7): the base by origin; categories and entry dates are the next split when declared values are available.'
+- id: ty.comp.fs_by_scope
+  entity_id: toyota
+  view: financial_services
+  basis: 'financial services operating income by scope: the US module (translated) and the uncovered residual'
+  unit: ¥tn/yr
+  period: fiscal year ending March
+  drives: false
+  total: toyota.financial_services_operating_income
+  members:
+  - toyota.fs_income_us_scope
+  residual: toyota.fs_income_uncovered
+  note: 'Batch 2 (Q11): a scoped module reconciled into the group with an explicit uncovered residual; reconciling view (the revenue/cost
+    view drives).'
 paths:
 - id: ty.path.tariffs_sourcing
   name: Tariffs and sourcing
@@ -4919,6 +6508,10 @@ paths:
   - {interaction_id: ty_tariff_base}
   - {interaction_id: ty_na_prod_to_exports}
   - {interaction_id: ty_exports_customs_base}
+  - {interaction_id: ty_na_production_customs}
+  - {interaction_id: ty_customs_japan_base}
+  - {interaction_id: ty_customs_na_base}
+  - {interaction_id: ty_customs_other_base}
   - {interaction_id: ty_customs_base_cost}
   - {interaction_id: ty_na_units_to_inventory}
   - {interaction_id: ty_na_production_to_oi}
@@ -5178,9 +6771,14 @@ paths:
   - interaction_id: ty_intersegment_to_japan_oi
   - interaction_id: ty_recovery_costs_oi
   - interaction_id: ty_reg_japan_oi
+  - interaction_id: ty_exports_to_inventory
+    branch: inventory_buffer
+  - interaction_id: ty_arrivals_stock
   endpoint: toyota.operating_profit
   description: 'Plan round: certification restriction → available production (units withheld) → deliveries and plant utilization, and
-    recovery costs → Japan operating income → group (geographic identity). Exports fall through the export identity. The dated events
+    recovery costs → Japan operating income → group (geographic identity). Exports fall through the export identity. Batch 2 (T04C):
+    fewer exports arrive at dealers and the dealer stock buffers sales by the mass balance (change in stock = arrivals - sales), so a
+    lost unit is a delayed sale, a stock draw or a foregone sale, never all three. The dated events
     (halt, orders, staged restarts) and the production loss measured from monthly data are local; an event replays as a level of the
     shortfall over its dates.'
 - id: ty.path.cash_capital
@@ -5204,3 +6802,23 @@ paths:
     dividends (per share x shares, identity) and buybacks above the liquidity buffer under an open authorization → shares outstanding
     (stock-flow), which feeds back into the dividend bill. The finance book is funded by its own borrowings (ty_receivables_borrowings)
     and kept out of industrial cash. Authorized and completed buybacks are separate values (R8).'
+- id: ty.path.us_finance_module
+  name: 'US finance module: asset and funding clocks'
+  entity_id: toyota
+  trigger: a move in US 2-year yields
+  steps:
+  - interaction_id: ty_ust_us_asset_yield
+    branch: asset_clock
+  - interaction_id: ty_ust_us_funding_rate
+    branch: funding_clock
+  - interaction_id: ty_usfin_yield_income
+  - interaction_id: ty_usfin_rate_expense
+  - interaction_id: ty_usfin_income_nii
+  - interaction_id: ty_usfin_expense_nii
+  - interaction_id: ty_usfin_nii_scope
+  - interaction_id: ty_fs_us_scope_oi
+  - interaction_id: ty_seg_financial_services_operating_income
+  endpoint: toyota.operating_profit
+  description: 'Batch 2 (Q11): US scope only (US GAAP, dollars). Assets and funding reprice on separate clocks (the share resetting
+    per year); interest = balance x rate by identity; the margin translates into yen and reconciles into the segment with an uncovered
+    residual. Japan and other countries are not built (no scoped data); leases'' rentals and depreciation are not scaled by the yield.'

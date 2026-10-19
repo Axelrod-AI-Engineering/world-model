@@ -359,5 +359,17 @@ Generalizations from building the eleven companies, kept here so the next compan
 | Oct 18 | A reported level replaces one an earlier round derived, and the before and after are recorded | R5, R16 |
 | Oct 18 | A per-share identity states whether its share count is average or period-end. A stock split is a dated corporate action, and series are not converted across it silently | R2 |
 | Oct 18 | Validation figures stay local: tests read the client's disclosures from the local folder and check only directions on CI | R6, R16 |
+| Oct 18 | A golden test bank checks the model directly. A responder that can read only the model (v1 reads, plus a fixture in model ids) answers; a separate grader holds the expected answer. Evidence, mechanism, calculation and timing are scored separately, and critical sign, scope, unit or accounting failures are listed on their own | R16 |
+| Oct 18 | Exact arithmetic belongs in identities (market × share, net income / shares, local profit × rate). Calibrated slopes are for behavioural responses | R12 |
+| Oct 18 | Unknown is a state. An unsized step leaves its target unknown, never zero. Measured zero, held constant, not applicable and unknown stay distinct | R4, R9 |
+| Oct 18 | Reconciling views are solved to check the driving view and are never summed into it | R5 |
+| Oct 18 | An observation records when its fact occurred (the reported period's end), apart from when it was published and when it was recorded | R8, R2 |
+| Oct 18 | A measure on another perimeter (US retail against consolidated units) is its own value, with no link onward without a scope mapping | R14 |
+| Oct 18 | A feedback loop within a period is cut and listed, never iterated silently | R9 |
+| Oct 18 | A rate shock reprices balance × reset share × the fraction of the period active, with separate clocks for assets and funding | R12 |
+| Oct 18 | A workbook's labels are not provenance: formula literals, allocations and zeros are builder assumptions however a ledger labels them, and a sensitivity that reads zero because a cell is text is unknown coverage | R8, R15 |
+| Oct 18 | Calibration windows do not overlap: an annual actual and the quarters inside it are not independent observations, and forecasts and revisions stay out of an actual-only fit | R4, R15 |
+| Oct 18 | A broker mean is a comparison view with its contributor set. Mean net income and mean EPS are never forced into one identity | R8 |
+| Oct 18 | A baseline is chosen and labelled (dated actual, guidance or model state), and a difference between the export's state and an actual is reported, never plugged | R5, R8 |
 | Oct 18 | Toyota's paths are operational: each says which flows are covered and when the cost falls due, who bears it, the management response (absorb, reprice, resource, or a mix), how customers, dealers and production respond, and which regional accounts change and how they reconcile to the group | R1, R3 |
 | Oct 18 | The same figure in a Japanese and an English filing is one fact: cite the English primary filing. The input search needs Japanese terms too | R6, R7 |
