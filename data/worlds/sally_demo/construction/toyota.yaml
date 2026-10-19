@@ -157,6 +157,70 @@ subentities:
   features: {view: financial_services, basis: 'debt funding the finance subsidiaries; most consolidated debt is this, not industrial
       borrowing'}
 - entity: toyota
+  id: toyota.fs_interest_income
+  name: Toyota financial services interest income
+  attribute_kind: revenue_flow
+  unit: ¥tn/yr
+  family: gaussian
+  prior:
+    family: gaussian
+    mu: 2.8
+    sigma: 0.2
+  scale: 0.2
+  features:
+    view: financial_services
+    basis: 'Repair (Fix 5): interest on retail and dealer loans = finance receivables x contract rate; moves with the customer rate and the book, applied to the exposed balance'
+    prior: synthetic
+    input_class: derived
+- entity: toyota
+  id: toyota.fs_lease_other_revenue
+  name: Toyota financial services lease and other revenue
+  attribute_kind: revenue_flow
+  unit: ¥tn/yr
+  family: gaussian
+  prior:
+    family: gaussian
+    mu: 1.7
+    sigma: 0.2
+  scale: 0.2
+  features:
+    view: financial_services
+    basis: 'Repair (Fix 5): lease rentals and other financing revenue; a fixed construction assumption that does not move with the contract rate (the reported segment line does not split it from interest)'
+    prior: synthetic
+    input_class: assumed
+- entity: toyota
+  id: toyota.fs_funding_interest
+  name: Toyota financial services funding interest
+  attribute_kind: spending_flow
+  unit: ¥tn/yr
+  family: gaussian
+  prior:
+    family: gaussian
+    mu: 1.8
+    sigma: 0.2
+  scale: 0.2
+  features:
+    view: financial_services
+    basis: 'Repair (Fix 5): interest expense on funding = borrowings x funding rate; moves with the funding rate by reset date, never with depreciation'
+    prior: synthetic
+    input_class: derived
+- entity: toyota
+  id: toyota.fs_depreciation_other_costs
+  name: Toyota financial services depreciation and other financing costs
+  attribute_kind: spending_flow
+  unit: ¥tn/yr
+  family: gaussian
+  prior:
+    family: gaussian
+    mu: 1.2
+    sigma: 0.2
+  scale: 0.2
+  features:
+    view: financial_services
+    basis: 'Repair (Fix 5): depreciation and impairment of vehicles on operating leases and other costs of financing (residual-value losses land here); a fixed construction assumption that does not move with the funding rate'
+    prior: synthetic
+    input_class: assumed
+- entity: toyota
   id: toyota.japan_operating_income
   name: Toyota Japan operating income
   attribute_kind: revenue_flow
@@ -1219,8 +1283,93 @@ subentities:
   scale: 0.1
   features:
     view: financial_services
-    basis: 'the US module''s net financing margin translated into yen (before GAAP mapping): the covered part of the segment'
+    basis: 'the US module''s operating contribution translated into yen (net financing margin, net lease margin, other revenues, expenses and the stated GAAP to IFRS adjustment): the covered part of the segment; blocked from driving the segment (see ty.comp.fs_by_scope)'
     prior: synthetic
+- entity: toyota
+  id: toyota.us_fin_net_lease_margin
+  name: Toyota US finance subsidiary net lease margin
+  attribute_kind: revenue_flow
+  unit: $bn/yr
+  family: gaussian
+  prior:
+    family: gaussian
+    mu: 0.6
+    sigma: 0.2
+  scale: 0.2
+  features:
+    view: financial_services
+    basis: 'Repair (Fix 4): operating-lease rentals less depreciation on operating leases (US GAAP); the lease line the interest-based margin excludes. Residual-value losses sit in the depreciation'
+    prior: synthetic
+    input_class: assumed
+    scope: subsidiary
+- entity: toyota
+  id: toyota.us_fin_other_revenues
+  name: Toyota US finance subsidiary other revenues
+  attribute_kind: revenue_flow
+  unit: $bn/yr
+  family: gaussian
+  prior:
+    family: gaussian
+    mu: 2.0
+    sigma: 0.3
+  scale: 0.3
+  features:
+    view: financial_services
+    basis: 'Repair (Fix 4): voluntary protection contract revenues and insurance premiums, investment and other income (US GAAP)'
+    prior: synthetic
+    input_class: assumed
+    scope: subsidiary
+- entity: toyota
+  id: toyota.us_fin_expenses
+  name: Toyota US finance subsidiary expenses
+  attribute_kind: spending_flow
+  unit: $bn/yr
+  family: gaussian
+  prior:
+    family: gaussian
+    mu: 2.6
+    sigma: 0.3
+  scale: 0.3
+  features:
+    view: financial_services
+    basis: 'Repair (Fix 4): provision for credit losses, operating and administrative, voluntary protection contract expenses and insurance losses (US GAAP); lease depreciation is not here (it is in the net lease margin), so nothing is deducted twice'
+    prior: synthetic
+    input_class: assumed
+    scope: subsidiary
+- entity: toyota
+  id: toyota.us_fin_gaap_ifrs_adjustment
+  name: Toyota US finance subsidiary GAAP to IFRS adjustment
+  attribute_kind: revenue_flow
+  unit: $bn/yr
+  family: gaussian
+  prior:
+    family: gaussian
+    mu: 0.0
+    sigma: 0.1
+  scale: 0.1
+  features:
+    view: financial_services
+    basis: 'Repair (Fix 4): the accounting-basis difference between the subsidiary''s US GAAP result and its contribution to the IFRS segment, and intersegment items; not disclosed, so an explicit zero-centred assumption, never a plug'
+    prior: synthetic
+    input_class: assumed
+    scope: subsidiary
+- entity: toyota
+  id: toyota.us_fin_operating_contribution
+  name: Toyota US finance subsidiary operating contribution
+  attribute_kind: revenue_flow
+  unit: $bn/yr
+  family: gaussian
+  prior:
+    family: gaussian
+    mu: 3.41
+    sigma: 0.7
+  scale: 0.7
+  features:
+    view: financial_services
+    basis: 'Repair (Fix 4): net financing margin plus net lease margin plus other revenues less expenses, plus the GAAP to IFRS adjustment: the US contribution to the segment before translation; pre-tax'
+    prior: synthetic
+    input_class: derived
+    scope: subsidiary
 - entity: toyota
   id: toyota.fs_income_uncovered
   name: 'Toyota financial services income: uncovered residual'
@@ -3534,12 +3683,12 @@ interactions:
     - {input: 'funding mix, maturity ladder and hedging', status: found_not_connected, searched: [ty.wb, ty.bridge, ty.sm, ty.r1, ty.r2, ty.xc, ty.peer, ty.robo, ty.rates, 'corpus: funding mix, maturity ladder and hedging', 'corpus: funding', 'corpus: alm', 'corpus: swap', 'corpus: maturity', ty.f20, ty.f20p, ty.dk, ty.fsum, ty.qa, ty.fs10, ty.mo, ty.us, ty.tt, ty.cert, ty.rt, ty.cap, ty.ir, ty.ja, 'corpus: public document pack (144 files parsed, scripts/construction/inputs.py)'], found_in: [ty.fs10], note: 'the US finance subsidiary reports debt by type, contractual maturities, its weighted average contractual rate, swap use, and a +/-100bp scenario on pre-tax cash flow; US only, in dollars, and the consolidated segment''s funding is not split; recorded locally, not bound'}
 - id: ty_funding_cost
   source: toyota.fs_funding_cost_rate
-  target: toyota.fs_cost_of_financing
+  target: toyota.fs_funding_interest
   label: raises interest expense
   edge_type: identity
-  identity: ty.id.cost_of_financing
+  identity: ty.id.fs_funding_interest
   transition:
-    mechanism: Higher funding cost raises interest expense on the funded book
+    mechanism: Higher funding cost raises funding interest (only) on the debt that reprices or refinances; depreciation and other financing costs do not move with the funding rate
     sign: +
     actor: Toyota finance subsidiaries
     business_unit: financial services
@@ -3550,7 +3699,7 @@ interactions:
     timing: {onset: with refinancing, build: over debt life, persistence: persistent, recognition: cost of financing}
     evidence: {existence: documented, direction: documented, magnitude: unknown, timing: unknown, sources: [ty.wb, ty.pub, ty.sm]}
     breaker: 'matched funding: assets reprice too'
-    next_state: Toyota cost of financing operations
+    next_state: Toyota financial services funding interest
     unresolved: []
 - id: ty_funding_reprice
   source: toyota.fs_funding_cost_rate
@@ -3574,12 +3723,12 @@ interactions:
     unresolved: []
 - id: ty_customer_rate_rev
   source: toyota.fs_customer_rate
-  target: toyota.financial_services_revenue
+  target: toyota.fs_interest_income
   label: earns more interest
   edge_type: identity
-  identity: ty.id.fs_revenue
+  identity: ty.id.fs_interest_income
   transition:
-    mechanism: Higher contract rates raise interest income as the book turns over
+    mechanism: Higher contract rates raise interest income (only) on the contracts that reprice, as the book turns over; lease and other revenue do not move with the rate
     sign: +
     actor: Toyota finance subsidiaries
     business_unit: financial services
@@ -3589,7 +3738,7 @@ interactions:
     timing: {onset: new contracts, build: years, persistence: contract term, recognition: financing revenue}
     evidence: {existence: documented, direction: documented, magnitude: unknown, timing: unknown, sources: [ty.wb, ty.pub]}
     breaker: volume falls
-    next_state: Toyota financial services revenue
+    next_state: Toyota financial services interest income
     unresolved: []
 - id: ty_customer_rate_units
   source: toyota.fs_customer_rate
@@ -3668,10 +3817,10 @@ interactions:
     - {input: finance penetration rate, status: found_not_connected, searched: [ty.wb, ty.bridge, ty.sm, ty.r1, ty.r2, ty.xc, ty.peer, ty.robo, ty.rates, 'corpus: finance penetration rate', 'corpus: penetration', 'corpus: financing share', 'corpus: captive finance', ty.f20, ty.f20p, ty.dk, ty.fsum, ty.qa, ty.fs10, ty.mo, ty.us, ty.tt, ty.cert, ty.rt, ty.cap, ty.ir, ty.ja, 'corpus: public document pack (144 files parsed, scripts/construction/inputs.py)'], found_in: [ty.fs10], note: 'the US finance subsidiary reports its share of the US distributor''s sales by fiscal year; US only and a unit share, so not bound: the receivables stock-flow also needs the amount financed per unit, and Canada and Mexico differ'}
 - id: ty_receivables_rev
   source: toyota.fs_finance_receivables
-  target: toyota.financial_services_revenue
+  target: toyota.fs_interest_income
   label: earns interest
   edge_type: identity
-  identity: ty.id.fs_revenue
+  identity: ty.id.fs_interest_income
   transition:
     mechanism: A larger earning book earns more financing revenue
     sign: +
@@ -3683,7 +3832,7 @@ interactions:
     timing: {onset: as balances grow, build: years, persistence: persistent, recognition: financing revenue}
     evidence: {existence: documented, direction: documented, magnitude: unknown, timing: unknown, sources: [ty.wb]}
     breaker: yield compression
-    next_state: Toyota financial services revenue
+    next_state: Toyota financial services interest income
     unresolved: []
 - id: ty_receivables_borrowings
   source: toyota.fs_finance_receivables
@@ -3706,10 +3855,10 @@ interactions:
     unresolved: []
 - id: ty_borrowings_cost
   source: toyota.fs_borrowings
-  target: toyota.fs_cost_of_financing
+  target: toyota.fs_funding_interest
   label: carries interest
   edge_type: identity
-  identity: ty.id.cost_of_financing
+  identity: ty.id.fs_funding_interest
   transition:
     mechanism: More borrowings carry more interest expense
     sign: +
@@ -3721,7 +3870,7 @@ interactions:
     timing: {onset: as drawn, build: none, persistence: debt term, recognition: cost of financing}
     evidence: {existence: documented, direction: documented, magnitude: unknown, timing: unknown, sources: [ty.wb]}
     breaker: none (arithmetic at a given rate)
-    next_state: Toyota cost of financing operations
+    next_state: Toyota financial services funding interest
     unresolved: []
 - id: ty_used_residual
   source: us_auto_market.used_vehicle_prices
@@ -3767,11 +3916,11 @@ interactions:
     unresolved: []
 - id: ty_residual_cost
   source: toyota.fs_residual_value_losses
-  target: toyota.fs_cost_of_financing
+  target: toyota.fs_depreciation_other_costs
   label: is recognized in cost of financing
   calibration: uncalibrated
   transition:
-    mechanism: Residual losses on operating-lease vehicles are recognized as depreciation and impairment within cost of financing
+    mechanism: Residual losses on operating-lease vehicles are recognized as depreciation and impairment, in the depreciation and other financing costs line of cost of financing
     sign: +
     actor: accounting
     business_unit: financial services
@@ -3781,7 +3930,7 @@ interactions:
     timing: {onset: impairment review or sale, build: none, persistence: per cohort, recognition: cost of financing}
     evidence: {existence: inferred, direction: inferred, magnitude: unknown, timing: unknown, sources: [ty.pub, ty.sm, ty.wb]}
     breaker: none (accounting)
-    next_state: Toyota cost of financing operations
+    next_state: Toyota financial services depreciation and other financing costs
     unresolved: []
 - id: ty_income_arrears
   source: us_economy.gdp_growth
@@ -5662,14 +5811,14 @@ interactions:
     breaker: a change of definition or perimeter
     next_state: us fin net interest income
     unresolved: []
-- id: ty_usfin_nii_scope
-  source: toyota.us_fin_net_interest_income
+- id: ty_usfin_contribution_scope
+  source: toyota.us_fin_operating_contribution
   target: toyota.fs_income_us_scope
   label: translates into yen
   edge_type: identity
   identity: ty.id.fs_us_scope
   transition:
-    mechanism: 'Identity: the US module''s contribution in yen = margin x USD/JPY (average rate); GAAP mapping not represented'
+    mechanism: 'Identity: the US module''s contribution in yen = operating contribution x USD/JPY (average rate); the GAAP to IFRS adjustment is an explicit assumption'
     sign: +
     condition: same period and perimeter
     condition_observable: the defining arithmetic
@@ -5695,7 +5844,7 @@ interactions:
   edge_type: identity
   identity: ty.id.fs_us_scope
   transition:
-    mechanism: 'Identity: the US module''s contribution in yen = margin x USD/JPY'
+    mechanism: 'Identity: the US module''s contribution in yen = operating contribution x USD/JPY'
     sign: +
     condition: same period and perimeter
     condition_observable: the defining arithmetic
@@ -5824,6 +5973,177 @@ interactions:
       found_in:
       - ty.fs10
       note: the maturity ladder and swap use are in the subsidiary's report; the share is a local estimate, not bound
+- id: ty_fs_interest_to_revenue
+  source: toyota.fs_interest_income
+  target: toyota.financial_services_revenue
+  label: is a line of financial services revenue
+  edge_type: accounting
+  effect: {mu: 0.6667, sigma: 0.001}
+  kernel: *id001
+  transition:
+    mechanism: 'Identity: interest income is one line of the segment''s financing revenue (repair, Fix 5)'
+    sign: '+'
+    business_unit: financial services
+    currency: JPY
+    condition: same period, perimeter and accounting basis on both sides
+    condition_observable: the reported reconciliation (parts plus residual equal the total)
+    timing: {onset: same period, build: none, persistence: while the definition holds, recognition: each reported quarter}
+    evidence: {existence: documented, direction: documented, magnitude: documented, timing: documented, sources: [ty.fsum, ty.pub]}
+    breaker: a change of segment definition, perimeter or accounting basis
+    next_state: financial services revenue
+    unresolved: []
+- id: ty_fs_lease_other_to_revenue
+  source: toyota.fs_lease_other_revenue
+  target: toyota.financial_services_revenue
+  label: is a line of financial services revenue
+  edge_type: accounting
+  effect: {mu: 0.6667, sigma: 0.001}
+  kernel: *id001
+  transition:
+    mechanism: 'Identity: lease and other revenue is the fixed remainder of the segment''s financing revenue (an explicit assumption that does not move with rates)'
+    sign: '+'
+    business_unit: financial services
+    currency: JPY
+    condition: same period, perimeter and accounting basis on both sides
+    condition_observable: the reported reconciliation (parts plus residual equal the total)
+    timing: {onset: same period, build: none, persistence: while the definition holds, recognition: each reported quarter}
+    evidence: {existence: documented, direction: documented, magnitude: documented, timing: documented, sources: [ty.fsum, ty.pub]}
+    breaker: a change of segment definition, perimeter or accounting basis
+    next_state: financial services revenue
+    unresolved: []
+- id: ty_fs_funding_interest_to_cost
+  source: toyota.fs_funding_interest
+  target: toyota.fs_cost_of_financing
+  label: is a line of cost of financing
+  edge_type: accounting
+  effect: {mu: 0.6667, sigma: 0.001}
+  kernel: *id001
+  transition:
+    mechanism: 'Identity: funding interest is one line of cost of financing operations (repair, Fix 5)'
+    sign: '+'
+    business_unit: financial services
+    currency: JPY
+    condition: same period, perimeter and accounting basis on both sides
+    condition_observable: the reported reconciliation (parts plus residual equal the total)
+    timing: {onset: same period, build: none, persistence: while the definition holds, recognition: each reported quarter}
+    evidence: {existence: documented, direction: documented, magnitude: documented, timing: documented, sources: [ty.fsum, ty.pub]}
+    breaker: a change of segment definition, perimeter or accounting basis
+    next_state: cost of financing operations
+    unresolved: []
+- id: ty_fs_depr_other_to_cost
+  source: toyota.fs_depreciation_other_costs
+  target: toyota.fs_cost_of_financing
+  label: is a line of cost of financing
+  edge_type: accounting
+  effect: {mu: 0.6667, sigma: 0.001}
+  kernel: *id001
+  transition:
+    mechanism: 'Identity: depreciation and other financing costs are the fixed remainder of cost of financing (an explicit assumption that does not move with the funding rate)'
+    sign: '+'
+    business_unit: financial services
+    currency: JPY
+    condition: same period, perimeter and accounting basis on both sides
+    condition_observable: the reported reconciliation (parts plus residual equal the total)
+    timing: {onset: same period, build: none, persistence: while the definition holds, recognition: each reported quarter}
+    evidence: {existence: documented, direction: documented, magnitude: documented, timing: documented, sources: [ty.fsum, ty.pub]}
+    breaker: a change of segment definition, perimeter or accounting basis
+    next_state: cost of financing operations
+    unresolved: []
+- id: ty_usfin_nii_contribution
+  source: toyota.us_fin_net_interest_income
+  target: toyota.us_fin_operating_contribution
+  label: is the interest-based start of the contribution
+  edge_type: accounting
+  effect: {mu: 0.8571, sigma: 0.001}
+  kernel: *id001
+  transition:
+    mechanism: 'Identity: the US net financing margin (financing revenue less interest expense) is the first line of the US operating contribution (repair, Fix 4)'
+    sign: '+'
+    business_unit: financial services (US)
+    currency: USD
+    condition: same period, perimeter and accounting basis on both sides
+    condition_observable: the reported reconciliation (parts plus residual equal the total)
+    timing: {onset: same period, build: none, persistence: while the definition holds, recognition: each reported quarter}
+    evidence: {existence: documented, direction: documented, magnitude: documented, timing: documented, sources: [ty.fs10, ty.pub]}
+    breaker: a change of segment definition, perimeter or accounting basis
+    next_state: US operating contribution
+    unresolved: []
+- id: ty_usfin_lease_contribution
+  source: toyota.us_fin_net_lease_margin
+  target: toyota.us_fin_operating_contribution
+  label: adds the lease line
+  edge_type: accounting
+  effect: {mu: 0.2857, sigma: 0.001}
+  kernel: *id001
+  transition:
+    mechanism: 'Identity: operating-lease rentals less depreciation add to the contribution; depreciation is deducted here and nowhere else'
+    sign: '+'
+    business_unit: financial services (US)
+    currency: USD
+    condition: same period, perimeter and accounting basis on both sides
+    condition_observable: the reported reconciliation (parts plus residual equal the total)
+    timing: {onset: same period, build: none, persistence: while the definition holds, recognition: each reported quarter}
+    evidence: {existence: documented, direction: documented, magnitude: documented, timing: documented, sources: [ty.fs10, ty.pub]}
+    breaker: a change of segment definition, perimeter or accounting basis
+    next_state: US operating contribution
+    unresolved: []
+- id: ty_usfin_other_rev_contribution
+  source: toyota.us_fin_other_revenues
+  target: toyota.us_fin_operating_contribution
+  label: adds other revenues
+  edge_type: accounting
+  effect: {mu: 0.4286, sigma: 0.001}
+  kernel: *id001
+  transition:
+    mechanism: 'Identity: protection-contract revenues, premiums and investment income add to the contribution'
+    sign: '+'
+    business_unit: financial services (US)
+    currency: USD
+    condition: same period, perimeter and accounting basis on both sides
+    condition_observable: the reported reconciliation (parts plus residual equal the total)
+    timing: {onset: same period, build: none, persistence: while the definition holds, recognition: each reported quarter}
+    evidence: {existence: documented, direction: documented, magnitude: documented, timing: documented, sources: [ty.fs10, ty.pub]}
+    breaker: a change of segment definition, perimeter or accounting basis
+    next_state: US operating contribution
+    unresolved: []
+- id: ty_usfin_expenses_contribution
+  source: toyota.us_fin_expenses
+  target: toyota.us_fin_operating_contribution
+  label: is deducted from the contribution
+  edge_type: accounting
+  effect: {mu: -0.4286, sigma: 0.001}
+  kernel: *id001
+  transition:
+    mechanism: 'Identity: provision for credit losses, operating and administrative expenses and protection-contract losses are deducted once'
+    sign: '-'
+    business_unit: financial services (US)
+    currency: USD
+    condition: same period, perimeter and accounting basis on both sides
+    condition_observable: the reported reconciliation (parts plus residual equal the total)
+    timing: {onset: same period, build: none, persistence: while the definition holds, recognition: each reported quarter}
+    evidence: {existence: documented, direction: documented, magnitude: documented, timing: documented, sources: [ty.fs10, ty.pub]}
+    breaker: a change of segment definition, perimeter or accounting basis
+    next_state: US operating contribution
+    unresolved: []
+- id: ty_usfin_adjustment_contribution
+  source: toyota.us_fin_gaap_ifrs_adjustment
+  target: toyota.us_fin_operating_contribution
+  label: maps US GAAP to the segment basis
+  edge_type: accounting
+  effect: {mu: 0.1429, sigma: 0.001}
+  kernel: *id001
+  transition:
+    mechanism: 'Identity: the stated GAAP to IFRS adjustment closes the contribution to the segment''s basis (explicit assumption, not disclosed)'
+    sign: '+'
+    business_unit: financial services (US)
+    currency: USD
+    condition: same period, perimeter and accounting basis on both sides
+    condition_observable: the reported reconciliation (parts plus residual equal the total)
+    timing: {onset: same period, build: none, persistence: while the definition holds, recognition: each reported quarter}
+    evidence: {existence: documented, direction: documented, magnitude: documented, timing: documented, sources: [ty.fs10, ty.pub]}
+    breaker: a change of segment definition, perimeter or accounting basis
+    next_state: US operating contribution
+    unresolved: []
 - id: ty_fs_us_scope_oi
   source: toyota.fs_income_us_scope
   target: toyota.financial_services_operating_income
@@ -6143,18 +6463,14 @@ identities:
 - {id: ty.id.asia_revenue, entity_id: toyota, form: product, target: toyota.asia_external_revenue,
    factors: [toyota.asia_units, toyota.asia_revenue_per_vehicle], unit_check: '¥tn/yr = m units/yr x ¥m/unit',
    basis: 'external revenue over units sold'}
-- {id: ty.id.fs_revenue, entity_id: toyota, form: product, target: toyota.financial_services_revenue,
-   factors: [toyota.fs_finance_receivables, toyota.fs_customer_rate], coefficient: 0.0160714,
-   unit_check: '¥tn/yr = ¥tn x % x 0.01 x 1.607',
-   note: 'The 0.01 converts the rate in %; the 1.607 holds lease rentals and other financing revenue as a constant multiple
-     of contract interest at the construction levels (an approximation: lease income is not split from interest in the
-     material). Synthetic levels, not the company''s.'}
-- {id: ty.id.cost_of_financing, entity_id: toyota, form: product, target: toyota.fs_cost_of_financing,
-   factors: [toyota.fs_borrowings, toyota.fs_funding_cost_rate], coefficient: 0.0166667,
-   unit_check: '¥tn/yr = ¥tn x % x 0.01 x 1.667',
-   note: 'The 0.01 converts the rate in %; the 1.667 holds lease depreciation and other costs of financing as a constant
-     multiple of funding interest at the construction levels (an approximation; residual-value losses are added
-     separately by ty_residual_cost). Synthetic levels.'}
+- {id: ty.id.fs_interest_income, entity_id: toyota, form: product, target: toyota.fs_interest_income,
+   factors: [toyota.fs_finance_receivables, toyota.fs_customer_rate], coefficient: 0.01,
+   unit_check: '¥tn/yr = ¥tn x % x 0.01',
+   note: 'Repair (Fix 5), replaces ty.id.fs_revenue: interest income only, no constant multiple. Lease and other revenue is a separate fixed value (toyota.fs_lease_other_revenue) that does not move with the contract rate. Balances are period-end stocks standing in for average earning balances (an approximation, labelled in the input classes).'}
+- {id: ty.id.fs_funding_interest, entity_id: toyota, form: product, target: toyota.fs_funding_interest,
+   factors: [toyota.fs_borrowings, toyota.fs_funding_cost_rate], coefficient: 0.01,
+   unit_check: '¥tn/yr = ¥tn x % x 0.01',
+   note: 'Repair (Fix 5), replaces ty.id.cost_of_financing: funding interest only, no constant multiple. Depreciation and other financing costs are a separate fixed value (toyota.fs_depreciation_other_costs); residual-value losses land there. Balances are period-end stocks standing in for average funded balances (labelled). The exposure by reset date is the cohort function in model/rate_exposure.py.'}
 - {id: ty.id.japan_exports, entity_id: toyota, form: difference, target: toyota.japan_export_units,
    of: toyota.japan_production, minus: [toyota.japan_units, toyota.japan_other_flows],
    note: 'Exports = Japan production - Japan sales - other flows (inventory build); the reported exports are observed, and the
@@ -6257,11 +6573,11 @@ identities:
   form: product
   target: toyota.fs_income_us_scope
   factors:
-  - toyota.us_fin_net_interest_income
+  - toyota.us_fin_operating_contribution
   - dollar_yen.usd_jpy
   coefficient: 0.001
   unit_check: ¥tn/yr = $bn/yr x ¥/$ x 0.001
-  note: Translation at the average rate; US GAAP to IFRS mapping is not represented and sits in the uncovered residual.
+  note: 'Translation at the average rate. Repair (Fix 4): the input is the US operating contribution (net financing margin through expenses and the stated GAAP to IFRS adjustment), not the margin alone. The scope view is reconciling (drives: false): the US contribution replaces nothing in the group revenue/cost view, so a US rate change is blocked from the group endpoint rather than counted twice.'
 - id: ty.id.us_brand_units
   entity_id: toyota
   form: product
@@ -6475,6 +6791,36 @@ compositions:
   - toyota.us_customs_base_north_america
   residual: toyota.us_customs_base_third_country
   note: 'Batch 2 (Q7): the base by origin; categories and entry dates are the next split when declared values are available.'
+- id: ty.comp.fs_revenue_lines
+  entity_id: toyota
+  view: financial_services
+  basis: financial services revenue by line (IFRS segment)
+  unit: ¥tn/yr
+  period: fiscal year ending March
+  total: toyota.financial_services_revenue
+  members: [toyota.fs_interest_income]
+  residual: toyota.fs_lease_other_revenue
+  note: 'Repair (Fix 5): interest income moves with the contract rate on repricing balances; lease and other revenue is a fixed assumption (the segment line does not split them).'
+- id: ty.comp.fs_cost_lines
+  entity_id: toyota
+  view: financial_services
+  basis: cost of financing operations by line (IFRS segment)
+  unit: ¥tn/yr
+  period: fiscal year ending March
+  total: toyota.fs_cost_of_financing
+  members: [toyota.fs_funding_interest]
+  residual: toyota.fs_depreciation_other_costs
+  note: 'Repair (Fix 5): funding interest moves with the funding rate on repricing debt; depreciation and other financing costs are a fixed assumption (residual-value losses land here).'
+- id: ty.comp.us_fin_contribution
+  entity_id: toyota
+  view: financial_services
+  basis: US finance subsidiary operating contribution, US GAAP in dollars bridged to the segment basis
+  unit: $bn/yr
+  period: fiscal year ending March
+  total: toyota.us_fin_operating_contribution
+  members: [toyota.us_fin_net_interest_income, toyota.us_fin_net_lease_margin, toyota.us_fin_other_revenues, toyota.us_fin_expenses]
+  residual: toyota.us_fin_gaap_ifrs_adjustment
+  note: 'Repair (Fix 4): net financing margin through lease, other revenues and expenses to the US operating contribution. Provision for credit losses, operating costs and protection-contract losses are in expenses only; lease depreciation is in the lease margin only. The contribution reaches group financial-services income only through ty.comp.fs_by_scope, which is reconciling (blocked), never added to the revenue/cost view.'
 - id: ty.comp.fs_by_scope
   entity_id: toyota
   view: financial_services
@@ -6638,6 +6984,8 @@ paths:
   - {interaction_id: ty_receivables_borrowings, branch: funding_need}
   - {interaction_id: ty_borrowings_cost}
   - {interaction_id: ty_credit_loss_expense}
+  - {interaction_id: ty_fs_interest_to_revenue}
+  - {interaction_id: ty_fs_funding_interest_to_cost}
   - {interaction_id: ty_fs_revenue}
   - {interaction_id: ty_fs_cost_of_financing}
   - {interaction_id: ty_fs_other_expenses}
@@ -6654,6 +7002,7 @@ paths:
   - {interaction_id: ty_used_residual, branch: residual}
   - {interaction_id: ty_used_severity, branch: severity}
   - {interaction_id: ty_residual_cost}
+  - {interaction_id: ty_fs_depr_other_to_cost}
   - {interaction_id: ty_credit_loss_expense}
   - {interaction_id: ty_fs_cost_of_financing}
   - {interaction_id: ty_fs_other_expenses}
@@ -6815,7 +7164,8 @@ paths:
   - interaction_id: ty_usfin_rate_expense
   - interaction_id: ty_usfin_income_nii
   - interaction_id: ty_usfin_expense_nii
-  - interaction_id: ty_usfin_nii_scope
+  - interaction_id: ty_usfin_nii_contribution
+  - interaction_id: ty_usfin_contribution_scope
   - interaction_id: ty_fs_us_scope_oi
   - interaction_id: ty_seg_financial_services_operating_income
   endpoint: toyota.operating_profit
