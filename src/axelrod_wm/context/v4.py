@@ -31,6 +31,7 @@ from datetime import datetime
 from typing import Any
 
 from axelrod_wm.context.construction import state_text
+from axelrod_wm.model.construction import transition_profile
 
 SCHEMA = "v4.1.4"
 PACK_SCHEMA = "v4.1.4_modular_domain_pack"
@@ -316,6 +317,7 @@ def domain_pack(wm: Any, ltm: Any, *, pc: dict, book: list[str], version: int, s
             out["evidence_source_type"] = tr.evidence.existence
             out["evidence_reliability"] = tr.evidence.magnitude
             out["axelrod"]["transition"] = tr.model_dump(mode="json")
+            out["axelrod"]["transition_profile"] = transition_profile(g, i)
         out["dependency_type"] = "accounting_identity" if i.fixed else "causal"
         if i.identity is not None:
             out["axelrod"]["identity"] = identity_ref(g, i)

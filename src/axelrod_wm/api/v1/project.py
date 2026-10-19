@@ -35,9 +35,10 @@ def level(sub: Any) -> s.Level:
     return s.Level(mean=round(float(d.mean()), 6), sd=round(float(d.sd()), 6), q05=q05, q95=q95)
 
 
-def observations(sub: Any) -> list[s.Observation]:
+def observations(sub: Any, occurred: dict[str, Any] | None = None) -> list[s.Observation]:
     """The attribute's dated observations, oldest first: each history point a fold of an observed value left, with the
-    value in the attribute's unit (valid_at: when it applies; observed_at: when the model recorded it)."""
+    value in the attribute's unit (valid_at: when it applies; observed_at: when the model recorded it; occurred_at:
+    when the fact occurred, from the update that carried it, e.g. a reported figure's period end)."""
     from axelrod_wm.model.distributions import from_link
 
     out = []
@@ -47,7 +48,8 @@ def observations(sub: Any) -> list[s.Observation]:
         value = round(float(from_link(sub.anchor + sub.scale * ts.values["y"], sub.link)), 6)
         oid = hashlib.sha256(f"{sub.id}|{ts.at.valid_at.isoformat()}|{ts.source_event_id}|{value}".encode()).hexdigest()
         out.append(s.Observation(id=f"obs_{oid[:16]}", attribute_id=sub.id, value=value, valid_at=ts.at.valid_at,
-                                 observed_at=ts.at.recorded_at, event_id=ts.source_event_id, epistemic_type="observed"))
+                                 observed_at=ts.at.recorded_at, event_id=ts.source_event_id, epistemic_type="observed",
+                                 occurred_at=(occurred or {}).get(ts.source_event_id)))
     return out
 
 
@@ -59,9 +61,9 @@ def states(sub: Any) -> list[s.AttributeState]:
             for ts in sub.history if "mean" in ts.values]
 
 
-def attribute(wm: Any, sid: str) -> s.Attribute:
+def attribute(wm: Any, sid: str, occurred: dict[str, Any] | None = None) -> s.Attribute:
     sub = wm.graph.subentities[sid]
-    obs = observations(sub)
+    obs = observations(sub, occurred)
     return s.Attribute(id=sid, key=sid.removeprefix(f"{sub.entity_id}."), entity_id=sub.entity_id, name=sub.name,
                        aliases=list(sub.aliases), unit=sub.unit, concept=sub.attribute_kind,
                        view=sub.features.get("view", ""), basis=sub.features.get("basis", ""),
@@ -83,7 +85,7 @@ def own_attributes(wm: Any, eid: str) -> list[str]:
 
 
 def entity(wm: Any, ltm: Any, eid: str, attribute_ids: list[str] | None = None,
-           relationships: list[s.Relationship] | None = None) -> dict:
+           relationships: list[s.Relationship] | None = None, occurred: dict[str, Any] | None = None) -> dict:
     """An entity with its attributes nested: all of them, or only `attribute_ids` (those an answer reached or matched)."""
     e = wm.graph.entities[eid]
     own = own_attributes(wm, eid)
@@ -93,14 +95,17 @@ def entity(wm: Any, ltm: Any, eid: str, attribute_ids: list[str] | None = None,
                    identifiers={k: v for k, v in sorted(e.features.items()) if k in IDENTIFIER_KEYS},
                    description=e.description, concepts=concepts(ltm, e.generalization_id),
                    features=dict(sorted(e.features.items())), group_ids=groups, attribute_count=len(own),
-                   attributes=[attribute(wm, x) for x in shown], relationships=relationships, origin=str(e.origin),
+                   attributes=[attribute(wm, x, occurred) for x in shown], relationships=relationships, origin=str(e.origin),
                    created_at=e.created_at)
     return out.model_dump(mode="json", exclude={"relationships"} if relationships is None else set())
 
 
 # -- relationships and evidence -------------------------------------------------------------------------------------------
-def relationship(i: Any) -> s.Relationship:
-    """An uncalibrated relationship has a sign but no size: its effect and timing are null, never 0."""
+def relationship(i: Any, graph: Any = None) -> s.Relationship:
+    """An uncalibrated relationship has a sign but no size: its effect and timing are null, never 0. With the graph,
+    it carries its retrieval profile (model/construction.transition_profile)."""
+    from axelrod_wm.model.construction import transition_profile
+
     k = i.forward.kernel
     sized = i.quantified
     return s.Relationship(
@@ -112,7 +117,9 @@ def relationship(i: Any) -> s.Relationship:
         kernel=s.Kernel(delay_days=round(float(k.delay.mean()), 3) if sized else None,
                         lag_days=round(float(k.lag.mean()), 3) if sized else None,
                         duration_days=None if k.duration is None or not sized else round(float(k.duration.mean()), 3)),
-        transition=i.transition.model_dump(mode="json") if i.transition is not None else None, identity_id=i.identity,
+        transition=i.transition.model_dump(mode="json") if i.transition is not None else None,
+        profile=transition_profile(graph, i) if graph is not None and i.transition is not None else None,
+        identity_id=i.identity,
         state_dependent=i.state is not None, origin=str(i.origin), epistemic_type=EPISTEMIC_OF_ORIGIN[str(i.origin)],
         status="retired" if i.retired_at is not None else "active", valid_from=i.created_at, valid_to=i.retired_at,
         evidence_count=len(i.evidence) + i.evidence_dropped)
@@ -142,7 +149,7 @@ def path(graph: Any, p: Any) -> s.Path:
         i = graph.interactions.get(st.interaction_id)
         if i is None:
             continue
-        r = relationship(i)
+        r = relationship(i, graph)
         steps.append(s.PathStep(relationship_id=i.id, branch=st.branch, source_attribute_id=i.source_id,
                                 target_attribute_id=i.target_id, type=r.type, calibration=r.calibration,
                                 effect=r.effect, sign=r.sign, transition=r.transition))

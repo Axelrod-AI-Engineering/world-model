@@ -104,6 +104,7 @@ class Observation(Api):
     observed_at: datetime
     event_id: str | None
     epistemic_type: EpistemicType
+    occurred_at: datetime | None = None   # Oct 18: when the observed fact occurred (a reported figure's period end)
 
 
 class AttributeState(Api):
@@ -159,6 +160,7 @@ class Relationship(Api):
     calibration: Calibration
     kernel: Kernel
     transition: dict | None
+    profile: dict | None = None          # Oct 18: exposure, unit, date, hedge, pass-through, endpoint, calculation, source
     identity_id: str | None
     state_dependent: bool
     origin: Origin

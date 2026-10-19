@@ -147,6 +147,9 @@ class Transition(BaseModel):
     breaker_threshold: str = ""          # 6. only when supported
     next_state: str = ""                 # 7. the next operating state or financial output
     unresolved: list[InputNeed] = []     # 7. inputs still missing, each with its search status
+    # Oct 18 (retrieval fields): what offsets the exposure before it reaches the accounts; "" = not stated (unknown)
+    hedge: str = ""                      # hedging that delays or removes part of the effect
+    pass_through: str = ""               # the share passed on to customers or suppliers, when stated
 
     @field_validator("unresolved", mode="before")
     @classmethod
@@ -840,3 +843,65 @@ def reconcile_stock_flows(graph: Any, series: dict[str, list[tuple[str, float]]]
                          "tolerance": tolerance, "status": verdict(missing, [], rel, tolerance),
                          "blocked_by": missing})
     return rows
+
+
+PROFILE_FIELDS = ("native_slope", "exposure", "unit", "date", "hedge", "pass_through", "financial_endpoint", "calculation", "source")
+
+
+def transition_profile(graph: Any, i: Any) -> dict[str, Any]:
+    """The retrieval fields every active link carries (Oct 18): the exposure (business unit, geography, currency), the
+    unit (source -> target), the date (when the link entered the model, and when the accounts recognize it), hedge and
+    pass-through ("unknown" when not stated, never zero), the financial endpoint (the endpoints of the named paths the
+    link is a step of, else its target), the calculation (the identity or stock-flow formula, the calibrated size, or
+    "unsized (sign only)"), and the source ids. Derived from the link and the graph, so no link can lack them."""
+    tr = i.transition
+    sub = graph.subentities
+
+    def unit(sid: str) -> str:
+        return getattr(sub.get(sid), "unit", "") or ""
+
+    exposure = "; ".join(x for x in ((tr.business_unit, tr.geography, tr.currency) if tr else ()) if x) or "unknown"
+    ends = sorted({p.endpoint for p in graph.paths.values() if any(s.interaction_id == i.id for s in p.steps)})
+    if i.identity is not None:
+        obj = graph.identities.get(i.identity) or graph.stock_flows.get(i.identity)
+        calc = obj.formula() if obj is not None else f"term of {i.identity}"
+    elif i.quantified:
+        e = i.forward.effect
+        sd = getattr(e, "sigma", None)
+        calc = (f"{'accounting' if i.fixed else 'calibrated'} effect {float(e.mean()):.4g} sd/sd"
+                + (f" (sigma {float(sd):.3g})" if sd is not None else "")
+                + (f", magnitude {tr.evidence.magnitude}" if tr else ""))
+    else:
+        calc = "unsized (sign only): forecasts list it as excluded, never as zero"
+    recog = tr.timing.recognition if tr else "unknown"
+    return {"native_slope": native_slope(graph, i),
+            "exposure": exposure,
+            "unit": f"{unit(i.source_id) or '?'} -> {unit(i.target_id) or '?'}",
+            "date": {"in_model_from": i.created_at.isoformat() if getattr(i, "created_at", None) else None,
+                     "recognition": recog},
+            "hedge": (tr.hedge if tr and tr.hedge else "unknown"),
+            "pass_through": (tr.pass_through if tr and tr.pass_through else "unknown"),
+            "financial_endpoint": ends or [i.target_id],
+            "calculation": calc,
+            "source": list(tr.evidence.sources) if tr else []}
+
+
+def construction_level(sub: Any) -> tuple[float, float, str]:
+    """A value's (native construction level, link-space scale, link) from its prior, as the build sizes links."""
+    from axelrod_wm.model.distributions import from_link
+
+    link = str(sub.prior.link)
+    return float(from_link(sub.prior.link_moments()[0], link)), float(sub.scale), link
+
+
+def native_slope(graph: Any, i: Any) -> float | None:
+    """A sized link's change in the target per unit change in the source, in their native units at the construction
+    levels (effect x target native sd / source native sd); None when the link carries no size."""
+    if not i.quantified or i.source_id not in graph.subentities or i.target_id not in graph.subentities:
+        return None
+    try:
+        s, t = construction_level(graph.subentities[i.source_id]), construction_level(graph.subentities[i.target_id])
+        return round(float(i.forward.effect.mean()) * native_per_sd(*t) / native_per_sd(*s), 9)
+    except Exception:  # noqa: BLE001 - a value without a usable prior has no native slope
+        return None
+

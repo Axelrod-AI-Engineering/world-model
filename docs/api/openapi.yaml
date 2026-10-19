@@ -3280,6 +3280,13 @@ components:
           - 'null'
         epistemic_type:
           $ref: '#/components/schemas/EpistemicType'
+        occurred_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: When the observed fact occurred, e.g. a reported figure's period end; null when the update did
+            not say
       required:
       - id
       - attribute_id
@@ -3545,6 +3552,12 @@ components:
           - object
           - 'null'
           description: 'The relationship as a business step: mechanism, condition, timing, evidence basis, breaker'
+        profile:
+          type:
+          - object
+          - 'null'
+          description: 'What a reader retrieves about the step: exposure, unit, date, hedge or pass-through, financial
+            endpoint, calculation and source; null without a transition'
         identity_id:
           type:
           - string
