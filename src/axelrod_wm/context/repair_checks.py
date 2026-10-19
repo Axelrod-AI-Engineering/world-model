@@ -9,8 +9,6 @@ assumed input to observed.
 
 from __future__ import annotations
 
-from typing import Any
-
 from axelrod_wm.evaluation.golden import eval_identity
 from axelrod_wm.model.period_math import (
     DisruptionPeriod,
@@ -28,7 +26,6 @@ from axelrod_wm.model.period_math import (
     project_cash_flows,
     translate,
 )
-from axelrod_wm.model.rate_exposure import Cohort, interest_increment
 
 
 def A(aid, name, binding, geography, scope, period, units, value, reason, calc, offsets, replace, source=None):

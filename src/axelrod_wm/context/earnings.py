@@ -24,7 +24,6 @@ from __future__ import annotations
 import json
 from collections import defaultdict, deque
 from pathlib import Path
-from typing import Any
 
 from axelrod_wm.context.repair_checks import ASSUMPTIONS, run_checks
 from axelrod_wm.model.rate_exposure import Cohort, interest_increment
@@ -119,11 +118,8 @@ def reconcile_at(bridge: list[dict], levels: dict[str, float], label: str) -> di
 # -- the quarterly bridge --------------------------------------------------------------------------------------------------------------
 def build_bridge(spec: dict, obs: dict[str, dict], evidence_ids: set[str]) -> dict:
     """Each period's arithmetic and the year-on-year change by line, from the observations (¥tn, rounded display left to the reader)."""
-    def val(oid: str, key: str) -> float:
-        return obs[f"{oid}_{key}"]["value"]
-
     periods = {"current": "Q1_FY3_27", "prior": "Q1_FY3_26"}
-    lines, totals = [], {}
+    lines = []
     for ln in spec["lines"]:
         row = {"line_id": ln["line_id"], "role": ln["role"], "sign_in_bridge": ln["sign"]}
         for p, k in periods.items():
@@ -261,7 +257,6 @@ def attach_repair(ctx: dict, repair: dict, days_dir: str | Path | None = None) -
     key_outputs = [k for k in ("toyota.operating_profit", "toyota.net_income", "toyota.financial_services_operating_income", "toyota.fs_income_us_scope",
                                "toyota.automotive_operating_income", "toyota.us_fin_net_interest_income", "toyota.pricing_net_op_effect",
                                "toyota.hybrid_mix_contribution") if k in values]
-    feats = {v["metric_id"]: v for v in values.values()}
     cls_objs: dict[str, dict] = {}
     for mid, v in values.items():
         spec = classes.get(mid, {})

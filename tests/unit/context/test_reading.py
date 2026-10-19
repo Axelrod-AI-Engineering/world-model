@@ -208,3 +208,34 @@ def test_a_company_without_residual_or_eliminations_and_an_unlisted_company(tmp_
 def test_a_too_small_cap_fails_loudly(tmp_path, ctx):
     with pytest.raises(ValueError, match="larger than"):
         export(tmp_path, ctx, cap_kb=1)
+
+
+def _obs(kind, perimeter, ptype):
+    return {"company_id": "C1", "kind": kind, "scope": {"perimeter": perimeter}, "period": {"type": ptype, "label": "L"}}
+
+
+def test_earnings_objects_are_routed_by_what_they_are():
+    sup = {"earnings_observations": [_obs("reported actual", "Toyota Motor Credit Corp", "year"), _obs("subsidiary actual", "x", "year"),
+                                     _obs("reported actual", "group", "quarter"), _obs("reported actual", "group", "year")],
+           "earnings_bridges": [{"company_id": "C1", "bridge_id": "b"}], "unrelated": [{"x": 1}]}
+    rows = reading.route({"domain_specific_support_objects": sup}, {"C1": "c1"})
+    got = [(fam, order) for fam, order, s, _o, _g in rows if "earnings_observations" in s]
+    assert got == [("earnings_financing_c1", 43), ("earnings_financing_c1", 43), ("earnings_quarterly_c1", 41), ("earnings_baseline_c1", 42)]
+    assert ("earnings_quarterly_c1", 41) in [(f, o) for f, o, s, _x, _g in rows if "earnings_bridges" in s]
+    assert ("support", 60) in [(f, o) for f, o, s, _x, _g in rows if "unrelated" in s]
+    # an object without a period and a company unknown to the slug map still routes
+    r = reading.route({"domain_specific_support_objects": {"model_checks": [{"check_id": "M1"}]}}, {})
+    assert r[0][:2] == ("earnings_inputs_", 44)
+
+
+def test_earnings_files_are_built_with_their_bridges_first(tmp_path, ctx):
+    pack = json.loads(json.dumps(ctx["domain_pack"]))
+    cid = pack["companies"][0]["company_id"]
+    sup = pack["domain_specific_support_objects"]
+    sup["earnings_bridges"] = [{"company_id": cid, "bridge_id": "b1"}]
+    sup["earnings_evidence_records"] = [{"company_id": cid, "evidence_id": "E1"}]
+    sup["earnings_observations"] = [{"company_id": cid, "observation_id": "O1", "kind": "reported actual", "scope": {}, "period": {"type": "quarter", "label": "Q"}}]
+    out, _m, check = export(tmp_path, {**ctx, "domain_pack": pack})
+    assert check["ok"]
+    doc = json.loads(next((out / "reading").glob("41_earnings_quarterly_*_01.json")).read_text())
+    assert list(doc["sections"])[0].endswith("earnings_bridges")

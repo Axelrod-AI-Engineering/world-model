@@ -3,8 +3,8 @@
 import pytest
 
 from axelrod_wm.context.earnings import _docs, build_bridge, reconcile_at
-from axelrod_wm.context.repair_checks import ASSUMPTIONS, run_checks  # noqa: F401  (import check)
 from axelrod_wm.context.reading import routing_text
+from axelrod_wm.context.repair_checks import ASSUMPTIONS
 
 
 def test_evidence_count_counts_distinct_documents_not_references():
