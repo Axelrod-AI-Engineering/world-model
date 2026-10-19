@@ -3,6 +3,8 @@
 Loads the scenario, optionally folds in a folder of daily import bundles (each approved, as a reviewer would), optionally
 poses the scenario's ready theses, and writes each part under the file name the load order gives it: the 03x domain
 pack, its 020 registry entry, the current state as an evidence pack, one evidence pack per forecast, and the manifest.
+By default it also writes reading/ (context/reading.py): the pack split into files of at most --max-file-kb (100) that
+an answering agent can open, with 00_START_HERE.md; the whole pack stays as the machine-import file.
 With --client-core, the client's own 000, 010, and 020 are copied beside them (020 with our registry row appended), so
 the folder is a complete upload set.
 
@@ -26,6 +28,7 @@ Client material stays local: point the output and the client core at a gitignore
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import shutil
 import sys
@@ -36,6 +39,8 @@ from fastapi.testclient import TestClient
 
 from axelrod_wm.api.app import create_app
 from axelrod_wm.context.construction import load_sources
+from axelrod_wm.context.earnings import attach_repair, load_repair
+from axelrod_wm.context.reading import build_reading_set
 from axelrod_wm.context.v4 import attach_sources
 from axelrod_wm.engine.focus import focus_result
 from axelrod_wm.repo.snapshots import MemoryBackend
@@ -66,6 +71,8 @@ def main() -> int:
     ap.add_argument("--days", help="a folder of import bundles to fold in first, in file order, each item approved")
     ap.add_argument("--theses", action="store_true", help="also pose the scenario's ready theses and export their evidence")
     ap.add_argument("--client-core", help="the client's folder holding 000, 010, and 020, to copy beside the export")
+    ap.add_argument("--max-file-kb", type=int, default=100,
+                    help="also write reading/, files of at most this many KB for an answering agent (0 = none)")
     ap.add_argument("--construction-sources", help="a folder of <company>/sources.json and citations.json")
     args = ap.parse_args()
 
@@ -109,6 +116,13 @@ def main() -> int:
                 print(f"  UNRESOLVED {u['source_id']} (cited by {len(u['cited_by'])} link(s) or value(s))")
             for p in doc["citation_gaps"]["catalogue_problems"]:
                 print(f"  SOURCES {p}")
+            # Oct 19: a company's repair data (<company>/repair.json) binds its reported observations, bridges and assumptions
+            for rep in load_repair(args.construction_sources, {c["company_id"] for c in ctx["domain_pack"]["companies"]}):
+                n = attach_repair(ctx, rep, args.days)
+                print(f"repair {rep['repair_version']} for {rep['company_id']}: {n['values_with_reported_observation']} of {n['values']} values carry a reported "
+                      f"observation; {n['observations']} observations, {n['evidence_records']} explanations, {n['bridges']} bridges, {n['pairs']} pairs, "
+                      f"{n['reconciliations']} reconciliations (not ok: {', '.join(n['reconciliations_not_ok']) or 'none'}), input classes "
+                      f"{n['input_classes']}, {n['assumption_records']} assumptions, {n['checks']} checks")
         files = {f["source"]: f["file"] for f in m["load_order"]}
         write(out / files["this export: domain_pack"], ctx["domain_pack"])
         write(out / files["this export: evidence"], ctx["evidence"])
@@ -148,6 +162,15 @@ def main() -> int:
                     if f["file"].startswith(prefix):
                         f["file"] = name
                         f["source"] = "yours" + (", with our registry row appended" if prefix == "020_" else ", unchanged")
+        if args.max_file_kb:
+            check = build_reading_set(out, ctx, m, cap_kb=args.max_file_kb)
+            files = m["reading_set"]["files"]
+            print(f"reading set: {len(files)} file(s) in reading/, largest {max(f['bytes'] for f in files) / 1024:.1f} KB; "
+                  f"{check['shard_objects']} of {check['objects']} pack objects, "
+                  f"{check['missing']} missing, {check['unexpected_or_duplicated']} duplicated or unexpected")
+        # a version for every file (its sha256): a changed file is visible; the as-of and decision dates do not move with the run
+        m["file_versions"] = {f["file"]: hashlib.sha256((out / f["file"]).read_bytes()).hexdigest()[:16]
+                              for f in m["load_order"] if (out / f["file"]).exists()}
         write(out / "axelrod_manifest.json", m)
     print(f"done: {out}")
     return 0

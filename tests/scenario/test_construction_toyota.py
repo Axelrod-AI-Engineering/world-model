@@ -46,7 +46,8 @@ COMPS = {"ty.comp.reporting_segments", "ty.comp.regional_operating_income", "ty.
          "ty.comp.revenue_by_customer_location", "ty.comp.units_by_customer_region", "ty.comp.units_by_production_region",
          "ty.comp.retail_units_bridge", "ty.comp.retail_units_by_powertrain", "ty.comp.financial_services",
          "ty.comp.pretax_bridge", "ty.comp.net_income_bridge", "ty.comp.segment_revenue",
-         "ty.comp.us_customs_base_by_origin", "ty.comp.fs_by_scope"}
+         "ty.comp.us_customs_base_by_origin", "ty.comp.fs_by_scope",
+         "ty.comp.fs_revenue_lines", "ty.comp.fs_cost_lines", "ty.comp.us_fin_contribution"}
 PATHS = {"ty.path.regional_growth", "ty.path.pricing_competition", "ty.path.asia_entrants", "ty.path.product_mix",
          "ty.path.tariffs_sourcing", "ty.path.yen", "ty.path.financing_funding", "ty.path.financing_credit_residual",
          "ty.path.execution_share", "ty.path.new_initiatives", "ty.path.china_affiliates", "ty.path.group_bridge",
@@ -360,12 +361,14 @@ def test_generalization_trace_japan_production_stoppage(g):
 
 # -- conversion round (Oct 18): one driving view per total, identities, state ------------------------------------------
 IDENTITIES = {"ty.id.na_revenue", "ty.id.japan_revenue", "ty.id.europe_revenue", "ty.id.asia_revenue",
-              "ty.id.fs_revenue", "ty.id.cost_of_financing", "ty.id.japan_exports", "ty.id.na_imports",
+              "ty.id.fs_interest_income", "ty.id.fs_funding_interest", "ty.id.japan_exports", "ty.id.na_imports",
               "ty.id.industrial_fcf", "ty.id.dividends", "ty.id.us_duty", "ty.id.na_incentive_cost",
               "ty.id.incentive_breakeven", "ty.id.dealer_days", "ty.id.us_fin_income", "ty.id.us_fin_expense",
               "ty.id.us_fin_nii", "ty.id.fs_us_scope",
               # Batch 2, Part 3 (gaps the seeds exposed): US brand units, EPS on weighted-average shares, pure translation
-              "ty.id.us_brand_units", "ty.id.eps", "ty.id.us_translation"}
+              "ty.id.us_brand_units", "ty.id.eps", "ty.id.us_translation",
+              "ty.id.hybrid_mix_op", "ty.id.price_recovery_in_year", "ty.id.cost_recognized_in_year", "ty.id.pricing_net_op",
+              "ty.id.us_duty_avoided"}
 
 
 def test_one_driving_view_per_total(g):
@@ -468,7 +471,8 @@ def test_compositions_reconcile_at_the_local_baselines(g):
     rows = toyota_rows(reconcile(g, levels))
     assert {r["composition_id"] for r in rows} == COMPS
     # Batch 2: the customs base by origin and the finance scope view have no reported parts: blocked, never flagged
-    unreported = {"ty.comp.us_customs_base_by_origin", "ty.comp.fs_by_scope"}
+    unreported = {"ty.comp.us_customs_base_by_origin", "ty.comp.fs_by_scope",
+         "ty.comp.fs_revenue_lines", "ty.comp.fs_cost_lines", "ty.comp.us_fin_contribution"}
     assert all(r["status"] == "blocked" for r in rows if r["composition_id"] in unreported)
     rows = [r for r in rows if r["composition_id"] not in unreported]
     assert all(r["status"] == "ok" and not r["missing_levels"] for r in rows), \
@@ -478,7 +482,7 @@ def test_compositions_reconcile_at_the_local_baselines(g):
     # contract and funding rates are not disclosed, so they have no level to compare
     ids = {r["identity_id"]: r for r in reconcile_identities(g, levels) if r["identity_id"] in IDENTITIES}
     blocked = {k for k, r in ids.items() if r["status"] == "blocked"}
-    assert {"ty.id.fs_revenue", "ty.id.cost_of_financing", "ty.id.industrial_fcf"} <= blocked
+    assert {"ty.id.fs_interest_income", "ty.id.fs_funding_interest", "ty.id.industrial_fcf"} <= blocked
     # Batch 2: the new arithmetic (duty, incentives, dealer days, the US module) has no reported terms: blocked, not flagged
     assert {"ty.id.us_duty", "ty.id.dealer_days", "ty.id.us_fin_income"} <= blocked
     assert all(r["status"] == "ok" for k, r in ids.items() if r["status"] != "blocked")
@@ -497,8 +501,9 @@ def test_fy2025_baselines_reconcile(g):
     ids = {r["identity_id"]: r for r in reconcile_identities(g, levels) if r["identity_id"] in IDENTITIES}
     assert all(r["status"] == "blocked" for k, r in ids.items() if k != "ty.id.dividends")
     assert ids["ty.id.dividends"]["status"] == "ok"
-    assert ids["ty.id.cost_of_financing"]["blocked_by"] == ["toyota.fs_funding_cost_rate"]
-    assert ids["ty.id.fs_revenue"]["blocked_by"] == ["toyota.fs_customer_rate"]
+    # Repair (Fix 5): the interest lines are not reported separately, so each is blocked by its own level and its rate
+    assert set(ids["ty.id.fs_funding_interest"]["blocked_by"]) == {"toyota.fs_funding_interest", "toyota.fs_funding_cost_rate"}
+    assert set(ids["ty.id.fs_interest_income"]["blocked_by"]) == {"toyota.fs_interest_income", "toyota.fs_customer_rate"}
 
 
 def test_shares_roll_forward_between_dated_counts(g):
@@ -544,9 +549,9 @@ def test_financial_services_paths_and_subsidiary_scope(g):
     """Plan round: funding and refinancing -> financing economics; borrower conditions -> credit losses; used values ->
     lease outcomes; the US finance subsidiary connects to its consolidation scope but is never a composition part (R14)."""
     fs_oi = "toyota.financial_services_operating_income"
-    assert ("toyota.fs_funding_cost_rate", "toyota.fs_cost_of_financing") in path_pairs(g, "ty.path.financing_funding")
+    assert ("toyota.fs_funding_cost_rate", "toyota.fs_funding_interest") in path_pairs(g, "ty.path.financing_funding")
     assert ("us_economy.gdp_growth", "toyota.fs_credit_loss_rate") in path_pairs(g, "ty.path.financing_borrower")
-    assert ("toyota.fs_residual_value_losses", "toyota.fs_cost_of_financing") in path_pairs(g, "ty.path.financing_credit_residual")
+    assert ("toyota.fs_residual_value_losses", "toyota.fs_depreciation_other_costs") in path_pairs(g, "ty.path.financing_credit_residual")
     for pid in ("ty.path.financing_funding", "ty.path.financing_borrower", "ty.path.financing_credit_residual"):
         assert (fs_oi, OP) in path_pairs(g, pid)
     sub = "toyota.us_finance_subsidiary_earning_assets"

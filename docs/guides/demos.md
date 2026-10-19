@@ -105,7 +105,7 @@ uv run python scripts/imports/bundles.py days sally_demo data/sally_data/_bundle
 
 To write the whole upload set to a folder (after folding in a folder of daily bundles, with an evidence pack per ready thesis, and the client's 000, 010, and 020 beside it, 020 with our row appended): `uv run python scripts/imports/export_context.py sally_demo data/sally_data/exports/<name> --days data/sally_data/days --theses --client-core <their folder>`. Point it at a gitignored folder: the set holds client files.
 
-The API: `GET /api/context/v4` returns the export (load order, domain pack, registry entry, evidence); `?forecast=<id>` adds that forecast's evidence pack. The exporter is `src/axelrod_wm/context/v4.py`.
+The API: `GET /api/context/v4` returns the export (load order, domain pack, registry entry, evidence); `?forecast=<id>` adds that forecast's evidence pack. The exporter is `src/axelrod_wm/context/v4.py`. The script also writes `reading/`, the pack split into files of at most 100 KB with a `00_START_HERE.md` (`--max-file-kb`), because the whole pack can be too large for an agent's file reader; see [focus.md](../construction/focus.md#the-reading-set-reading).
 
 ## The tutorial (small and production demos)
 

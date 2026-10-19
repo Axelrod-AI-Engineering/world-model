@@ -340,13 +340,18 @@ def domain_pack(wm: Any, ltm: Any, *, pc: dict, book: list[str], version: int, s
 
     # company edge relationships: owned by the company whose metrics the link moves (or that drives it)
     rels, macro_links, seen = [], [], set()
+    macro_seen: set[str] = set()
     for i in sorted(live, key=lambda x: x.id):
         te, se = ent_of[i.target_id], ent_of[i.source_id]
         owner_e = te if is_co[te] else se if is_co[se] else None
         if owner_e is None:
             m = link(i, None)
-            macro_links.append({"link_id": f"MLINK_{node[se][2:]}_TO_{node[te][2:]}__{m['edge_id']}_{_snake(slot[i.target_id])}",
-                                "source_node_id": node[se], "target_node_id": node[te], **m})
+            first = f"MLINK_{node[se][2:]}_TO_{node[te][2:]}__{m['edge_id']}_{_snake(slot[i.target_id])}"
+            lid, n_dup = first, 2
+            while lid in macro_seen:        # Oct 19: two links between the same nodes on one edge and metric keep distinct ids
+                lid, n_dup = f"{first}_{n_dup}", n_dup + 1
+            macro_seen.add(lid)
+            macro_links.append({"link_id": lid, "source_node_id": node[se], "target_node_id": node[te], **m})
             continue
         r = link(i, node[owner_e])
         rid = f"REL_{node[owner_e][2:]}__{r['edge_id']}_{ev[i.id]['edge_name']}"
@@ -592,7 +597,12 @@ def domain_pack(wm: Any, ltm: Any, *, pc: dict, book: list[str], version: int, s
                                              "ontology_entity_type": "Metric", "source_packs_present": [stamp]})
         f["applies_to"].append(ents[ent_of[sid]].name)
 
-    terms = sorted({a for e in ents.values() for a in e.aliases if len(a) > 2} | {c["company_name"] for c in companies})[:60]
+    # Oct 19: the companies' own names, aliases and tickers come first, so the registry row (its first 24 terms) activates the
+    # pack by them; alphabetical order had pushed "Toyota" out of it
+    first_terms = list(dict.fromkeys(t for c in companies for t in [c["company_name"], *c.get("aliases", []), c.get("ticker")]
+                                     if t and len(t) > 2))
+    rest = sorted(({a for e in ents.values() for a in e.aliases if len(a) > 2} | {c["company_name"] for c in companies}) - set(first_terms))
+    terms = (first_terms + rest)[:60]
     return {
         "schema_version": PACK_SCHEMA, "file_index": pc["file_index"], "domain_pack_id": pc["domain_pack_id"],
         "domain_pack_name": pc["domain_pack_name"], "file_role": "DOMAIN_PACK__LOAD_AFTER_CORE_WHEN_ACTIVATED",
@@ -635,7 +645,10 @@ def evidence_pack(wm: Any, *, pc: dict, version: int, state_hash: str | None) ->
                        "q95": None if _q(d, 0.95) is None else round(_q(d, 0.95), 4),
                        "observed": bool(s.observed),
                        "baseline_status": "observed in reviewed research" if s.observed else "model estimate; not observed in supplied research",
-                       "evidence_count": sum(len(i.evidence) for i in g.interactions.values() if i.target_id == sid)})
+                       "evidence_count": sum(len(i.evidence) for i in g.interactions.values() if i.target_id == sid),
+                       "prior_mean": None if _mean(getattr(s, "prior", None)) is None else round(_mean(s.prior), 4),
+                       "prior_sd": None if _sd(getattr(s, "prior", None)) is None else round(_sd(s.prior), 4),
+                       "input_class_declared": (getattr(s, "features", None) or {}).get("input_class")})
     questions = [{"id": h.id, "question": h.statement, "probability": round(h.probability, 3),
                   "informational_value": round(h.informational_value or 0.0, 4)}
                  for h in wm.hypotheses.values() if str(h.status).endswith("open")]

@@ -39,6 +39,7 @@
   - [Operating and financial paths](#operating-and-financial-paths)
 - [Validation](#validation)
 - [Completion report](#completion-report)
+- [Repair round (Oct 19)](#repair-round-oct-19)
 <!-- /toc -->
 
 The construction lives in `data/worlds/sally_demo/construction/toyota.yaml` (values, links with their transitions,
@@ -1413,3 +1414,28 @@ contribution margins, incentive response, funding and credit sensitivities, resi
 margins by powertrain; JV-level profit; the use of the found yen split without counting the yen twice; industrial
 free cash flow; US-only import exposure by origin. The second round's [inputs by status](#inputs-by-status) says, for
 each, whether the material was searched and what it holds.
+
+## Repair round (Oct 19)
+
+The reviewer's repair instructions (Fixes 1 to 14 and the model checks). This page holds ids, formulas, and structure only; the
+figures (dated observations, management passages, the subsidiary's lines) are in the local `repair.json` of the company's source
+folder, built by a local script from the Q1 FY3/27 summary, deck and Q&A, the Q1 FY3/26 summary, and the US finance subsidiary's
+10-Q. Retrieval and agent loading are the runtime owner's, not this build's; the reading set and the activation aliases below are
+cheap conveniences, not a retrieval fix.
+
+| Fix | What changed (ids) | How it is checked |
+|---|---|---|
+| 1 Reported against estimated | Each Toyota value in the evidence pack carries `reported` (period, unit, scope, availability date, source location) apart from `estimate` (mean, sd, prior, derivation with the imported items that touched it, model version). `observed` is true only with a dated reported observation; `reportable` keeps the old flag. `evidence_count` = distinct source documents among references and observations; `evidence_ref_count` = references; `link_evidence_items` keeps the old number. Pairs: `observation_estimate_pairs` (`PAIR_...`). | `context/earnings.attach_repair`; `test_earnings.py` |
+| 2 Quarterly bridge | `ty.bridge.quarterly_earnings_q1_fy3_27` (each period's arithmetic and the year-on-year change by line), observations `OBS_TY_Q_...`, explanations `EVD_...`, the China measures `ty.china.q1_fy3_27` (inside operating income, and the equity-method line: different accounts), the operating-income walk. | arithmetic computed in the exporter; residuals are rounding and shown |
+| 3 Reconciliation | One selected baseline (`BASELINE_TY_FY3_26`, the dated FY3/26 actuals) runs through both operating-profit views; `baseline_reconciliations` (`RECON_...`) hold before (model state) and after, the cause of each part's gap, and the explicit residual. Composition ids and roles unchanged. | `check.py --reconcile --baselines` |
+| 4 US financing endpoint | `ty.comp.us_fin_contribution`: net financing margin + net lease margin + other revenues - expenses + GAAP to IFRS adjustment = `toyota.us_fin_operating_contribution`; `ty.id.fs_us_scope` now translates the contribution, not the margin. The scope view `ty.comp.fs_by_scope` stays reconciling: the US module is blocked from the group endpoint (counted once, never added to the revenue/cost view). | `financing_bridges` (`ty.fin.us_rate_to_group`) |
+| 5 Group financing lines | `ty.id.fs_revenue` and `ty.id.cost_of_financing` (constant multiples) are replaced by `ty.id.fs_interest_income` and `ty.id.fs_funding_interest` (balance x rate x 0.01) with fixed assumed lines `toyota.fs_lease_other_revenue` and `toyota.fs_depreciation_other_costs`, summed by `ty.comp.fs_revenue_lines` and `ty.comp.fs_cost_lines`. The exposure by reset date is `model/rate_exposure.py`. | `test_rate_exposure.py` |
+| 6 Input classes | `input_classification` (`CLASS_...`): reported, derived, externally estimated, assumed, with the outputs that depend on each assumption and the resolution class (reconnect existing data, targeted extraction, explicit assumption). `features.input_class` on new and key values. | `attach_repair` |
+| 7 to 14 | Assumed values and identities for one instance each: `ty.id.hybrid_mix_op`; `ty.id.price_recovery_in_year`, `ty.id.cost_recognized_in_year`, `ty.id.pricing_net_op`; `ty.id.us_duty_avoided`; FX channel boundaries (`fx_boundaries`); stale notes corrected (dealer stock, liquidity roll-forward, China figures); the OP-to-share-price default is exported as an uncalibrated hypothesis. Fixtures with intermediate values: `model_checks` (MC1 to MC4, M07 to M10). Every temporary input has an `assumption_records` entry (`ASM_...`), never observed. | `model/period_math.py`, `test_period_math.py` |
+
+Schema gaps recorded in the pack: the dated event instance, the minimum of three ceilings for a buyback, the regional x business split
+(undisclosed, so unknown), and a refund/receivable/cash split for duty.
+
+Retrieval-side conveniences (not a retrieval fix): the registry row's activation terms now start with the companies' names, aliases and
+tickers (alphabetical order had pushed "Toyota" out of the first 24); an earnings-quality search scope; `reading/` files `41_` to `44_`
+with START_HERE routing earnings, baseline, financing and input questions to them; unique macro `link_id`s.
