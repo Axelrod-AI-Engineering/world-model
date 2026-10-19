@@ -221,6 +221,284 @@ subentities:
     prior: synthetic
     input_class: assumed
 - entity: toyota
+  id: toyota.hybrid_eligible_units
+  name: Toyota eligible consolidated hybrid units
+  attribute_kind: production_flow
+  unit: m units/yr
+  family: gaussian
+  prior:
+    family: gaussian
+    mu: 0.5
+    sigma: 0.1
+  scale: 0.1
+  features:
+    view: operating_state
+    basis: 'Repair (Fix 7), assumption: the consolidated units eligible for the powertrain substitution: a named scope (US consolidated sales, FY3/27), never the global retail view, which includes equity-accounted sales'
+    prior: synthetic
+    input_class: assumed
+    scope: 'US consolidated sales, Toyota and Lexus, FY3/27'
+    period: 'fiscal year ending March 2027'
+- entity: toyota
+  id: toyota.hybrid_substituted_units
+  name: Toyota hybrid units substituted for other powertrains
+  attribute_kind: production_flow
+  unit: m units/yr
+  family: gaussian
+  prior:
+    family: gaussian
+    mu: 0.01
+    sigma: 0.005
+  scale: 0.005
+  features:
+    view: operating_state
+    basis: 'Repair (Fix 7), assumption: units moved to hybrid from other powertrains at fixed total units (the same absolute count is removed from the others); a controlled sensitivity, not a forecast'
+    prior: synthetic
+    input_class: assumed
+    scope: 'inside toyota.hybrid_eligible_units'
+    period: 'fiscal year ending March 2027'
+- entity: toyota
+  id: toyota.hybrid_contribution_spread
+  name: Toyota hybrid-minus-displaced contribution per unit
+  attribute_kind: price
+  unit: ¥m/unit
+  family: gaussian
+  prior:
+    family: gaussian
+    mu: 0.05
+    sigma: 0.02
+  scale: 0.02
+  features:
+    view: operating_state
+    basis: 'Repair (Fix 7), assumption: hybrid contribution per unit less the displaced vehicle''s, after net price (incentives netted) and variable cost; the company does not disclose it. Zero removes the mix benefit'
+    prior: synthetic
+    input_class: assumed
+    scope: 'inside toyota.hybrid_eligible_units'
+    period: 'fiscal year ending March 2027'
+- entity: toyota
+  id: toyota.hybrid_mix_contribution
+  name: Toyota hybrid mix contribution to automotive operating income
+  attribute_kind: revenue_flow
+  unit: ¥tn/yr
+  family: gaussian
+  prior:
+    family: gaussian
+    mu: 0.0005
+    sigma: 0.0003
+  scale: 0.0003
+  features:
+    view: operating_state
+    basis: 'Repair (Fix 7): substituted units x contribution spread (detailed mode); derived from two assumed inputs, so it is itself an assumption-dependent sensitivity. In the direct-margin mode this line is not used, so price, incentive and mix are not added twice'
+    prior: synthetic
+    input_class: derived
+    scope: 'inside toyota.hybrid_eligible_units'
+    period: 'fiscal year ending March 2027'
+- entity: toyota
+  id: toyota.material_cost_pressure
+  name: Toyota higher material cost, materials alone
+  attribute_kind: spending_flow
+  unit: ¥tn/yr
+  family: gaussian
+  prior:
+    family: gaussian
+    mu: 1.2
+    sigma: 0.1
+  scale: 0.1
+  features:
+    view: costs
+    basis: 'Repair (Fix 8): management''s approximate annual impact of higher material costs alone (Q&A Q6 follow-up); a company estimate for FY3/27, not a recognized amount by quarter. Energy, other materials and supplier support are not split; memory and aluminum do not follow an oil edit'
+    prior: synthetic
+    input_class: reported
+    period: 'fiscal year ending March 2027'
+- entity: toyota
+  id: toyota.supplier_support_cost
+  name: Toyota supplier-strengthening cost
+  attribute_kind: spending_flow
+  unit: ¥tn/yr
+  family: gaussian
+  prior:
+    family: gaussian
+    mu: 0.1
+    sigma: 0.05
+  scale: 0.05
+  features:
+    view: costs
+    basis: 'Repair (Fix 8): the difference between the approximately 1.3tn yen including supplier-strengthening measures and the approximately 1.2tn yen for materials alone (Q&A Q6); derived from two rounded statements'
+    prior: synthetic
+    input_class: derived
+    period: 'fiscal year ending March 2027'
+- entity: toyota
+  id: toyota.price_recovery_annualized
+  name: Toyota price recovery objective, annualized
+  attribute_kind: revenue_flow
+  unit: ¥tn/yr
+  family: gaussian
+  prior:
+    family: gaussian
+    mu: 0.6
+    sigma: 0.2
+  scale: 0.2
+  features:
+    view: costs
+    basis: 'Repair (Fix 8): roughly half of the materials impact is to be recovered through price revisions (Q&A Q6): a management objective, not realized recovery, no price date, and it carries over into the following year'
+    prior: synthetic
+    input_class: assumed
+    period: 'fiscal year ending March 2027'
+- entity: toyota
+  id: toyota.recovery_year_share
+  name: Toyota share of the fiscal year with price recovery
+  attribute_kind: share
+  unit: fraction
+  family: gaussian
+  prior:
+    family: gaussian
+    mu: 1.0
+    sigma: 0.25
+  scale: 0.25
+  features:
+    view: costs
+    basis: 'Repair (Fix 8): share of the March-ending year in which an annualized recovery is realized (1 = from April 1; 0.5 = from October 1); an assumed start date, not an observed one'
+    prior: synthetic
+    input_class: assumed
+    period: 'fiscal year ending March 2027'
+- entity: toyota
+  id: toyota.cost_recognition_weight
+  name: Toyota share of the annual cost recognized in FY3/27
+  attribute_kind: share
+  unit: fraction
+  family: gaussian
+  prior:
+    family: gaussian
+    mu: 1.0
+    sigma: 0.25
+  scale: 0.25
+  features:
+    view: costs
+    basis: 'Repair (Fix 8): share of the annual cost recognized in the year, from assumed quarterly recognition weights that sum to the stated total (inventory turn is undisclosed)'
+    prior: synthetic
+    input_class: assumed
+    period: 'fiscal year ending March 2027'
+- entity: toyota
+  id: toyota.price_recovery_booked
+  name: Toyota price recovery recognized in FY3/27
+  attribute_kind: revenue_flow
+  unit: ¥tn/yr
+  family: gaussian
+  prior:
+    family: gaussian
+    mu: 0.6
+    sigma: 0.2
+  scale: 0.2
+  features:
+    view: costs
+    basis: 'Repair (Fix 8): annualized recovery x share of the year realized; recovery already embedded in the selected baseline is not added again'
+    prior: synthetic
+    input_class: derived
+    period: 'fiscal year ending March 2027'
+- entity: toyota
+  id: toyota.material_cost_booked
+  name: Toyota material cost recognized in FY3/27
+  attribute_kind: spending_flow
+  unit: ¥tn/yr
+  family: gaussian
+  prior:
+    family: gaussian
+    mu: 1.2
+    sigma: 0.1
+  scale: 0.1
+  features:
+    view: costs
+    basis: 'Repair (Fix 8): annual cost x share recognized in the year; cost timing is kept apart from recovery timing'
+    prior: synthetic
+    input_class: derived
+    period: 'fiscal year ending March 2027'
+- entity: toyota
+  id: toyota.pricing_net_op_effect
+  name: Toyota net operating effect of cost and price recovery
+  attribute_kind: revenue_flow
+  unit: ¥tn/yr
+  family: gaussian
+  prior:
+    family: gaussian
+    mu: -0.6
+    sigma: 0.2
+  scale: 0.2
+  features:
+    view: costs
+    basis: 'Repair (Fix 8): recovery recognized in the year less cost recognized in the year, before lost-unit contribution and independent savings (held at zero or stated separately); compared with the selected baseline'
+    prior: synthetic
+    input_class: derived
+    period: 'fiscal year ending March 2027'
+- entity: toyota
+  id: toyota.localized_customs_value
+  name: Toyota customs value displaced by localization
+  attribute_kind: balance
+  unit: ¥tn/yr
+  family: gaussian
+  prior:
+    family: gaussian
+    mu: 0.4
+    sigma: 0.1
+  scale: 0.1
+  features:
+    view: operating_state
+    basis: 'Repair (Fix 13), assumption: customs value of covered imports displaced by one eligible sourcing project; not the whole US customs base, and a local unit does not remove all imported-parts exposure'
+    prior: synthetic
+    input_class: assumed
+    scope: 'one eligible sourcing project (assumed)'
+    period: 'from the assumed commissioning date'
+- entity: toyota
+  id: toyota.us_duty_avoided
+  name: Toyota US duty avoided by localization
+  attribute_kind: spending_flow
+  unit: ¥tn/yr
+  family: gaussian
+  prior:
+    family: gaussian
+    mu: 0.06
+    sigma: 0.03
+  scale: 0.03
+  features:
+    view: operating_state
+    basis: 'Repair (Fix 13): displaced covered customs value x applicable rate; recognized as the inventory cost is sold, not when paid; refunds are separate'
+    prior: synthetic
+    input_class: derived
+    scope: 'one eligible sourcing project (assumed)'
+    period: 'from the assumed commissioning date'
+- entity: toyota
+  id: toyota.buyback_cash_authorization
+  name: Toyota board cash ceiling for repurchases
+  attribute_kind: balance
+  unit: ¥tn
+  family: gaussian
+  prior:
+    family: gaussian
+    mu: 1.0
+    sigma: 0.1
+  scale: 0.1
+  features:
+    view: capital
+    basis: 'Repair (Fix 14): the board-approved cash ceiling of the 2026-08-04 repurchase resolution (stored apart from completed purchases and from the share ceiling); an authorization, not execution'
+    prior: synthetic
+    input_class: reported
+    period: 'authorization window per the resolution'
+- entity: toyota
+  id: toyota.eligible_liquidity_floor
+  name: Toyota eligible liquidity floor (reviewer-selected)
+  attribute_kind: balance
+  unit: ¥tn
+  family: gaussian
+  prior:
+    family: gaussian
+    mu: 15.0
+    sigma: 1.0
+  scale: 1.0
+  features:
+    view: capital
+    basis: 'Repair (Fix 14), assumption: a reviewer-selected floor for a conditional sensitivity, with owner and effective period on its assumption record. It is not Toyota''s minimum and not an inferred buyback cut trigger'
+    prior: synthetic
+    input_class: assumed
+    period: 'the controlled period'
+- entity: toyota
   id: toyota.japan_operating_income
   name: Toyota Japan operating income
   attribute_kind: revenue_flow
@@ -1572,7 +1850,7 @@ entities:
     family: gaussian
     prior: {family: gaussian, mu: 20.0, sigma: 3.0}
     scale: 3.0
-    features: {basis: Chinese-brand share of new light-vehicle sales in the main Southeast Asian markets}
+    features: {basis: Chinese-brand share of new light-vehicle sales in the main Southeast Asian markets, input_class: assumed, qualification: 'a labelled stress input with no evidence reference, not a verified regional observation; it does not establish Toyota displacement in a country'}
 
 # --- links: accounting identities, then causal steps -----------------------------------------------------------
 interactions:
@@ -2962,7 +3240,7 @@ interactions:
   label: draws down dealer stock
   edge_type: identity
   identity: ty.id.dealer_days
-  note: 'Form check (Oct 18): left uncalibrated; dealer stock is held as days'' supply (a stock-to-sales ratio), not units, so no roll-forward in units applies; a units stock needs a dealer-stock series (not disclosed).'
+  note: 'Repair (Fix 11): a units stock now exists (ty.sf.na_dealer_stock, with ty.id.dealer_days as its days-of-supply view); its level is a synthetic prior, not a dealer-stock series. Stock, arrivals and sales must be the same model, geography and channel: this link deducts toyota.north_america_units, a consolidated-volume proxy for retail registrations, so the scope is approximate and labelled. Manufacturer sales to an external dealer are not necessarily retail registrations; in-transit units cannot buffer a destination before they arrive.'
   transition:
     mechanism: Sales faster than supply draw dealer inventory down
     sign: '-'
@@ -3040,7 +3318,7 @@ interactions:
   source: toyota.north_america_production
   target: toyota.na_dealer_arrivals
   label: supplies dealer stock
-  note: 'Form check (Oct 18): left uncalibrated; dealer stock is held as days'' supply (a stock-to-sales ratio), not units, so no roll-forward in units applies; a units stock needs a dealer-stock series (not disclosed).'
+  note: 'Repair (Fix 11): a units stock now exists (ty.sf.na_dealer_stock, with ty.id.dealer_days as its days-of-supply view); its level is a synthetic prior, not a dealer-stock series. Stock, arrivals and sales must be the same model, geography and channel: this link deducts toyota.north_america_units, a consolidated-volume proxy for retail registrations, so the scope is approximate and labelled. Manufacturer sales to an external dealer are not necessarily retail registrations; in-transit units cannot buffer a destination before they arrive.'
   calibration: uncalibrated
   transition:
     mechanism: Local production replenishes dealer inventory
@@ -4120,7 +4398,7 @@ interactions:
     breaker: JV losses or impairment; ownership change (consolidation would move units into revenue)
     next_state: Toyota share of equity-method income
     unresolved:
-    - {input: equity-method income by investee, status: found_connected, searched: [ty.wb, ty.bridge, ty.sm, ty.r1, ty.r2, ty.xc, ty.peer, ty.robo, ty.rates, 'corpus: equity-method income by investee', 'corpus: equity method', 'corpus: equity income', 'corpus: share of profit', ty.f20, ty.f20p, ty.dk, ty.fsum, ty.qa, ty.fs10, ty.mo, ty.us, ty.tt, ty.cert, ty.rt, ty.cap, ty.ir, ty.ja, 'corpus: public document pack (144 files parsed, scripts/construction/inputs.py)'], found_in: [ty.sm], note: 'China JV equity-method income for one year (results deck, via the client''s transmission model) is cited on the link; other investees are not split, and the deck figures conflict across quarters'}
+    - {input: equity-method income by investee, status: found_connected, searched: [ty.wb, ty.bridge, ty.sm, ty.r1, ty.r2, ty.xc, ty.peer, ty.robo, ty.rates, 'corpus: equity-method income by investee', 'corpus: equity method', 'corpus: equity income', 'corpus: share of profit', ty.f20, ty.f20p, ty.dk, ty.fsum, ty.qa, ty.fs10, ty.mo, ty.us, ty.tt, ty.cert, ty.rt, ty.cap, ty.ir, ty.ja, 'corpus: public document pack (144 files parsed, scripts/construction/inputs.py)'], found_in: [ty.sm], note: 'China JV equity-method income for one year (results deck, via the client''s transmission model) is cited on the link; other investees are not split. Repair (Fix 12): the deck''s two China figures are different accounts, not a conflict: 41.5bn yen (Q1 FY3/27; 55.0bn a year earlier) is operating income of consolidated subsidiaries, inside consolidated operating income, and 16.0bn yen (23.3bn) is the share of profit of associates and joint ventures, the equity-method line; any genuine cross-period conflict is kept with its source definition'}
 - id: ty_tax_formula
   source: toyota.pretax_income
   target: toyota.income_tax_expense
@@ -5020,8 +5298,7 @@ interactions:
   label: adds to liquid assets
   edge_type: stock_flow
   identity: ty.sf.industrial_liquidity
-  note: 'A roll-forward of liquid assets is not built: investing flows other than capex and market moves on the securities are not split
-    out (blocked, not flagged).'
+  note: 'Repair (Fix 14): the roll-forward exists (ty.sf.industrial_liquidity, fed by ty.id.industrial_fcf = operating cash flow - capex, and the dividends and buyback terms). What is not built is a verified cash operand set: investing flows other than capex and market moves on the securities are not split out, so the reconciliation is blocked, not flagged. Eligible liquidity excludes the finance subsidiaries'' cash; a floor is a reviewer-selected sensitivity, not a Toyota policy.'
   transition:
     mechanism: Free cash flow not paid out builds the industrial businesses' liquid assets
     sign: +
@@ -5811,7 +6088,7 @@ interactions:
     breaker: a change of definition or perimeter
     next_state: us fin net interest income
     unresolved: []
-- id: ty_usfin_contribution_scope
+- id: ty_usfin_nii_scope
   source: toyota.us_fin_operating_contribution
   target: toyota.fs_income_us_scope
   label: translates into yen
@@ -6144,6 +6421,202 @@ interactions:
     breaker: a change of segment definition, perimeter or accounting basis
     next_state: US operating contribution
     unresolved: []
+- id: ty_hybrid_units_mix
+  source: toyota.hybrid_substituted_units
+  target: toyota.hybrid_mix_contribution
+  label: times the spread is the mix benefit
+  edge_type: identity
+  identity: ty.id.hybrid_mix_op
+  transition:
+    mechanism: 'Identity: substituted units x contribution spread'
+    sign: '+'
+    condition: same period and perimeter
+    condition_observable: the defining arithmetic
+    timing: {onset: same period, build: none, persistence: while the definition holds, recognition: each period}
+    evidence: {existence: inferred, direction: inferred, magnitude: inferred, timing: inferred, sources: [ty.pub]}
+    breaker: a change of definition or perimeter
+    next_state: hybrid mix contribution
+    unresolved: []
+- id: ty_hybrid_spread_mix
+  source: toyota.hybrid_contribution_spread
+  target: toyota.hybrid_mix_contribution
+  label: times the units is the mix benefit
+  edge_type: identity
+  identity: ty.id.hybrid_mix_op
+  transition:
+    mechanism: 'Identity: substituted units x contribution spread'
+    sign: '+'
+    condition: same period and perimeter
+    condition_observable: the defining arithmetic
+    timing: {onset: same period, build: none, persistence: while the definition holds, recognition: each period}
+    evidence: {existence: inferred, direction: inferred, magnitude: inferred, timing: inferred, sources: [ty.pub]}
+    breaker: a change of definition or perimeter
+    next_state: hybrid mix contribution
+    unresolved: []
+- id: ty_hybrid_mix_auto_oi
+  source: toyota.hybrid_mix_contribution
+  target: toyota.automotive_operating_income
+  label: adds to automotive operating income
+  note: 'Repair (Fix 7): an assumption-driven sensitivity, not a measured hybrid earnings opportunity. Eligible units are consolidated only; equity-accounted JV units and their profit stay out (the JV reaches equity-method income, below operating income). Supply capacity (toyota.electrified_supply_capacity) is an unverified ceiling.'
+  calibration: uncalibrated
+  transition:
+    mechanism: 'The substitution benefit reaches the existing automotive operating income endpoint once; independent price or cost effects are added only separately'
+    sign: '+'
+    business_unit: automotive
+    currency: JPY
+    condition: the assumed inputs hold
+    condition_observable: the reported segment result
+    timing: {onset: with the assumed schedule, build: the assumed ramp, persistence: while the assumption holds, recognition: segment results}
+    evidence: {existence: inferred, direction: inferred, magnitude: unknown, timing: unknown, sources: [ty.pub]}
+    breaker: the assumed inputs are replaced by evidence
+    next_state: Toyota automotive segment operating income
+    unresolved: []
+- id: ty_recovery_annual_in_year
+  source: toyota.price_recovery_annualized
+  target: toyota.price_recovery_booked
+  label: times the share of the year is the in-year recovery
+  edge_type: identity
+  identity: ty.id.price_recovery_in_year
+  transition:
+    mechanism: 'Identity: in-year recovery = annualized recovery x share of the year'
+    sign: '+'
+    condition: same period and perimeter
+    condition_observable: the defining arithmetic
+    timing: {onset: same period, build: none, persistence: while the definition holds, recognition: each period}
+    evidence: {existence: inferred, direction: inferred, magnitude: inferred, timing: inferred, sources: [ty.pub]}
+    breaker: a change of definition or perimeter
+    next_state: price recovery in year
+    unresolved: []
+- id: ty_recovery_share_in_year
+  source: toyota.recovery_year_share
+  target: toyota.price_recovery_booked
+  label: sets the share of the year
+  edge_type: identity
+  identity: ty.id.price_recovery_in_year
+  transition:
+    mechanism: 'Identity: in-year recovery = annualized recovery x share of the year'
+    sign: '+'
+    condition: same period and perimeter
+    condition_observable: the defining arithmetic
+    timing: {onset: same period, build: none, persistence: while the definition holds, recognition: each period}
+    evidence: {existence: inferred, direction: inferred, magnitude: inferred, timing: inferred, sources: [ty.pub]}
+    breaker: a change of definition or perimeter
+    next_state: price recovery in year
+    unresolved: []
+- id: ty_cost_annual_in_year
+  source: toyota.material_cost_pressure
+  target: toyota.material_cost_booked
+  label: times the share recognized is the in-year cost
+  edge_type: identity
+  identity: ty.id.cost_recognized_in_year
+  transition:
+    mechanism: 'Identity: in-year cost = annual cost x share recognized'
+    sign: '+'
+    condition: same period and perimeter
+    condition_observable: the defining arithmetic
+    timing: {onset: same period, build: none, persistence: while the definition holds, recognition: each period}
+    evidence: {existence: inferred, direction: inferred, magnitude: inferred, timing: inferred, sources: [ty.pub]}
+    breaker: a change of definition or perimeter
+    next_state: material cost recognized in year
+    unresolved: []
+- id: ty_cost_share_in_year
+  source: toyota.cost_recognition_weight
+  target: toyota.material_cost_booked
+  label: sets the share recognized
+  edge_type: identity
+  identity: ty.id.cost_recognized_in_year
+  transition:
+    mechanism: 'Identity: in-year cost = annual cost x share recognized'
+    sign: '+'
+    condition: same period and perimeter
+    condition_observable: the defining arithmetic
+    timing: {onset: same period, build: none, persistence: while the definition holds, recognition: each period}
+    evidence: {existence: inferred, direction: inferred, magnitude: inferred, timing: inferred, sources: [ty.pub]}
+    breaker: a change of definition or perimeter
+    next_state: material cost recognized in year
+    unresolved: []
+- id: ty_recovery_pricing_net
+  source: toyota.price_recovery_booked
+  target: toyota.pricing_net_op_effect
+  label: adds to the net effect
+  edge_type: identity
+  identity: ty.id.pricing_net_op
+  transition:
+    mechanism: 'Identity: net = recovery recognized - cost recognized'
+    sign: '+'
+    condition: same period and perimeter
+    condition_observable: the defining arithmetic
+    timing: {onset: same period, build: none, persistence: while the definition holds, recognition: each period}
+    evidence: {existence: inferred, direction: inferred, magnitude: inferred, timing: inferred, sources: [ty.pub]}
+    breaker: a change of definition or perimeter
+    next_state: pricing net operating effect
+    unresolved: []
+- id: ty_cost_pricing_net
+  source: toyota.material_cost_booked
+  target: toyota.pricing_net_op_effect
+  label: is deducted from the net effect
+  edge_type: identity
+  identity: ty.id.pricing_net_op
+  transition:
+    mechanism: 'Identity: net = recovery recognized - cost recognized'
+    sign: '-'
+    condition: same period and perimeter
+    condition_observable: the defining arithmetic
+    timing: {onset: same period, build: none, persistence: while the definition holds, recognition: each period}
+    evidence: {existence: inferred, direction: inferred, magnitude: inferred, timing: inferred, sources: [ty.pub]}
+    breaker: a change of definition or perimeter
+    next_state: pricing net operating effect
+    unresolved: []
+- id: ty_pricing_net_auto_oi
+  source: toyota.pricing_net_op_effect
+  target: toyota.automotive_operating_income
+  label: reaches automotive operating income
+  note: 'Repair (Fix 8): cost and recovery run on separate schedules; the recovery is a management objective, not realized; model-level price elasticity is undisclosed, so volume is held fixed as a labelled assumption or a unit-loss assumption is stated. Recovery already embedded in guidance is not added again (the sensitivity is against the selected baseline).'
+  calibration: uncalibrated
+  transition:
+    mechanism: 'The net of recognized cost and recognized price recovery, compared with the selected baseline, reaches automotive operating income once'
+    sign: '+'
+    business_unit: automotive
+    currency: JPY
+    condition: the assumed inputs hold
+    condition_observable: the reported segment result
+    timing: {onset: with the assumed schedule, build: the assumed ramp, persistence: while the assumption holds, recognition: segment results}
+    evidence: {existence: inferred, direction: inferred, magnitude: unknown, timing: unknown, sources: [ty.pub]}
+    breaker: the assumed inputs are replaced by evidence
+    next_state: Toyota automotive segment operating income
+    unresolved: []
+- id: ty_localized_value_duty
+  source: toyota.localized_customs_value
+  target: toyota.us_duty_avoided
+  label: times the rate is the duty avoided
+  edge_type: identity
+  identity: ty.id.us_duty_avoided
+  transition:
+    mechanism: 'Identity: displaced covered customs value x applicable rate'
+    sign: '+'
+    condition: same period and perimeter
+    condition_observable: the defining arithmetic
+    timing: {onset: same period, build: none, persistence: while the definition holds, recognition: each period}
+    evidence: {existence: inferred, direction: inferred, magnitude: inferred, timing: inferred, sources: [ty.pub]}
+    breaker: a change of definition or perimeter
+    next_state: US duty avoided
+    unresolved: []
+- id: ty_localized_rate_duty
+  source: us_vehicle_tariffs.effective_rate
+  target: toyota.us_duty_avoided
+  label: sets the rate on the displaced value
+  edge_type: identity
+  identity: ty.id.us_duty_avoided
+  transition:
+    mechanism: 'Identity: displaced covered customs value x applicable rate'
+    sign: '+'
+    condition: same period and perimeter
+    condition_observable: the defining arithmetic
+    timing: {onset: same period, build: none, persistence: while the definition holds, recognition: each period}
+    evidence: {existence: inferred, direction: inferred, magnitude: inferred, timing: inferred, sources: [ty.pub]}
+    breaker: a change of definition or perimeter
+    next_state: US duty avoided
+    unresolved: []
 - id: ty_fs_us_scope_oi
   source: toyota.fs_income_us_scope
   target: toyota.financial_services_operating_income
@@ -6471,6 +6944,25 @@ identities:
    factors: [toyota.fs_borrowings, toyota.fs_funding_cost_rate], coefficient: 0.01,
    unit_check: '¥tn/yr = ¥tn x % x 0.01',
    note: 'Repair (Fix 5), replaces ty.id.cost_of_financing: funding interest only, no constant multiple. Depreciation and other financing costs are a separate fixed value (toyota.fs_depreciation_other_costs); residual-value losses land there. Balances are period-end stocks standing in for average funded balances (labelled). The exposure by reset date is the cohort function in model/rate_exposure.py.'}
+- {id: ty.id.hybrid_mix_op, entity_id: toyota, form: product, target: toyota.hybrid_mix_contribution,
+   factors: [toyota.hybrid_substituted_units, toyota.hybrid_contribution_spread], coefficient: 1.0,
+   unit_check: '¥tn/yr = m units/yr x ¥m/unit',
+   note: 'Repair (Fix 7): at fixed total units, delta OP = substituted eligible units x (hybrid contribution per unit - displaced contribution per unit). Both factors are assumptions; a spread of zero removes the benefit. Detailed unit economics and a direct automotive-margin assumption are alternatives for the same effect: use one.'}
+- {id: ty.id.price_recovery_in_year, entity_id: toyota, form: product, target: toyota.price_recovery_booked,
+   factors: [toyota.price_recovery_annualized, toyota.recovery_year_share], coefficient: 1.0,
+   unit_check: '¥tn/yr = ¥tn/yr x fraction',
+   note: 'Repair (Fix 8): in-year recovery = annualized recovery x the share of the fiscal year it is realized.'}
+- {id: ty.id.cost_recognized_in_year, entity_id: toyota, form: product, target: toyota.material_cost_booked,
+   factors: [toyota.material_cost_pressure, toyota.cost_recognition_weight], coefficient: 1.0,
+   unit_check: '¥tn/yr = ¥tn/yr x fraction',
+   note: 'Repair (Fix 8): in-year cost = annual cost x the share recognized in the year (assumed quarterly weights).'}
+- {id: ty.id.pricing_net_op, entity_id: toyota, form: difference, target: toyota.pricing_net_op_effect,
+   of: toyota.price_recovery_booked, minus: [toyota.material_cost_booked],
+   note: 'Repair (Fix 8): incremental OP = recovery recognized - cost recognized (before lost-unit contribution and independent savings, shown separately). Baseline recovery embedded in guidance is not added again.'}
+- {id: ty.id.us_duty_avoided, entity_id: toyota, form: product, target: toyota.us_duty_avoided,
+   factors: [toyota.localized_customs_value, us_vehicle_tariffs.effective_rate], coefficient: 0.01,
+   unit_check: '¥tn/yr = ¥tn/yr x % x 0.01',
+   note: 'Repair (Fix 13): duty avoided only on displaced covered customs value at a labelled scenario rate; the exemption assumption is separate.'}
 - {id: ty.id.japan_exports, entity_id: toyota, form: difference, target: toyota.japan_export_units,
    of: toyota.japan_production, minus: [toyota.japan_units, toyota.japan_other_flows],
    note: 'Exports = Japan production - Japan sales - other flows (inventory build); the reported exports are observed, and the
@@ -6542,7 +7034,7 @@ identities:
   coefficient: 365.0
   unit_check: days = 365 x m units / (m units/yr)
   note: 'Batch 2 (Q10): a metric definition (calendar days, annual selling rate; not seasonally adjusted), not a threshold for incentive
-    changes. The days'' supply level is a synthetic prior, never an observation.'
+    changes. The days'' supply level is a synthetic prior, never an observation. Repair (Fix 11): the denominator is consolidated vehicle volume, a proxy for retail registrations; the stock is in the same market only to that approximation.'
 - id: ty.id.us_fin_income
   entity_id: toyota
   form: product
@@ -7165,7 +7657,7 @@ paths:
   - interaction_id: ty_usfin_income_nii
   - interaction_id: ty_usfin_expense_nii
   - interaction_id: ty_usfin_nii_contribution
-  - interaction_id: ty_usfin_contribution_scope
+  - interaction_id: ty_usfin_nii_scope
   - interaction_id: ty_fs_us_scope_oi
   - interaction_id: ty_seg_financial_services_operating_income
   endpoint: toyota.operating_profit

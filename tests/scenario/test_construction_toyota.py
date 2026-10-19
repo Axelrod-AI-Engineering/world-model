@@ -366,7 +366,9 @@ IDENTITIES = {"ty.id.na_revenue", "ty.id.japan_revenue", "ty.id.europe_revenue",
               "ty.id.incentive_breakeven", "ty.id.dealer_days", "ty.id.us_fin_income", "ty.id.us_fin_expense",
               "ty.id.us_fin_nii", "ty.id.fs_us_scope",
               # Batch 2, Part 3 (gaps the seeds exposed): US brand units, EPS on weighted-average shares, pure translation
-              "ty.id.us_brand_units", "ty.id.eps", "ty.id.us_translation"}
+              "ty.id.us_brand_units", "ty.id.eps", "ty.id.us_translation",
+              "ty.id.hybrid_mix_op", "ty.id.price_recovery_in_year", "ty.id.cost_recognized_in_year", "ty.id.pricing_net_op",
+              "ty.id.us_duty_avoided"}
 
 
 def test_one_driving_view_per_total(g):
