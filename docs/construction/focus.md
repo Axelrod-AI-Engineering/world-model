@@ -124,3 +124,11 @@ process-independence of the files.
    names a removed company needs an override in `data/scenarios/sally_focus/scenario.yaml`, and the report's
    `groups_dropped`, `theses_dropped`, and `mentions` say which.
 3. Run the export with a new date in the folder name, and zip it.
+
+### Repair data (Oct 19)
+
+A company folder under `--construction-sources` may hold `repair.json` (client material: dated observations with sources, management
+explanations, a financing bridge, input classes). The export binds it (`context/earnings.py`): reported against estimated on each of the
+company's values, the baseline reconciliations, the bridges, the assumption records and the controlled model checks. The decision date
+and the as-of date come from the instruction and the model state, not from the run; the manifest's `generated_at` is the only moving
+field, and `file_versions` gives a sha256 for every file. The reading set adds `41_` to `44_` files for these objects.

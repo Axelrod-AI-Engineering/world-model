@@ -12,6 +12,10 @@ at most `cap_kb` kilobytes, each holding whole objects of the pack unchanged, wi
     40_semantic_fields_NN.json  financial_model_semantic_fields
     50_financial_<company>_NN.json   the financial bridge and identities of the company
     60_support_NN.json          the other domain_specific_support_objects
+    41_earnings_quarterly_<company>_NN.json   dated quarterly observations, management explanations, the earnings bridge (repair data)
+    42_earnings_baseline_<company>_NN.json    the selected baseline's observations, observation/estimate pairs, reconciliations
+    43_earnings_financing_<company>_NN.json   financing bridges, the subsidiary's reported lines, FX channel boundaries
+    44_earnings_inputs_<company>_NN.json      input classes, assumption records, the controlled model checks
     90_index_ids_NN.json        every relationship, path, and support-object id -> its file (sorted, in as many files as it needs)
 
 Each object lands in exactly one shard; `verify_coverage` reads the written files back and checks that their union is
@@ -35,11 +39,40 @@ ID_KEY = {"company_edge_relationships": "relationship_id", "transmission_paths":
           "financial_model_semantic_fields": "field_spec_id", "clusters": "cluster_id",
           SUP + "macro_transmission_links": "link_id", SUP + "macro_factor_nodes": "node_id",
           SUP + "financial_bridge": "composition_id", SUP + "financial_identities": "identity_id",
-          SUP + "axelrod_edge_vocabulary": "edge_id"}
+          SUP + "axelrod_edge_vocabulary": "edge_id",
+          SUP + "earnings_observations": "observation_id", SUP + "earnings_evidence_records": "evidence_id",
+          SUP + "earnings_bridges": "bridge_id", SUP + "observation_estimate_pairs": "pair_id",
+          SUP + "baseline_reconciliations": "reconciliation_id", SUP + "financing_bridges": "bridge_id",
+          SUP + "input_classification": "classification_id", SUP + "assumption_records": "assumption_id",
+          SUP + "model_checks": "check_id", SUP + "fx_boundaries": "boundary_id"}
+# Oct 19: the company-bound earnings objects (context/earnings.py), routed to bounded files by the question they answer
+EARNINGS = {"earnings_observations": None, "earnings_evidence_records": ("quarterly", 41), "earnings_bridges": ("quarterly", 41),
+            "observation_estimate_pairs": ("baseline", 42), "baseline_reconciliations": ("baseline", 42),
+            "financing_bridges": ("financing", 43), "fx_boundaries": ("financing", 43), "input_classification": ("inputs", 44),
+            "assumption_records": ("inputs", 44), "model_checks": ("inputs", 44)}
+RANK = {"earnings_bridges": 0, "financing_bridges": 0, "baseline_reconciliations": 0, "model_checks": 0, "earnings_evidence_records": 1,
+        "observation_estimate_pairs": 1, "fx_boundaries": 1, "assumption_records": 1, "input_classification": 2, "earnings_observations": 3}
+EARNINGS_ROUTES = [
+    ("The latest quarter: what moved attributable net income against operating profit, the lines below operating profit, one-time items, the China measures",
+     "earnings_quarterly", "Start with the earnings bridge (`ty.bridge.quarterly_earnings_q1_fy3_27`: each period's arithmetic and the year-on-year change by line), "
+     "then the management explanations (`EVD_...`) it names, then the China measures (`ty.china.q1_fy3_27`): 41.5bn is inside operating income, 16.0bn is the equity-method line."),
+    ("The starting operating profit, net income or regional profit: reported against estimated, and whether the regional and business views agree",
+     "earnings_baseline", "Open the observation/estimate pair (`PAIR_...`) for the metric, then the reconciliation (`RECON_...`) of the view. The reported observation is the baseline; "
+     "the estimate is the model's current level and is never the observation."),
+    ("A financing or exchange-rate change: which balances reprice, whether it reaches group profit, translation signs",
+     "earnings_financing", "Open the financing bridge (`ty.fin.us_rate_to_group`) for the path from a US rate change to the US contribution and the blocked group endpoint, and `FXB_...` for the "
+     "FX channels each calibrated sensitivity includes."),
+    ("Which inputs are reported, derived, externally estimated or assumed, what depends on an assumption, and the controlled checks",
+     "earnings_inputs", "Open `CLASS_...` for an input, `ASM_...` for its assumption record, and the model checks (`MC1`..`MC4`, `M07`..`M10`) for fixtures with intermediate values."),
+]
 WHEN_ORDER = {10: "The pack's frame: companies, clusters, sector packs, caveats, metric families",
               20: "Mechanisms from a driver to a company metric: effect size, delay, validator, invalidator",
               30: "The ordered chain from a trigger to the companies it reaches",
               40: "Definitions of the financial-model fields",
+              41: "Dated quarterly observations, management explanations and the earnings bridge of a company",
+              42: "The selected dated baseline: observations, reported against estimated pairs, reconciliations before and after",
+              43: "Financing bridges (rate to US contribution to the group endpoint) and the FX channel boundaries",
+              44: "Input classes (reported, derived, externally estimated, assumed), assumption records, and the controlled model checks",
               50: "How a company's total splits into parts, and the identities that compute its metrics",
               60: "Macro nodes and links, edge vocabulary, schema gaps, model state, citation gaps",
               90: "To find the file holding a relationship, path, composition, identity, node, or link id"}
@@ -147,6 +180,17 @@ def route(pack: dict, slug_of: dict[str, str]) -> list[tuple[str, int, str, Any,
         elif s in PER_COMPANY:
             slug = slug_of.get(o["company_id"], o["company_id"].lower())
             out.append((f"financial_{slug}", 50, s, o, s))
+        elif s.removeprefix(SUP) in EARNINGS and s.startswith(SUP):
+            name = s.removeprefix(SUP)
+            slug = slug_of.get(o.get("company_id"), str(o.get("company_id", "")).lower())
+            where = EARNINGS[name]
+            if where is None:      # observations: by what they are
+                per = o["scope"].get("perimeter", "")
+                where = ("financing", 43) if per.startswith("Toyota Motor Credit") or "subsidiary" in o.get("kind", "") else \
+                    (("quarterly", 41) if o["period"]["type"] == "quarter" else ("baseline", 42))
+            fam_name, order = where
+            per = o.get("period")
+            out.append((f"earnings_{fam_name}_{slug}", order, s, o, f"{name}|{per.get('label', '') if isinstance(per, dict) else ''}"))
         elif s.startswith(SUP):
             out.append(("support", 60, s, o, s))
         else:
@@ -241,6 +285,22 @@ def company_overview(c: dict, pack: dict, where: dict[tuple[str, str], list[str]
     return "\n".join(L)
 
 
+def routing_text(rows: list[dict]) -> list[str]:
+    """Which earnings files answer which kind of question (empty when the export carries none)."""
+    names = [r["file"] for r in rows]
+    L = []
+    for question, fam, how in EARNINGS_ROUTES:
+        files = [n for n in names if f"_{fam}_" in n]
+        if files:
+            L.append(f"- **{question}.** Open {', '.join('`' + f + '`' for f in files)}. {how}")
+    if not L:
+        return []
+    return ["## Earnings, baseline and financing questions: go here first", "",
+            "For a question about reported results, a starting baseline, a reconciliation, a financing or FX path, or what rests on an assumption, "
+            "open these files before the relationship files. A source catalogue entry is a locator, not the proof: read the observation or "
+            "explanation it names. Forecast packs (`FC-S-...`) are outputs of model runs, scenario context, and never observed company facts.", "", *L, ""]
+
+
 def start_here(pack: dict, meta: dict, rows: list[dict], linked: list[dict], cap_kb: int) -> str:
     cos = ", ".join(f"{c['company_name']} ({c['ticker']})" for c in pack["companies"])
     L = [f"# START HERE: {pack['domain_pack_name']}", "",
@@ -260,6 +320,7 @@ def start_here(pack: dict, meta: dict, rows: list[dict], linked: list[dict], cap
          "| File | Holds | Size | Open it when |", "|---|---|---|---|"]
     L += [f"| `{r['file']}` | {r['holds']} | {kb(r['bytes'])} | {r['when']} |" for r in rows]
     L += [f"| `{r['file']}` | {r['holds']} | {kb(r['bytes'])} | {r['when']} |" for r in linked]
+    L += [""] + routing_text(rows)
     L += ["", "## Follow an id to its file", "",
           "- A relationship id is `REL_<COMPANY>__<EDGE>_<NAME>`; a path id is `PATH_...`. Open "
           "the `90_index_ids_NN.json` files: `ids` maps every relationship, path, financial composition and "
@@ -333,7 +394,10 @@ def build_reading_set(out: Path, ctx: dict, manifest: dict, *, cap_kb: int = 100
     where: dict[tuple[str, str], list[str]] = {}
     docs = []
     for (order, family), its in sorted(fam.items()):
-        its.sort(key=lambda t: t[2] if order == 20 else "")
+        if 41 <= order <= 44:      # bridges, reconciliations and checks first; the long lists of observations and classes after them
+            its.sort(key=lambda t: RANK.get(t[0].removeprefix(SUP), 5))
+        else:
+            its.sort(key=lambda t: t[2] if order == 20 else "")
         shards = pack_groups(its, int(cap * 0.88))
         for n, sh in enumerate(shards, 1):
             name = f"{order}_{family}_{n:02d}.json"
