@@ -26,7 +26,8 @@ jobs:
   # lakehouse, and the outward API must stay fully covered; everything else may not fall below coverage-floor.json.
   coverage:
     runs-on: ubuntu-latest
-    timeout-minutes: 75
+    # Oct 19: the suite outgrew 75 minutes under coverage (API v1, the construction rounds, the golden harness)
+    timeout-minutes: 150
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
