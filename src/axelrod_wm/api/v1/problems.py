@@ -117,13 +117,14 @@ def as_api_error(exc: Exception) -> ApiError | None:
     if isinstance(exc, UnboundThesis):
         return ApiError("thesis_unbound", f"the thesis names ends the model cannot bind: {exc.unbound}")
     if isinstance(exc, ControllerError):
-        return ApiError("conflict", str(exc))
+        return ApiError("conflict", "the request conflicts with the current state")
     if isinstance(exc, RestoreError):
-        return ApiError("version_not_found", str(exc))
+        return ApiError("version_not_found", "the requested version was not found")
     if isinstance(exc, KeyError):
         return ApiError("not_found", f"not found: {exc.args[0] if exc.args else ''}")
     if isinstance(exc, ValueError):
-        return ApiError("invalid_request", str(exc))
+        # exception text stays in the server log, never in the answer (CodeQL: information exposure)
+        return ApiError("invalid_request", "the request is invalid")
     return None
 
 
