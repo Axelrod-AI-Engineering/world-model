@@ -2914,10 +2914,11 @@ interactions:
   label: raises customs cost on imports
   edge_type: identity
   identity: ty.id.us_duty
-  note: 'Calibrated Oct 18 (scripts/construction/calibrate.py) from the company''s planned tariff cost at the stated all-in rate,
-    read as linear in the rate (the client''s transmission model); the range spans a broker''s lower gross estimate and the
-    reading on the incremental rate only. Cost to the importer, gross of pricing and countermeasures: those are the reprice,
-    resource, absorb and transfer-price branches, still uncalibrated. Origin (Canada, Mexico) and parts are not separated.'
+  note: 'Repair (Oct 19, M06): the rate factor of the duty identity ty.id.us_duty, the one driver of the duty effect; the effective rate
+    is a scenario input. The company''s planned and reported tariff cost is kept as a comparison observation (the identity''s result
+    is checked against it), not a second cost and no longer the source of this link''s size. Cost to the importer, gross of pricing
+    and countermeasures: those are the reprice, resource, absorb and transfer-price branches, still uncalibrated. Origin (Canada,
+    Mexico) and parts are not separated.'
   transition:
     mechanism: A higher effective US duty on covered vehicles and parts raises the customs cost of what Toyota imports into the US
     sign: +
@@ -3456,6 +3457,10 @@ interactions:
   source: asia_auto_market.chinese_brand_share
   target: toyota.asia_market_share
   label: takes share from
+  note: 'Repair (Oct 19, M05): the regional Chinese-brand share is an unverified assumption. The cited broker passage is one country''s
+    statement and is kept as its own record with its scope; it does not establish a region-wide series. A share is bound only as a
+    numerator over a matched market total (brand, retail or wholesale, powertrain, class, geography, month); a regional point move is
+    never applied to the whole consolidated Asia base, and units or share alone do not rank profit buffers.'
   calibration: uncalibrated
   transition:
     mechanism: Chinese brands' electric models gain share in Southeast Asia, largely from Japanese incumbents
@@ -4697,9 +4702,10 @@ interactions:
   label: times the rate is the duty
   edge_type: identity
   identity: ty.id.us_duty
-  note: 'Plan round: the product (duty = base x rate) is not built as an identity: the base has no level (not disclosed), and the rate''s
-    size is carried by the reduced form ty_tariff_cost, sized from the company''s planned cost (R13: one number per effect). The step
-    shows who pays and when the duty falls due.'
+  note: 'Repair (Oct 19, M06): one of the two factors of the duty identity ty.id.us_duty (duty = 0.01 x covered customs value x effective
+    rate), the one driver of the duty effect. The customs base is an assumption (no customs-entry source; North America sales less
+    production is not the US covered customs value), so the identity is blocked at the baselines. The company-reported tariff cost is
+    a comparison for the identity''s result, never a second additive cost. The step shows who pays and when the duty falls due.'
   transition:
     mechanism: The duty is the customs value of covered imports times the effective rate; Toyota's US importer of record owes it at
       customs entry and expenses it in cost of sales as the vehicles sell
@@ -4858,7 +4864,11 @@ interactions:
   target: toyota.hybrid_retail_units
   label: caps hybrid deliveries
   note: 'Holds only while supply binds (a threshold condition; not sized). Units are not margins (R14): the powertrain sales share says
-    nothing about profit per unit.'
+    nothing about profit per unit. Repair (Oct 19, M04): the capacity is an assumption; a sales plan is not installed capacity and a
+    battery-line conversion is not net expansion (project records keep announced, converted, commissioned, qualified and usable
+    apart). The path continues battery and line allocation -> deliverable eligible units -> additional sales or substitution -> net
+    price, variable cost and contribution -> automotive OP; both the incremental-demand and the substitution branch stay open, and
+    low inventory alone does not prove lost group sales.'
   calibration: uncalibrated
   transition:
     mechanism: When hybrid orders exceed what Toyota can build, deliveries follow supply, not demand (supply availability)
@@ -6999,8 +7009,8 @@ identities:
   coefficient: 0.01
   unit_check: ¥tn/yr = ¥tn/yr x % x 0.01
   note: 'Batch 2 (Q7): duty = covered customs value x effective rate, summed over origin by the base''s driving view; paid at entry,
-    expensed as the stock sells. Replaces the rate''s guidance-sized reduced form (R13): the base has no observed level, so the identity
-    is blocked at the baselines and its weights come from the construction levels.'
+    expensed as the stock sells. The one driver of the duty effect (R13); the company''s tariff guidance is a comparison, not a second
+    cost. The base has no observed level, so the identity is blocked at the baselines and its weights come from the construction levels.'
 - id: ty.id.na_incentive_cost
   entity_id: toyota
   form: product

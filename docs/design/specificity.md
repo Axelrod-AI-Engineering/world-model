@@ -13,7 +13,7 @@
 <!-- /toc -->
 
 The client's reviewer said, in two rounds, that our world model was not specific enough. A third document (Oct 18)
-set out how to build Toyota and Tokio Marine to her standard. The reviewer said:
+set out how to build Toyota and Tokio Marine to her standard. Repair documents followed on Oct 18 and Oct 19. The reviewer said:
 
 - it jumped from a macro driver straight to a company's sales or profit;
 - it did not say how;
@@ -241,6 +241,27 @@ what happens operationally, and where the result enters earnings, cash or capita
 be visible.
 *Test:* the company's scenario test runs each validation case through the model, the export and the context reads.
 
+**R17. A claim keeps its stage and scope.** A record says how far a development has gone and what it covers:
+
+- a plan or target is not capacity: a sales target is not installed capacity, and a line conversion is not net
+  expansion. A project keeps announced, converted, commissioned, qualified and usable output apart, and its unknowns
+  (net capacity, downtime, allocation, ramp, costs, eligibility) stay unknown;
+- an announcement is management intent, a proposed policy is not a final duty, launch orders are not deliveries, and a
+  consumer survey is not observed switching;
+- a category inside another is never relabelled as the whole (hybrids are one part of electrified vehicles);
+- a statement about one country, segment or denominator is kept as its own record with that scope. It does not
+  establish a regional series, and an aggregate with no source or denominator is an unverified assumption;
+- a value shown on two scopes (an operating line with and without a valuation item) is two records, never added;
+- each effect has one authoritative driver. A company's own reported or guided figure for the same effect is a
+  comparison, never a second additive cost.
+
+A plausible mechanism with no current evidence is a conditional path, not a newly observed change or a measured
+winner. Constraint evidence (low stock) supports an availability constraint, not lost group sales or a higher margin.
+*Test:* project and plan records carry a stage and their unknowns; a part's observations sit inside the whole's in
+every period; no value is observed without a dated reported observation; each effect names its driver and keeps the
+company's figure as a comparison; the completion checks report model correctness, runtime access and answer quality
+as separate states.
+
 ## Where each rule is enforced
 
 | Rule | Build (check.py, tests) | Ingestion | Learning and review | Prediction |
@@ -261,6 +282,7 @@ be visible.
 | R15 Working calculations | local bindings record version, location, formula | — | — | — |
 | R16 End-to-end validation | company tests: validation cases through model, export and context | — | — | the brief separates calculated from direction-only steps |
 | R13 One number per effect | company docs record the netting; company tests | — | — | not yet checked mechanically (see below) |
+| R17 Stage and scope | business records (`context/earnings.py`); completion checks C01–C06; company tests | a statement keeps its scope and stage (plan, announcement, order, delivery) | review shows the stage beside the claim | a conditional path is not reported as an observed change |
 
 ## Ingestion
 
@@ -378,3 +400,10 @@ Generalizations from building the eleven companies, kept here so the next compan
 | Oct 19 | A constant multiple that holds a non-interest line proportional to interest is replaced by a separate fixed (assumed) line; rates move only the interest lines, by exposed balance and reset date | R12, R13 |
 | Oct 19 | A scoped module (a subsidiary on another accounting basis) reaches the group endpoint either by replacing its matching portion of the driving view or not at all (blocked); it is never added | R5, R13, R14 |
 | Oct 19 | A temporary assumption has a full record (binding, scope, period, units, value, reason, affected calculation, offsets, replacement evidence) and is never observed because a formula runs | R4, R7 |
+| Oct 19 | Every value an agent may read follows the observed rule, including a market value outside the company that the company's links read | R2, R8 |
+| Oct 19 | A sales target, a planned conversion and a production move are project or plan records with a stage and their unknowns, not capacity, expansion or additional demand | R14, R17 |
+| Oct 19 | A broker's one-country share statement is kept with its scope; a regional share with no source or denominator is an unverified assumption, and a regional point move is never applied to a whole consolidated base | R14, R17 |
+| Oct 19 | An effect has one driver (the duty identity); the company's reported tariff cost is its comparison, and stale notes that contradict the driver are corrected | R13, R17 |
+| Oct 19 | A stipulated zero is an assumption, not an observed zero; free cash flow at a baseline is derived from its reported operands, with any perimeter caveat stated | R4, R8 |
+| Oct 19 | Completion checks return their package (status, changed ids, baseline, source period and passages, assumptions, intermediate values, reconciliation, unresolved endpoints) and keep model correctness, runtime access and answer quality apart | R16 |
+| Oct 19 | Agent-prompt amendments and runtime access problems are owned by the prompt and runtime owners; the model's job is that the records exist, are exported and are reachable by id | R16 |

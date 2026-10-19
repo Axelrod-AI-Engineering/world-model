@@ -268,8 +268,9 @@ def test_the_controlled_checks_all_run_and_pass():
     ctx, repair = build()
     attach_repair(ctx, repair)
     checks = {c["check_id"]: c for c in ctx["domain_pack"]["domain_specific_support_objects"]["model_checks"]}
-    assert list(checks) == ["MC1", "MC2", "MC3", "MC4", "M07", "M08", "M09", "M10"]
-    assert all(c["status"] == "run" and c["passes"] and c["company_id"] == CID for c in checks.values()), {k: c["passes"] for k, c in checks.items()}
+    earlier = ["MC1", "MC2", "MC3", "MC4", "M07", "M08", "M09", "M10"]
+    assert list(checks) == [*earlier, "C01", "C02", "C03", "C04", "C05", "C06"]
+    assert all(checks[k]["status"] == "run" and checks[k]["passes"] and checks[k]["company_id"] == CID for k in earlier), {k: c["passes"] for k, c in checks.items()}
     assert checks["MC1"]["results"]["mismatches_with_the_primary_summary"] == ["toyota.net_income"]
     assert checks["M10"]["results"]["op_to_share_price_default"].startswith("uncalibrated hypothesis")
 

@@ -6,7 +6,7 @@ description: Build a company's business construction in an Axelrod world model a
 # Building a company's business construction
 
 This is the method behind the Toyota, Tokio Marine and JPMorgan builds, and the eight that followed. The standard it
-enforces is [docs/design/specificity.md](../../docs/design/specificity.md), rules R1–R16. The tools and forms are in
+enforces is [docs/design/specificity.md](../../docs/design/specificity.md), rules R1–R17. The tools and forms are in
 [docs/construction/README.md](../../docs/construction/README.md). Reference builds are in
 [docs/construction/](../../docs/construction/).
 
@@ -90,14 +90,24 @@ Build in this order: composition → operating paths → mapping into the accoun
    - inferences.
 
    A forecast is not an observation, and a revision is news.
-9. **Baselines.** Make an `axelrod.import/v1` bundle of dated actuals from the company's own material, and keep
+9. **Projects, plans and scope (R17).** Give each announced project, plan or capacity claim its own record:
+   - its stage (announced, converted, commissioned, qualified, usable), dated facts and sources;
+   - what it is not: a sales target is not capacity, a conversion is not expansion, a production move is not demand;
+   - its unknowns kept unknown (net capacity, downtime, allocation, ramp, costs, tariff eligibility);
+   - the OP and cash rules it would follow once sized, with capex, depreciation and working capital apart.
+
+   Keep a statement with its own scope (one country, one denominator), keep a part inside its whole (hybrids inside
+   electrified), and keep a line's two reported scopes as two records. Each effect has one driver; the company's own
+   figure for it is a comparison. A value of another node that the company's links read follows the same observed
+   rule.
+10. **Baselines.** Make an `axelrod.import/v1` bundle of dated actuals from the company's own material, and keep
    estimates in a separate file. Validate it: `scripts/imports/bundles.py check <world> <bundle>`.
-10. **Sources and citations (R6).** Keep two local files:
+11. **Sources and citations (R6).** Keep two local files:
     - `sources.json`: source id → document, kind, date, period, basis, read state, proof limits;
     - `citations.json`: link or value id → source id, location (sheet!cell, table/row, page and paragraph), and passage.
 
     Tracked files hold **neutral ids only**: never a firm, broker, vendor or file name, and never a client figure.
-11. **Inputs (R7).** Run `scripts/construction/inputs.py <world> --entities <company> --corpus <client folder>`. Read
+12. **Inputs (R7).** Run `scripts/construction/inputs.py <world> --entities <company> --corpus <client folder>`. Read
     the candidates, then set each input's status:
     - found and connected;
     - found but not connected;
@@ -106,7 +116,7 @@ Build in this order: composition → operating paths → mapping into the accoun
     - not disclosed in the reviewed sources, listing what was searched.
 
     Leave none "not yet reviewed".
-12. **Check and reconcile.** Run:
+13. **Check and reconcile.** Run:
 
     ```
     scripts/construction/check.py <world> --entities <company> --sources <client>/construction --reconcile --statistic median [--baselines <bundle>]
@@ -114,14 +124,14 @@ Build in this order: composition → operating paths → mapping into the accoun
 
     The run must end with no problems, no unresolved ids, no uncited material claims, and no reconciliation flags
     at medians or at baselines. Report any unexplained difference as an explicit residual.
-13. **Generalization trace (R10).** Trace a development no path was written for, using `context.construction.trace`.
+14. **Generalization trace (R10).** Trace a development no path was written for, using `context.construction.trace`.
     Show that it reaches a financial endpoint, or where and why it stops.
-14. **Calculation coverage (R9).** For each path, and for the client's theses, record from a forecast's `coverage`:
+15. **Calculation coverage (R9).** For each path, and for the client's theses, record from a forecast's `coverage`:
     - which links contribute a size;
     - which are excluded, and why;
     - which inputs block a size;
     - the company's own steps, counted apart from summary links.
-15. **Validation test** (`tests/scenario/test_construction_<company>.py`):
+16. **Validation test** (`tests/scenario/test_construction_<company>.py`):
     - no construction problems;
     - the required compositions and paths exist;
     - every step has a transition, and every uncalibrated step a sign;
@@ -130,12 +140,19 @@ Build in this order: composition → operating paths → mapping into the accoun
     - the objects appear in the export and the API.
 
     Tests that need the client's files skip without them.
-16. **Validation cases (R16).** Run the company's named validation cases, plus one development outside them, through
+17. **Validation cases (R16).** Run the company's named validation cases, plus one development outside them, through
     the internal model, the export and the context an agent retrieves.
-17. **Completion report: four reviewable parts (R16).** A before/after audit by canonical id; the compositions and
+18. **Completion report: four reviewable parts (R16).** A before/after audit by canonical id; the compositions and
     connected paths; evidence and calibration; the end-to-end checks. For each gap: built and verified, built but
     uncalibrated, blocked by a named input, or not built. Then say what a downstream agent can now trace or calculate,
     and what the method could not express.
+
+    Start with the reviewer's small checks before rerunning any long question set. Each check returns: run, blocked or
+    not run; changed ids; the selected baseline; source period and passages; assumptions; intermediate values; the
+    reconciliation; unresolved endpoints. Report model correctness, runtime access and answer quality as three
+    separate states. Keep expected answers out of any retrieval scope, and never hard-code a test's answer into the
+    model. When a reviewer's figure disagrees with the records, check the source and record the disagreement rather
+    than overwrite either.
 
 ## Do not
 
@@ -148,6 +165,10 @@ Build in this order: composition → operating paths → mapping into the accoun
 - Apply a new market yield to a whole portfolio rather than the money reinvested at it.
 - Put client figures, quotes, firm names or file names in tracked files.
 - Edit another company's files. Make shared-file edits exact and minimal.
+- Call a plan capacity, a conversion an expansion, an announcement a result, or a survey observed behaviour.
+- Relabel a category's total as one of its parts, or spread one country's statement over a region.
+- Size the same effect twice: once through its driver and again from the company's own figure.
+- Mark a value observed, or a stipulated zero reported, without a dated source observation.
 
 ## Done means
 
