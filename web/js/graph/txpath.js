@@ -2,8 +2,11 @@
 // chips, each under the name of its entity, laid out as the grid lays them out: the input on the left, one column
 // per order, the outputs on the right. The world model's own furniture (entity boxes, superentities, badges, other
 // values) is hidden while the path is shown; the canvas keeps its paper, grid, pan, and zoom. An output fed by
-// another output moves to a column of its own (downstream outputs), and the link between them is dashed.
+// another output moves to a column of its own (downstream outputs), and the link between them is dashed. An output the
+// chain carries on past keeps its place in the chain and is echoed in the output column (Oct 17: outputs sit on the
+// end), joined to itself by a dotted line.
 import { ownOf } from "../names.js";
+import { fmtMove } from "./model.js";
 import { colOf } from "../panels/paths.js";
 import { signed } from "../util.js";
 
@@ -15,18 +18,21 @@ const HEAD_H = 18;        // an entity's name above its chips
 const COL_GAP = 120;
 const TOP = 0;
 
+export const ECHO = "~out";   // an echoed output's chip id: the value's id and this suffix
 const fmtSd = (v) => `${v > 0 ? "▲" : v < 0 ? "▼" : ""}${Math.abs(v).toFixed(2)}`;
 
 // where each value goes: its column (the grid's), its entity group, its place in the column
 export function pathPlacement(grid) {
-  const vals = grid.values ?? {};
-  const outs = new Set(grid.outputs ?? []);
+  const vals = { ...(grid.values ?? {}) };
+  for (const id of grid.echoes ?? []) if (vals[id]) vals[id + ECHO] = { ...vals[id], column: "output", echo_of: id };
+  const outs = new Set([...(grid.outputs ?? []), ...(grid.echoes ?? []).map((id) => id + ECHO)]);
   const cols = grid.columns ?? ["input", "1", "2", "3", "output"];
   const fed = new Map();
   for (const e of grid.edges ?? []) {
     if (!fed.has(e.target)) fed.set(e.target, []);
     fed.get(e.target).push(e.source);
   }
+  for (const id of grid.echoes ?? []) fed.set(id + ECHO, fed.get(id) ?? []);     // an echo sits by what feeds its value
   const colOfVal = (id) => {
     const v = vals[id];
     if (v.column === "output" && outs.has(id) && (fed.get(id) ?? []).some((s) => vals[s]?.column === "output" && outs.has(s))) return "downstream";
@@ -86,7 +92,7 @@ export function pathPlacement(grid) {
       for (const ch of g.chips) { ch.y += dy; chips.set(ch.id, ch); }
     }
   }
-  return { columns, chips, width: Math.max(0, x - COL_GAP), height: H };
+  return { columns, chips, vals, width: Math.max(0, x - COL_GAP), height: H };
 }
 
 export class TxPathLayer {
@@ -109,11 +115,13 @@ export class TxPathLayer {
     const reduce = !!this.r.opts.reducedMotion;
     if (this.shown === key) return this.bounds;
     this.shown = key;
-    const vals = grid.values ?? {};
     const P = pathPlacement(grid);
+    const vals = P.vals;
     const ox = 600 - P.width / 2;
     const oy = 440 - P.height / 2;
-    const outs = new Set(grid.outputs ?? []);
+    const outs = new Set([...(grid.outputs ?? []), ...(grid.echoes ?? []).map((id) => id + ECHO)]);
+    // each value's move reads in its own unit where it can (Oct 17, as on the rows of open entities); sd stays in its title
+    const subOf = new Map(((this.r.fullView ?? this.r.view)?.subentities ?? []).map((s) => [s.id, s]));
     const colIx = new Map(P.columns.map((c, i) => [c.key, i]));
     this.g.selectAll("*").remove();
     const root = this.g.append("g").attr("class", "tx-root").attr("transform", `translate(${ox},${oy})`);
@@ -152,6 +160,18 @@ export class TxPathLayer {
         .append("title").text(`${chain ? "Output to output · " : ""}${e.label || "interaction"}: ${signed(e.effect)} sd per sd, `
           + `belief it exists ${Math.round(100 * (e.exists ?? 1))}%, about ${e.delay_days} days`);
     }
+    // an echoed output, dotted back to its place in the chain
+    for (const id of grid.echoes ?? []) {
+      const a = P.chips.get(id);
+      const b = P.chips.get(id + ECHO);
+      if (!a || !b) continue;
+      const x1 = a.x + CHIP_W;
+      const y1 = a.y + CHIP_H / 2;
+      const dx = Math.max(30, (b.x - x1) * 0.5);
+      edges.append("path").attr("class", "tx-edge echo").attr("d", `M${x1},${y1} C${x1 + dx},${y1} ${b.x - dx},${b.y + CHIP_H / 2} ${b.x - 2},${b.y + CHIP_H / 2}`)
+        .attr("data-s", id).attr("data-t", id).style("--d", `${reduce ? 0 : 120 + 160 * (colIx.get("output") ?? 0)}ms`)
+        .append("title").text("The same value, read as an output");
+    }
     // entities' names and their values' chips
     const nodes = root.append("g").attr("class", "tx-nodes");
     for (const c of P.columns) {
@@ -163,15 +183,16 @@ export class TxPathLayer {
           const own = ownOf(v.name, v.entity);
           const peak = v.peak ?? 0;
           const asked = outs.has(ch.id);
-          const chip = grp.append("g").attr("class", `tx-chip o${c.key === "input" ? 0 : c.key === "output" || c.key === "downstream" ? "out" : Math.min(3, +c.key)}${asked ? " asked" : ""}`)
-            .attr("transform", `translate(${ch.x},${ch.y})`).attr("data-id", ch.id).attr("tabindex", 0).attr("role", "button")
-            .attr("aria-label", `${v.entity ?? ""} ${own}: ${fmtSd(peak)} sd at its peak`);
+          const sid = v.echo_of ?? ch.id;
+          const chip = grp.append("g").attr("class", `tx-chip o${c.key === "input" ? 0 : c.key === "output" || c.key === "downstream" ? "out" : Math.min(3, +c.key)}${asked ? " asked" : ""}${v.echo_of ? " echo" : ""}`)
+            .attr("transform", `translate(${ch.x},${ch.y})`).attr("data-id", sid).attr("tabindex", 0).attr("role", "button")
+            .attr("aria-label", `${v.entity ?? ""} ${own}: ${fmtMove(peak, subOf.get(sid))} at its peak (${fmtSd(peak)} sd)`);
           chip.append("rect").attr("class", "tx-box").attr("width", CHIP_W).attr("height", CHIP_H).attr("rx", 9);
           chip.append("rect").attr("class", "tx-bar").attr("x", 0).attr("y", 0).attr("width", 5).attr("height", CHIP_H).attr("rx", 2.5);
           chip.append("text").attr("class", "tx-name").attr("x", 14).attr("y", CHIP_H / 2 + 4.5).text(own.length > 22 ? `${own.slice(0, 21).trimEnd()}…` : own);
           chip.append("text").attr("class", `tx-num ${peak > 0.005 ? "up" : peak < -0.005 ? "down" : ""}`).attr("x", CHIP_W - 10).attr("y", CHIP_H / 2 + 4.5)
-            .attr("text-anchor", "end").text(c.key === "input" && !v.order ? "shock" : `${fmtSd(peak)} sd`);
-          chip.append("title").text(`${v.entity ? `${v.entity} · ` : ""}${own}: ${signed(peak)} sd at its peak on day ${v.peak_day}; `
+            .attr("text-anchor", "end").text(c.key === "input" && !v.order ? "shock" : fmtMove(peak, subOf.get(sid)));
+          chip.append("title").text(`${v.entity ? `${v.entity} · ` : ""}${own}: ${fmtMove(peak, subOf.get(sid))} (${signed(peak)} sd) at its peak on day ${v.peak_day}; `
             + `${signed(v.effect ?? 0)} sd at the horizon${v.order ? `; first reached around day ${v.arrives_day}` : ""}${asked ? "; an output" : ""}`);
         }
       }

@@ -441,10 +441,9 @@ class UpdateCycle:
         c = self.c
         if run.state != UpdateState.AWAITING_REVIEW:
             return run
-        if run.waiting_on is not None:
-            p = c.proposals.get(run.waiting_on)
-            if p is not None and p.status == ProposalStatus.PENDING:
-                c.defer(p.id, by="update")
+        p = c.proposals.get(run.waiting_on)          # a paused run always waits on a proposal
+        if p is not None and p.status == ProposalStatus.PENDING:
+            c.defer(p.id, by="update")
         run.waiting_on = None
         run.state = UpdateState.RUNNING
         self._ledger(run, "resumed", day=run.current_day)
@@ -465,18 +464,17 @@ class UpdateCycle:
         if run.state in (UpdateState.DONE, UpdateState.CANCELLED, UpdateState.FAILED):
             return run
         run.cancel_requested = True
-        if run.state == UpdateState.AWAITING_REVIEW:
+        if run.state == UpdateState.AWAITING_REVIEW:     # a paused run always waits on a proposal
             run.state = UpdateState.RUNNING
-            if run.waiting_on is not None:
-                c.defer(run.waiting_on, by="cancel")
-                run.waiting_on = None
-        if run.state in (UpdateState.RUNNING, UpdateState.COLLECTING):
-            d = run.current_day if run.current_day is not None else run.first_day
-            if run.predicted_day == d and d <= run.last_day:
-                self._walk(run, d)
-                self._close_day(run, d)
-                run.current_day = d + 1
-            self._finish(run, cancelled=True)
+            c.defer(run.waiting_on, by="cancel")
+            run.waiting_on = None
+        # the run is running (or still collecting): finish the day in progress, then stop
+        d = run.current_day if run.current_day is not None else run.first_day
+        if run.predicted_day == d and d <= run.last_day:
+            self._walk(run, d)
+            self._close_day(run, d)
+            run.current_day = d + 1
+        self._finish(run, cancelled=True)
         return run
 
     def _finish(self, run: UpdateRun, cancelled: bool = False) -> None:

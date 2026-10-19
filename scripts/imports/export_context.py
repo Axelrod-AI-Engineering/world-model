@@ -6,8 +6,19 @@ pack, its 020 registry entry, the current state as an evidence pack, one evidenc
 With --client-core, the client's own 000, 010, and 020 are copied beside them (020 with our registry row appended), so
 the folder is a complete upload set.
 
+With --construction-sources (a folder of <company>/sources.json and citations.json), the export resolves its evidence
+(context/v4.attach_sources): each relationship whose transition cites sources, and each cited value baseline, carries
+`evidence_refs` (source id, document, location, passage); the source catalogue is written as its own file, listed in the
+manifest's load order after the evidence pack; and the domain pack's `citation_gaps` lists source ids that do not
+resolve and material claims without a citation. The script prints the counts. Passages are the client's text.
+
     uv run python scripts/imports/export_context.py sally_demo data/sally_data/exports/<name> \\
-        --days data/sally_data/days --theses --client-core data/sally_data/unpacked/world_model_v4/<folder>
+        --days data/sally_data/days --theses --client-core data/sally_data/unpacked/world_model_v4/<folder> \\
+        --construction-sources data/sally_data/construction
+
+A focused scenario (engine/focus.py, docs/construction/focus.md) imports only the bundle items about its companies and
+the players they connect to (the script prints what each bundle kept and dropped), and the source catalogue keeps only
+the exported companies' folders.
 
 Client material stays local: point the output and the client core at a gitignored folder (data/<client>_data).
 """
@@ -24,7 +35,23 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from axelrod_wm.api.app import create_app
+from axelrod_wm.context.construction import load_sources
+from axelrod_wm.context.v4 import attach_sources
+from axelrod_wm.engine.focus import focus_result
 from axelrod_wm.repo.snapshots import MemoryBackend
+from axelrod_wm.sim.scenario import ScenarioScript
+
+
+def restrict_sources(sources: dict, companies: set[str]) -> dict:
+    """`load_sources`' result with only these companies' folders: their catalogue entries and citations."""
+    keep = [c for c in sources["companies"] if c in companies]
+    left = sorted(set(sources["companies"]) - set(keep))
+    if left:
+        print(f"sources: left out the folders of {len(left)} company(ies) not in this export")
+    cites = {k: [r for r in refs if r["company"] in keep] for k, refs in sources["citations"].items()}
+    return {"catalogue": {k: v for k, v in sources["catalogue"].items() if v["company"] in keep},
+            "citations": {k: v for k, v in cites.items() if v}, "companies": keep,
+            "problems": [p for p in sources["problems"] if not any(c in p for c in left)]}
 
 
 def write(path: Path, obj: dict) -> None:
@@ -39,27 +66,54 @@ def main() -> int:
     ap.add_argument("--days", help="a folder of import bundles to fold in first, in file order, each item approved")
     ap.add_argument("--theses", action="store_true", help="also pose the scenario's ready theses and export their evidence")
     ap.add_argument("--client-core", help="the client's folder holding 000, 010, and 020, to copy beside the export")
+    ap.add_argument("--construction-sources", help="a folder of <company>/sources.json and citations.json")
     args = ap.parse_args()
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
+    focus = ScenarioScript.load(args.scenario).initialization.focus
     app = create_app(scenario=args.scenario, storage=MemoryBackend(), trace_dir=None, play_delay=0.0)
     with TestClient(app) as c:
         if args.days:
             c.patch("/api/config/review", json={"policy": "auto_approve_all", "approve_pending": True})
             files = sorted(Path(args.days).glob("*.json"))
+            folded = 0
             for f in files:
-                c.post("/api/import", json={"bundle": json.loads(f.read_text())})
+                bundle = json.loads(f.read_text())
+                if focus is not None:
+                    # a focused world imports only what concerns it (engine/focus.narrow_bundle; the import does the same)
+                    bundle, n = focus_result(focus).narrow_bundle(bundle)
+                    print(f"  {f.name}: {n['items_kept']} item(s) kept, {len(n['items_dropped'])} dropped as about a "
+                          f"removed company, {n['signals_dropped']} signal(s) on removed values left out")
+                    if not bundle["items"]:
+                        continue
+                c.post("/api/import", json={"bundle": bundle})
+                folded += 1
                 while c.get("/api/sim/status").json()["state"] == "running":
                     time.sleep(0.2)
-            print(f"folded in {len(files)} bundle(s)")
+            print(f"folded in {folded} of {len(files)} bundle(s)")
         st = c.get("/api/sim/status").json()
         print(f"model as of {st['sim_time'][:10]}, version {st['version']}")
         ctx = c.get("/api/context/v4").json()
         m = ctx["manifest"]
+        if args.construction_sources:
+            # only the exported companies' sources: a focused world never carries a removed company's documents
+            exported = {r["axelrod_entity_id"] for r in ctx["domain_pack"]["companies"]}
+            doc = attach_sources(ctx, restrict_sources(load_sources(args.construction_sources), exported))
+            n = doc["counts"]
+            print(f"sources: {n['sources']} in the catalogue ({', '.join(doc['companies'])}); {n['resolved_ids']} cited "
+                  f"id(s) resolve, {n['unresolved_ids']} do not; {n['cited_links']} link(s) and {n['cited_values']} "
+                  f"value(s) cited; {n['claims_without_citation']} material claim(s) without a citation; "
+                  f"{n['unknown_citation_keys']} citation key(s) name nothing exported")
+            for u in doc["citation_gaps"]["unresolved_source_ids"]:
+                print(f"  UNRESOLVED {u['source_id']} (cited by {len(u['cited_by'])} link(s) or value(s))")
+            for p in doc["citation_gaps"]["catalogue_problems"]:
+                print(f"  SOURCES {p}")
         files = {f["source"]: f["file"] for f in m["load_order"]}
         write(out / files["this export: domain_pack"], ctx["domain_pack"])
         write(out / files["this export: evidence"], ctx["evidence"])
+        if "sources" in ctx:
+            write(out / files["this export: sources"], ctx["sources"])
         write(out / m["registry_entry_file"], ctx["registry_entry"])
         forecasts = []
         if args.theses:

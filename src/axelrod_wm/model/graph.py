@@ -9,6 +9,7 @@ from collections import defaultdict
 import networkx as nx
 from pydantic import BaseModel, ConfigDict
 
+from axelrod_wm.model.construction import Composition, Identity, Matrix, NamedPath, StockFlow
 from axelrod_wm.model.entity import Entity, Subentity
 from axelrod_wm.model.interaction import EdgeDynamics, Interaction
 from axelrod_wm.model.serialization import digest
@@ -39,6 +40,11 @@ class CausalGraph(BaseModel):
     instances: dict[str, SuperentityInstance] = {}
     super_interactions: dict[str, SuperInteraction] = {}
     entity_link_labels: dict[str, str] = {}   # "a->b" -> label (Figure 1's arrow labels)
+    paths: dict[str, NamedPath] = {}          # readable business paths (model/construction.py, Oct 17)
+    compositions: dict[str, Composition] = {} # views of a business split into parts (Oct 17)
+    identities: dict[str, Identity] = {}      # products, ratios, differences (Oct 18)
+    stock_flows: dict[str, StockFlow] = {}    # stocks accumulating flows (Oct 18)
+    matrices: dict[str, Matrix] = {}          # two views of one total as rows x columns (Oct 18)
 
     # ----- interactions --------------------------------------------------------------------
     def active_interactions(self) -> list[Interaction]:

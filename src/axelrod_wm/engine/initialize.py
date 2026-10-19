@@ -15,16 +15,32 @@ from pydantic import BaseModel, ConfigDict
 
 from axelrod_wm.memory.long_term import SuperInteractionBuilder
 from axelrod_wm.model.categories import CategoryTag
+from axelrod_wm.model.construction import (
+    Composition,
+    Identity,
+    Matrix,
+    NamedPath,
+    ResponseState,
+    StockFlow,
+    Transition,
+    identity_weights,
+    stock_flow_weights,
+)
+from axelrod_wm.model.corporate_actions import CorporateAction, is_per_share
 from axelrod_wm.model.distributions import (
     FAMILIES,
     Beta,
+    family_link,
+    from_link,
     parse_distribution,
     prior_from_native,
+    to_link,
 )
 from axelrod_wm.model.entity import Entity, EntityKind, Subentity
 from axelrod_wm.model.evidence import Evidence, Origin, SourceType
 from axelrod_wm.model.ids import entity_of
 from axelrod_wm.model.interaction import (
+    Calibration,
     Direction,
     EdgeDynamics,
     EdgeType,
@@ -115,6 +131,7 @@ class EntitySpec(_Spec):
     subentities: list[SubentitySpec] = []
     short: str | None = None         # names its default subentities ("Delta jet fuel cost"); else the name
     levels: dict[str, float] = {}    # slot -> typical native level of a default it gets (else the kind's)
+    corporate_actions: list[CorporateAction] = []   # splits (model/corporate_actions.py)
 
 
 class ParameterSpec(_Spec):
@@ -123,6 +140,7 @@ class ParameterSpec(_Spec):
     form: ParameterForm = ParameterForm.MULTIPLICATIVE
     coefficient: dict[str, Any]
     threshold: float | None = None
+    side: str = "above"                  # piecewise: where the full effect applies (above or below the threshold)
 
 
 class EvidenceSpec(_Spec):
@@ -153,6 +171,49 @@ class InteractionSpec(_Spec):
     tags: list[str] = []
     note: str | None = None
     generalization: str | None = None    # its interaction generalization, for links made from a kind's defaults
+    calibration: Calibration = Calibration.CALIBRATED   # Oct 17: "uncalibrated" carries no numbers
+    transition: Transition | None = None  # the link as a business step (model/construction.py)
+    identity: str | None = None           # Oct 18: the identity or stock-flow whose term the link is (its weight is derived)
+    state: ResponseState | None = None    # Oct 18: asymmetric, threshold and sign-flip responses (compiled to parameters)
+
+
+def read_construction(d: Path) -> tuple[dict, dict[str, str]]:
+    """A world folder's construction as plain data (entities.yaml, interactions.yaml, and construction/*.yaml merged),
+    and the origin of each item a construction file adds: entity, value, interaction, path, composition, identity,
+    stock-flow, or matrix id -> the file's stem."""
+    ent = yaml.safe_load((d / "entities.yaml").read_text()) or {}
+    inter = yaml.safe_load((d / "interactions.yaml").read_text()) or {}
+    data = {"decision_variables": ent.get("decision_variables", []), "entities": ent.get("entities", []),
+            "interactions": inter.get("interactions", []),
+            "entity_link_labels": inter.get("entity_link_labels", {}) or {}, "paths": [], "compositions": [],
+            "identities": [], "stock_flows": [], "matrices": []}
+    origin: dict[str, str] = {}
+    # Oct 17: a world's business construction, one file per company (construction/*.yaml): values added to its
+    # entities, new entities, interactions, readable paths, and compositions
+    for f in sorted((d / "construction").glob("*.yaml")) if (d / "construction").is_dir() else []:
+        doc = yaml.safe_load(f.read_text()) or {}
+        by_id = {e.get("id"): e for e in data["entities"]}
+        for extra in doc.get("subentities", []) or []:
+            owner = by_id.get(extra.get("entity"))
+            if owner is None:
+                raise ConstructionError(f"{f.name}: value {extra.get('id')!r} names unknown entity {extra.get('entity')!r}")
+            owner.setdefault("subentities", []).append({k: v for k, v in extra.items() if k != "entity"})
+            origin[str(extra.get("id"))] = f.stem
+        for e in doc.get("entities", []) or []:
+            origin[str(e.get("id"))] = f.stem
+            origin.update({str(s.get("id")): f.stem for s in e.get("subentities", []) or []})
+        data["entities"] += doc.get("entities", []) or []
+        by_id = {e.get("id"): e for e in data["entities"]}
+        for act in doc.get("corporate_actions", []) or []:
+            owner = by_id.get(act.get("entity"))
+            if owner is None:
+                raise ConstructionError(f"{f.name}: corporate action names unknown entity {act.get('entity')!r}")
+            owner.setdefault("corporate_actions", []).append({k: v for k, v in act.items() if k != "entity"})
+        for key in ("interactions", "paths", "compositions", "identities", "stock_flows", "matrices"):
+            items = doc.get(key, []) or []
+            data[key] += items
+            origin.update({str(x.get("id")): f.stem for x in items})
+    return data, origin
 
 
 class ConstructionSpec(_Spec):
@@ -162,24 +223,38 @@ class ConstructionSpec(_Spec):
     entities: list[EntitySpec]
     interactions: list[InteractionSpec] = []
     entity_link_labels: dict[str, str] = {}
+    paths: list[NamedPath] = []
+    compositions: list[Composition] = []
+    identities: list[Identity] = []
+    stock_flows: list[StockFlow] = []
+    matrices: list[Matrix] = []
+    focus: list[str] | None = None   # a focused world (engine/focus.py): the ids it dropped, kept out of the taxonomy
 
     @classmethod
-    def load(cls, construction_dir: str | Path, taxonomy_dir: str | Path | None = None) -> ConstructionSpec:
+    def load(cls, construction_dir: str | Path, taxonomy_dir: str | Path | None = None,
+             focus: Any = None) -> ConstructionSpec:
         """The spec, with each kind's default subentities and links filled in from the object taxonomy
-        (`taxonomy_dir`; else the world's own `taxonomy/` folder if it has one; else the shared data/taxonomy)."""
+        (`taxonomy_dir`; else the world's own `taxonomy/` folder if it has one; else the shared data/taxonomy).
+        With `focus` (engine/focus.FocusSpec), the world is first narrowed to its focus companies and the players
+        they connect to (engine/focus.py); `spec.focus` then lists the ids it dropped."""
         d = resolve_path(construction_dir)
-        ent = yaml.safe_load((d / "entities.yaml").read_text()) or {}
-        inter = yaml.safe_load((d / "interactions.yaml").read_text()) or {}
-        data = {"decision_variables": ent.get("decision_variables", []), "entities": ent.get("entities", []),
-                "interactions": inter.get("interactions", []),
-                "entity_link_labels": inter.get("entity_link_labels", {}) or {}}
+        dropped: list[str] | None = None
+        if focus is not None:
+            from axelrod_wm.engine.focus import focus_result
+
+            fr = focus_result(focus)
+            data, dropped = fr.construction(), fr.dropped_ids()
+        else:
+            data, _origin = read_construction(d)
         try:
             spec = cls.model_validate(data)
         except Exception as exc:  # pydantic's message names the field
             raise ConstructionError(f"invalid construction spec in {d}: {exc}") from exc
+        spec.focus = dropped
         tax = resolve_path(taxonomy_dir) if taxonomy_dir is not None else world_taxonomy_dir(d)
         objects = tax / "objects.yaml"
-        return apply_kind_defaults(spec, objects) if objects.exists() else spec
+        spec = apply_kind_defaults(spec, objects) if objects.exists() else spec
+        return compile_construction(spec, load_vocabulary(tax)) if (tax / "attributes.yaml").exists() else spec
 
     def subentity_ids(self) -> set[str]:
         return {s.id for e in self.entities for s in e.subentities}
@@ -208,6 +283,13 @@ class ConstructionSpec(_Spec):
                     continue
                 if s.scale is not None and s.scale <= 0:
                     raise ConstructionError(f"subentity {s.id!r}: scale must be positive")
+        for e in self.entities:
+            days = [a.effective for a in e.corporate_actions]
+            if len(set(days)) < len(days):
+                raise ConstructionError(f"entity {e.id!r}: two corporate actions on the same day")
+            if e.corporate_actions and not any(is_per_share(s) for s in e.subentities):
+                raise ConstructionError(f"entity {e.id!r}: a split changes no value; mark its per-share values with "
+                                        "features {per_share: \"true\"} or a unit that says \"per share\"")
         for dv in self.decision_variables:
             if dv not in subs:
                 raise ConstructionError(f"decision variable {dv!r} is not a subentity")
@@ -233,9 +315,31 @@ class ConstructionSpec(_Spec):
             for p in i.parameters:
                 if p.moderator not in subs:
                     raise ConstructionError(f"interaction {i.id!r}: moderator {p.moderator!r} is not a known subentity")
+            if i.calibration == Calibration.UNCALIBRATED and (i.transition is None or i.transition.sign is None):
+                raise ConstructionError(f"interaction {i.id!r} is uncalibrated, so its transition must state a sign")
+        for pa in self.paths:
+            for st in pa.steps:
+                if st.interaction_id not in seen_ids:
+                    raise ConstructionError(f"path {pa.id!r}: unknown interaction {st.interaction_id!r}")
+            if pa.endpoint not in subs:
+                raise ConstructionError(f"path {pa.id!r}: endpoint {pa.endpoint!r} is not a known subentity")
+        for c in self.compositions:
+            for sid in [c.total, *c.members, *([c.residual] if c.residual else []),
+                        *([c.eliminations] if c.eliminations else [])]:
+                if sid not in subs:
+                    raise ConstructionError(f"composition {c.id!r}: {sid!r} is not a known subentity")
+        for x in [*self.identities, *self.stock_flows]:
+            for sid in [getattr(x, "target", None) or getattr(x, "stock", None), *(v for v, _ in x.terms())]:
+                if sid not in subs:
+                    raise ConstructionError(f"{x.id!r}: {sid!r} is not a known subentity")
+        comp_ids = {c.id for c in self.compositions}
+        for m in self.matrices:
+            for cid in (m.rows, m.columns):
+                if cid not in comp_ids:
+                    raise ConstructionError(f"matrix {m.id!r}: {cid!r} is not a composition")
 
     def spec_hash(self) -> str:
-        return sha256_text(canonical_json(self.model_dump(mode="json")))
+        return sha256_text(canonical_json(self.model_dump(mode="json", exclude={"focus"} if self.focus is None else None)))
 
 
 # ---------------------------------------------------------------------------------------------
@@ -256,6 +360,7 @@ class SlotSpec(_Spec):
     family: str | None = None
     mean: float                      # typical native level; an entity's `levels` overrides it
     scale: float
+    features: dict[str, str] = {}    # e.g. {per_share: "true"} for a share price
 
 
 class SlotLinkSpec(_Spec):
@@ -305,7 +410,8 @@ def apply_kind_defaults(spec: ConstructionSpec, objects_path: Path) -> Construct
         for g, sl in wanted:
             s = filled.get(sl.slot) or SubentitySpec(
                 id=f"{e.id}.{sl.slot}", name=f"{e.short or e.name} {sl.name}", attribute_kind=sl.attribute_kind,
-                unit=sl.unit, family=sl.family, mean=e.levels.get(sl.slot, sl.mean), scale=sl.scale)
+                unit=sl.unit, family=sl.family, mean=e.levels.get(sl.slot, sl.mean), scale=sl.scale,
+                features=dict(sl.features))
             subs.append(s.model_copy(update={"slot": sl.slot, "slot_of": g}))
         taken = {s.id for s in filled.values()}
         subs += [s for s in e.subentities if s.id not in taken]
@@ -334,9 +440,175 @@ def apply_kind_defaults(spec: ConstructionSpec, objects_path: Path) -> Construct
                     generalization=ln.generalization))
     for g in sorted({g for ks in kinds_of.values() for g in ks}):
         for k, ln in enumerate(slot_links[g]):
-            if not applied.get((g, k)):
+            if not applied.get((g, k)) and spec.focus is None:   # a focused world drops some instances
                 raise ConstructionError(f"{g}: default link {ln.source} -> {ln.target} applies to no instance")
     return spec.model_copy(update={"entities": entities, "interactions": links})
+
+
+# ---------------------------------------------------------------------------------------------
+# Identities, stock-flows, and state-dependent responses (Oct 18)
+# ---------------------------------------------------------------------------------------------
+# DECISION: weights an identity determines are derived when the spec loads, from each value's construction level and
+# scale (model/construction.identity_weights, stock_flow_weights), and written into the links' effects. Every consumer
+# of the spec (the initializer, the synthetic world, calibration) then reads one set of numbers. A link a builder writes
+# for a term (to carry a transition or a kernel) must not state an effect: the size is not the builder's to choose.
+
+IDENTITY_SIGMA = 0.001                              # an identity's weight is exact up to rounding
+FIXED_EXISTENCE = {"alpha": 1000.0, "beta": 0.001}  # an identity always holds
+IDENTITY_KERNEL = {"delay_days": 0, "lag_days": 1, "duration_days": None}   # same period (delay floors at a day)
+
+
+def _levels(spec: ConstructionSpec, vocab: AttributeVocabulary) -> Any:
+    """value id -> (native construction level, link-space scale, link), computed when first asked."""
+    subs = {s.id: s for e in spec.entities for s in e.subentities}
+    cache: dict[str, tuple[float, float, str]] = {}
+
+    def get(sid: str) -> tuple[float, float, str]:
+        if sid not in cache:
+            s = subs[sid]
+            family = s.family or (s.prior or {}).get("family") or vocab.family(s.attribute_kind)
+            prior, scale = _native_prior(s, family, vocab)
+            link = family_link(family)
+            cache[sid] = (float(from_link(prior.link_moments()[0], link)), scale, str(link))
+        return cache[sid]
+
+    return get, subs
+
+
+class _Values(dict):
+    """A lazy {value id: (level, scale, link)} for the weight functions; an unknown id raises KeyError."""
+
+    def __init__(self, get: Any, known: set[str]) -> None:
+        super().__init__()
+        self._get, self._known = get, known
+
+    def __missing__(self, sid: str) -> tuple[float, float, str]:
+        if sid not in self._known:
+            raise KeyError(sid)
+        return self._get(sid)
+
+
+def _identity_link(x: Identity | StockFlow, edge: EdgeType, target: str, v: str, w: float, sign: int,
+                   written: InteractionSpec | None, names: dict[str, str]) -> InteractionSpec:
+    """The link of one term, with its derived weight: the builder's entry when there is one, else a generated one."""
+    kind = "identity" if edge == EdgeType.IDENTITY else "stock-flow"
+    if written is not None:
+        if written.effect is not None:
+            raise ConstructionError(f"interaction {written.id!r}: an {kind} link's weight is derived from {x.id}; do not "
+                                    "write an effect")
+        if written.target != target:
+            raise ConstructionError(f"interaction {written.id!r}: a term of {x.id} must point at {target}")
+        if written.calibration == Calibration.UNCALIBRATED:
+            raise ConstructionError(f"interaction {written.id!r}: an {kind} link is never uncalibrated")
+    if isinstance(x, StockFlow):
+        k = dict((written.kernel if written is not None else None) or {})
+        if k.get("duration_days") is not None or k.get("lag_days", x.period_days) != x.period_days:
+            raise ConstructionError(f"{x.id}: a stock-flow link accumulates over its period ({x.period_days:g} days); "
+                                    "give at most its delay")
+        # a period-average stock lags the end-of-period level by half a period (an approximation, stated)
+        half = x.period_days / 2 if x.measure == "period_average" else 0.0
+        kernel = {"delay_days": k.get("delay_days", 1) + half, "lag_days": x.period_days, "duration_days": None,
+                  "shape": "accumulate"}
+        label = "flows into" if sign > 0 else "flows out of"
+        mech = f"{x.formula(names)}: {names.get(v, v)} {label} the stock each period"
+    else:
+        kernel = dict((written.kernel if written is not None else None) or IDENTITY_KERNEL)
+        label = f"{x.role(v)} in {x.id}"
+        mech = f"{x.formula(names)}: {names.get(v, v)} is a {x.role(v)}"
+    fields = {"effect": {"mu": round(w, 6), "sigma": IDENTITY_SIGMA}, "kernel": kernel, "identity": x.id,
+              "edge_type": edge}
+    if written is not None:
+        return written.model_copy(update={**fields, "existence": written.existence or dict(FIXED_EXISTENCE)})
+    tr = Transition(mechanism=mech + "; weight derived at the construction levels", sign="+" if w > 0 else "-",
+                    timing={"onset": "same period" if edge == EdgeType.IDENTITY else "each period",
+                            "build": "none" if edge == EdgeType.IDENTITY else "accumulates",
+                            "persistence": "identity", "recognition": "unknown"},
+                    evidence={"existence": "inferred", "direction": "inferred", "magnitude": "inferred",
+                              "timing": "inferred"})
+    return InteractionSpec(id=f"{x.id}:{v}", source=v, target=target, label=label, existence=dict(FIXED_EXISTENCE),
+                           tags=["derived_weight"], transition=tr, **fields)
+
+
+def _state_parameters(i: InteractionSpec, get: Any, known: set[str]) -> tuple[dict | None, list[ParameterSpec]]:
+    """(the link's effect, its parameters) with its `state` compiled to piecewise moderators (see ResponseState)."""
+    st = i.state
+    effect = i.effect
+    params = list(i.parameters)
+
+    def z_at(sid: str, level: float | None) -> float:
+        if sid not in known:
+            raise ConstructionError(f"interaction {i.id!r}: state value {sid!r} is not a known subentity")
+        lv, scale, link = get(sid)
+        return 0.0 if level is None else (float(to_link(level, link)) - float(to_link(lv, link))) / scale
+
+    if st.asymmetry is not None:
+        a = st.asymmetry
+        if effect is not None or i.calibration == Calibration.UNCALIBRATED:
+            raise ConstructionError(f"interaction {i.id!r}: an asymmetric link's sizes are its state.asymmetry (write no "
+                                    "effect, and it is calibrated)")
+        r, f = float(a.rises.get("mu", 0.0)), float(a.falls.get("mu", 0.0))
+        if r == 0 and f == 0:
+            raise ConstructionError(f"interaction {i.id!r}: an asymmetry with no size either way")
+        base, other, side = (a.rises, a.falls, "above") if r != 0 else (a.falls, a.rises, "below")
+        mu = float(base["mu"])
+        effect = {"mu": mu, "sigma": float(base.get("sigma", 0.15))}
+        coef = {"mu": float(other.get("mu", 0.0)) / mu, "sigma": float(other.get("sigma", 0.0)) / abs(mu)}
+        params.append(ParameterSpec(name="rises and falls", moderator=a.value or i.source, form=ParameterForm.PIECEWISE,
+                                    coefficient=coef, threshold=z_at(a.value or i.source, a.at), side=side))
+    if st.threshold is not None:
+        t = st.threshold
+        side = "above" if t.above is not None else "below"
+        params.append(ParameterSpec(name=f"acts only {side} a level", moderator=t.value, form=ParameterForm.PIECEWISE,
+                                    coefficient={"mu": 0.0, "sigma": 0.0},
+                                    threshold=z_at(t.value, t.above if t.above is not None else t.below), side=side))
+    if st.sign_flip is not None:
+        sf = st.sign_flip
+        params.append(ParameterSpec(name="sign follows a level", moderator=sf.value, form=ParameterForm.PIECEWISE,
+                                    coefficient={"mu": -1.0, "sigma": 0.0}, threshold=z_at(sf.value, sf.at),
+                                    side=sf.positive))
+    return effect, params
+
+
+def compile_construction(spec: ConstructionSpec, vocab: AttributeVocabulary) -> ConstructionSpec:
+    """`spec` with every identity's and stock-flow's links carrying their derived weights (and kernels), and every link's
+    `state` compiled to piecewise moderators. Generated links are named `<identity id>:<term>`."""
+    get, subs = _levels(spec, vocab)
+    known = set(subs)
+    names = {sid: s.name for sid, s in subs.items()}
+    values = _Values(get, known)
+    links = list(spec.interactions)
+    objs = [(x, EdgeType.IDENTITY, x.target) for x in spec.identities] + \
+           [(x, EdgeType.STOCK_FLOW, x.stock) for x in spec.stock_flows]
+    declared = {(x.id, edge) for x, edge, _t in objs}
+    for i in links:
+        if i.edge_type in (EdgeType.IDENTITY, EdgeType.STOCK_FLOW) and (i.identity, i.edge_type) not in declared:
+            raise ConstructionError(f"interaction {i.id!r}: an {i.edge_type} link names no declared "
+                                    f"{'identity' if i.edge_type == EdgeType.IDENTITY else 'stock-flow'} ({i.identity!r})")
+    for x, edge, target in objs:
+        try:
+            weights = identity_weights(x, values) if edge == EdgeType.IDENTITY else stock_flow_weights(x, values)
+        except KeyError as exc:
+            raise ConstructionError(f"{x.id}: {exc.args[0]!r} is not a known subentity") from exc
+        except ValueError as exc:
+            raise ConstructionError(f"{x.id}: {exc}") from exc
+        for v, e in x.terms():
+            mine = [k for k, i in enumerate(links) if i.edge_type == edge and i.identity == x.id and i.source == v]
+            if len(mine) > 1:
+                raise ConstructionError(f"{x.id}: {v} has {len(mine)} links; write at most one")
+            new = _identity_link(x, edge, target, v, weights[v], e, links[mine[0]] if mine else None, names)
+            if mine:
+                links[mine[0]] = new
+            else:
+                links.append(new)
+        stray = [i.id for i in links if i.edge_type == edge and i.identity == x.id
+                 and i.source not in {v for v, _ in x.terms()}]
+        if stray:
+            raise ConstructionError(f"{x.id}: {', '.join(stray)} is not a term of it")
+    for k, i in enumerate(links):
+        if i.state is not None:
+            effect, params = _state_parameters(i, get, known)
+            links[k] = i.model_copy(update={"effect": effect, "parameters": params})
+    return spec.model_copy(update={"interactions": links})
 
 
 def world_taxonomy_dir(world_dir: str | Path) -> Path:
@@ -413,7 +685,12 @@ class SeedFile(_Spec):
     palettes: dict[str, dict[str, str]] = {}
 
     @classmethod
-    def load(cls, path: str | Path) -> SeedFile:
+    def load(cls, path: str | Path, focus: Any = None) -> SeedFile:
+        """The seed file; with `focus` (engine/focus.FocusSpec), its groups restricted to the focused world."""
+        if focus is not None:
+            from axelrod_wm.engine.focus import focus_result
+
+            return cls.model_validate(focus_result(focus).seeds())
         p = resolve_path(path)
         return cls.model_validate(yaml.safe_load(p.read_text()) or {})
 
@@ -454,7 +731,7 @@ class Initializer:
         from axelrod_wm.dynamics.daily import ensure_channel_states
 
         eng = self.engine
-        vocab = vocab or eng.vocab or load_vocabulary(taxonomy_dir)
+        vocab = vocab or (eng.vocab if eng.vocab.kinds else None) or load_vocabulary(taxonomy_dir)
         if not eng.vocab.kinds:
             eng.vocab = vocab
         spec.validate_spec(vocab)
@@ -462,6 +739,12 @@ class Initializer:
         clock = datetime.combine(day0 - timedelta(days=1), time(23, 59, 59), tzinfo=UTC)
         obj_tax = load_taxonomy(resolve_path(taxonomy_dir) / "objects.yaml", TaxonomyKind.OBJECT)
         int_tax = load_taxonomy(resolve_path(taxonomy_dir) / "interactions.yaml", TaxonomyKind.INTERACTION)
+        if spec.focus:
+            # a focused world's taxonomy lists only what remains (engine/focus.py)
+            gone = set(spec.focus)
+            for tax in (obj_tax, int_tax):
+                for n in tax.nodes.values():
+                    n.instance_ids = [x for x in n.instance_ids if x not in gone]
         obj_home = {iid: gid for gid, n in obj_tax.nodes.items() for iid in n.instance_ids}
         int_home = {iid: gid for gid, n in int_tax.nodes.items() for iid in n.instance_ids}
         # links made from a kind's defaults name their own generalization
@@ -490,6 +773,16 @@ class Initializer:
                 self._add_entity(txn, es, vocab, obj_home.get(es.id), clock)
             for ispec in spec.interactions:
                 self._add_interaction(txn, ispec, int_home.get(ispec.id), clock)
+            for pa in spec.paths:
+                txn.add("wm.graph.paths", pa)
+            for comp in spec.compositions:
+                txn.add("wm.graph.compositions", comp)
+            for x in spec.identities:
+                txn.add("wm.graph.identities", x)
+            for x in spec.stock_flows:
+                txn.add("wm.graph.stock_flows", x)
+            for x in spec.matrices:
+                txn.add("wm.graph.matrices", x)
             # internal interactions of each entity
             internal: dict[str, list[str]] = {}
             for ispec in spec.interactions:
@@ -521,7 +814,8 @@ class Initializer:
             sub_ids.append(s.id)
         ent = Entity(id=es.id, name=es.name, kind=es.kind, aliases=es.aliases, category_tags=set(es.category_tags),
                      features=es.features, subentity_ids=sub_ids, generalization_id=gen_id,
-                     origin=Origin.CONSTRUCTION, created_at=now, description=es.description)
+                     origin=Origin.CONSTRUCTION, created_at=now, description=es.description,
+                     corporate_actions=list(es.corporate_actions))
         txn.add("wm.graph.entities", ent)
 
     def _add_interaction(self, txn: MutationTxn, i: InteractionSpec, gen_id: str | None, now: datetime) -> None:
@@ -544,7 +838,7 @@ class Initializer:
             coef = dict(p.coefficient)
             coef.setdefault("family", "gaussian")
             params.append(ParameterBinding(name=p.name, moderator_id=p.moderator, form=p.form,
-                                           coefficient=parse_distribution(coef), threshold=p.threshold))
+                                           coefficient=parse_distribution(coef), threshold=p.threshold, side=p.side))
         evidence = []
         for ev in i.evidence:
             evidence.append(Evidence(id=txn.new_id("EV"), source_type=ev.source_type, source_ref=ev.source_ref,
@@ -553,7 +847,8 @@ class Initializer:
                             edge_type=i.edge_type, origin=Origin.CONSTRUCTION, existence=existence, forward=forward,
                             reverse=reverse, parameters=params, evidence=evidence, generalization_id=gen_id,
                             internal=entity_of(i.source) == entity_of(i.target), tags=list(i.tags), created_at=now,
-                            prior_source_id="construction")
+                            prior_source_id="construction", calibration=i.calibration, transition=i.transition,
+                            identity=i.identity, state=i.state, note=i.note)
         txn.add("wm.graph.interactions", inter)
 
     # -- seeds -----------------------------------------------------------------------------

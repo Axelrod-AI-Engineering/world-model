@@ -8,7 +8,7 @@ from datetime import date, datetime
 from typing import Any
 
 import yaml
-from fastapi import APIRouter, Body, HTTPException, Query, Request
+from fastapi import APIRouter, Body, File, Form, HTTPException, Query, Request, UploadFile
 from pydantic import BaseModel, ConfigDict
 
 from axelrod_wm.api.app import AppState, state_for
@@ -430,11 +430,10 @@ async def get_proposals(request: Request, status: str | None = Query(None)) -> l
 
 
 def _proposal_after(st: AppState, proposal_id: str) -> dict:
-    ctl = st.controller
+    ctl = st.controller          # loads the runner when it is not loaded yet
     runner = st.runner
-    if runner is not None:
-        runner.status()          # leaves awaiting_review once the queue is empty
-        runner._broadcast()
+    runner.status()              # leaves awaiting_review once the queue is empty
+    runner._broadcast()
     return proposal_view(ctl.proposals[proposal_id], ctl.engine.wm, ctl.engine.ltm)
 
 
@@ -771,10 +770,11 @@ async def forecast_paths(request: Request, forecast_id: str, method: str = "rele
         fc = ctl.forecast(forecast_id)
         if fc is None:
             raise KeyError(forecast_id)
-        # the outputs: what the question asked about by name; a question that names none reports everything that moves,
-        # so its grid ends where the chains end instead (inference/paths.default_outputs)
+        # the outputs: what the question asked about by name, the shocked values among them too (Oct 17: every output
+        # is read at the end, echoed there when it is an input or the chain carries on past it); a question that names
+        # none reports everything that moves, so its grid ends where the chains end instead (paths.default_outputs)
         thesis = getattr(ctl, "theses", {}).get(fc.thesis_id)
-        asked = [t for t in (thesis.targets if thesis is not None else []) if t not in set(fc.shocked)]
+        asked = list(thesis.targets) if thesis is not None else []
         return _grid_view(ctl, fc.paths, method, outs or asked or None, fc.question or forecast_id)
 
     return await st.call(run)
@@ -965,7 +965,7 @@ async def get_layout(request: Request) -> dict:
     path = runner.script.initialization.layout
     p = resolve_path(path) if path else runner.scenario_dir / "figure1_layout.yaml"
     if not p.exists():
-        raise HTTPException(404, "this scenario has no layout")
+        return {}             # no drawn layout: the canvas lays the graph out itself (a normal state, not an error)
     return json.loads(json.dumps(yaml.safe_load(p.read_text()) or {}, default=str))
 
 
@@ -1403,6 +1403,65 @@ async def run_import(request: Request, body: ImportBody) -> dict:
         return out
 
     return await st.call(run)
+
+
+# -- a document through ingestion, and the graph update it would make (Oct 17, api/ingest_view.py) ----------------
+async def _document_view(request: Request, st: AppState, read: Any) -> dict:
+    """Run `read(ingestor, tenant, graph)` (the service's ingestion path) and draw the update its bundle would make."""
+    from axelrod_wm.api.ingest_view import document_view
+    from axelrod_wm.api.service import _ingestor_for, lake, tenant_of
+
+    tenant = tenant_of(request)
+
+    def run() -> dict:
+        runner = _importer(st)
+        graph = st.controller.engine.wm.graph
+        res = read(_ingestor_for(request, st), tenant, graph)
+        return document_view(res, graph, runner, lake(request.app).get_chunks(tenant, res.document.id))
+
+    return await st.call(run)
+
+
+@router.post("/import/document")
+async def import_document(request: Request, file: UploadFile = File(...), source: str = Form(""),
+                          source_type: str = Form("other"), published_at: datetime | None = Form(None)) -> dict:
+    """A raw document (PDF, DOCX, XLSX, HTML, CSV, Markdown, text, or a JSON bundle) stored in the lakehouse, read
+    into an import bundle, and drawn as the graph update each item would make. Nothing in the model changes."""
+    from axelrod_wm.api.service import MAX_UPLOAD, caller_of
+    from axelrod_wm.ingest.pipeline import SOURCE_TYPES
+
+    st = S(request)
+    if source_type not in SOURCE_TYPES:
+        raise HTTPException(422, f"source_type must be one of {', '.join(SOURCE_TYPES)}")
+    data = await file.read()
+    if not data:
+        raise HTTPException(422, "the file is empty")
+    if len(data) > MAX_UPLOAD:
+        raise HTTPException(413, f"{file.filename} is over {MAX_UPLOAD // (1024 * 1024)} MB")
+    name, by = file.filename or "upload.bin", caller_of(request)
+    return await _document_view(request, st, lambda ing, tenant, graph: ing.ingest_file(
+        tenant, data, name, graph, source=source, source_type=source_type, published_at=published_at, uploaded_by=by))
+
+
+@router.get("/import/documents")
+async def import_documents(request: Request) -> list[dict]:
+    """Documents already in the lakehouse, newest first, to read again against the model as it is now."""
+    from axelrod_wm.api.service import lake, tenant_of
+
+    docs = lake(request.app).list_documents(tenant_of(request), order="ingested_at", limit=1000)
+    return [{"id": d.id, "filename": d.filename, "title": d.title, "event_time": d.event_time.isoformat(),
+             "status": d.status} for d in reversed(docs)]
+
+
+@router.post("/import/documents/{doc_id}")
+async def import_stored_document(request: Request, doc_id: str) -> dict:
+    """A stored document read again against the model as it is now, and the graph update it would make."""
+    from axelrod_wm.api.service import lake, tenant_of
+
+    st = S(request)
+    if lake(request.app).get_document(tenant_of(request), doc_id) is None:
+        raise HTTPException(404, f"no document {doc_id}")
+    return await _document_view(request, st, lambda ing, tenant, graph: ing.process(tenant, doc_id, graph))
 
 
 # -- a backend user's own knowledge (Oct 9) ------------------------------------------------------------

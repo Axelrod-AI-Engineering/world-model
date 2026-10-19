@@ -135,3 +135,12 @@ class Forecast(BaseModel):
     paths: dict | None = None                      # the transmission grid's source (inference/paths.py, Oct 11)
     split: dict[str, dict] = {}                    # each target at the horizon: the baseline and the forecast (Oct 14)
     scenario_table: dict = {}                      # bull, base, and bear bands of the draws, for the book (Oct 15)
+    # Oct 17: links the shock reaches whose size is unknown (uncalibrated): they add nothing to these numbers, so
+    # every value downstream of one is incomplete in that direction; [{interaction_id, source, target, sign,
+    # mechanism, source_peak, downstream}]
+    unquantified: list[dict] = []
+    # Oct 18: what the numbers are made of (inference/task.forecast_coverage): {contributed: [quantified links on the
+    # reached transmission, with their contribution], excluded: [reached links that carry no size, with why],
+    # blocking_inputs: [the excluded links' unresolved inputs, with status], targets: [per target, the share of the
+    # reached routes that are fully quantified]}
+    coverage: dict = {}

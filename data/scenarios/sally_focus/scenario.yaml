@@ -1,0 +1,33 @@
+# Sally's world narrowed to two of her names (Oct 18): Toyota and Tokio Marine, with the macro, policy, market, sector,
+# competitor, supplier, and regulator players they connect to, and none of her other nine covered companies. It is
+# built from sally_demo on every load (engine/focus.py, docs/construction/focus.md), so a new document pack for either
+# company reaches it by editing sally_demo's construction files. Every field not set here is sally_demo's.
+id: sally_focus
+title: "Sally's demo, focused: Toyota and Tokio Marine and the players they connect to"
+focus:
+  base: sally_demo
+  companies: [toyota, tokio_marine]
+  # text that named a removed company, rewritten for the focused world
+  overrides:
+    S7:
+      name: "Tokio Marine's reinvestment"
+      description: "Tokio Marine reinvests at Japanese, US, and euro yields, translates overseas profit at USD/JPY and JPY/EUR, and trades with Japanese equities."
+    S8:
+      name: Yen exporter
+      description: "Toyota: each yen of USD/JPY moves its profit; global demand sets its volumes."
+    S-T2:
+      question: "Global yields fall: the Fed cuts 100 bp and Treasury and Bund yields drop. What happens to insurers' reinvestment and the yen?"
+    S-T4:
+      question: "China eases: the PBoC cuts the loan prime rate 25 bp and property stabilizes. What does it do to Toyota's volumes?"
+    china_economy:
+      description: "Chinese growth, credit, and the property market: what the PBoC eases against, and what Chinese car demand follows."
+    watchlist:
+      name: "Sally's book, focused"
+      description: "Two names on the rates, yen, and global-yields thesis: a Japanese insurer and a Japanese exporter."
+# the export (context/v4.py): its own pack, numbered after sally_demo's 036
+context_pack:
+  domain_pack_id: PACK_JAPAN_EXPORTER_AND_INSURER_FOCUS
+  name: "Japan Exporter and Insurer Focus: Toyota and Tokio Marine"
+  slug: japan_exporter_insurer_focus
+  file_index: "037"
+  edge_id_start: 60

@@ -223,7 +223,7 @@ def _window_phi(wm: WorkingMemory, key: str, source: str, rec: KernelRecursion, 
     if start >= day:
         return
     series = dev.series(source)
-    r = KernelRecursion.warm_start(rec.d, rec.l, rec.lam, series, start)
+    r = KernelRecursion.warm_start(rec.d, rec.l, rec.lam, series, start, acc=rec.acc)
     for t in range(start, day):
         txn.put("wm.channel_phi", f"{key}|{t}", r.phi())
         r.advance(series, t)
@@ -234,7 +234,7 @@ def build_channel_state(wm: WorkingMemory, key: str, source: str, dyn: EdgeDynam
     """Warm-start a channel's regressor at `day` and add (or replace) its ChannelState. The window's
     channel_phi values are recomputed so that it never mixes two kernels (§8.6.1)."""
     d, l, lam = mean_kernel_days(dyn.kernel, min_delay_of(ctx))
-    rec = KernelRecursion.warm_start(d, l, lam, wm.deviations.series(source), day)
+    rec = KernelRecursion.warm_start(d, l, lam, wm.deviations.series(source), day, acc=dyn.kernel.accumulates)
     cs = ChannelState(channel_id=key, recursion=rec, day=day)
     txn.replace("wm.channels", cs)
     _window_phi(wm, key, source, rec, day, int(ctx.config.abduction.window_days), txn)
@@ -269,8 +269,10 @@ def sync_channel_states(wm: WorkingMemory, ctx: ProcessContext, txn: MutationTxn
         s, _t, dyn, _inter = live[key]
         cs = wm.channels.get(key)
         want = mean_kernel_days(dyn.kernel, min_delay)
-        if cs is None or (cs.recursion.d, cs.recursion.l) != want[:2] or abs(cs.recursion.lam - want[2]) > 1e-12 \
-                or cs.day > day:
+        acc = dyn.kernel.accumulates
+        lam = 1.0 if acc else want[2]
+        if cs is None or (cs.recursion.d, cs.recursion.l) != want[:2] or abs(cs.recursion.lam - lam) > 1e-12 \
+                or cs.recursion.acc != acc or cs.day > day:
             build_channel_state(wm, key, s, dyn, day, ctx, txn)
             rebuilt.append(key)
         elif cs.day < day:
@@ -303,6 +305,8 @@ class KalmanPredict(DailyPropagator):
         # 1. process noise on every channel's effect
         if q_b2 > 0:
             for inter in graph.active_interactions():
+                if inter.fixed:
+                    continue                     # an identity's weight does not drift (accounting, identity, stock-flow)
                 fields = {"forward.effect": refit_effect(inter.forward.effect, inter.forward.effect.mean(),
                                                          inter.forward.effect.var() + q_b2)}
                 if inter.direction == Direction.BIDIRECTIONAL and inter.reverse is not None:
@@ -393,7 +397,8 @@ class KalmanPredict(DailyPropagator):
                     s = wm.graph.interactions[inter.id].channel_items()
                     src = next(x[1] for x in s if x[0] == key)
                     d, l, lam = mean_kernel_days(dyn.kernel, min_delay_of(ctx))
-                    old = KernelRecursion.warm_start(d, l, lam, dev.series(src), day - width).phi()
+                    old = KernelRecursion.warm_start(d, l, lam, dev.series(src), day - width,
+                                                     acc=dyn.kernel.accumulates).phi()
             params = list(inter.parameters) if key == inter.id else []
             mult = moderator_terms(params, dev, day, clip)[0] if params else 1.0
             cc = dyn.effect.mean() * mult * (phi - float(old))

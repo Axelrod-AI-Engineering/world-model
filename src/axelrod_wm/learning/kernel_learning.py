@@ -42,7 +42,7 @@ def phi_path(wm: WorkingMemory, source: str, kernel: Any, start: int, end: int, 
     """phi(t) for t in [start, end] at the kernel's mean parameters scaled by `multiplier`."""
     d, l, lam = mean_kernel_days(kernel, min_delay, multiplier)
     series = wm.deviations.series(source)
-    rec = KernelRecursion.warm_start(d, l, lam, series, start)
+    rec = KernelRecursion.warm_start(d, l, lam, series, start, acc=kernel.accumulates)
     out: dict[int, float] = {}
     for t in range(start, end + 1):
         out[t] = rec.phi()
@@ -103,8 +103,8 @@ class GridRescaleKernelUpdater(KernelUpdater):
             mods = {ch.key: {d: moderator_terms(ch.params, dev, d, clip)[0] for d in observed}
                     for ch in chans if ch.params}
             for ch in chans:
-                if ch.key != ch.inter.id:
-                    continue       # reverse channels share the interaction's learning schedule
+                if ch.key != ch.inter.id or ch.inter.fixed:
+                    continue       # reverse channels share the interaction's schedule; an identity's timing is fixed
                 informative = [d for d in observed if abs(base[ch.key].get(d, 0.0)) >= min_reg]
                 if len(informative) < int(cfg.min_observations):
                     continue

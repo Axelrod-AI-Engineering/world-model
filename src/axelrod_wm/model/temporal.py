@@ -42,9 +42,16 @@ def gamma_from_mean(mean_days: float, cv: float = KERNEL_CV) -> Gamma:
     return Gamma(k=k, theta=max(float(mean_days) / k, 1e-9))
 
 
+ACCUMULATE = "accumulate"
+
+
 class KernelSpec(BaseModel):
     """Step response of one channel, in days. It is zero before `delay`, rises linearly over
-    `lag`, then fades over `duration`. duration=None means the effect is permanent."""
+    `lag`, then fades over `duration`. duration=None means the effect is permanent.
+
+    Shape "accumulate" (Oct 18, a flow into a stock): the response never levels off. It rises by one effect per `lag`
+    days (the flow's period) for as long as the source stays moved, so the target integrates the source: a stock
+    accumulates a flow. It has no duration."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -65,6 +72,17 @@ class KernelSpec(BaseModel):
             out["duration"] = gamma_from_mean(dur) if dur is not None else None
             return out
         return data
+
+    @model_validator(mode="after")
+    def _accumulate_is_permanent(self) -> KernelSpec:
+        if self.shape == ACCUMULATE and self.duration is not None:
+            raise ValueError("an accumulating kernel integrates its source for good: it has no duration")
+        return self
+
+    @property
+    def accumulates(self) -> bool:
+        """Whether the response integrates its source (a stock accumulating a flow) instead of stepping to a level."""
+        return self.shape == ACCUMULATE
 
     def means(self) -> tuple[float, float, float | None]:
         """(delay, lag, duration) means in days."""
@@ -129,6 +147,7 @@ def step_response(d: int, l: int, D: float | None, n_days: int) -> np.ndarray:
 
 
 __all__ = [
+    "ACCUMULATE",
     "Bitemporal",
     "TimeState",
     "KernelSpec",

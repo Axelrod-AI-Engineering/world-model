@@ -116,22 +116,21 @@ def update_cmd(until: Optional[str] = typer.Option(None, "--until", help="Last d
         typer.echo(f"  deferred {p.id} ({p.kind}, {p.market_event_id or p.event.id}): {', '.join(p.review_reasons)}")
         run = ctl.continue_update(run.id)
     _write_session(r, path)
-    rep = run.report
+    rep = run.report                    # a finished run always has one (a failed run raises above)
     typer.echo(f"{run.id}: {run.state} through {day} in {time.time() - t:.1f}s; version "
-               f"{rep.version_before if rep else '?'} -> {rep.version_after if rep else ctl.engine.version}")
-    if rep is not None:
-        typer.echo(f"  days {rep.days}; collected {rep.collected}; duplicates dropped {rep.duplicates_dropped}; "
-                   f"late {rep.late_collected}")
-        typer.echo(f"  translated {rep.translated}; auto-applied {rep.auto_applied}; approved {rep.approved}; "
-                   f"rejected {rep.rejected}; deferred {rep.deferred}; late folded {rep.late_folded}")
-        if rep.not_translated:
-            typer.echo(f"  no translation: {', '.join(rep.not_translated[:10])}")
-        if rep.model_edits_proposed:
-            typer.echo(f"  model edits proposed: {', '.join(rep.model_edits_proposed[:10])}")
-        if rep.biggest_moves:
-            typer.echo("  biggest moves: " + ", ".join(f"{s} {m:+.2f}" for s, m in rep.biggest_moves[:6]))
-        if rep.reposed_theses:
-            typer.echo(f"  re-posed: {', '.join(rep.reposed_theses)}")
+               f"{rep.version_before} -> {rep.version_after}")
+    typer.echo(f"  days {rep.days}; collected {rep.collected}; duplicates dropped {rep.duplicates_dropped}; "
+               f"late {rep.late_collected}")
+    typer.echo(f"  translated {rep.translated}; auto-applied {rep.auto_applied}; approved {rep.approved}; "
+               f"rejected {rep.rejected}; deferred {rep.deferred}; late folded {rep.late_folded}")
+    if rep.not_translated:
+        typer.echo(f"  no translation: {', '.join(rep.not_translated[:10])}")
+    if rep.model_edits_proposed:
+        typer.echo(f"  model edits proposed: {', '.join(rep.model_edits_proposed[:10])}")
+    if rep.biggest_moves:
+        typer.echo("  biggest moves: " + ", ".join(f"{s} {m:+.2f}" for s, m in rep.biggest_moves[:6]))
+    if rep.reposed_theses:
+        typer.echo(f"  re-posed: {', '.join(rep.reposed_theses)}")
     pending = ctl.pending_proposals()
     if pending:
         typer.echo(f"  {len(pending)} proposals await review")
@@ -204,8 +203,7 @@ def thesis(scenario: str = typer.Argument("oil_shock_demo"), question: str = typ
     for t in fc.targets:
         lv, ef = fc.summary[t][-1], fc.effect_summary[t][-1]
         typer.echo(f"  {t}: median {lv.q50:.3f} (5-95%: {lv.q05:.3f} to {lv.q95:.3f}); effect {ef.q50:+.2f} sd")
-    if ex is not None:
-        typer.echo(f"  {ex.text}")
+    typer.echo(f"  {ex.text}")                  # a posed forecast's explanation is always on record
 
 
 @app.command()

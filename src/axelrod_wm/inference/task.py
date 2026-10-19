@@ -17,6 +17,8 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
+import numpy as np
+
 from axelrod_wm.dynamics.propagation import PropagationResult, ShockInput
 from axelrod_wm.engine.registry import registry
 from axelrod_wm.inference.records import (
@@ -173,9 +175,13 @@ class InferenceTask:
         from axelrod_wm.inference.paths import source_of
 
         grid_src = source_of(sorted({s.subentity_id for s in shocks}), chans, mix.effect, int(ctx.notes["horizon_days"]),
-                             trans, int(ctx.config.propagation.min_delay_days)) if chans else None
+                             trans, int(ctx.config.propagation.min_delay_days),
+                             asked=frozenset(forecast.targets)) if chans else None
         reached = {e.subentity_id for e in trans} | {s.subentity_id for s in shocks}
-        binding = {sid: round(v, 4) for sid, v in sorted(hits.items()) if v >= 0.05 and sid in reached}
+        contrib, live, absent = channel_contributions(scenarios, coupled, baseline)
+        coverage = forecast_coverage(wm.graph, sorted({s.subentity_id for s in shocks}), reached, list(forecast.targets),
+                                     contrib, live, absent)
+        binding ={sid: round(v, 4) for sid, v in sorted(hits.items()) if v >= 0.05 and sid in reached}
         # the scenario table (Oct 15): bull, base, and bear bands of the draws, read for the book (the watchlist, else
         # the names the thesis asks about)
         from axelrod_wm.inference.scenario_table import build_scenario_table
@@ -187,7 +193,9 @@ class InferenceTask:
                                                "movers": movers(mix, coupled, shocked), "transmission": trans,
                                                "shocked": sorted({s.subentity_id for s in shocks}),
                                                "constraints_binding": binding, "paths": grid_src,
-                                               "scenario_table": table})
+                                               "scenario_table": table,
+                                               "unquantified": unquantified_links(wm.graph, reached, trans),
+                                               "coverage": coverage})
         if scenarios:
             from axelrod_wm.dynamics.regressors import emit_frames
 
@@ -250,3 +258,150 @@ class InferenceTask:
                         forecast_id=view.forecast.id, thesis_id=thesis_id)
         return view.forecast
 
+
+def unquantified_links(graph: Any, reached: set[str], trans: list[Any]) -> list[dict]:
+    """The uncalibrated links a forecast's shock reaches (Oct 17): each one's source moves, but its size is unknown,
+    so it adds nothing here, and what lies downstream of it (by any link) is incomplete in that direction."""
+    peak = {t.subentity_id: float(t.peak) for t in trans}
+    out_of: dict[str, list[str]] = {}
+    for i in graph.active_interactions():
+        out_of.setdefault(i.source_id, []).append(i.target_id)
+    rows = []
+    for i in graph.active_interactions():
+        if i.quantified or i.source_id not in reached:
+            continue
+        down, stack = set(), [i.target_id]
+        while stack:
+            v = stack.pop()
+            if v not in down:
+                down.add(v)
+                stack.extend(out_of.get(v, []))
+        rows.append({"interaction_id": i.id, "source": i.source_id, "target": i.target_id,
+                     "sign": i.transition.sign if i.transition is not None else None,
+                     "mechanism": i.transition.mechanism if i.transition is not None else i.label,
+                     "source_peak": round(peak.get(i.source_id, 0.0), 4), "downstream": sorted(down)})
+    return rows
+
+
+def channel_contributions(scenarios: list[Any], coupled: dict[str, Any],
+                          baseline: dict[str, Any]) -> tuple[dict[str, float], set[str], set[str]]:
+    """Per link (interaction id, both channels of a two-way link together): its contribution to its target at the
+    horizon, in target sd (the median over draws of what the channel added with the shock minus without it, weighted
+    by scenario); the links that ran in at least one scenario; and the links every scenario that held them forced off."""
+    from axelrod_wm.model.interaction import base_interaction_id
+
+    contrib: dict[str, float] = {}
+    live: set[str] = set()
+    held: set[str] = set()
+    for s in scenarios:
+        on, off = coupled[s.id], baseline[s.id]
+        H = on.horizon_days
+        for ch in on.channels:
+            iid = base_interaction_id(ch.channel_key)
+            held.add(iid)
+            if ch.forced is False:
+                continue
+            live.add(iid)
+            d = on.contrib_of(ch.channel_key)[:, H] - off.contrib_of(ch.channel_key)[:, H]
+            contrib[iid] = contrib.get(iid, 0.0) + s.weight * float(np.median(d))
+    return contrib, live, held - live
+
+
+ROUTE_DEPTH = 6          # routes from a shock to a target are counted up to this many links (transmission's max order)
+ROUTE_BUDGET = 20000     # links walked in all; a denser graph reports its route counts as truncated
+
+
+def _entity(graph: Any, sid: str) -> str | None:
+    sub = graph.subentities.get(sid)
+    return sub.entity_id if sub is not None else None
+
+
+def forecast_coverage(graph: Any, shocked: list[str], reached: set[str], targets: list[str], contrib: dict[str, float],
+                      live: set[str], absent: set[str], max_depth: int = ROUTE_DEPTH,
+                      budget: int = ROUTE_BUDGET) -> dict:
+    """A forecast's calculation coverage (Oct 18): what its numbers are made of, and what they leave out.
+
+    - `contributed`: the quantified links out of a reached value that ran in the forecast, each with its contribution
+      at the horizon (target sd, `channel_contributions`), largest first.
+    - `excluded`: the links out of a reached value that carry no size here, with why: `uncalibrated` (represented, sign
+      and mechanism known, size unknown), `absent_in_every_scenario` (every scenario forced it off), or
+      `outside_the_forecast_networks` (quantified, but no network the forecast isolated holds it).
+    - `blocking_inputs`: the unresolved inputs of the excluded links' transitions, with their status.
+    - `targets`: per target, the routes from a shocked value to it (simple paths of at most `max_depth` active links,
+      calibrated or not), how many are fully quantified (every link contributed), and that share (None with no route).
+      Oct 18: and the company's own construction apart from the routes (a high share must not hide a path whose own steps
+      are all unsized): `own_steps` (the distinct links inside the target's company on any route), how many contributed,
+      and that share; and the fully quantified routes split into those through at least one own step
+      (`quantified_routes_through_own_steps`) and those quantified only through macro or summary links
+      (`quantified_routes_through_summary_links_only`).
+    """
+    from axelrod_wm.context.construction import input_needs
+
+    active = sorted(graph.active_interactions(), key=lambda i: i.id)
+    contributed, excluded = [], []
+    for i in active:
+        if i.source_id not in reached:
+            continue
+        if i.quantified and i.id in live:
+            contributed.append({"interaction_id": i.id, "source": i.source_id, "target": i.target_id,
+                                "edge_type": str(i.edge_type), "contribution_sd": round(contrib.get(i.id, 0.0), 4)})
+            continue
+        tr = i.transition
+        reason = ("uncalibrated" if not i.quantified else "absent_in_every_scenario" if i.id in absent
+                  else "outside_the_forecast_networks")
+        signed = i.quantified or (tr is not None and tr.sign is not None)
+        excluded.append({"interaction_id": i.id, "source": i.source_id, "target": i.target_id, "reason": reason,
+                         "sign": ("+" if i.polarity() > 0 else "-") if signed else None,
+                         "mechanism": tr.mechanism if tr is not None else i.label,
+                         "unresolved": [u.input for u in tr.unresolved] if tr is not None else []})
+    contributed.sort(key=lambda r: (-abs(r["contribution_sd"]), r["interaction_id"]))
+    blocking = input_needs([(r["interaction_id"], graph.interactions[r["interaction_id"]].transition) for r in excluded])
+
+    ok = {r["interaction_id"] for r in contributed}
+    out_of: dict[str, list[Any]] = {}
+    for i in active:
+        out_of.setdefault(i.source_id, []).append(i)
+    counts = {t: [0, 0, 0] for t in targets}           # routes, fully quantified, fully quantified through own steps
+    owner = {t: graph.subentities[t].entity_id if t in graph.subentities else None for t in targets}
+    own_steps: dict[str, set[str]] = {t: set() for t in targets}
+    walked = 0
+    truncated = False
+
+    def walk(v: str, seen: frozenset[str], quantified: bool, depth: int, route: tuple[Any, ...]) -> None:
+        nonlocal walked, truncated
+        for i in out_of.get(v, []):
+            if i.target_id in seen:
+                continue
+            if walked >= budget:
+                truncated = True
+                return
+            walked += 1
+            q = quantified and i.id in ok
+            here = route + (i,)
+            t = i.target_id
+            if t in counts:
+                own = [x.id for x in here if _entity(graph, x.source_id) == owner[t] == _entity(graph, x.target_id)]
+                own_steps[t].update(own)
+                counts[t][0] += 1
+                counts[t][1] += int(q)
+                counts[t][2] += int(q and bool(own))
+            if depth + 1 < max_depth:
+                walk(t, seen | {t}, q, depth + 1, here)
+
+    for s in shocked:
+        walk(s, frozenset({s}), True, 0, ())
+    rows = []
+    for t, (n, q, qo) in counts.items():
+        own = own_steps[t]
+        own_q = len(own & ok)
+        rows.append({"target": t, "routes": n, "quantified_routes": q, "share_quantified": round(q / n, 4) if n else None,
+                     "quantified_routes_through_own_steps": qo, "quantified_routes_through_summary_links_only": q - qo,
+                     "own_steps": len(own), "own_steps_quantified": own_q,
+                     "share_own_steps_quantified": round(own_q / len(own), 4) if own else None,
+                     "own_steps_unquantified": sorted(own - ok), "truncated": truncated})
+    reasons = sorted({r["reason"] for r in excluded})
+    return {"contributed": contributed, "excluded": excluded, "blocking_inputs": blocking, "targets": rows,
+            "summary": {"contributed": len(contributed), "excluded": len(excluded),
+                        "excluded_by_reason": {k: sum(1 for r in excluded if r["reason"] == k) for k in reasons},
+                        "blocking_inputs": len(blocking)},
+            "max_route_depth": max_depth}

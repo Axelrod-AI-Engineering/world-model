@@ -15,7 +15,9 @@ contract's ID rules, field names, and value styles:
 - **an evidence pack**: every value's level and spread at the committed version, with what has been observed, and the
   open questions (the hypothesis frontier);
 - **a forecast evidence pack** for a thesis: targets with their ranges, the transmission by order and path, the key
-  interactions, and the scenario table.
+  interactions, the scenario table, and the forecast's calculation coverage;
+- **a source catalogue** (Oct 18, `attach_sources`, when the client's local sources are given): each cited source id's
+  document, and `evidence_refs` (document, location, passage) on the relationships and values that cite them.
 
 The client's core files (000, 010, 020) are named in the manifest's load order, never copied. Following the contract's
 decision boundary, the context grounds an agent's judgment and never concludes it: no ratings, no sizing, no funding
@@ -27,6 +29,8 @@ from __future__ import annotations
 import re
 from datetime import datetime
 from typing import Any
+
+from axelrod_wm.context.construction import state_text
 
 SCHEMA = "v4.1.4"
 PACK_SCHEMA = "v4.1.4_modular_domain_pack"
@@ -80,11 +84,20 @@ def _q(d: Any, q: float) -> float | None:
 
 
 def _direction(i: Any) -> str:
-    """positive / negative when the effect's 90% range keeps its sign, mixed when it straddles zero."""
+    """positive / negative when the effect's 90% range keeps its sign, mixed when it straddles zero; for an
+    uncalibrated link, the sign its transition states."""
+    if not getattr(i, "quantified", True):
+        return "positive" if i.polarity() > 0 else "negative"
     lo, hi, m = _q(i.forward.effect, 0.05), _q(i.forward.effect, 0.95), _mean(i.forward.effect) or 0.0
     if lo is not None and hi is not None and lo < 0 < hi:
         return "mixed_lean_positive" if m > 0 else "mixed_lean_negative"
     return "positive" if m > 0 else "negative" if m < 0 else "mixed"
+
+
+def _sign_of(rel: dict) -> bool:
+    """Whether an exported relationship raises its target (from its effect, or its stated sign when uncalibrated)."""
+    ax = rel["axelrod"]
+    return (ax["effect_sd_per_sd"] > 0) if ax["effect_sd_per_sd"] is not None else ax.get("sign") == "+"
 
 
 def _horizon(k: Any) -> str:
@@ -114,6 +127,51 @@ def _cause_first(chain: list[Any]) -> list[Any]:
     return out
 
 
+# Oct 17: what the business construction carries that the v4.1.4 schema has no field for, and where it is instead
+SCHEMA_GAPS = [
+    {"concept": "transition timing by part (onset, build-up, persistence, reporting recognition)",
+     "carried_in": "company_edge_relationships[].axelrod.transition.timing", "canonical_nearest": "time_horizon"},
+    {"concept": "the observable's definition, units, frequency, and proof limits",
+     "carried_in": "company_edge_relationships[].axelrod.transition.observable", "canonical_nearest": "evidence_required"},
+    {"concept": "evidence kept apart for existence, direction, magnitude, and timing",
+     "carried_in": "company_edge_relationships[].axelrod.transition.evidence",
+     "canonical_nearest": "evidence_source_type, evidence_reliability"},
+    {"concept": "calibration status (a represented link whose size is unknown)",
+     "carried_in": "company_edge_relationships[].qualification_status and .axelrod.magnitude", "canonical_nearest": "status"},
+    {"concept": "business composition views with residuals and eliminations",
+     "carried_in": "domain_specific_support_objects.financial_bridge", "canonical_nearest": "financial_model_semantic_fields"},
+    {"concept": "parallel branches within a path",
+     "carried_in": "transmission_paths[].axelrod.steps[].branch", "canonical_nearest": "ordered_steps"},
+    {"concept": "identities that are not sums (products, ratios, differences) and stock-flow roll-forwards, with their "
+                "formulas and derived weights",
+     "carried_in": "company_edge_relationships[].axelrod.identity and domain_specific_support_objects."
+                   "financial_identities", "canonical_nearest": "dependency_type"},
+    {"concept": "state-dependent responses (rises versus falls, thresholds, sign flips)",
+     "carried_in": "company_edge_relationships[].axelrod.state", "canonical_nearest": "invalidator"},
+]
+
+# Oct 18: how a stock-flow link computes, stated wherever it is exported
+STOCK_FLOW_NOTE = ("The stock integrates the flow's deviation from its construction level: a flow held one sd above its "
+                   "level adds the weight to the stock every period, linearized at the construction levels. The baseline "
+                   "accumulation (the flow at its level) is part of the stock's own path, not added by the link.")
+
+
+def identity_ref(g: Any, i: Any) -> dict:
+    """The identity or stock-flow a link is a term of, with its formula and how its weight was set (Oct 18)."""
+    names = {k: v.name for k, v in g.subentities.items()}
+    if str(i.edge_type) == "stock_flow":
+        x = g.stock_flows.get(i.identity)
+        if x is None:
+            return {"identity_id": i.identity, "form": "stock_flow", "formula": None}
+        return {"identity_id": x.id, "form": "stock_flow", "formula": x.formula(names), "period_days": x.period_days,
+                "role": "inflow" if i.source_id in x.inflows else "outflow", "computation": STOCK_FLOW_NOTE}
+    x = g.identities.get(i.identity)
+    if x is None:
+        return {"identity_id": i.identity, "form": None, "formula": None}
+    return {"identity_id": x.id, "form": x.form, "formula": x.formula(names), "role": x.role(i.source_id),
+            "computation": "weight derived at the construction levels and scales, fixed (never refit)"}
+
+
 def pack_config(scenario_id: str, title: str, cfg: dict | None = None) -> dict:
     """The pack's identity: its PACK_ id, name, file slug, file index, and the first number of its edge vocabulary."""
     cfg = dict(cfg or {})
@@ -137,7 +195,9 @@ def domain_pack(wm: Any, ltm: Any, *, pc: dict, book: list[str], version: int, s
     node = {eid: _node_id(e) for eid, e in ents.items()}
     is_co = {eid: str(e.kind) == "company" for eid, e in ents.items()}
     ent_of = {sid: s.entity_id for sid, s in subs.items()}
-    slot = {sid: sid.split(".", 1)[-1] for sid in subs}
+    # a value's metric name is its id's suffix unless it states one (Oct 17: Tokio Marine's "operating_profit" is
+    # adjusted net income by definition, so it says so instead of passing for an operating-profit measure)
+    slot = {sid: (getattr(s, "features", None) or {}).get("metric") or sid.split(".", 1)[-1] for sid, s in subs.items()}
 
     def concepts(gid: str | None) -> list[str]:
         if not gid or gid not in otax.nodes:
@@ -219,7 +279,7 @@ def domain_pack(wm: Any, ltm: Any, *, pc: dict, book: list[str], version: int, s
         k = i.forward.kernel
         reach = (_mean(k.delay) or 0) + (_mean(k.lag) or 0)
         last = max((x.observed_at for x in i.evidence), default=None)
-        sign = "rises" if (_mean(i.forward.effect) or 0) > 0 else "falls"
+        sign = "rises" if i.polarity() > 0 else "falls"
         out = {
             "edge_id": v["edge_id"], "direction": _direction(i), "confidence_prior": _confidence(p),
             "affected_metrics": [slot[i.target_id]], "ontology_relationship_type_hint": [_snake(i.label).lower()],
@@ -240,6 +300,38 @@ def domain_pack(wm: Any, ltm: Any, *, pc: dict, book: list[str], version: int, s
                         "lag_days": round(_mean(k.lag) or 0, 1),
                         "duration_days": None if k.duration is None else round(_mean(k.duration) or 0, 1),
                         "evidence_count": len(i.evidence) + i.evidence_dropped}}
+        tr = i.transition
+        if tr is not None:
+            # Oct 17: the link as a business step, in the canonical properties; what has no canonical field (timing
+            # by part, the observable's definition and proof limits, evidence by claim) rides under "axelrod"
+            out["mechanism_label"] = tr.mechanism
+            out["validator"] = "; ".join(x for x in (tr.condition, tr.condition_observable and
+                                                    f"observable: {tr.condition_observable}") if x) or out["validator"]
+            if tr.breaker:
+                out["invalidator"] = tr.breaker + (f" (threshold: {tr.breaker_threshold})" if tr.breaker_threshold else "")
+            if tr.timing.onset != "unknown" or tr.timing.build != "unknown":
+                out["time_horizon"] = f"onset {tr.timing.onset}; build {tr.timing.build}"
+            out["evidence_required"] = [x for x in (tr.condition_observable, tr.observable and tr.observable.name) if x] \
+                or out["evidence_required"]
+            out["evidence_source_type"] = tr.evidence.existence
+            out["evidence_reliability"] = tr.evidence.magnitude
+            out["axelrod"]["transition"] = tr.model_dump(mode="json")
+        out["dependency_type"] = "accounting_identity" if i.fixed else "causal"
+        if i.identity is not None:
+            out["axelrod"]["identity"] = identity_ref(g, i)
+        if i.note:
+            out["axelrod"]["note"] = i.note
+        if i.state is not None:
+            out["axelrod"]["state"] = {**i.state.model_dump(mode="json", exclude_none=True),
+                                       "in_words": state_text(i, {k: v.name for k, v in subs.items()})}
+        out["qualification_status"] = str(i.calibration)
+        if not i.quantified:
+            # no size is known: it is not zero, and nothing numeric is reported for it
+            out["status"] = "represented_uncalibrated"
+            out["validator"] = out["validator"].replace("rises", "moves") if tr is None else out["validator"]
+            out["axelrod"].update(effect_sd_per_sd=None, effect_q05=None, effect_q95=None, delay_days=None, lag_days=None,
+                                  duration_days=None, magnitude="unknown (uncalibrated)",
+                                  sign=tr.sign if tr is not None else None)
         if owner:
             out = {"relationship_id": "", "company_id": owner, **out}
         return out
@@ -311,7 +403,7 @@ def domain_pack(wm: Any, ltm: Any, *, pc: dict, book: list[str], version: int, s
     sector_packs = []
     for p in top:
         mem = all_members(p.id)
-        scope_ids = [s["required_search_scope_id"] for s in scopes if set(s["cluster_ids"]) & {cl_id[c] for c in [p.id, *p.sub_pattern_ids]}]
+        scope_ids = [s["required_search_scope_id"] for s in scopes if set(s["cluster_ids"]) & {cl_id[c] for c in [p.id, *p.sub_pattern_ids] if c in cl_id}]
         mfs = sorted({mf_id[subs[s].attribute_kind] for e in mem for s in ents[e].subentity_ids if s in subs})
         sector_packs.append({"sector_pack_id": sp_id[p.id], "sector_pack_name": p.name,
                              "when_to_activate": [p.name, *[ents[e].name for e in mem]][:14],
@@ -339,7 +431,7 @@ def domain_pack(wm: Any, ltm: Any, *, pc: dict, book: list[str], version: int, s
         for a, b in zip(rs, rs[1:]):
             if a["company_id"] == b["company_id"]:
                 continue
-            same = (a["axelrod"]["effect_sd_per_sd"] > 0) == (b["axelrod"]["effect_sd_per_sd"] > 0)
+            same = _sign_of(a) == _sign_of(b)
             cid = f"CV_{a['company_id'][2:]}_TO_{b['company_id'][2:]}__{a['edge_id']}_{_snake(slot[src])}"
             if cid in seen_cv:
                 continue
@@ -418,13 +510,76 @@ def domain_pack(wm: Any, ltm: Any, *, pc: dict, book: list[str], version: int, s
         if not chain:
             continue
         cos = [node[ent_of[i.target_id]] for i in chain if is_co[ent_of[i.target_id]]]
-        primary = max(set(cos), key=cos.count) if cos else "EVENT_OR_CONTEXT_DRIVEN"
+        # the company the chain reaches most; on a tie, the one it reaches first (a set's order varies by process,
+        # so the same model exported twice named different companies)
+        primary = max(dict.fromkeys(cos), key=cos.count) if cos else "EVENT_OR_CONTEXT_DRIVEN"
         paths.append({"path_id": f"PATH_{primary[2:] if cos else 'CONTEXT'}_{cl_id[pid][3:]}", "primary_company_id": primary,
                       "trigger": f"{subs[chain[0].source_id].name} moves",
                       "ordered_steps": [f"{ev[i.id]['edge_id']}: {subs[i.source_id].name} {i.label} {subs[i.target_id].name}"
                                         for i in chain],
                       "edge_ids": list(dict.fromkeys(ev[i.id]["edge_id"] for i in chain)),
                       "company_ids": sorted(set(cos)), "cluster_id": cl_id[pid]})
+
+    # Oct 17: the business paths the construction names (model/construction.py), step by step with their transitions
+    for pid, np_ in sorted(g.paths.items()):
+        steps = [(st, g.interactions[st.interaction_id]) for st in np_.steps if st.interaction_id in g.interactions]
+        steps = [(st, i) for st, i in steps if i.id in ev]
+        if not steps:
+            continue
+        owner = node.get(np_.entity_id, np_.entity_id)
+        paths.append({
+            "path_id": f"PATH_{owner[2:] if owner.startswith('N_') else _snake(owner)}_{_snake(np_.name)}",
+            "primary_company_id": owner, "trigger": np_.trigger,
+            "ordered_steps": [f"{ev[i.id]['edge_id']}{f' [{st.branch}]' if st.branch else ''}: "
+                              f"{(i.transition.mechanism if i.transition else f'{subs[i.source_id].name} {i.label} {subs[i.target_id].name}')}"
+                              f"{'' if i.quantified else ' (uncalibrated)'}" for st, i in steps],
+            "edge_ids": list(dict.fromkeys(ev[i.id]["edge_id"] for _st, i in steps)),
+            "company_ids": [owner], "path_kind": "business_construction",
+            "axelrod": {"path_id": pid, "endpoint": np_.endpoint, "description": np_.description,
+                        "active_when": np_.active_when or None,
+                        "steps": [{"interaction_id": i.id, "branch": st.branch, "source_metric": i.source_id,
+                                   "target_metric": i.target_id, "calibration": str(i.calibration),
+                                   "edge_type": str(i.edge_type)} for st, i in steps]}})
+    # and the compositions: each view of a business, its parts, and how they reconcile to the total (Oct 18: at the
+    # model's levels, each additive view's parts against its total, model/construction.reconcile)
+    from axelrod_wm.model.construction import (
+        composition_role,
+        reconcile,
+        reconcile_identities,
+        reconcile_matrices,
+    )
+
+    rec = {r["composition_id"]: {k: v for k, v in r.items() if k not in ("composition_id", "entity_id", "view", "role")}
+           for r in reconcile(g)}
+    mrec = {r["matrix_id"]: r for r in reconcile_matrices(g)}
+    in_matrix = {cid: mid for mid, m in g.matrices.items() for cid in (m.rows, m.columns)}
+    bridge = [{"composition_id": c.id, "company_id": node.get(c.entity_id, c.entity_id), "view": c.view, "basis": c.basis,
+               "unit": c.unit, "period": c.period, "total_metric": c.total, "member_metrics": list(c.members),
+               "residual_metric": c.residual, "eliminations_metric": c.eliminations, "additive": c.additive,
+               "note": c.note, "overlaps_other_views": [o.id for o in g.compositions.values()
+                                                        if o.entity_id == c.entity_id and o.id != c.id],
+               "role": composition_role(g, c.id), "matrix_id": in_matrix.get(c.id),
+               "reconciliation": rec.get(c.id)}
+              for c in sorted(g.compositions.values(), key=lambda c: c.id)]
+    names = {k: v.name for k, v in subs.items()}
+    irec = {r["identity_id"]: r for r in reconcile_identities(g)}
+    identities = [{"identity_id": x.id, "company_id": node.get(x.entity_id, x.entity_id), "form": x.form,
+                   "target_metric": x.target, "formula": x.formula(names), "formula_ids": x.formula(),
+                   "terms": [{"metric": v, "role": x.role(v), "exponent_or_sign": e} for v, e in x.terms()],
+                   "coefficient": x.coefficient, "unit_check": x.unit_check, "basis": x.basis, "period": x.period,
+                   "note": x.note, "weights": "derived at the construction levels: d ln y = sum e_i d ln x_i (product, "
+                   "ratio) or dy = sum s_i dx_i (difference), in sd/sd", "reconciliation": irec.get(x.id)}
+                  for _, x in sorted(g.identities.items())]
+    identities += [{"identity_id": x.id, "company_id": node.get(x.entity_id, x.entity_id), "form": "stock_flow",
+                    "target_metric": x.stock, "formula": x.formula(names), "formula_ids": x.formula(),
+                    "terms": [{"metric": v, "role": "inflow" if e > 0 else "outflow", "exponent_or_sign": e}
+                              for v, e in x.terms()], "period_days": x.period_days, "basis": x.basis, "note": x.note,
+                    "weights": STOCK_FLOW_NOTE, "reconciliation": None}
+                   for _, x in sorted(g.stock_flows.items())]
+    matrices = [{"matrix_id": m.id, "company_id": node.get(m.entity_id, m.entity_id), "rows": m.rows,
+                 "columns": m.columns, "driving": m.driving, "reconciling": m.passive,
+                 "cells": [{"row": r, "column": c, "metric": v} for r, c, v in m.cell_list()], "note": m.note,
+                 "reconciliation": mrec.get(m.id)} for _, m in sorted(g.matrices.items())]
 
     fm_fields: dict[str, dict] = {}
     for sid, s in sorted(subs.items()):
@@ -447,6 +602,8 @@ def domain_pack(wm: Any, ltm: Any, *, pc: dict, book: list[str], version: int, s
         "domain_specific_support_objects": {
             "axelrod_edge_vocabulary": list(vocab.values()), "macro_factor_nodes": macro_nodes,
             "macro_transmission_links": macro_links,
+            "financial_bridge": bridge, "financial_identities": identities, "financial_matrices": matrices,
+            "schema_gaps": SCHEMA_GAPS if (bridge or g.paths or identities or any(i.transition for i in live)) else [],
             "axelrod_model_state": {"state_version": version, "state_hash": state_hash, "as_of": wm.clock.isoformat(),
                                     "numbers_note": "effect_sd_per_sd is the target's move in its own standard deviations per "
                                                     "standard deviation of the source; existence_p is the probability the link holds."}},
@@ -527,6 +684,10 @@ def forecast_record(fc: Any, explanation: Any, wm: Any, pc: dict) -> dict:
             "horizon_days": fc.horizon_days, "targets": targets, "transmission": trans, "key_interactions": key,
             "constraints_binding": fc.constraints_binding, "scenario_table": fc.scenario_table,
             "scenarios": [{"id": s.id, "name": s.name, "weight": round(s.weight, 4)} for s in fc.scenarios],
+            # Oct 18: what the numbers above are made of (inference/task.forecast_coverage): the quantified links that
+            # contribute, the reached links that carry no size and why, the inputs that block them, and per target the
+            # share of reached routes that are fully quantified
+            "unquantified": fc.unquantified, "calculation_coverage": fc.coverage,
             "evidence_boundary": "A forecast the model computed; it grounds the agent's scenarios and never concludes an action."}
 
 
@@ -574,3 +735,65 @@ def context_pack(wm: Any, ltm: Any, *, scenario_id: str, title: str, book: list[
     if forecast is not None:
         out["forecast"] = forecast_record(forecast, explanation, wm, pc)
     return out
+
+
+# Oct 18: the source catalogue and evidence references (context/construction.load_sources)
+SOURCE_GAP = {"concept": "evidence references: the document, the location (sheet and cell, table and row, page and "
+                         "paragraph), and the supporting passage behind a claim",
+              "carried_in": "company_edge_relationships[].evidence_refs, macro_transmission_links[].evidence_refs, "
+                            "evidence.values[].evidence_refs, and the source catalogue file",
+              "canonical_nearest": "evidence_available"}
+
+
+def source_catalogue_file(pack: dict) -> str:
+    return f"source_catalogue_axelrod_{pack['domain_pack_id'].lower()}.json"
+
+
+def attach_sources(ctx: dict, sources: dict) -> dict:
+    """Bind an exported context (`context_pack`'s output, as JSON) to the local sources and citations.
+
+    Each relationship (company edge or macro link) whose transition names source ids, or that has citations, gains
+    `evidence_refs` [{source_id, document, location, passage}]; so does each evidence value with cited baselines. The
+    domain pack's support objects gain `citation_gaps` (source ids that do not resolve, material claims without a
+    citation giving a location, citation keys that name nothing exported) and a schema gap for the references. The
+    catalogue (source id -> document, kind, publication date, period, basis, read state, proof limits) is its own file,
+    listed in the manifest's load order right after the evidence pack; it is returned and kept under ctx["sources"].
+    Passages are the client's text: an export with sources stays in the client's local folder."""
+    from axelrod_wm.context.construction import citation_check, evidence_refs
+
+    pack, ev, m = ctx["domain_pack"], ctx["evidence"], ctx["manifest"]
+    sup = pack["domain_specific_support_objects"]
+    links = []
+    for r in [*pack["company_edge_relationships"], *sup["macro_transmission_links"]]:
+        iid, tr = r["axelrod"]["interaction_id"], r["axelrod"].get("transition")
+        links.append((iid, tr))
+        refs = evidence_refs(iid, ((tr or {}).get("evidence") or {}).get("sources") or [], sources)
+        if refs:
+            r["evidence_refs"] = refs
+    values = [v["metric_id"] for v in ev["values"]]
+    for v in ev["values"]:
+        refs = evidence_refs(v["metric_id"], [], sources)
+        if refs:
+            v["evidence_refs"] = refs
+    chk = citation_check(links, values, sources, {iid for iid, _tr in links} | set(values))
+    gaps = {"unresolved_source_ids": chk["unresolved"], "claims_without_citation": chk["claims_without_citation"],
+            "unknown_citation_keys": chk["unknown_citation_keys"], "catalogue_problems": list(sources["problems"])}
+    sup["citation_gaps"] = gaps
+    sup["schema_gaps"] = [*sup["schema_gaps"], SOURCE_GAP]
+    name = source_catalogue_file(pack)
+    at = next(k for k, f in enumerate(m["load_order"]) if f["source"] == "this export: evidence") + 1
+    m["load_order"].insert(at, {"file": name, "source": "this export: sources"})
+    doc = {"schema_version": f"{SCHEMA}_source_catalogue",
+           "file_role": "SOURCE_CATALOGUE__RESOLVES_EVIDENCE_REFS__LOAD_AFTER_EVIDENCE_PACK",
+           "domain_pack_id": pack["domain_pack_id"], "companies": list(sources["companies"]),
+           "sources": [sources["catalogue"][s] for s in sorted(sources["catalogue"])],
+           "counts": {"sources": len(sources["catalogue"]), "resolved_ids": len(chk["resolved"]),
+                      "unresolved_ids": len(chk["unresolved"]), "cited_links": chk["cited_links"],
+                      "cited_values": chk["cited_values"],
+                      "claims_without_citation": len(chk["claims_without_citation"]),
+                      "unknown_citation_keys": len(chk["unknown_citation_keys"])},
+           "citation_gaps": gaps,
+           "evidence_boundary": "The client's own source material, named so an agent can open the document at the cited "
+                                "location. Local to the client; never part of a pack."}
+    ctx["sources"] = doc
+    return doc

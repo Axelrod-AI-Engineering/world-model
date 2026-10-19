@@ -17,7 +17,7 @@ from typing import Any
 import numpy as np
 from pydantic import BaseModel, ConfigDict
 
-from axelrod_wm.dynamics.kernels import warm_start_batch
+from axelrod_wm.dynamics.kernels import tail_weights, warm_start_batch
 from axelrod_wm.engine.registry import register, registry
 from axelrod_wm.engine.rng import substream
 from axelrod_wm.events.graph_update import Persistence
@@ -209,7 +209,13 @@ class _Params:
         self.d = np.ones((S, C), dtype=np.int64)
         self.l = np.ones((S, C), dtype=np.int64)
         self.lam = np.ones((S, C))
-        self.mods: list[tuple[int, int, str, np.ndarray, float | None]] = []   # (channel, mod idx, form, gamma, thr)
+        self.acc = np.zeros((S, C), dtype=bool)      # accumulating kernels (a stock integrating a flow)
+        # (channel, moderator index, form, gamma, threshold, side)
+        self.mods: list[tuple[int, int, str, np.ndarray, float | None, str]] = []
+
+    @property
+    def kappa(self) -> np.ndarray:
+        return tail_weights(self.l, self.lam, self.acc)
 
 
 def _to_days(x: np.ndarray, floor: int) -> np.ndarray:
@@ -246,7 +252,15 @@ class McImpulsePropagator(Propagator):
         for c, ch in enumerate(chans):
             key = ch.channel_key
             dyn = ch.dynamics
-            if self.deterministic:
+            if dyn.kernel.accumulates:
+                # a stock-flow link is an identity: its period and delay are exact, never drawn
+                d, l, _dur = dyn.kernel.means()
+                P.exists[:, c] = float(ch.forced) if ch.forced is not None else 1.0
+                P.beta[:, c] = dyn.effect.mean()
+                P.d[:, c] = max(floor, int(round(d)))
+                P.l[:, c] = max(1, int(round(l)))
+                P.acc[:, c] = True
+            elif self.deterministic:
                 P.exists[:, c] = float(ch.forced) if ch.forced is not None else ch.existence.mean()
                 P.beta[:, c] = dyn.effect.mean()
                 d, l, dur = dyn.kernel.means()
@@ -275,19 +289,22 @@ class McImpulsePropagator(Propagator):
                     gam = np.full(S, par.coefficient.mean())
                 else:
                     gam = par.coefficient.sample(S, substream(rng, key, "mod", k))
-                P.mods.append((c, idx[par.moderator_id], str(par.form), gam, par.threshold))
+                P.mods.append((c, idx[par.moderator_id], str(par.form), gam, par.threshold, str(par.side)))
         return P
 
     def _multipliers(self, P: _Params, z_prev: np.ndarray, S: int, C: int) -> tuple[np.ndarray, list]:
         m = np.ones((S, C))
         additive = []
         lo, hi = self.moderator_clip
-        for c, mi, form, gam, thr in P.mods:
+        for c, mi, form, gam, thr, side in P.mods:
             zm = z_prev[:, mi]
             if form == ParameterForm.MULTIPLICATIVE:
                 m[:, c] *= np.clip(1.0 + gam * zm, lo, hi)
             elif form == ParameterForm.THRESHOLD:
                 m[:, c] *= (zm > (thr if thr is not None else 0.0)).astype(float)
+            elif form == ParameterForm.PIECEWISE:
+                on = zm > thr if side == "above" else zm < thr
+                m[:, c] *= np.where(on, 1.0, gam)
             else:
                 additive.append((c, gam * zm))
         return m, additive
@@ -346,14 +363,14 @@ class McImpulsePropagator(Propagator):
                     vals = hist_.array(sid, today - K + 1, today)        # oldest .. today
                     hist_rev[r, :] = np.asarray(vals[::-1], dtype=float)
                 hist_rev[r, 0] = z[0, i, 0]                              # today's value as given
-            S_sum, T_sum = warm_start_batch(P.d, P.l, P.lam, hist_rev, rows)
+            S_sum, T_sum = warm_start_batch(P.d, P.l, P.lam, hist_rev, rows, P.kappa)
         else:
             S_sum = np.zeros((S, 0))
             T_sum = np.zeros((S, 0))
         Kh = hist_rev.shape[1]
         rows_b = np.broadcast_to(rows[None, :], (S, C)) if C else np.zeros((S, 0), dtype=np.int64)
         lf = P.l.astype(float)
-        one_minus_lam = 1.0 - P.lam
+        kappa = P.kappa
 
         # each source's whole series in one array (Oct 15, speed): column 0 is zero (days older than the kept history),
         # columns 1..Kh the history from oldest to today, then the simulated days 1..H, written as the loop runs; day u
@@ -461,7 +478,7 @@ class McImpulsePropagator(Propagator):
                 va = z_src(t - P.d)
                 vb = z_src(t - P.d - P.l)
                 S_sum = S_sum + va - vb
-                T_sum = P.lam * T_sum - one_minus_lam * vb
+                T_sum = P.lam * T_sum + kappa * vb
             a = a + drift[None, :] * (damp ** t)
             if noise is not None:
                 a = a + lvl_sd[None, :] * noise[:, :, t - 1]
@@ -512,7 +529,8 @@ def contribution_paths(params: _Params, c: int, hist_rev: np.ndarray, src_path: 
     S, n_days = src_path.shape
     H = n_days - 1
     d, l, lam = params.d[:, c], params.l[:, c], params.lam[:, c]
-    S0, T0 = warm_start_batch(d[:, None], l[:, None], lam[:, None], hist_rev[None, :], np.array([0]))
+    kappa = params.kappa[:, c]
+    S0, T0 = warm_start_batch(d[:, None], l[:, None], lam[:, None], hist_rev[None, :], np.array([0]), kappa[:, None])
     s_sum, t_sum = S0[:, 0].copy(), T0[:, 0].copy()
     K = hist_rev.shape[0]
     rows = np.arange(S)
@@ -529,7 +547,7 @@ def contribution_paths(params: _Params, c: int, hist_rev: np.ndarray, src_path: 
         va = z_at(t - d)
         vb = z_at(t - d - l)
         s_sum = s_sum + va - vb
-        t_sum = lam * t_sum - (1.0 - lam) * vb
+        t_sum = lam * t_sum + kappa * vb
         out[:, t] = s_sum / lf + t_sum
     return out * (params.exists[:, c] * params.beta[:, c])[:, None]
 

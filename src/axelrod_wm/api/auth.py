@@ -24,7 +24,9 @@ from html import escape
 from pathlib import Path
 from urllib.parse import parse_qs, quote
 
-from starlette.responses import HTMLResponse, PlainTextResponse, RedirectResponse
+from starlette.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse
+
+from axelrod_wm.api.keys import api_keys, bearer, is_service_path, match
 
 COOKIE = "axelrod_session"
 SESSION_DAYS = 14
@@ -62,7 +64,10 @@ class BasicAuthMiddleware:
                     or bool(os.environ.get("RAILWAY_ENVIRONMENT_ID")))
         if (required or self.username or self.password) and not (self.username and self.password):
             raise RuntimeError("Basic Auth requires both username and password")
+        self.required = required
         self.extra = extra_logins()
+        # Oct 17: the outward service's API keys (api/keys.py), each acting as one login
+        self.keys = api_keys()
         if self.extra and not self.username:
             raise RuntimeError("WORLD_MODEL_LOGINS needs the main Basic Auth login as well")
         self.logins = [(self.username, self.password), *((x.username, x.password) for x in self.extra)]
@@ -155,10 +160,39 @@ class BasicAuthMiddleware:
         resp.delete_cookie(COOKIE, path="/")
         await resp(scope, receive, send)
 
+    async def service(self, scope, receive, send):
+        token = bearer(dict(scope.get("headers", [])))
+        key = match(self.keys, token)
+        known = {u for u, _ in self.logins}
+        if key is not None and (not self.username or key.login in known):
+            scope["axelrod_login"] = key.login if self.username else None
+            scope["axelrod_caller"] = key.caller
+            return await self.app(scope, receive, send)
+        if not self.keys and not self.username and not self.required:
+            # a local run with no keys and no logins: the service is open, as the demo is
+            scope["axelrod_caller"] = "local"
+            return await self.app(scope, receive, send)
+        login = self.authorized(scope) if scope["type"] == "http" else None
+        if login is not None and token is None:
+            # a signed-in browser (e.g. the API docs page) may call the service as its login
+            scope["axelrod_login"] = login
+            scope["axelrod_caller"] = f"session:{login}"
+            return await self.app(scope, receive, send)
+        if scope["type"] == "websocket":
+            await send({"type": "websocket.close", "code": 1008})
+            return
+        await JSONResponse({"error": {"code": "authentication_required",
+                                      "message": "Send Authorization: Bearer <API key>."}},
+                           status_code=401, headers={"Cache-Control": "no-store", "WWW-Authenticate": "Bearer",
+                                                     "X-Axelrod-API-Version": "1"})(scope, receive, send)
+
     async def __call__(self, scope, receive, send):
         if scope["type"] not in ("http", "websocket"):
             return await self.app(scope, receive, send)
         path = scope.get("path", "")
+        # the outward service (/api/world-model, /mcp) takes an API key: its caller acts as the key's login
+        if is_service_path(path):
+            return await self.service(scope, receive, send)
         if not self.username:
             # no sign-in configured (a local run): /login and /logout just go to the demo
             if scope["type"] == "http" and path in ("/login", "/logout"):

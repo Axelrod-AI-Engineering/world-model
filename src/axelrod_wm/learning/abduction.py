@@ -375,11 +375,11 @@ class CoActivationInducer(SuperentityInducer):
                 counted.add(pid)
                 instances_changed = True
                 # DECISION: later components on the same day can match the new candidate, so one
-                # configuration realized twice in a day makes one candidate rather than two
-                if pid in patterns:
-                    living.append(patterns[pid])
-                    tuples_of[pid] = pattern_tuples(patterns[pid], ltm, thr)
-                    absent_of[pid] = absent_tuples(patterns[pid], ltm, thr)
+                # configuration realized twice in a day makes one candidate rather than two (the
+                # transaction applies the add at once, so the new pattern is already in `patterns`)
+                living.append(patterns[pid])
+                tuples_of[pid] = pattern_tuples(patterns[pid], ltm, thr)
+                absent_of[pid] = absent_tuples(patterns[pid], ltm, thr)
 
         # composites earn support when both parts are active across a boundary edge (same spacing)
         if not init:
@@ -457,10 +457,10 @@ class CoActivationInducer(SuperentityInducer):
 
         name = f"{kind_name(ti.source_id)} {value_word(ti.source_id)} → {kind_name(ti.target_id)} {value_word(ti.target_id)}"
         # DECISION: a candidate named after its strongest edge says how many more relations it has, so
-        # two configurations that share that edge do not read as duplicates
-        if len(relations) > 1:
-            more = len(relations) - 1
-            name += f" + {more} more relation{'s' if more > 1 else ''}"
+        # two configurations that share that edge do not read as duplicates (a component has two edges or more,
+        # one relation each)
+        more = len(relations) - 1
+        name += f" + {more} more relation{'s' if more > 1 else ''}"
         pid = txn.new_id("pat")
         n_pat = sum(1 for p in og.patterns.values() if p.origin != Origin.SEED)
         palette_key = f"x{n_pat % len(EXTRA_PALETTE) + 1}"

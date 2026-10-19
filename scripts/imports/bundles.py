@@ -20,6 +20,7 @@ from collections import defaultdict
 from pathlib import Path
 
 from axelrod_wm.intake.bundle import ImportBundle
+from axelrod_wm.intake.overlap import overlapping_views, views_by_part
 from axelrod_wm.repo.snapshots import MemoryBackend
 from axelrod_wm.sim.runner import build_runner
 
@@ -63,7 +64,17 @@ def problems_of(runner, items: list[dict]) -> list[str]:
             out.append(f"{row['id']}: maps to nothing")
     ids = [i.id for i in bundle.items]
     out += [f"duplicate id {i}" for i in sorted({i for i in ids if ids.count(i) > 1})]
-    return out
+    return out + driving_view_problems(graph, bundle.items)
+
+
+def driving_view_problems(graph, items) -> list[str]:
+    """Totals the bundle observes parts of that have two driving views (Oct 18): one view drives a total, the others
+    are marked `drives: false` (or held in a matrix) so a results day imports whole."""
+    parts = views_by_part(graph)
+    touched = {s.value_of for it in items for s in it.signals if s.value_of in parts}
+    return [f"{total} has {len(cids)} driving views ({', '.join(cids)}) and the bundle observes their parts; mark all "
+            f"but one `drives: false` so it imports whole" for total, cids in overlapping_views(graph).items()
+            if any(t == total for sid in touched for t, _ in parts[sid])]
 
 
 def _items(path: Path) -> list[dict]:

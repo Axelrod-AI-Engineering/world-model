@@ -110,6 +110,10 @@ def _resolve(ctl: Any, at: Any) -> list[dict]:
     return [observe("skybridge.operating_margin", 3.0, at)]
 
 
+def _guidance(ctl: Any, at: Any) -> list[dict]:
+    return [observe("skybridge.operating_margin", 2.0, at)]
+
+
 def _weaken(ctl: Any, at: Any) -> list[dict]:
     iid = find_link(ctl, OIL, "productivity_tech.tfp_growth")
     return [reweight(iid, False, 0.6)] if iid else []
@@ -171,7 +175,7 @@ def _third_shock(ctl: Any, at: Any) -> list[dict]:
 
 OPS = {"jet_fuel": _jet_fuel, "lumen": _lumen, "ai_spend": _ai_spend, "opec_cut": _opec_cut, "carry_note": _carry_note,
        "cpi": _cpi, "skybridge": _skybridge, "fed_hike": _fed_hike, "second_shock": _second_shock, "vague": _vague,
-       "resolve": _resolve, "hedges_end": _hedges_end, "weaken": _weaken, "climb": _climb, "fuel_index": _fuel_index, "fares_begin": _fares_begin,
+       "resolve": _resolve, "guidance": _guidance, "hedges_end": _hedges_end, "weaken": _weaken, "climb": _climb, "fuel_index": _fuel_index, "fares_begin": _fares_begin,
        "oil_up": lambda c, a: [move(OIL, 0.08, a)], "oil_down": lambda c, a: [move(OIL, -0.08, a)],
        "fare_up": _fare(264.0), "fare_down": _fare(244.0), "fare_up2": _fare(296.0), "fare_down2": _fare(208.0),
        "northwind": _northwind, "alpenflug": _alpenflug, "oil_fall": _oil_fall, "quota_up": _quota_up,
@@ -369,6 +373,12 @@ EXAMPLES: list[Example] = [
               "SkyBridge Air's operating margin falls to 3% (illustrative)",
               "With fuel unhedged and oil high, SkyBridge Air reported an operating margin of 3%.",
               [("operating margin of 3%", [0])], "A reported value for SkyBridge's margin.", kind="filing",
+              source="Synthetic filing", mentions=["SkyBridge"], event_type="earnings")),
+                 # Oct 17: the busier world asks three articles of evidence (recognition 3), not two as the small demo
+                 Step(ops="guidance", days=3, article=A(
+              "SkyBridge Air cuts its margin outlook to 2% as fuel bites (illustrative)",
+              "SkyBridge Air now expects an operating margin of 2% for the year, citing unhedged fuel costs.",
+              [("an operating margin of 2%", [0])], "A further reported value for SkyBridge's margin.", kind="filing",
               source="Synthetic filing", mentions=["SkyBridge"], event_type="earnings"))]),
     _twin("weaken", summary="A study finds little sign that oil moves productivity growth. The belief that the link exists "
                       "falls, so it carries less of every later ripple.",

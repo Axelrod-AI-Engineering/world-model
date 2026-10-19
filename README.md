@@ -1,5 +1,7 @@
 # Axelrod World Model
 
+[![Tests](https://github.com/Axelrod-AI-Engineering/world-model/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/Axelrod-AI-Engineering/world-model/actions/workflows/tests.yml)
+
 The **Axelrod World Model**, v0. It is one causal world model of the economy, built like version control:
 
 <!-- toc -->
@@ -7,6 +9,8 @@ The **Axelrod World Model**, v0. It is one causal world model of the economy, bu
 
 - [Quick start](#quick-start)
 - [Hosted demo](#hosted-demo)
+- [API](#api)
+- [Tests](#tests)
 - [Documentation](#documentation)
 <!-- /toc -->
 
@@ -42,20 +46,69 @@ The production and full demos replay three years of synthetic history the first 
 
 ## Hosted demo
 
-The full demo runs on Railway's `dev` environment at **https://world-model-dev.up.railway.app**, behind Basic Auth. Ask the team for the credentials. Everyone who opens it shares one session, so a review approved there is approved for everyone. [docs/deployment.md](docs/deployment.md) covers the infrastructure, the release runbook, and the checks.
+The full demo runs on Railway's `dev` environment at **https://world-model-dev.up.railway.app**, behind Basic Auth. Ask the team for the credentials. Everyone who opens it shares one session, so a review approved there is approved for everyone. [docs/guides/deployment.md](docs/guides/deployment.md) covers the infrastructure, the release runbook, and the checks.
+
+## API
+
+The world model is also a service: REST under `/api/world-model` and MCP tools at `/mcp`, on the same deploy, with an API key per caller. Upload research (PDF, Office, HTML, CSV, text), read it into proposed graph updates, import them through review, search everything ingested, read the model at any past version, and pose forecasts. See [docs/api.md](docs/api.md) and, for how a file becomes graph updates, [docs/guides/ingestion.md](docs/guides/ingestion.md).
+
+## Tests
+
+The badge above is the CI run on `main`. The table is the last full run (`scripts/coverage_gate.py`): tests per suite, and line and branch coverage per package. CI fails if a strict module loses a line or branch of coverage, or if the repository falls below its floor.
+
+<!-- tests:start -->
+
+| Suite | Passed | Failed | Skipped |
+|---|---:|---:|---:|
+| ✅ `tests/ingest` | 582 | 0 | 0 |
+| ✅ `tests/integration` | 111 | 0 | 12 |
+| ✅ `tests/lake` | 146 | 0 | 0 |
+| ✅ `tests/scenario` | 75 | 0 | 2 |
+| ✅ `tests/service` | 84 | 0 | 0 |
+| ✅ `tests/ui` | 0 | 0 | 3 |
+| ✅ `tests/unit` | 1012 | 0 | 0 |
+
+| Package | Lines | Branches | Gate |
+|---|---:|---:|---|
+| `(top level)` | 100.0% | 100.0% | ratchet |
+| `api` | 100.0% | 100.0% | 100% for service, mcp, keys; ratchet |
+| `context` | 100.0% | 100.0% | ratchet |
+| `control` | 100.0% | 100.0% | ratchet |
+| `dynamics` | 100.0% | 100.0% | ratchet |
+| `engine` | 100.0% | 100.0% | ratchet |
+| `evaluation` | 100.0% | 100.0% | ratchet |
+| `events` | 100.0% | 100.0% | ratchet |
+| `flows` | 100.0% | 100.0% | ratchet |
+| `inference` | 100.0% | 100.0% | ratchet |
+| `ingest` | 100.0% | 100.0% | 100% required |
+| `intake` | 100.0% | 100.0% | ratchet |
+| `lake` | 100.0% | 100.0% | 100% required |
+| `learning` | 100.0% | 100.0% | ratchet |
+| `memory` | 100.0% | 100.0% | ratchet |
+| `model` | 100.0% | 100.0% | ratchet |
+| `repo` | 100.0% | 100.0% | ratchet |
+| `shared` | 100.0% | 100.0% | ratchet |
+| `sim` | 100.0% | 100.0% | ratchet |
+| **all** | **100.0%** | **100.0%** | floor in `coverage-floor.json` |
+
+Slow scenario runs (`--runslow`) are not in these numbers. Regenerate with `scripts/coverage_gate.py` (see its docstring).
+
+<!-- tests:end -->
 
 ## Documentation
 
 | Read | For |
 |---|---|
 | [docs/design/README.md](docs/design/README.md) | **The design**: the architecture, 17 modules with specs, diagrams, the cognitive framings, Cognee vs Semantica, decisions, and the migration plan |
-| [docs/demos.md](docs/demos.md) | The five demos, the 24 examples, and how the review works |
-| [docs/interface.md](docs/interface.md) | A tour of the interface: the top bar, the canvas, the panels, and every shortcut |
-| [docs/cli.md](docs/cli.md) | The command line and configuration |
-| [docs/ml-stack.md](docs/ml-stack.md) | The ML stack as built, stated formally, with its adversarial review |
-| [docs/ml-roadmap.md](docs/ml-roadmap.md) | The plan to replace each heuristic with a method we can defend |
-| [docs/deployment.md](docs/deployment.md) | The Railway dev deployment, sign-in, and running the container locally |
-| [docs/development.md](docs/development.md) | Tests, the repository layout, conventions, and the demo videos |
+| [docs/guides/demos.md](docs/guides/demos.md) | The five demos, the 24 examples, and how the review works |
+| [docs/guides/gui.md](docs/guides/gui.md) | A tour of the interface: the top bar, the canvas, the panels, and every shortcut |
+| [docs/guides/cli.md](docs/guides/cli.md) | The command line and configuration |
+| [docs/ml/stack.md](docs/ml/stack.md) | The ML stack as built, stated formally, with its adversarial review |
+| [docs/ml/roadmap.md](docs/ml/roadmap.md) | The plan to replace each heuristic with a method we can defend |
+| [docs/api.md](docs/api.md) | The outward API and MCP server: auth, routes, errors, and mounting it from core |
+| [docs/guides/ingestion.md](docs/guides/ingestion.md) | The ingestion pipeline and the lakehouse: parsing, extraction, event time, determinism, search |
+| [docs/guides/deployment.md](docs/guides/deployment.md) | The Railway dev deployment, sign-in, and running the container locally |
+| [docs/guides/development.md](docs/guides/development.md) | Tests, the repository layout, conventions, and the demo videos |
 | [docs/archive/plan.md](docs/archive/plan.md) | The original specification (historical), which the code's § references point to |
 
 Inside the demo, **How it works** (`H`) explains the model itself: the five stages of learning and the seven of inference, each with its flowchart; the literature review; and the implementation.

@@ -18,3 +18,12 @@ docs/media/
 *.m4a
 # meeting notes (client and team context): local only
 *Notes by Gemini*.pdf
+# client feedback on the world model (construction skill reviews): local only
+*world model construction skill*.pdf
+
+# coverage reports (scripts/coverage_gate.py)
+.coverage
+coverage.json
+junit.xml
+/Data Model and API Design Best Practices*.pdf
+/Toyota and Tokio Marine world model enhancement instructions*.pdf

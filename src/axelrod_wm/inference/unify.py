@@ -306,10 +306,8 @@ class ChannelsAndRivalsUnifier(ForecastUnifier):
 
         def levels(res: PropagationResult | None, sid: str, n: int) -> np.ndarray:
             if res is not None and res.has(sid):
-                z = res.z_of(sid)[:n]
-                if z.shape[1] < H + 1:
-                    z = np.pad(z, ((0, 0), (0, H + 1 - z.shape[1])), mode="edge")
-                return z[:, : H + 1]
+                # every run spans the horizon (the couplers propagate for horizon_for(ctx), the same H)
+                return res.z_of(sid)[:n, : H + 1]
             z0 = dev.z_at(sid, today) or 0.0
             return np.full((n, H + 1), z0)
 

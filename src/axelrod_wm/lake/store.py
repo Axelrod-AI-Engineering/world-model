@@ -1,0 +1,198 @@
+"""The lakehouse's records and its storage interface (Oct 17).
+
+Ids are derived from content, so the same bytes always get the same document id and uploading a file twice stores it
+once. Times are UTC: `ingested_at` is when the lake received a document, `event_time` when what it reports happened
+(the document's date, or its items' dates). Records are frozen pydantic models; the store returns them sorted, so
+every read is deterministic.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+from abc import ABC, abstractmethod
+from datetime import datetime
+from typing import Any
+
+from pydantic import BaseModel, ConfigDict, Field
+
+DEFAULT_TENANT = "default"
+
+
+def content_id(data: bytes) -> str:
+    """A document's id: the first 24 hex digits of its SHA-256 (collisions are not a practical concern)."""
+    return hashlib.sha256(data).hexdigest()[:24]
+
+
+def canonical_json(obj: Any) -> str:
+    """JSON with sorted keys and no extra whitespace: the same object always serializes to the same bytes."""
+    return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False, default=str)
+
+
+def digest(obj: Any) -> str:
+    return hashlib.sha256(canonical_json(obj).encode()).hexdigest()
+
+
+class _R(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+
+class Document(_R):
+    tenant: str
+    id: str                                   # content_id of the raw bytes
+    sha256: str
+    filename: str
+    mime: str
+    size: int
+    source: str = ""                          # who or what produced it (a broker, a feed, an analyst)
+    source_type: str = "other"                # the import schema's source types (broker_research, news, ...)
+    title: str = ""
+    published_at: datetime | None = None      # the document's own date, when known
+    event_time: datetime                      # when what it reports happened (published_at, else ingested_at)
+    ingested_at: datetime                     # when the lake received it
+    uploaded_by: str = ""                     # the API caller or login that uploaded it
+    meta: dict[str, Any] = Field(default_factory=dict)
+    status: str = "stored"                    # stored -> parsed -> extracted -> imported (or failed)
+    error: str = ""
+
+
+class Chunk(_R):
+    tenant: str
+    doc_id: str
+    ord: int                                  # its position in the document
+    start: int                                # character span in the document's text
+    end: int
+    text: str
+    page: int | None = None                   # the page or sheet it came from, when the format has them
+    section: str = ""
+
+
+class Mention(_R):
+    tenant: str
+    doc_id: str
+    ord: int
+    entity_id: str
+    subentity_id: str | None = None
+    surface: str                              # the words that named it
+
+
+class BundleRecord(_R):
+    tenant: str
+    id: str                                   # digest of the bundle's canonical JSON
+    doc_ids: list[str]
+    created_at: datetime
+    extractor_version: str
+    items: int
+    signals: int
+    bundle: dict[str, Any]
+
+
+class ImportRecord(_R):
+    tenant: str
+    bundle_id: str
+    imported_at: datetime
+    update_id: str | None
+    item_ids: list[str]
+    by: str = ""
+
+
+class Hit(_R):
+    """One search result: a chunk (or an entity, for graph search) with its score and why it matched."""
+
+    kind: str                                 # chunk | entity | value
+    doc_id: str | None = None
+    ord: int | None = None
+    ref: str | None = None                    # entity or value id, for graph hits
+    score: float
+    text: str
+    title: str = ""
+    filename: str = ""
+    event_time: datetime | None = None
+    why: list[str] = []
+
+
+class LakeStore(ABC):
+    """Storage for the lakehouse. Every method takes the tenant; nothing reads across tenants."""
+
+    # -- documents --------------------------------------------------------------------------------------------
+    @abstractmethod
+    def put_document(self, doc: Document, data: bytes) -> tuple[Document, bool]:
+        """Store a document and its bytes; returns the stored record and whether it was new (same bytes: not new)."""
+
+    @abstractmethod
+    def get_document(self, tenant: str, doc_id: str) -> Document | None: ...
+
+    @abstractmethod
+    def raw_bytes(self, tenant: str, doc_id: str) -> bytes | None: ...
+
+    @abstractmethod
+    def list_documents(self, tenant: str, *, since: datetime | None = None, until: datetime | None = None,
+                       order: str = "event_time", limit: int = 100, offset: int = 0) -> list[Document]: ...
+
+    @abstractmethod
+    def update_document(self, tenant: str, doc_id: str, **fields: Any) -> Document: ...
+
+    @abstractmethod
+    def delete_document(self, tenant: str, doc_id: str) -> bool: ...
+
+    # -- text, chunks, mentions, embeddings ------------------------------------------------------------------
+    @abstractmethod
+    def put_text(self, tenant: str, doc_id: str, text: str, parser: str) -> None: ...
+
+    @abstractmethod
+    def get_text(self, tenant: str, doc_id: str) -> tuple[str, str] | None:
+        """(text, parser) for a parsed document."""
+
+    @abstractmethod
+    def put_chunks(self, tenant: str, doc_id: str, chunks: list[Chunk]) -> None:
+        """Replace the document's chunks (and their keyword index)."""
+
+    @abstractmethod
+    def get_chunks(self, tenant: str, doc_id: str) -> list[Chunk]: ...
+
+    @abstractmethod
+    def put_mentions(self, tenant: str, doc_id: str, mentions: list[Mention]) -> None: ...
+
+    @abstractmethod
+    def mentions_of(self, tenant: str, *, entity_id: str | None = None, subentity_id: str | None = None,
+                    doc_id: str | None = None) -> list[Mention]: ...
+
+    @abstractmethod
+    def put_embeddings(self, tenant: str, doc_id: str, model: str, vectors: list[list[float]]) -> None: ...
+
+    @abstractmethod
+    def embeddings(self, tenant: str, model: str) -> list[tuple[str, int, list[float]]]: ...
+
+    # -- search -----------------------------------------------------------------------------------------------
+    @abstractmethod
+    def keyword_search(self, tenant: str, query: str, *, prefix: bool = False, limit: int = 20) -> list[Hit]: ...
+
+    # -- bundles and imports ----------------------------------------------------------------------------------
+    @abstractmethod
+    def put_bundle(self, rec: BundleRecord) -> BundleRecord: ...
+
+    @abstractmethod
+    def get_bundle(self, tenant: str, bundle_id: str) -> BundleRecord | None: ...
+
+    @abstractmethod
+    def list_bundles(self, tenant: str, *, doc_id: str | None = None, limit: int = 100) -> list[BundleRecord]: ...
+
+    @abstractmethod
+    def put_import(self, rec: ImportRecord) -> None: ...
+
+    @abstractmethod
+    def list_imports(self, tenant: str, *, bundle_id: str | None = None) -> list[ImportRecord]: ...
+
+    # -- the LLM step's replay cache --------------------------------------------------------------------------
+    @abstractmethod
+    def cache_get(self, key: str) -> dict | None: ...
+
+    @abstractmethod
+    def cache_put(self, key: str, provider: str, model: str, value: dict) -> None: ...
+
+    # -- housekeeping -----------------------------------------------------------------------------------------
+    @abstractmethod
+    def stats(self, tenant: str) -> dict[str, int]: ...
+
+    @abstractmethod
+    def close(self) -> None: ...

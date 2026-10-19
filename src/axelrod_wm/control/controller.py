@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import threading
-from datetime import UTC, date, datetime, time, timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -33,10 +33,6 @@ if TYPE_CHECKING:
 
 class ControllerError(ValueError):
     pass
-
-
-def end_of_day(day: date) -> datetime:
-    return datetime.combine(day, time(23, 59, 59), tzinfo=UTC)
 
 
 class WorldModelController:
@@ -108,11 +104,11 @@ class WorldModelController:
             self._world_dir = None
             p = self.scenario_dir / "scenario.yaml" if self.scenario_dir is not None else None
             if p is not None and p.exists():
-                import yaml
-
                 from axelrod_wm.engine.initialize import resolve_path
+                from axelrod_wm.sim.scenario import scenario_raw
 
-                d = ((yaml.safe_load(p.read_text()) or {}).get("initialization") or {}).get("construction_dir")
+                # a focused scenario's world is its base's (sim/scenario.scenario_raw)
+                d = (scenario_raw(p).get("initialization") or {}).get("construction_dir")
                 self._world_dir = resolve_path(d) if d else None
         return self._world_dir
 
@@ -797,14 +793,12 @@ class WorldModelController:
         return None
 
     def watchlist(self) -> dict | None:
-        """The names a portfolio tracks (addition): the scenario's watchlist.yaml, read once."""
+        """The names a portfolio tracks (addition): the scenario's watchlist.yaml, read once (a focused scenario's
+        keeps the names its world keeps, sim/scenario.load_watchlist)."""
         if not hasattr(self, "_watchlist"):
-            self._watchlist = None
-            path = self.scenario_dir / "watchlist.yaml" if self.scenario_dir is not None else None
-            if path is not None and path.exists():
-                import yaml
+            from axelrod_wm.sim.scenario import load_watchlist
 
-                self._watchlist = yaml.safe_load(path.read_text()) or None
+            self._watchlist = load_watchlist(self.scenario_dir) if self.scenario_dir is not None else None
         return self._watchlist
 
     def explanation(self, explanation_id: str) -> Any:

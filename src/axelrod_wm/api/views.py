@@ -68,6 +68,7 @@ class SubentityNode(_V):
     slot_kind: str | None = None      # the name of that kind ("Airline")
     user_confidence: float | None = None   # the reviewer's confidence when it was added (Oct 8)
     open: float = 1.0                 # its open node (Oct 9): the share of its movement its interactions do not explain
+    scale: float = 0.0                # one standardized unit in link space (Oct 17), so a move in sd reads in its own unit
 
 
 class LinkView(_V):
@@ -281,7 +282,8 @@ def build_graph_view(wm: WorkingMemory, ltm: LongTermMemory, controller: WorldMo
                                   density=s.posterior.density_points(20), slot=s.slot,
                                   slot_kind=kind_name(s.slot_of) if s.slot_of else None,
                                   constraint=s.constraint.model_dump() if s.constraint is not None else None,
-                                  user_confidence=s.user_confidence, open=sub_open.get(sid, 1.0)))
+                                  user_confidence=s.user_confidence, open=sub_open.get(sid, 1.0),
+                                  scale=float(s.scale)))
     links = []
     hedges = {p.key: p for p in wm.pending_refinements.values() if p.key and p.soft}
     for inter in g.active_interactions():

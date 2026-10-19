@@ -17,12 +17,10 @@ from axelrod_wm.events.graph_update import (
     AnnotateInteraction,
     ChangeMode,
     ChangeValue,
-    DissolveSuperentity,
     EventKind,
     EventValidationError,
     ObserveValue,
     ProposeHypothesis,
-    ProposeSuperentity,
     RetireEntity,
     RetireInteraction,
     ReweightInteraction,
@@ -86,10 +84,6 @@ class _Writer:
         self.ctx = ctx
         self.txn = txn
 
-    @property
-    def real(self) -> bool:
-        return self.txn is not None
-
     def new_id(self, prefix: str) -> str:
         if self.txn is not None:
             return self.txn.new_id(prefix)
@@ -111,16 +105,8 @@ class _Writer:
         target[obj_id] = target[obj_id].model_copy(update=fields)
 
     def append_to(self, collection: str, obj_id: str, field: str, *items: Any, keep_last: int | None = None) -> None:
-        if self.txn is not None:
-            self.txn.append_to(collection, obj_id, field, *items, keep_last=keep_last)
-            return
-        overlay = self.ctx.overlay
-        target = {"entities": overlay.graph.entities, "subentities": overlay.graph.subentities,
-                  "interactions": overlay.graph.interactions}[collection]
-        cur = list(getattr(target[obj_id], field)) + list(items)
-        if keep_last is not None:
-            cur = cur[-keep_last:]
-        target[obj_id] = target[obj_id].model_copy(update={field: cur})
+        """Only real events append (a thesis never annotates an interaction or keeps its evidence)."""
+        self.txn.append_to(collection, obj_id, field, *items, keep_last=keep_last)  # type: ignore[union-attr]
 
 
 @register("parser", "default")
@@ -140,9 +126,7 @@ class DefaultParser(EventParser):
 
     def _resolve(self, ref: str, temp_map: dict[str, str]) -> str:
         if ref.startswith(TEMP_PREFIX):
-            if ref not in temp_map:
-                raise EventValidationError(f"temp id {ref!r} used before it is defined")
-            return temp_map[ref]
+            return temp_map[ref]          # validate_event has checked that every temp id is defined before use
         return ref
 
     def _concrete(self, target: Any, temp_map: dict[str, str], graph: Any, what: str) -> str:
@@ -249,10 +233,12 @@ class DefaultParser(EventParser):
                     origin = Origin.EVENT_PARSING
                 placeholder = EdgeDynamics(effect=Gaussian(mu=0.0, sigma=1.0),
                                            kernel=KernelSpec(delay=gamma_from_mean(14), lag=gamma_from_mean(30)))
-                dyn = op.dynamics or placeholder
-                reverse = op.reverse
+                # copies: the interaction's dynamics are learned in place, and must not change the op (a proposal's
+                # event, or a hedge's stored op) they came from
+                dyn = op.dynamics.model_copy(deep=True) if op.dynamics is not None else placeholder
+                reverse = op.reverse.model_copy(deep=True) if op.reverse is not None else None
                 if op.direction == Direction.BIDIRECTIONAL and reverse is None:
-                    reverse = dyn
+                    reverse = dyn.model_copy(deep=True)   # its own copy, or refitting one direction moves both
                 evid = Evidence(id=w.new_id("EV"), source_type=ev_source, excerpt=excerpt or op.label,
                                 observed_at=event.occurred_at, strength=min(1.0, max(ev_strength * c, 0.0)),
                                 market_event_id=event.market_event_id, user_confidence=round(c, 4))
@@ -366,7 +352,7 @@ class DefaultParser(EventParser):
                 retired_ents.append(ent.id)
                 retired_subs.extend(subs)
                 retired_ints.extend(i for i in ints if i not in retired_ints)
-            elif isinstance(op, (ProposeSuperentity, DissolveSuperentity)):
+            else:                              # ProposeSuperentity or DissolveSuperentity
                 raise EventValidationError(f"op {idx} ({op.op}) is applied only by the StructuralApplier after review")
 
         graph = ctx.wm.graph
@@ -442,10 +428,8 @@ class DefaultParser(EventParser):
                             transient=not real)
         return parsed
 
-    def _close_frontier(self, src: str, tgt: str, ctx: ProcessContext, txn: MutationTxn | None) -> None:
-        """An interaction created between a frontier pair closes the entry (§8.7 step 7)."""
-        if txn is None:
-            return
+    def _close_frontier(self, src: str, tgt: str, ctx: ProcessContext, txn: MutationTxn) -> None:
+        """An interaction created between a frontier pair closes the entry (§8.7 step 7). Real events only."""
         for co in ctx.ltm.correlation_frontier.for_pair(src, tgt):
             if co.hypothesis_id and co.hypothesis_id in ctx.wm.hypotheses:
                 txn.update("hypotheses", co.hypothesis_id, status=HypothesisStatus.SUPPORTED)

@@ -253,8 +253,9 @@ class BoundSuperentityIsolator(NetworkIsolator):
                 rc = self._candidate(rid, cands[rid]["attention"] if rid in cands else 0.0, seeds, seed_entities, dist,
                                      wm, ltm, ctx, model, prefer_members=members or None)
                 if rid in kept_ids:
-                    if rc is not None:
-                        kept = [rc if k["pattern"].id == rid else k for k in kept]
+                    # a kept rival was a candidate, so it is admitted, not composite, and has an instance (or binds
+                    # again the same way): rc is not None here
+                    kept = [rc if k["pattern"].id == rid else k for k in kept]
                     continue
                 if rc is not None and rc["relevance"] >= float(cfg.min_relevance) / 2.0:
                     kept.append(rc)
