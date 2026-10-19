@@ -45,7 +45,7 @@ RATE_WORDS = re.compile(r"\b(?:rate (?:hikes?|cuts?|rises?)|hikes|hike|hiking)\b
 OTHER_HIKES = re.compile(r"\b(?:price|prices|tariff|tariffs|tax|taxes|wage|wages|fee|fees|rent|cost|costs|premium|"
                          r"premiums|salary|salaries|dividend)\s+$", re.I)
 OTHER_NAME = re.compile(r"\b([A-Z][A-Za-z]{1,5})\s+$")      # a name right before: "the PSL rate cut", "a BoE rate hike"
-RATE_ACTION = re.compile(r"['’]?s?\s+(?:rate\s+)?(?:hikes?|hiking|cuts?|cutting|tightening|easing)\b", re.I)
+RATE_ACTION = re.compile(r"['’]?s?\s{1,8}(?:rate\s{1,8})?(?:hikes?|hiking|cuts?|cutting|tightening|easing)\b", re.I)
 ADJACENT = re.compile(r"\s?(?:['’]s?\s?)?|\s(?:raised|raises|raise|raising|hiked|hikes|hike|hiking|cut|cuts|cutting|"
                       r"lowered|lowers|held|holds|kept|keeps|left|leaves|lifted|increased|reduced|eased|tightened)"
                       r"(?:\s(?:its|their|the|policy))?\s")
@@ -53,9 +53,9 @@ KEY_LINE = 90                       # a key-data line is short, and its label co
 KEY_LEAD = {"shr", "share", "stock", "current", "last", "closing", "close", "latest", "static"}   # "Shr price, close", ...
 # ... but a noun after it makes it something else's label: "Price Index rebased", "Income statement"
 # the words after a name that RATE_ACTION and KEY_NEXT read: a short window, so neither scans a whole long text
-# (CodeQL: polynomial regular expression on runs of spaces)
+# (CodeQL: polynomial regular expression on runs of spaces); their spaces are bounded too
 LOOKAHEAD = 64
-KEY_NEXT = re.compile(r"\s+(?!(?:was|is|of|at|stood|stands|closed|ended|on|as|for|in|to|reached|rose|fell|has|had|"
+KEY_NEXT = re.compile(r"\s{1,8}(?!(?:was|is|of|at|stood|stands|closed|ended|on|as|for|in|to|reached|rose|fell|has|had|"
                       r"were)\b)[A-Za-z]{2,}")
 # a sector report names many listed companies by ticker: "(WFC)", "KEY US", "8316 JT"; it has no single subject
 TICKERS = re.compile(r"\((?:[A-Z]{1,5}|\d{4})(?:\.[A-Z]{1,2})?\)|\b(?:[A-Z]{1,5}|\d{4}) (?:US|JP|JT|IM|LN|FP|GY|HK|CN|SW)\b"
