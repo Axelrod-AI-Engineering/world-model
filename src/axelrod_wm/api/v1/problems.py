@@ -113,17 +113,17 @@ def as_api_error(exc: Exception) -> ApiError | None:
     if isinstance(exc, ValidationError):
         return ApiError("invalid_request", "the request is not valid", errors=_field_errors(json.loads(exc.json())))
     if isinstance(exc, HTTPException):
-        return ApiError(BY_STATUS.get(exc.status_code, "invalid_request"), str(exc.detail))
+        return ApiError(BY_STATUS.get(exc.status_code, "invalid_request"), "the request could not be processed")
     if isinstance(exc, UnboundThesis):
-        return ApiError("thesis_unbound", f"the thesis names ends the model cannot bind: {exc.unbound}")
+        return ApiError("thesis_unbound", "the thesis names ends the model cannot bind")
     if isinstance(exc, ControllerError):
-        return ApiError("conflict", str(exc))
+        return ApiError("conflict", "the request conflicts with the current state")
     if isinstance(exc, RestoreError):
-        return ApiError("version_not_found", str(exc))
+        return ApiError("version_not_found", "the requested version was not found")
     if isinstance(exc, KeyError):
-        return ApiError("not_found", f"not found: {exc.args[0] if exc.args else ''}")
+        return ApiError("not_found", "not found")
     if isinstance(exc, ValueError):
-        return ApiError("invalid_request", str(exc))
+        return ApiError("invalid_request", "the request is not valid")
     return None
 
 
