@@ -8,6 +8,7 @@ from enum import StrEnum
 from pydantic import BaseModel, ConfigDict
 
 from axelrod_wm.model.categories import TagSet
+from axelrod_wm.model.corporate_actions import CorporateAction
 from axelrod_wm.model.distributions import Distribution
 from axelrod_wm.model.evidence import Origin
 from axelrod_wm.model.temporal import TimeState
@@ -89,3 +90,4 @@ class Entity(BaseModel):
     origin: Origin
     created_at: datetime
     user_confidence: float | None = None        # the reviewer's confidence when it was added (Oct 8); None: not set
+    corporate_actions: list[CorporateAction] = []   # splits (Oct 17): per-share values stay on the pre-split basis

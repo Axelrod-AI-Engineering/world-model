@@ -204,10 +204,13 @@ class KalmanEdgeFolder(Folder):
                 wgt = rate * min(1.0, abs(h))
                 existence = Beta(alpha=inter.existence.alpha + wgt * r, beta=inter.existence.beta + wgt * (1 - r))
                 dyn = ch.dyn
-                txn.update("wm.graph.interactions", inter.id,
-                           **{f"{ch.side}.effect": refit_effect(dyn.effect, mu_post, var_post),
-                              "existence": existence})
-                inter = graph.interactions[inter.id]
+                # an accounting, identity or stock-flow link is an identity, not an estimate: its weight and existence
+                # stay as built (Oct 17: statistics flipped the sign of "vehicle sales -> profit")
+                if not inter.fixed:
+                    txn.update("wm.graph.interactions", inter.id,
+                               **{f"{ch.side}.effect": refit_effect(dyn.effect, mu_post, var_post),
+                                  "existence": existence})
+                    inter = graph.interactions[inter.id]
                 # 5. time states and evidence
                 if not routine or time_state_due(inter.time_states, wm, day):
                     txn.append_to("wm.graph.interactions", inter.id, "time_states",

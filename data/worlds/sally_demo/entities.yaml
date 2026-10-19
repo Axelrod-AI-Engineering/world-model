@@ -31,7 +31,7 @@ entities:
     aliases: [US, United States]
     subentities:
       - {id: us_economy.headline_cpi, name: US headline CPI, attribute_kind: inflation_rate, unit: pct y/y,
-         family: gaussian, prior: {family: gaussian, mu: 3.3, sigma: 0.3}, scale: 0.3, aliases: [US CPI, US inflation]}
+         family: gaussian, prior: {family: gaussian, mu: 3.3, sigma: 0.3}, scale: 0.3, aliases: [US CPI, US inflation, headline CPI, headline inflation]}
       - {id: us_economy.core_cpi, name: US core CPI, attribute_kind: inflation_rate, unit: pct y/y,
          family: gaussian, prior: {family: gaussian, mu: 3.0, sigma: 0.2}, scale: 0.2, aliases: [core inflation]}
       - {id: us_economy.gdp_growth, name: US real GDP growth, attribute_kind: growth_rate, unit: pct y/y,
@@ -45,9 +45,9 @@ entities:
     aliases: [Japan]
     subentities:
       - {id: japan_economy.core_cpi, name: Japan core CPI, attribute_kind: inflation_rate, unit: pct y/y,
-         family: gaussian, prior: {family: gaussian, mu: 2.0, sigma: 0.3}, scale: 0.3, aliases: [Japan inflation]}
+         family: gaussian, prior: {family: gaussian, mu: 2.0, sigma: 0.3}, scale: 0.3, aliases: [Japan inflation, Japan CPI, Japanese CPI]}
       - {id: japan_economy.wage_growth, name: Japan wage growth, attribute_kind: growth_rate, unit: pct y/y,
-         family: gaussian, prior: {family: gaussian, mu: 3.2, sigma: 0.5}, scale: 0.5, aliases: [shunto, Japanese wages]}
+         family: gaussian, prior: {family: gaussian, mu: 3.2, sigma: 0.5}, scale: 0.5, aliases: [shunto, Japanese wages, wage growth, Japan wages]}
       - {id: japan_economy.gdp_growth, name: Japan real GDP growth, attribute_kind: growth_rate, unit: pct y/y,
          family: gaussian, prior: {family: gaussian, mu: 0.8, sigma: 0.4}, scale: 0.4, aliases: [Japan growth, Japanese GDP]}
   - id: euro_economy
@@ -59,7 +59,7 @@ entities:
     aliases: [euro area, eurozone]
     subentities:
       - {id: euro_economy.headline_cpi, name: Euro area inflation, attribute_kind: inflation_rate, unit: pct y/y,
-         family: gaussian, prior: {family: gaussian, mu: 2.3, sigma: 0.3}, scale: 0.3, aliases: [euro inflation, HICP]}
+         family: gaussian, prior: {family: gaussian, mu: 2.3, sigma: 0.3}, scale: 0.3, aliases: [euro inflation, HICP, eurozone inflation, euro area HICP, eurozone HICP, headline CPI, headline inflation]}
 
   - id: china_economy
     name: China economy
@@ -87,7 +87,7 @@ entities:
     aliases: [Fed, FOMC]
     subentities:
       - {id: federal_reserve.policy_rate, name: Fed funds rate (midpoint), attribute_kind: policy_rate, unit: pct,
-         family: gaussian, prior: {family: gaussian, mu: 3.875, sigma: 0.25}, scale: 0.25, aliases: [fed funds, Fed rate]}
+         family: gaussian, prior: {family: gaussian, mu: 3.875, sigma: 0.25}, scale: 0.25, aliases: [fed funds, Fed rate, fed funds rate, federal funds rate, FFR, fed funds target range, fed funds target rate, interest rates, short-term rates, policy rates]}
   - id: boj
     name: Bank of Japan
     short: BoJ
@@ -98,7 +98,7 @@ entities:
     aliases: [BoJ, BOJ]
     subentities:
       - {id: boj.policy_rate, name: BoJ policy rate, attribute_kind: policy_rate, unit: pct,
-         family: gaussian, prior: {family: gaussian, mu: 1.0, sigma: 0.25}, scale: 0.25, aliases: [BoJ rate, Japan policy rate]}
+         family: gaussian, prior: {family: gaussian, mu: 1.0, sigma: 0.25}, scale: 0.25, aliases: [BoJ rate, Japan policy rate, interest rates, short-term rates, policy rates]}
   - id: ecb
     name: European Central Bank
     short: ECB
@@ -109,7 +109,7 @@ entities:
     aliases: [ECB]
     subentities:
       - {id: ecb.policy_rate, name: ECB deposit rate, attribute_kind: policy_rate, unit: pct,
-         family: gaussian, prior: {family: gaussian, mu: 2.25, sigma: 0.25}, scale: 0.25, aliases: [ECB rate]}
+         family: gaussian, prior: {family: gaussian, mu: 2.25, sigma: 0.25}, scale: 0.25, aliases: [ECB rate, deposit facility rate, ECB deposit facility rate, DFR, interest rates, short-term rates, policy rates]}
 
   - id: pboc
     name: People's Bank of China
@@ -121,7 +121,7 @@ entities:
     aliases: [PBoC, PBOC]
     subentities:
       - {id: pboc.loan_prime_rate, name: 1-year loan prime rate, attribute_kind: policy_rate, unit: pct,
-         family: gaussian, prior: {family: gaussian, mu: 3.0, sigma: 0.1}, scale: 0.1, aliases: [LPR, loan prime rate, Chinese policy rate]}
+         family: gaussian, prior: {family: gaussian, mu: 3.0, sigma: 0.1}, scale: 0.1, aliases: [LPR, loan prime rate, Chinese policy rate, "1-year LPR", "1Y LPR", interest rates, short-term rates, policy rates]}
 
   # --- the curves and the yen --------------------------------------------------------------------------------------
   - id: us_treasuries
@@ -134,9 +134,9 @@ entities:
     aliases: [Treasuries, UST, US yields]
     subentities:
       - {id: us_treasuries.yield_2y, name: UST 2Y yield, attribute_kind: bond_yield, unit: pct,
-         family: gaussian, prior: {family: gaussian, mu: 4.2, sigma: 0.2}, scale: 0.2, aliases: [two-year Treasury, US 2-year]}
+         family: gaussian, prior: {family: gaussian, mu: 4.2, sigma: 0.2}, scale: 0.2, aliases: [two-year Treasury, US 2-year, "2-year Treasury", "2-year Treasury yield", UST 2Y, US 2Y, "2Y UST", "2-year yield", two-year yield, "2yr yield"]}
       - {id: us_treasuries.yield_10y, name: UST 10Y yield, attribute_kind: bond_yield, unit: pct,
-         family: gaussian, prior: {family: gaussian, mu: 4.85, sigma: 0.2}, scale: 0.2, aliases: [ten-year Treasury, US 10-year]}
+         family: gaussian, prior: {family: gaussian, mu: 4.85, sigma: 0.2}, scale: 0.2, aliases: [ten-year Treasury, US 10-year, "10-year Treasury", "10-year Treasury yield", "10-year UST", UST 10Y, US 10Y, "10Y UST", "10-year US Treasury", "10-year yield", ten-year yield, "10Y yield", "10-year bond yield", "10yr yield", the 10-year, the ten-year]}
   - id: jgbs
     name: Japanese government bonds
     short: JGB
@@ -147,9 +147,9 @@ entities:
     aliases: [JGBs, JGB, Japanese yields]
     subentities:
       - {id: jgbs.yield_10y, name: JGB 10Y yield, attribute_kind: bond_yield, unit: pct,
-         family: gaussian, prior: {family: gaussian, mu: 1.9, sigma: 0.15}, scale: 0.15, aliases: [ten-year JGB]}
+         family: gaussian, prior: {family: gaussian, mu: 1.9, sigma: 0.15}, scale: 0.15, aliases: [ten-year JGB, "10-year JGB", JGB 10-year, "10Y JGB", JGB 10Y, Japan 10-year, Japanese 10-year, Japan 10-year bond yield, "10-year yield", ten-year yield, "10Y yield", "10-year bond yield", "10yr yield", the 10-year, the ten-year]}
       - {id: jgbs.yield_30y, name: JGB 30Y yield, attribute_kind: bond_yield, unit: pct,
-         family: gaussian, prior: {family: gaussian, mu: 3.85, sigma: 0.15}, scale: 0.15, aliases: [thirty-year JGB, super-long JGB]}
+         family: gaussian, prior: {family: gaussian, mu: 3.85, sigma: 0.15}, scale: 0.15, aliases: [thirty-year JGB, super-long JGB, "30-year JGB", JGB 30-year, "30Y JGB", JGB 30Y, super-long JGB yield]}
   - id: dollar_yen
     name: USD/JPY
     kind: market
@@ -159,7 +159,7 @@ entities:
     aliases: [USD/JPY, yen, dollar-yen]
     subentities:
       - {id: dollar_yen.usd_jpy, name: USD/JPY, attribute_kind: fx_rate, unit: ¥ per $,
-         family: lognormal, mean: 156.0, scale: 0.03, aliases: [dollar-yen, yen, USDJPY]}
+         family: lognormal, mean: 156.0, scale: 0.03, aliases: [dollar-yen, yen, USDJPY, USD-JPY, dollar/yen, JPY]}
       - {id: dollar_yen.carry_positioning, name: Yen carry positioning, attribute_kind: capital_flow, unit: index,
          family: gaussian, prior: {family: gaussian, mu: 0.0, sigma: 1.0}, scale: 1.0, aliases: [carry trade, carry positions]}
 
@@ -173,7 +173,7 @@ entities:
     aliases: [Bunds, euro yields, German yields]
     subentities:
       - {id: bunds.yield_10y, name: Bund 10Y yield, attribute_kind: bond_yield, unit: pct,
-         family: gaussian, prior: {family: gaussian, mu: 2.7, sigma: 0.15}, scale: 0.15, aliases: [ten-year Bund, euro 10-year]}
+         family: gaussian, prior: {family: gaussian, mu: 2.7, sigma: 0.15}, scale: 0.15, aliases: [ten-year Bund, euro 10-year, "10-year Bund", Bund 10-year, "10Y Bund", "Bund 10Y", German 10-year, "10-year yield", ten-year yield, "10Y yield", "10-year bond yield", "10yr yield", the 10-year, the ten-year]}
   - id: us_capital_markets
     name: US capital markets
     kind: market
@@ -228,7 +228,7 @@ entities:
     aliases: [CGBs, CGB, Chinese government bonds, Chinese yields]
     subentities:
       - {id: cgbs.yield_10y, name: CGB 10Y yield, attribute_kind: bond_yield, unit: pct,
-         family: gaussian, prior: {family: gaussian, mu: 1.85, sigma: 0.1}, scale: 0.1, aliases: [ten-year CGB, China 10-year]}
+         family: gaussian, prior: {family: gaussian, mu: 1.85, sigma: 0.1}, scale: 0.1, aliases: [ten-year CGB, China 10-year, "10-year CGB", CGB 10-year, "CGB 10Y", China 10-year bond yield, "10-year yield", ten-year yield, "10Y yield", "10-year bond yield", "10yr yield", the 10-year, the ten-year]}
   - id: china_capital_markets
     name: China capital markets
     kind: market
@@ -264,18 +264,21 @@ entities:
   - id: tokio_marine
     name: Tokio Marine
     kind: company
-    description: "Japan's largest P&C insurer, more than half of its profit from abroad. A weaker yen lifts translated overseas profit; higher US and JGB yields lift reinvestment income."
+    description: "Japan's largest P&C insurer, more than half of its profit from abroad. A weaker yen lifts translated overseas profit (partly offset by foreign-currency claims reserves at home); higher US and JGB yields lift income only on the share of the portfolio that reinvests. Business construction: construction/tokio_marine.yaml."
     category_tags: [SC]
     features: {sector: insurance, region: JP}
     aliases: [Tokio Marine Holdings, "8766 JP", TMNF]
     levels: {share_price: 6000.0}
     subentities:
       - {id: tokio_marine.international_profit, name: Tokio Marine international business profit, attribute_kind: revenue_flow,
-         unit: ¥bn/yr, family: lognormal, mean: 640.0, scale: 0.06, aliases: [international segment, overseas profit]}
+         features: {view: reporting_segments, basis: "ANI: international business adjusted net income, company definition (IFRS), yen at the period-average rate", metric: international_adjusted_net_income},
+         unit: ¥bn/yr, family: lognormal, mean: 640.0, scale: 0.06, aliases: [international segment, overseas profit, international business]}
       - {id: tokio_marine.japan_pc_profit, name: Tokio Marine Japan P&C profit, attribute_kind: revenue_flow,
-         unit: ¥bn/yr, family: lognormal, mean: 225.0, scale: 0.06, aliases: [domestic P&C, TMNF profit]}
+         features: {view: reporting_segments, basis: "ANI: Japan P&C business adjusted net income, company definition (IFRS)", metric: japan_pc_adjusted_net_income},
+         unit: ¥bn/yr, family: lognormal, mean: 225.0, scale: 0.06, aliases: [domestic P&C, TMNF profit, "Japan P&C"]}
       - {id: tokio_marine.operating_profit, name: Tokio Marine adjusted net income, attribute_kind: revenue_flow,
-         unit: ¥bn/yr, family: lognormal, mean: 960.0, scale: 0.05, aliases: [adjusted profit]}
+         features: {view: reporting_segments, basis: "ANI: group adjusted net income, company definition (IFRS from FY3/27; excludes gains on business-related equities); not operating profit and not J-GAAP segment profit", metric: adjusted_net_income},
+         unit: ¥bn/yr, family: lognormal, mean: 960.0, scale: 0.05, aliases: [adjusted profit, adjusted net profit]}
   - id: jpmorgan
     name: JPMorgan Chase
     short: JPMorgan
@@ -287,13 +290,17 @@ entities:
     levels: {share_price: 300.0}
     subentities:
       - {id: jpmorgan.net_interest_income, name: JPMorgan net interest income, attribute_kind: revenue_flow, unit: $bn/yr,
-         family: lognormal, mean: 102.0, scale: 0.05, aliases: [NII]}
+         features: {view: product, basis: "managed: firmwide net interest income incl. CIB Markets NII (fully taxable-equivalent)", metric: net_interest_income},
+         family: lognormal, mean: 102.0, scale: 0.05, aliases: [NII, net interest income, net II]}
       - {id: jpmorgan.ib_fees, name: JPMorgan investment banking fees, attribute_kind: revenue_flow, unit: $bn/yr,
+         features: {view: product, basis: "line: investment banking fees (advisory, equity and debt underwriting), firmwide", metric: investment_banking_fees},
          family: lognormal, mean: 9.5, scale: 0.08, aliases: [JPM IB fees, advisory and underwriting]}
       - {id: jpmorgan.markets_revenue, name: JPMorgan markets revenue, attribute_kind: revenue_flow, unit: $bn/yr,
+         features: {view: product, basis: "segment product: CIB Fixed Income plus Equity Markets revenue, managed (incl. Markets NII)", metric: markets_revenue},
          family: lognormal, mean: 32.0, scale: 0.07, aliases: [JPM trading, markets]}
       - {id: jpmorgan.cet1_ratio, name: JPMorgan CET1 ratio, attribute_kind: structural_level, unit: pct,
-         family: gaussian, prior: {family: gaussian, mu: 15.5, sigma: 0.3}, scale: 0.3, aliases: [JPM capital, CET1]}
+         features: {view: capital, basis: "CET1 capital over risk-weighted assets, standardized (binding approach), incl. AOCI", metric: cet1_ratio},
+         family: gaussian, prior: {family: gaussian, mu: 15.5, sigma: 0.3}, scale: 0.3, aliases: [JPM capital, CET1, CET1 ratio, CET-1, CET-1 ratio, Common Equity Tier 1 ratio, Common Equity Tier 1 Capital Ratio]}
 
   - id: citigroup
     name: Citigroup
@@ -306,10 +313,13 @@ entities:
     levels: {share_price: 125.0}
     subentities:
       - {id: citigroup.net_interest_income, name: Citi net interest income, attribute_kind: revenue_flow, unit: $bn/yr,
-         family: lognormal, mean: 64.0, scale: 0.05, aliases: [Citi NII]}
+         features: {view: product, basis: "line: firm net interest income incl. Markets NII (US GAAP); the guided measure is NII ex-Markets", metric: net_interest_income},
+         family: lognormal, mean: 64.0, scale: 0.05, aliases: [Citi NII, NII, net interest income, net II]}
       - {id: citigroup.services_revenue, name: Citi services revenue, attribute_kind: revenue_flow, unit: $bn/yr,
+         features: {view: reporting_segments, basis: "segment: Services revenues (Treasury and Trade Solutions plus Securities Services, NII and non-interest revenue), managed basis, segments as recast in 2026", metric: services_revenues},
          family: lognormal, mean: 20.0, scale: 0.05, aliases: [TTS, treasury and trade solutions, Citi services]}
       - {id: citigroup.markets_revenue, name: Citi markets revenue, attribute_kind: revenue_flow, unit: $bn/yr,
+         features: {view: reporting_segments, basis: "segment: Markets revenues (Fixed Income plus Equity Markets, incl. Markets NII), managed basis", metric: markets_revenues},
          family: lognormal, mean: 21.0, scale: 0.07, aliases: [Citi trading]}
 
   - id: morgan_stanley
@@ -322,10 +332,13 @@ entities:
     levels: {share_price: 185.0}
     subentities:
       - {id: morgan_stanley.trading_revenue, name: Morgan Stanley trading revenue, attribute_kind: revenue_flow, unit: $bn/yr,
+         features: {view: product, basis: "segment product total: ISG sales and trading net revenues, Equity plus Fixed Income (incl. their fees and net interest; excl. ISG other)", metric: sales_and_trading_revenues},
          family: lognormal, mean: 28.0, scale: 0.08, aliases: [markets revenue]}
       - {id: morgan_stanley.ib_fees, name: Morgan Stanley investment banking revenue, attribute_kind: revenue_flow, unit: $bn/yr,
+         features: {view: product, basis: "segment product total: ISG investment banking revenues (advisory plus equity and fixed income underwriting); not the firm investment banking line", metric: isg_investment_banking_revenues},
          family: lognormal, mean: 6.5, scale: 0.09, aliases: [MS IB, advisory, underwriting]}
       - {id: morgan_stanley.wealth_revenue, name: Morgan Stanley wealth management revenue, attribute_kind: revenue_flow, unit: $bn/yr,
+         features: {view: reporting_segments, basis: "segment: Wealth Management net revenues (incl. intersegment amounts)", metric: wm_net_revenues},
          family: lognormal, mean: 30.0, scale: 0.05, aliases: [wealth management, MS wealth]}
 
   - id: unicredit
@@ -338,40 +351,47 @@ entities:
     levels: {share_price: 80.0}
     subentities:
       - {id: unicredit.net_interest_income, name: UniCredit net interest income, attribute_kind: revenue_flow, unit: €bn/yr,
-         family: lognormal, mean: 14.5, scale: 0.04, aliases: [UniCredit NII]}
+         features: {view: product, basis: "reclassified P&L: group net interest income (IFRS), standalone, as reported (restated quarters may differ)", metric: net_interest_income},
+         family: lognormal, mean: 14.5, scale: 0.04, aliases: [UniCredit NII, NII, net interest income, net II]}
       - {id: unicredit.cet1_ratio, name: UniCredit CET1 ratio, attribute_kind: structural_level, unit: pct,
-         family: gaussian, prior: {family: gaussian, mu: 15.9, sigma: 0.3}, scale: 0.3, aliases: [UniCredit capital]}
+         features: {view: capital, basis: "CET1 capital over risk-weighted assets, standalone (before any Commerzbank consolidation)", metric: cet1_ratio},
+         family: gaussian, prior: {family: gaussian, mu: 15.9, sigma: 0.3}, scale: 0.3, aliases: [UniCredit capital, CET1, CET1 ratio, CET-1, CET-1 ratio, Common Equity Tier 1 ratio, Common Equity Tier 1 Capital Ratio]}
 
   - id: toyota
     name: Toyota Motor
     short: Toyota
     kind: company
-    description: "Japan's largest exporter. Each yen of USD/JPY moves its operating profit by tens of billions of yen."
+    description: "Automaker reporting automotive, financial-services and other businesses, and five regions; builds far more in Japan than it sells there, so Japan's export margin and the yen matter (each yen of USD/JPY moves operating profit by tens of billions of yen), while North America sells more than it builds and carries the tariff and finance exposure. China volume runs largely through equity-accounted JVs. Construction: construction/toyota.yaml."
     category_tags: [SC]
     features: {sector: autos, region: JP}
     aliases: [Toyota, "7203 JP"]
     levels: {share_price: 2800.0}
     subentities:
       - {id: toyota.operating_profit, name: Toyota operating profit, attribute_kind: revenue_flow, unit: ¥tn/yr,
-         family: lognormal, mean: 3.4, scale: 0.08, aliases: [Toyota earnings]}
+         features: {view: reporting_segments, basis: "consolidated operating income (IFRS); the total of the business-segment and the regional views, which overlap"},
+         family: lognormal, mean: 3.4, scale: 0.08, aliases: [Toyota earnings, OP, Op. profit, operating profit, operating income, EBIT]}
       - {id: toyota.vehicle_sales, name: Toyota global vehicle sales, attribute_kind: production_flow, unit: m units/yr,
-         family: lognormal, mean: 10.5, scale: 0.04, aliases: [Toyota volumes, unit sales]}
+         features: {view: product, basis: "Toyota and Lexus retail units, including units retailed by equity-accounted JVs; not consolidated vehicle sales (toyota.consolidated_units)"},
+         family: lognormal, mean: 10.5, scale: 0.04, aliases: [Toyota volumes, unit sales, vehicle sales, global vehicle sales]}
 
   - id: komatsu
     name: Komatsu
     kind: company
-    description: "A Japanese construction and mining equipment maker. Its profit rides the yen and mining capex."
+    description: "A Japanese construction and mining equipment maker: construction, mining and utility equipment (new machines plus a large parts and service aftermarket, sold in eight regions), retail finance and industrial machinery. Mining follows miners' capex and fleet hours, construction follows regional building activity, and a weaker yen lifts its profit (docs/construction/komatsu.md)."
     category_tags: [SC]
     features: {sector: machinery, region: JP}
     aliases: ["6301 JP"]
     levels: {share_price: 5000.0}
     subentities:
       - {id: komatsu.operating_profit, name: Komatsu operating profit, attribute_kind: revenue_flow, unit: ¥bn/yr,
-         family: lognormal, mean: 600.0, scale: 0.08, aliases: [Komatsu earnings]}
+         features: {view: reporting_segments, basis: "consolidated operating income, US GAAP: segment profit plus corporate, eliminations and other operating items"},
+         family: lognormal, mean: 600.0, scale: 0.08, aliases: [Komatsu earnings, OP, Op. profit, operating profit, operating income, EBIT]}
       - {id: komatsu.mining_demand, name: Mining equipment demand, attribute_kind: production_flow, unit: index,
-         family: lognormal, mean: 100.0, scale: 0.06, aliases: [mining capex]}
+         features: {view: operating_state, basis: "industry demand for mining equipment (the company's demand outlook, units); not Komatsu's orders"},
+         family: lognormal, mean: 100.0, scale: 0.06, aliases: [mining capex, mining machinery demand, demand for mining equipment]}
       - {id: komatsu.construction_demand, name: Construction equipment demand, attribute_kind: production_flow, unit: index,
-         family: lognormal, mean: 100.0, scale: 0.06, aliases: [construction demand, construction equipment]}
+         features: {view: operating_state, basis: "global industry demand for the major construction equipment products (units); a reduced-form index, not Komatsu's regional sales"},
+         family: lognormal, mean: 100.0, scale: 0.06, aliases: [construction demand, construction equipment, construction machinery demand, demand for construction equipment]}
 
   - id: softbank_corp
     name: SoftBank Corp
@@ -383,9 +403,11 @@ entities:
     levels: {share_price: 235.0}
     subentities:
       - {id: softbank_corp.operating_profit, name: SoftBank Corp operating income, attribute_kind: revenue_flow, unit: ¥bn/yr,
-         family: lognormal, mean: 1100.0, scale: 0.06, aliases: [SoftBank Corp earnings]}
+         family: lognormal, mean: 1100.0, scale: 0.06, aliases: [SoftBank Corp earnings, OP, Op. profit, operating profit, operating income, EBIT],
+         features: {view: reporting_segments, basis: "IFRS consolidated operating income (incl. one-off items in segment income; before finance costs and minorities)", metric: operating_income}}
       - {id: softbank_corp.ai_capex, name: SoftBank Corp AI data-center investment, attribute_kind: spending_flow, unit: ¥bn/yr,
-         family: lognormal, mean: 300.0, scale: 0.1, aliases: [AI data centers, AI capex, GPU investment]}
+         family: lognormal, mean: 300.0, scale: 0.1, aliases: [AI data centers, AI capex, GPU investment],
+         features: {view: operating_state, basis: "investment in AI data centres and compute (GPUs, servers, buildings); its split across PP&E capex, leases and other investing is not disclosed in the sources read", metric: ai_investment}}
 
   - id: china_construction_bank
     name: China Construction Bank
@@ -398,10 +420,13 @@ entities:
     levels: {share_price: 7.5}
     subentities:
       - {id: china_construction_bank.net_interest_margin, name: CCB net interest margin, attribute_kind: margin, unit: pct,
-         family: gaussian, prior: {family: gaussian, mu: 1.42, sigma: 0.05}, scale: 0.05, aliases: [CCB NIM, Chinese bank margins]}
+         features: {view: operating_state, basis: "IFRS: net interest income over average interest-earning assets, group", metric: net_interest_margin},
+         family: gaussian, prior: {family: gaussian, mu: 1.42, sigma: 0.05}, scale: 0.05, aliases: [CCB NIM, Chinese bank margins, NIM, net interest margin]}
       - {id: china_construction_bank.npl_ratio, name: CCB non-performing loan ratio, attribute_kind: structural_level, unit: pct,
-         family: gaussian, prior: {family: gaussian, mu: 1.33, sigma: 0.05}, scale: 0.05, aliases: [CCB NPLs, asset quality]}
+         features: {view: credit, basis: "non-performing loans (five-category classification: substandard, doubtful, loss) over gross loans, group", metric: npl_ratio},
+         family: gaussian, prior: {family: gaussian, mu: 1.33, sigma: 0.05}, scale: 0.05, aliases: [CCB NPLs, asset quality, NPL ratio]}
       - {id: china_construction_bank.operating_profit, name: CCB net profit, attribute_kind: revenue_flow, unit: CNY bn/yr,
+         features: {view: reporting_segments, basis: "IFRS net profit, group incl. minority interests (the id is kept for Sally's expected paths; it is not an operating line)", metric: net_profit},
          family: lognormal, mean: 335.0, scale: 0.04, aliases: [CCB earnings]}
   - id: aib_group
     name: AIB Group
@@ -414,20 +439,24 @@ entities:
     levels: {share_price: 7.0}
     subentities:
       - {id: aib_group.net_interest_income, name: AIB net interest income, attribute_kind: revenue_flow, unit: €bn/yr,
-         family: lognormal, mean: 3.7, scale: 0.05, aliases: [AIB NII]}
+         features: {view: product, basis: "IFRS: group net interest income (Ireland and UK, EUR), incl. net interest on the structural hedge", metric: net_interest_income},
+         family: lognormal, mean: 3.7, scale: 0.05, aliases: [AIB NII, NII, net interest income, net II]}
   - id: msad
     name: MS&AD Insurance
     short: MS&AD
     kind: company
-    description: "A Japanese P&C insurer group (Mitsui Sumitomo, Aioi Nissay Dowa) with a growing overseas book. Like Tokio Marine, it gains from a weaker yen and from higher yields to reinvest at."
+    description: "A Japanese P&C insurer group (Mitsui Sumitomo, Aioi Nissay Dowa) with a growing overseas book (MS Amlin, Asia) and two life companies. A weaker yen lifts translated overseas profit; higher yields lift income only on the money that reinvests. Business construction: construction/msad.yaml."
     category_tags: [SC]
     features: {sector: insurance, region: JP}
     aliases: [MS&AD Insurance Group, "8725 JP", Mitsui Sumitomo]
     levels: {share_price: 3300.0}
     subentities:
       - {id: msad.international_profit, name: MS&AD international business profit, attribute_kind: revenue_flow,
-         unit: ¥bn/yr, family: lognormal, mean: 160.0, scale: 0.07, aliases: [MS&AD overseas, MS Amlin]}
+         features: {view: reporting_segments, basis: "GAP: international business adjusted profit, company definition, yen at reporting rates", metric: international_adjusted_profit},
+         unit: ¥bn/yr, family: lognormal, mean: 160.0, scale: 0.07, aliases: [MS&AD overseas, MS Amlin, international business]}
       - {id: msad.domestic_profit, name: MS&AD domestic P&C profit, attribute_kind: revenue_flow,
-         unit: ¥bn/yr, family: lognormal, mean: 260.0, scale: 0.06, aliases: [MS&AD domestic, Mitsui Sumitomo profit]}
+         features: {view: reporting_segments, basis: "GAP: domestic non-life adjusted profit (Mitsui Sumitomo and Aioi Nissay Dowa), company definition", metric: domestic_nonlife_adjusted_profit},
+         unit: ¥bn/yr, family: lognormal, mean: 260.0, scale: 0.06, aliases: [MS&AD domestic, "domestic P&C", "Japan P&C"]}
       - {id: msad.operating_profit, name: MS&AD group adjusted profit, attribute_kind: revenue_flow,
-         unit: ¥bn/yr, family: lognormal, mean: 620.0, scale: 0.05, aliases: [MS&AD adjusted profit, MS&AD earnings]}
+         features: {view: reporting_segments, basis: "GAP: group adjusted profit, company definition (J-GAAP based; not net income and not operating profit)", metric: group_adjusted_profit},
+         unit: ¥bn/yr, family: lognormal, mean: 620.0, scale: 0.05, aliases: [MS&AD adjusted profit, MS&AD earnings, adjusted net profit, adjusted profit]}

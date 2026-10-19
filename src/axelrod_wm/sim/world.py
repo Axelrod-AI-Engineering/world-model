@@ -30,7 +30,8 @@ from axelrod_wm.engine.rng import make_rng
 from axelrod_wm.events.market import MarketEvent, MarketEventChannel, MarketEventKind
 from axelrod_wm.intake.sources import MarketEventSource, in_window
 from axelrod_wm.model.distributions import Link, family_link, from_link, parse_distribution, to_link
-from axelrod_wm.model.temporal import kernel_days
+from axelrod_wm.model.interaction import EdgeType
+from axelrod_wm.model.temporal import ACCUMULATE, kernel_days
 
 if TYPE_CHECKING:
     from axelrod_wm.engine.initialize import ConstructionSpec
@@ -81,16 +82,21 @@ class _Sub:
         self.noise = noise
 
 
+DERIVED = (EdgeType.IDENTITY, EdgeType.STOCK_FLOW)
+
+
 class _Chan:
     def __init__(self, cid: str, src: int, tgt: int, beta: float, d: int, l: int, lam: float,
-                 mods: list[tuple[int, str, float, float | None]], active_from: int = -10**9) -> None:
+                 mods: list[tuple[int, str, float, float | None, str]], active_from: int = -10**9,
+                 acc: bool = False) -> None:
         self.id = cid
         self.src = src
         self.tgt = tgt
         self.beta = beta
         self.d = d
         self.l = l
-        self.lam = lam
+        self.lam = 1.0 if acc else lam
+        self.kappa = 1.0 / l if acc else -(1.0 - lam)    # the tail's weight: an accumulating kernel keeps rising
         self.mods = mods
         self.active_from = active_from
         self.S = 0.0
@@ -145,11 +151,16 @@ class SyntheticWorld:
                 continue
             rng = make_rng(self.seed, "world", "parameters", i.id)
             mu = float((i.effect or {}).get("mu", 0.0))
-            beta = float(truth.effect_overrides.get(i.id, mu * float(rng.normal(1.0, truth.effect_multiplier_sd))))
-            d, l, lam = self._kernel(truth.kernel_overrides.get(i.id, i.kernel or {}), min_delay_days)
-            mods = [(self.idx[p.moderator], str(p.form), float(p.coefficient.get("mu", 0.0)), p.threshold)
+            # a derived identity's weight is the world's too (identity and stock-flow links are not estimates; accounting
+            # links keep their draw, so the worlds built before Oct 18 are unchanged)
+            draw = 1.0 if i.edge_type in DERIVED else float(rng.normal(1.0, truth.effect_multiplier_sd))
+            beta = float(truth.effect_overrides.get(i.id, mu * draw))
+            kernel = truth.kernel_overrides.get(i.id, i.kernel or {})
+            d, l, lam = self._kernel(kernel, min_delay_days)
+            mods = [(self.idx[p.moderator], str(p.form), float(p.coefficient.get("mu", 0.0)), p.threshold, p.side)
                     for p in i.parameters if p.moderator in self.idx]
-            self.channels.append(_Chan(i.id, self.idx[i.source], self.idx[i.target], beta, d, l, lam, mods))
+            self.channels.append(_Chan(i.id, self.idx[i.source], self.idx[i.target], beta, d, l, lam, mods,
+                                       acc=kernel.get("shape") == ACCUMULATE))
             if i.reverse is not None and i.source not in self.decision_vars:
                 rmu = float(i.reverse.effect.get("mu", 0.0))
                 rbeta = rmu * float(rng.normal(1.0, truth.effect_multiplier_sd))
@@ -287,16 +298,18 @@ class SyntheticWorld:
                 za = buf[a, ch.src] - self.offsets[ch.src] if 0 <= a < k else 0.0
                 zb = buf[b, ch.src] - self.offsets[ch.src] if 0 <= b < k else 0.0
                 ch.S += za - zb
-                ch.T = ch.lam * ch.T - (1.0 - ch.lam) * zb
+                ch.T = ch.lam * ch.T + ch.kappa * zb
             if k < ch.active_from:
                 continue
             m = 1.0
-            for mi, form, gam, thr in ch.mods:
+            for mi, form, gam, thr, side in ch.mods:
                 zm = z_prev[mi]
                 if form == "multiplicative":
                     m *= min(max(1.0 + gam * zm, self.clip[0]), self.clip[1])
                 elif form == "threshold":
                     m *= 1.0 if zm > (thr or 0.0) else 0.0
+                elif form == "piecewise":
+                    m *= 1.0 if (zm > (thr or 0.0) if side == "above" else zm < (thr or 0.0)) else gam
                 else:
                     add[ch.tgt] += gam * zm
             contrib[ch.tgt] += ch.beta * m * (ch.S / ch.l + ch.T)

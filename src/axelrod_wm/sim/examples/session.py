@@ -135,9 +135,7 @@ class ExampleSession:
             return "ready"
         if entry.get("pid") is None:
             return "skipped" if entry.get("note") else "done"
-        p = self.controller.proposals.get(entry["pid"])
-        if p is None:
-            return "done"
+        p = self.controller.proposals[entry["pid"]]
         if p.status == ProposalStatus.PENDING:
             return "waiting"
         if p.status in (ProposalStatus.APPROVED, ProposalStatus.AUTO_APPLIED):
@@ -269,9 +267,7 @@ class ExampleSession:
             self._play(ex, auto=True, record=kept.get(ex.id))
 
     def _record(self, entry: dict) -> dict:
-        p = self.controller.proposals.get(entry.get("pid") or "")
-        if p is None:
-            return {"status": "approved", "ops": None}
+        p = self.controller.proposals[entry["pid"]]
         status = str(p.status)
         ops = [op.model_dump(mode="json") for op in p.event.ops] if p.edited_from is not None else None
         return {"status": "rejected" if status in ("rejected", "deferred", "pending") else "approved", "ops": ops,

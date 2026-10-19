@@ -134,6 +134,11 @@ export function initPaths({ toast, onSelect, onShow, onHide, onIsolate }) {
       r.big = Math.max(r.big, Math.abs(v.peak));
       (r.cells[v.column] ??= []).push(id);
     }
+    // an output the chain carries on past is also read at the end (Oct 17: outputs sit on the end)
+    for (const id of grid.echoes ?? []) {
+      const r = rows.get(vals[id]?.entity_id);
+      if (r) (r.cells.output ??= []).push(`echo:${id}`);
+    }
     // then a few sweeps that move each row toward the rows it is joined to (the barycenter heuristic), so the
     // interactions cross as little as possible and each chain reads straight across
     let ordered = [...rows.values()].sort((a, b) => a.first - b.first || b.big - a.big);
@@ -153,14 +158,16 @@ export function initPaths({ toast, onSelect, onShow, onHide, onIsolate }) {
       ordered = ordered.map((r) => ({ r, b: 0.5 * bary(r) + 0.5 * pos.get(r.id) })).sort((x, y) => x.b - y.b).map((x) => x.r);
     }
     scale = Math.max(0.05, ...Object.values(vals).flatMap((v) => [Math.abs(v.q10.reduce((m, x) => Math.max(m, Math.abs(x)), 0)), Math.abs(v.q90.reduce((m, x) => Math.max(m, Math.abs(x)), 0))]));
-    const chip = (id) => {
+    const chip = (key) => {
+      const echo = key.startsWith("echo:");
+      const id = echo ? key.slice(5) : key;
       const v = vals[id];
       // an output the chain carries on past sits at its order (inference/paths._grid), marked as asked
-      const asked = v.column !== "output" && v.order && (grid.outputs ?? []).includes(id);
+      const asked = !echo && v.column !== "output" && v.order && (grid.outputs ?? []).includes(id);
       // its row names its entity, so the chip names only its own part; the tooltip names both
       const own = ownOf(v.name, v.entity);
-      return `<button class="px-chip ${asked ? "asked" : ""}" data-id="${esc(id)}" type="button" title="${esc(v.entity ? `${v.entity} · ${own}` : v.name)}: ${signed(v.peak)} sd at its peak on day ${v.peak_day}; ${signed(v.effect)} sd at the horizon${v.order ? `; first reached around day ${v.arrives_day}` : ""}${asked ? "; an output, which the grid follows further" : ""}">
-        <span class="px-name">${(v.column === "output" || asked) && v.order ? `<i class="px-ord o${Math.min(3, v.order)}" title="${esc(ORDINAL[v.order] ?? v.order)} order">${v.order}</i>` : ""}${esc(own)}</span>
+      return `<button class="px-chip ${asked ? "asked" : ""}${echo ? " echo" : ""}" data-id="${esc(id)}" type="button" title="${esc(v.entity ? `${v.entity} · ${own}` : v.name)}: ${signed(v.peak)} sd at its peak on day ${v.peak_day}; ${signed(v.effect)} sd at the horizon${v.order ? `; first reached around day ${v.arrives_day}` : ""}${asked ? "; an output, which the grid follows further and also shows at the end" : ""}${echo ? "; an output, shown at the end as well as in its chain" : ""}">
+        <span class="px-name">${(v.column === "output" || asked || echo) && v.order ? `<i class="px-ord o${Math.min(3, v.order)}" title="${esc(ORDINAL[v.order] ?? v.order)} order">${v.order}</i>` : ""}${esc(own)}</span>
         <span class="px-meter"><i class="band"></i><i class="bar"></i><i class="zero"></i></span>
         <span class="px-num mono"></span></button>`;
     };
@@ -168,7 +175,7 @@ export function initPaths({ toast, onSelect, onShow, onHide, onIsolate }) {
       <div class="px-corner"></div>
       ${COLS.map((c) => `<div class="px-colhead ${c.cls}" title="${esc(c.help)}">${esc(c.word)}</div>`).join("")}
       ${ordered.map((r) => `<div class="px-ent" title="${esc(r.name)}">${esc(r.name)}</div>
-        ${COLS.map((c) => `<div class="px-cell ${c.cls}">${(r.cells[c.id] ?? []).sort((a, b) => Math.abs(vals[b].peak) - Math.abs(vals[a].peak)).map(chip).join("")}</div>`).join("")}`).join("")}
+        ${COLS.map((c) => `<div class="px-cell ${c.cls}">${(r.cells[c.id] ?? []).sort((a, b) => Math.abs(vals[b.replace(/^echo:/, "")].peak) - Math.abs(vals[a.replace(/^echo:/, "")].peak)).map(chip).join("")}</div>`).join("")}`).join("")}
     </div>`;
     for (const b of pane.querySelectorAll(".px-chip")) {
       b.addEventListener("click", () => onSelect?.({ kind: "subentity", id: b.dataset.id }));

@@ -76,9 +76,7 @@ def transmission_map(shocked: list[str], channels: list[Any], effect_of: Any, ho
                 q.append(ch.target_id)
     # the most significant path among the shortest ones: one pass over the layers
     best: dict[str, tuple[float, Any | None, str]] = {s: (1.0, None, s) for s in shocked}
-    for u in sorted(dist, key=lambda x: (dist[x], x)):
-        if u not in best:
-            continue
+    for u in sorted(dist, key=lambda x: (dist[x], x)):      # each value at order d was reached from one at d - 1
         score, _prev, origin = best[u]
         for ch in out_edges.get(u, []):
             v = ch.target_id

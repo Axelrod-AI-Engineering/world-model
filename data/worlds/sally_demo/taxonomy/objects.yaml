@@ -14,7 +14,8 @@ nodes:
     parent: gen:obj:institutions
     signature: {required: {kind: [company]}}
     defaults:
-      - {slot: share_price, name: share price, attribute_kind: asset_price, unit: local ccy, mean: 100.0, scale: 0.08}
+      - {slot: share_price, name: share price, attribute_kind: asset_price, unit: local ccy, mean: 100.0, scale: 0.08,
+         features: {per_share: "true"}}
     default_links:
       - {source: operating_profit, target: share_price, label: drives, effect: 0.5,
          kernel: {delay_days: 1, lag_days: 21, duration_days: null}, generalization: gen:int:asset_repricing}

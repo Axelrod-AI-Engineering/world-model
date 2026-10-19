@@ -329,10 +329,9 @@ def _item(i: int, op: Any, names: dict[str, str], wm: Any, ltm: Any) -> StagedIt
     if k == "annotate_interaction":
         return StagedItem(index=i, op=k, action="note", what="interaction", refs=[op.interaction_id],
                           label=f"Note on {op.interaction_id}: {op.note}")
-    if k == "propose_hypothesis":
-        return StagedItem(index=i, op=k, action="hypothesis", what="hypothesis",
-                          label=f"Hypothesis: {op.hypothesis.statement}")
-    return StagedItem(index=i, op=k, action=k, what="", label=k)
+    # the last kind of operation: propose_hypothesis
+    return StagedItem(index=i, op=k, action="hypothesis", what="hypothesis",
+                      label=f"Hypothesis: {op.hypothesis.statement}")
 
 
 # ---------------------------------------------------------------------------------------------------
@@ -471,8 +470,6 @@ def _resolves(p: Proposal, wm: Any) -> dict | None:
 def _hedges(live_wm: Any, wm: Any) -> list[dict]:
     """How the event moves the hedges already held: each candidate's probability before and after, the evidence,
     and whether one now passes the bound (a resolution proposal follows)."""
-    if wm is None:
-        return []
     out = []
     for pid, after in sorted(wm.pending_refinements.items()):
         before = live_wm.pending_refinements.get(pid)
@@ -677,9 +674,7 @@ def _review(ctl: WorldModelController, p: Proposal, kept: list[int], items: list
             moves.append(Adjustment(subentity_id=sid, name=sub_name(sid), order=0,
                                     effect=round(float(after if after is not None else 0.0), 4),
                                     peak=round(float((after or 0.0) - (before or 0.0)), 4)))
-        for t in result.shared.analysis.transmission or []:
-            if t.order < 1:
-                continue
+        for t in result.shared.analysis.transmission or []:      # shocked values are not in it: order >= 1
             path = [sub_name(t.path[0].source_id)] + [sub_name(h.target_id) for h in t.path] if t.path else []
             ripple.append(Adjustment(subentity_id=t.subentity_id, name=sub_name(t.subentity_id), order=int(t.order),
                                      effect=round(float(t.effect), 4), peak=round(float(t.peak), 4),
@@ -690,32 +685,27 @@ def _review(ctl: WorldModelController, p: Proposal, kept: list[int], items: list
     # what the fold learned
     learned: list[Learned] = []
     if result is not None:
-        for sid in result.fold.updated_subentities:
-            s1 = sg.subentities.get(sid)
+        for sid in result.fold.updated_subentities:              # the fold found each in the staged graph
+            s1 = sg.subentities[sid]
             s0 = lg.subentities.get(sid)
-            if s1 is None:
-                continue
             learned.append(Learned(kind="value", ref=sid, name=sub_name(sid),
                                    before=round(float(s0.posterior.summary().q50), 4) if s0 is not None else None,
                                    after=round(float(s1.posterior.summary().q50), 4), unit=s1.unit))
         for iid in result.fold.updated_interactions:
-            i1 = sg.interactions.get(iid)
+            i1 = sg.interactions[iid]
             i0 = lg.interactions.get(iid)
-            if i1 is None:
-                continue
             learned.append(Learned(kind="effect", ref=iid,
                                    name=f"{sub_name(i1.source_id)} → {sub_name(i1.target_id)}",
                                    before=round(float(i0.forward.effect.mean()), 4) if i0 is not None else None,
                                    after=round(float(i1.forward.effect.mean()), 4)))
     # evidence for or against a link moves the belief that it exists
-    if wm is not None:
-        for iid, i1 in sg.interactions.items():
-            i0 = lg.interactions.get(iid)
-            if i0 is not None and i1.active and abs(float(i1.existence.mean()) - float(i0.existence.mean())) > 1e-4:
-                learned.append(Learned(kind="existence", ref=iid,
-                                       name=f"{sub_name(i1.source_id)} → {sub_name(i1.target_id)}",
-                                       before=round(float(i0.existence.mean()), 3),
-                                       after=round(float(i1.existence.mean()), 3)))
+    for iid, i1 in sg.interactions.items():
+        i0 = lg.interactions.get(iid)
+        if i0 is not None and i1.active and abs(float(i1.existence.mean()) - float(i0.existence.mean())) > 1e-4:
+            learned.append(Learned(kind="existence", ref=iid,
+                                   name=f"{sub_name(i1.source_id)} → {sub_name(i1.target_id)}",
+                                   before=round(float(i0.existence.mean()), 3),
+                                   after=round(float(i1.existence.mean()), 3)))
     lessons = _lessons(changesets, live_wm, live_ltm, wm, ltm, sub_name)
     raises = []
     for pe in list(getattr(result, "proposal_events", []) or []) + list(getattr(report, "proposal_events", []) or []):
@@ -740,8 +730,6 @@ def _review(ctl: WorldModelController, p: Proposal, kept: list[int], items: list
 
 def _lessons(changesets: list[ChangeSet], live_wm: Any, live_ltm: Any, wm: Any, ltm: Any, sub_name: Any) -> list[str]:
     """What long-term memory would learn, in words."""
-    if ltm is None:
-        return []
     out: list[str] = []
     touched: dict[str, set[str]] = {}
     for cs in changesets:

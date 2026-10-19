@@ -328,10 +328,8 @@ class SplitOnSharedFeatureGrower(TaxonomyGrower):
             for iid in group:
                 if taxonomy.kind == TaxonomyKind.INTERACTION:
                     txn.update("wm.graph.interactions", iid, generalization_id=new_id)
-                elif iid in graph.entities:
+                else:       # only entities split: a pattern's features are all in OBJECT_EXCLUDE
                     txn.update("wm.graph.entities", iid, generalization_id=new_id)
-                elif iid in ltm.object_generalizations.patterns:
-                    txn.update("ltm.object_generalizations.patterns", iid, generalization_id=new_id)
             ctx.tracer.emit(Phase.GENERALIZE, "generalize.split", refs=[gen_id, new_id], parent=gen_id, child=new_id,
                             feature=f"{key}={value}", instances=group)
             created.append(new_id)

@@ -10,7 +10,7 @@
 import { api } from "../api.js";
 import { CATEGORY_BLURBS, CATEGORY_CODES, CATEGORY_NAMES } from "../graph/layouts.js";
 import { SYMBOLS } from "../graph/legend.js";
-import { paletteOf } from "../graph/hulls.js";
+import { ancestors, paletteOf } from "../graph/hulls.js";
 import { on, stepShown, store } from "../store.js";
 import { esc } from "../util.js";
 
@@ -195,22 +195,27 @@ export function initAdmin({ renderer, actions }) {
     const order = ["Actors together", "Patterns in the economy", "Made of superentities", "From history", "Candidates"];
     const byKind = new Map(order.map((k) => [k, []]));
     for (const g of groups) byKind.get(groupKind(g))?.push(g);
-    const shared = (g) => [...g.members].filter((m) => (renderer.model?.owners.get(m) ?? []).length > 1).length;
+    // shared: a member held directly by two or more superentities (a composite that holds it through a part does not count)
+    const info = renderer.groupsInfo;
+    const direct = (m) => {
+      const ks = (info.ofEntity.get(m) ?? []).filter((k) => !info.byKey.get(k)?.transient);
+      return ks.filter((k) => !ks.some((o) => o !== k && ancestors(info.byKey, o).includes(k)));
+    };
+    const shared = (g) => [...g.members].filter((m) => direct(m).length > 1).length;
     const actors = (v?.entities ?? []).filter((e) => ACTOR_KINDS.has(e.kind) || e.features?.sector);
     return `
       <h4>Categories</h4>
       <div class="cats">${CATEGORY_CODES.map((c) => `<div class="cat" data-cat="${c}" tabindex="0" title="${esc(CATEGORY_BLURBS[c])}">
         <code>${c}</code><span>${esc(CATEGORY_NAMES[c])}</span><span class="n">${counts[c] ?? 0}</span></div>`).join("")}</div>
       <h4>Superentities</h4>
+      <p class="small muted">Kept in the model and its memory; not drawn on the canvas. Click one to frame its entities.</p>
       ${order.filter((k) => byKind.get(k).length).map((k) => `<div class="gk">${esc(k)}</div>${byKind.get(k).map((g) => {
         const p = paletteOf(g, v?.palettes);
-        const closed = renderer.ui.collapsed.has(g.key);
         const sh = shared(g);
         return `<div class="grow-row" data-group="${esc(g.key)}" tabindex="0">
           <span class="sw" style="background:${p.fill};border-color:${p.line}"></span>
           <span class="nm">${esc(g.label)}</span>
-          <span class="n faint">${g.members.size}${sh ? ` · ${sh} shared` : ""}</span>
-          <button class="ghost small" data-toggle="${esc(g.key)}" title="${closed ? "Open it" : "Close it into a card"}">${closed ? "open" : "close"}</button></div>`;
+          <span class="n faint">${g.members.size}${sh ? ` · ${sh} shared` : ""}</span></div>`;
       }).join("")}`).join("")}
       <h4>Actors</h4>
       <div class="chips">${actors.map((e) => `<button class="pick actor" data-node="${esc(e.id)}">${esc(e.name)}</button>`).join("")}</div>
@@ -225,7 +230,7 @@ export function initAdmin({ renderer, actions }) {
     const tog = (k, label, onv) => `<label class="tog"><input type="checkbox" data-tog="${k}" ${onv ? "checked" : ""}> ${esc(label)}</label>`;
     return `
       <h4>Detail</h4>
-      <div class="seg" role="group">${[["super", "Superentities"], ["entity", "Entities"], ["sub", "Subentities"]]
+      <div class="seg" role="group">${[["entity", "Entities"], ["sub", "Subentities"]]
         .map(([k, l]) => `<button data-detail="${k}" aria-pressed="${lv === k}">${l}</button>`).join("")}</div>
       <p class="small muted">Or per node: double-click, or right-click for options. Zoom never changes what is open.</p>
       <h4>Camera</h4>
@@ -234,7 +239,7 @@ export function initAdmin({ renderer, actions }) {
       <div class="seg" role="group"><button data-layout="figure1" aria-pressed="${store.settings.layout === "figure1"}" title="Every node in its place in Figure 1">Figure 1</button>
         <button data-layout="gravity" aria-pressed="${store.settings.layout === "gravity"}" title="Nodes settle where their interactions pull them">Gravity</button></div>
       <div class="toggles">
-        ${tog("candidates", "Candidate superentities", store.settings.showCandidates)}
+        ${tog("candidates", "Candidate superentities in the lists", store.settings.showCandidates)}
         ${tog("labels", "Every interaction label", document.body.classList.contains("labels"))}
         ${tog("f1links", "Figure 1 interactions only", store.settings.figure1LinksOnly)}
       </div>
@@ -295,9 +300,8 @@ export function initAdmin({ renderer, actions }) {
       const k = row.dataset.group;
       row.addEventListener("mouseenter", () => renderer.setFocus({ group: k }));
       row.addEventListener("mouseleave", () => renderer.setFocus(null));
-      row.addEventListener("click", (ev) => { if (!ev.target.closest("[data-toggle]")) actions.frameGroup(k); });
+      row.addEventListener("click", () => actions.frameGroup(k));
     }
-    for (const b of $$("[data-toggle]")) b.addEventListener("click", () => { renderer.toggleGroup(b.dataset.toggle); refresh(); });
     for (const b of $$("[data-node]")) b.addEventListener("click", () => actions.focusNode(b.dataset.node));
     for (const b of $$("[data-detail]")) b.addEventListener("click", () => { renderer.setDetail(b.dataset.detail); refresh(); });
     for (const b of $$("[data-layout]")) b.addEventListener("click", () => { actions.setLayout(b.dataset.layout); refresh(); });

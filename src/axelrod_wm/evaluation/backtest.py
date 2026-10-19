@@ -226,8 +226,6 @@ class Backtester:
                 if not n.pattern_id:
                     continue
                 hit = pattern_hit([s for s in n.subentity_ids if s in fc.z_summary], fc, realized, sig)
-                if hit is None:
-                    hit = pattern_hit(n.subentity_ids, fc, realized, sig)
                 if hit is not None:
                     h = hits.setdefault(n.pattern_id, [0, 0])
                     h[0] += int(hit)

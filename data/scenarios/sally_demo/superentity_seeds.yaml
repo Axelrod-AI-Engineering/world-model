@@ -82,7 +82,6 @@ patterns:
   interactions:
   - m25
   - m26
-  - m27
   - s08
   - s11
   - s12
@@ -230,7 +229,6 @@ patterns:
   interactions:
   - m25
   - m26
-  - m27
   - s08
   - s11
   - s12

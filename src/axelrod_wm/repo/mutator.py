@@ -35,6 +35,7 @@ from axelrod_wm.memory.working import (
     PendingRefinement,
     RippleJudgment,
 )
+from axelrod_wm.model.construction import Composition, Identity, Matrix, NamedPath, StockFlow
 from axelrod_wm.model.entity import Entity, Subentity
 from axelrod_wm.model.explanation import Explanation
 from axelrod_wm.model.hypothesis import Hypothesis
@@ -153,6 +154,11 @@ RECORDS: dict[str, tuple[type[BaseModel], str | None]] = {
     "wm.graph.interactions": (Interaction, "id"),
     "wm.graph.instances": (SuperentityInstance, "id"),
     "wm.graph.super_interactions": (SuperInteraction, "id"),
+    "wm.graph.paths": (NamedPath, "id"),
+    "wm.graph.compositions": (Composition, "id"),
+    "wm.graph.identities": (Identity, "id"),
+    "wm.graph.stock_flows": (StockFlow, "id"),
+    "wm.graph.matrices": (Matrix, "id"),
     "wm.deviations.points": (DeviationPoint, None),        # key "<subentity id>|<day>"
     "wm.channels": (ChannelState, "channel_id"),
     "wm.hypotheses": (Hypothesis, "id"),

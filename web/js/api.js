@@ -10,7 +10,8 @@ export class ApiError extends Error {
 
 async function request(method, path, body) {
   const opts = { method, headers: {} };
-  if (body !== undefined) {
+  if (body instanceof FormData) opts.body = body;          // a file upload: the browser sets the multipart boundary
+  else if (body !== undefined) {
     opts.headers["Content-Type"] = "application/json";
     opts.body = JSON.stringify(body);
   }
@@ -148,6 +149,14 @@ export const api = {
   importLocal: (name) => get(`/import/local/${q(name)}`),
   importPreview: (bundle) => post("/import/preview", { bundle }),
   importRun: (bundle, ids = null) => post("/import", { bundle, ids }),
+  // a raw document through ingestion (Oct 17): its bundle, what the pipeline read, and the graph update each item would make
+  importDocument: (file) => {
+    const form = new FormData();
+    form.append("file", file, file.name);
+    return request("POST", "/import/document", form);
+  },
+  importDocuments: () => get("/import/documents"),
+  importStoredDocument: (id) => post(`/import/documents/${q(id)}`),
 };
 
 // The /ws stream (§12.3): {"type": "hello", "since_seq": n}, then trace and status messages.

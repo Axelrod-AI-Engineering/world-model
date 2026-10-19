@@ -9,6 +9,7 @@ from typing import Any, Literal
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from axelrod_wm.engine.focus import FocusSpec, focus_result
 from axelrod_wm.engine.initialize import REPO_ROOT
 from axelrod_wm.events.thesis import Thesis
 from axelrod_wm.model.hypothesis import Hypothesis
@@ -34,6 +35,7 @@ class InitializationSpec(_M):
     seeds: str | None = None          # a blank canvas (the small demo) has no seeds and no history
     layout: str | None = None
     history: dict[str, Any] | None = None
+    focus: FocusSpec | None = None    # set from the scenario's `focus`: the world is narrowed on load (engine/focus.py)
 
     def history_spec(self) -> HistorySpec:
         return HistorySpec.model_validate(self.history)
@@ -138,20 +140,63 @@ class ScenarioScript(_M):
     base: str | None = None           # a demo built on another scenario's world and history (prod_demo)
     # the client-format export's identity (context/v4.py): domain_pack_id, name, slug, file_index, edge_id_start
     context_pack: dict = {}
+    # Oct 18: a focused scenario narrows another's world to some of its covered companies (engine/focus.py). It
+    # inherits every field it does not set from the base, and its world, groups, theses, and expected paths
+    focus: FocusSpec | None = None
     steps: list[ScenarioStep]
 
     @classmethod
     def load(cls, scenario: str | Path) -> ScenarioScript:
-        p = Path(scenario)
-        if not p.exists():
-            p = SCENARIOS_DIR / str(scenario) / "scenario.yaml"
-        elif p.is_dir():
-            p = p / "scenario.yaml"
-        return cls.model_validate(yaml.safe_load(p.read_text()))
+        return cls.model_validate(scenario_raw(scenario))
 
     @property
     def directory(self) -> Path:
         return SCENARIOS_DIR / self.id
+
+
+def _scenario_path(scenario: str | Path) -> Path:
+    p = Path(scenario)
+    if not p.exists():
+        return SCENARIOS_DIR / str(scenario) / "scenario.yaml"
+    return p / "scenario.yaml" if p.is_dir() else p
+
+
+def scenario_raw(scenario: str | Path) -> dict:
+    """scenario.yaml as data; a focused scenario's is its base's, overlaid with its own fields."""
+    raw = yaml.safe_load(_scenario_path(scenario).read_text()) or {}
+    if not raw.get("focus"):
+        return raw
+    focus = FocusSpec.model_validate(raw["focus"])
+    base = yaml.safe_load(_scenario_path(focus.base).read_text()) or {}
+    out = {**base, **raw, "context_pack": {**(base.get("context_pack") or {}), **(raw.get("context_pack") or {})}}
+    out["initialization"] = {**(base.get("initialization") or {}), **(raw.get("initialization") or {}),
+                             "focus": focus.model_dump()}
+    return out
+
+
+def scenario_focus(scenario_dir: Path) -> FocusSpec | None:
+    """The focus a scenario folder's scenario.yaml declares, if any."""
+    p = Path(scenario_dir) / "scenario.yaml"
+    raw = (yaml.safe_load(p.read_text()) or {}) if p.exists() else {}
+    return FocusSpec.model_validate(raw["focus"]) if raw.get("focus") else None
+
+
+def load_expected_paths(scenario_dir: Path) -> dict:
+    """What a scenario's research expects of each thesis's path (expected_paths.yaml); narrowed for a focused one."""
+    focus = scenario_focus(scenario_dir)
+    if focus is not None:
+        return focus_result(focus).expected_paths()
+    p = Path(scenario_dir) / "expected_paths.yaml"
+    return (yaml.safe_load(p.read_text()) or {}) if p.exists() else {}
+
+
+def load_watchlist(scenario_dir: Path) -> dict | None:
+    """The names a portfolio tracks (watchlist.yaml); a focused scenario's keeps those its world keeps."""
+    focus = scenario_focus(scenario_dir)
+    if focus is not None:
+        return focus_result(focus).watchlist()
+    p = Path(scenario_dir) / "watchlist.yaml"
+    return (yaml.safe_load(p.read_text()) or None) if p.exists() else None
 
 
 class DecisionSpec(_M):
@@ -164,7 +209,12 @@ class DecisionSpec(_M):
 
 
 def load_theses(scenario_dir: Path, posed_at: datetime | None = None) -> tuple[dict[str, dict], dict[str, Hypothesis | dict]]:
-    """Raw thesis dicts (filled when posed) and hypothesis dicts from theses.yaml."""
+    """Raw thesis dicts (filled when posed) and hypothesis dicts from theses.yaml; a focused scenario's are its
+    base's, narrowed to its world (engine/focus.py)."""
+    focus = scenario_focus(scenario_dir)
+    if focus is not None:
+        raw = focus_result(focus).theses()
+        return {t["id"]: t for t in raw["theses"]}, {}
     p = scenario_dir / "theses.yaml"
     if not p.exists():
         return {}, {}
@@ -210,7 +260,7 @@ def list_scenarios() -> list[dict[str, str]]:
     for d in sorted(SCENARIOS_DIR.iterdir()) if SCENARIOS_DIR.exists() else []:
         p = d / "scenario.yaml"
         if p.exists():
-            raw = yaml.safe_load(p.read_text()) or {}
+            raw = scenario_raw(p)
             out.append({"id": raw.get("id", d.name), "title": raw.get("title", d.name),
                         "canvas": raw.get("canvas", "scripted"), "examples": raw.get("examples"),
                         "imports": bool(raw.get("imports"))})

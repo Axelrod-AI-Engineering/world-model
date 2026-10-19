@@ -38,6 +38,8 @@ def moderator_terms(params: list[ParameterBinding], dev: DeviationHistory, day: 
             mult *= min(max(1.0 + gam * z, clip[0]), clip[1])
         elif p.form == ParameterForm.THRESHOLD:
             mult *= 1.0 if z > (p.threshold if p.threshold is not None else 0.0) else 0.0
+        elif p.form == ParameterForm.PIECEWISE:
+            mult *= 1.0 if p.on(z) else gam
         else:
             add += gam * z
     return mult, add
@@ -51,7 +53,7 @@ def clip_of(ctx: ProcessContext) -> tuple[float, float]:
 def warm_recursion(dyn: EdgeDynamics, source_id: str, wm: WorkingMemory, day: int, min_delay: int = 1,
                    multiplier: float = 1.0) -> KernelRecursion:
     d, l, lam = mean_kernel_days(dyn.kernel, min_delay, multiplier)
-    return KernelRecursion.warm_start(d, l, lam, wm.deviations.series(source_id), day)
+    return KernelRecursion.warm_start(d, l, lam, wm.deviations.series(source_id), day, acc=dyn.kernel.accumulates)
 
 
 def phi_at(wm: WorkingMemory, channel_id: str, source_id: str, dyn: EdgeDynamics, day: int,

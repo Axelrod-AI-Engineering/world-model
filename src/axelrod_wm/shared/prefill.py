@@ -149,7 +149,7 @@ class AnalogEmpiricalBayesPrefiller(Prefiller):
                 eps = [e.episode_id for e in evidence[key]]
                 tags = sorted({t for e in eps for t in episodes[e].tags})
                 label = f"{tags[0]} " if tags else ""
-                notes.append(f"{key} effect {before:.2f} -> {after:.2f} from {len(eps)} {label}analogs")
+                model.notes.append(f"{key} effect {before:.2f} -> {after:.2f} from {len(eps)} {label}analogs")
                 ctx.tracer.emit(Phase.PREFILL, "prefill.adjusted", refs=[base_interaction_id(key)] + eps,
                                 interaction_id=base_interaction_id(key), channel=key, effect_before=round(before, 4),
                                 effect_after=round(after, 4), analog_ids=eps)

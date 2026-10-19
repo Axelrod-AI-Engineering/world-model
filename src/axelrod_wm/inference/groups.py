@@ -51,13 +51,12 @@ def resolve_group(group: TargetGroup, wm: Any, ltm: Any) -> tuple[str, list[str]
         if not ents:
             return None
         return group.ref.replace("_", " ").capitalize(), [s for e in ents for s in e.subentity_ids if s in g.subentities]
-    if group.kind == "category":
-        code = group.ref.upper()
-        if code not in CATEGORY_NAMES:
-            return None
-        ents = [e for _, e in sorted(g.entities.items()) if code in {str(t) for t in e.category_tags}]
-        return CATEGORY_NAMES[code].capitalize(), [s for e in ents for s in e.subentity_ids if s in g.subentities]
-    return None
+    # the kind is validated to one of four, so what is left is a category
+    code = group.ref.upper()
+    if code not in CATEGORY_NAMES:
+        return None
+    ents = [e for _, e in sorted(g.entities.items()) if code in {str(t) for t in e.category_tags}]
+    return CATEGORY_NAMES[code].capitalize(), [s for e in ents for s in e.subentity_ids if s in g.subentities]
 
 
 class EffectMixture:
@@ -75,10 +74,8 @@ class EffectMixture:
     def _paths(self, res: PropagationResult, sid: str, n: int) -> np.ndarray | None:
         if not res.has(sid):
             return None
-        z = res.z_of(sid)[:n]
-        if z.shape[1] < self.H + 1:
-            z = np.pad(z, ((0, 0), (0, self.H + 1 - z.shape[1])), mode="edge")
-        return z[:, : self.H + 1]
+        # every run spans the horizon (the couplers propagate for the thesis's horizon, the same H)
+        return res.z_of(sid)[:n, : self.H + 1]
 
     def levels(self, sid: str) -> tuple[np.ndarray, np.ndarray]:
         """Each subentity's standardized level paths with the shock and without it (the baseline), [samples, H + 1],
