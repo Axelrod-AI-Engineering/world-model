@@ -92,6 +92,30 @@ appear (a broker that is also a covered company can still appear as the author o
 export is the same file whichever process writes it, apart from the manifest's `generated_at`. Exports are client
 data: they stay in `data/sally_data` and are never committed.
 
+### The reading set (`reading/`)
+
+The full domain pack is the client's contract, but it runs to megabytes (the focused world's is 2.2 MB, about 480k
+tokens), and an answering system's file reader refuses a file that large ("file too large to extract") and answers
+without it. So the export also writes `reading/` (`context/reading.py`; `--max-file-kb`, default 100, 0 for none):
+
+- `00_START_HERE.md`: what the model is, the companies, version and as-of date, every file with its size and when
+  to open it, how to follow an id to its file, and the rule that a file which fails to load is reported, never
+  answered as if read.
+- `01_overview_<company>.md`: business composition, segments and regions, the paths (one line each, with their file),
+  the relationship files by edge, and calculation coverage.
+- JSON shards of at most 100 KB holding the pack's objects unchanged, never cut mid-object: `10_pack_core`,
+  `20_relationships_<company>` (grouped by edge, then by the metric the link points at), `30_paths_<company>`,
+  `40_semantic_fields`, `50_financial_<company>` (the bridge and identities), `60_support`; and
+  `90_index_ids_NN.json`, every relationship, path, composition, identity, node, link, and field id to its file.
+
+Every object is in exactly one shard. The build reads the written files back and refuses to finish unless their union
+equals the pack's objects (nothing lost, nothing duplicated; the script prints the count). The manifest marks the
+domain pack's load-order entry `role: machine_import`, names `read_first`, and lists each reading file with its
+size and sha256. If the pack itself repeats an id (the check lists any), the index gives every file that holds it.
+The source catalogue, evidence packs, and forecast packs are small enough to read as they are; START_HERE links
+them. Tests: `tests/unit/context/test_reading.py`, and `tests/integration/test_export_determinism.py` for the
+process-independence of the files.
+
 ## Regenerate after a new pack
 
 1. Merge the company's construction round (its `data/worlds/sally_demo/construction/<company>.yaml`) and put its local

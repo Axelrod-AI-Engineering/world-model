@@ -3,6 +3,8 @@
 Loads the scenario, optionally folds in a folder of daily import bundles (each approved, as a reviewer would), optionally
 poses the scenario's ready theses, and writes each part under the file name the load order gives it: the 03x domain
 pack, its 020 registry entry, the current state as an evidence pack, one evidence pack per forecast, and the manifest.
+By default it also writes reading/ (context/reading.py): the pack split into files of at most --max-file-kb (100) that
+an answering agent can open, with 00_START_HERE.md; the whole pack stays as the machine-import file.
 With --client-core, the client's own 000, 010, and 020 are copied beside them (020 with our registry row appended), so
 the folder is a complete upload set.
 
@@ -36,6 +38,7 @@ from fastapi.testclient import TestClient
 
 from axelrod_wm.api.app import create_app
 from axelrod_wm.context.construction import load_sources
+from axelrod_wm.context.reading import build_reading_set
 from axelrod_wm.context.v4 import attach_sources
 from axelrod_wm.engine.focus import focus_result
 from axelrod_wm.repo.snapshots import MemoryBackend
@@ -66,6 +69,8 @@ def main() -> int:
     ap.add_argument("--days", help="a folder of import bundles to fold in first, in file order, each item approved")
     ap.add_argument("--theses", action="store_true", help="also pose the scenario's ready theses and export their evidence")
     ap.add_argument("--client-core", help="the client's folder holding 000, 010, and 020, to copy beside the export")
+    ap.add_argument("--max-file-kb", type=int, default=100,
+                    help="also write reading/, files of at most this many KB for an answering agent (0 = none)")
     ap.add_argument("--construction-sources", help="a folder of <company>/sources.json and citations.json")
     args = ap.parse_args()
 
@@ -148,6 +153,12 @@ def main() -> int:
                     if f["file"].startswith(prefix):
                         f["file"] = name
                         f["source"] = "yours" + (", with our registry row appended" if prefix == "020_" else ", unchanged")
+        if args.max_file_kb:
+            check = build_reading_set(out, ctx, m, cap_kb=args.max_file_kb)
+            files = m["reading_set"]["files"]
+            print(f"reading set: {len(files)} file(s) in reading/, largest {max(f['bytes'] for f in files) / 1024:.1f} KB; "
+                  f"{check['shard_objects']} of {check['objects']} pack objects, "
+                  f"{check['missing']} missing, {check['unexpected_or_duplicated']} duplicated or unexpected")
         write(out / "axelrod_manifest.json", m)
     print(f"done: {out}")
     return 0
