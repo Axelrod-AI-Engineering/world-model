@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from axelrod_wm.ingest.pipeline import Ingestor
+from axelrod_wm.ingest.pipeline import Ingestor, bundle_id
 from axelrod_wm.lake.embed import HashingEmbedder
 from axelrod_wm.lake.sqlite import SQLiteLake
 from axelrod_wm.lake.store import canonical_json, digest
@@ -103,7 +103,7 @@ def test_two_fresh_lakes_give_byte_identical_results(corpus, graph, tmp_path):
     b, order_b = ingest_all(tmp_path / "b", files, graph)
     assert canonical_json(a) == canonical_json(b) and order_a == order_b
     for name in corpus:
-        assert a[name]["bundle_id"] == digest(json.loads(a[name]["bundle"]))[:24]
+        assert a[name]["bundle_id"] == bundle_id(json.loads(a[name]["bundle"]))
 
 
 def test_reingesting_the_same_bytes_is_not_new_and_gives_the_same_bundle(corpus, graph, tmp_path, inverted):
@@ -120,6 +120,27 @@ def test_reingesting_the_same_bytes_is_not_new_and_gives_the_same_bundle(corpus,
         assert len(lake.list_documents(T)) == len(corpus)
     finally:
         lake.close()
+
+
+def test_a_bundle_id_does_not_depend_on_when_it_was_read(corpus, graph, tmp_path, inverted):
+    """Two lakes reading the same file a year apart: a dated file's bundles differ only in `collected_at`, and share an
+    id. (An undated file is dated when it was read, so its items, and its id, differ.)"""
+    ids = []
+    for k, now in enumerate((NOW, NOW.replace(year=2027))):
+        lake = SQLiteLake(tmp_path / f"lake{k}")
+        try:
+            ing = Ingestor(lake, HashingEmbedder(), clock=lambda now=now: now, inverted=inverted)
+            ids.append({name: ing.ingest_file(T, data, name, graph).bundle for name, data in corpus.items()})
+        finally:
+            lake.close()
+    same = 0
+    for name in corpus:
+        a, b = ids[0][name], ids[1][name]
+        assert a.bundle["collected_at"] != b.bundle["collected_at"]
+        content = {**a.bundle, "collected_at": None} == {**b.bundle, "collected_at": None}
+        assert (a.id == b.id) is content, name
+        same += content
+    assert same >= 3                                    # the dated files: boj_2026-10-05.md, memo.docx, scan.pdf, ...
 
 
 @pytest.mark.parametrize("seed", [1, 2, 3])

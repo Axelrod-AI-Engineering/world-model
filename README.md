@@ -46,15 +46,15 @@ The production and full demos replay three years of synthetic history the first 
 
 ## Hosted demo
 
-The full demo runs on Railway's `dev` environment at **https://world-model-dev.up.railway.app**, behind Basic Auth. Ask the team for the credentials. Everyone who opens it shares one session, so a review approved there is approved for everyone. [docs/guides/deployment.md](docs/guides/deployment.md) covers the infrastructure, the release runbook, and the checks.
+The full demo runs on Railway's `dev` environment at **https://world-model-dev.up.railway.app**, behind a sign-in page. Ask the team for the credentials. Everyone who opens it shares one session, so a review approved there is approved for everyone. [docs/guides/deployment.md](docs/guides/deployment.md) covers the infrastructure, the release runbook, and the checks.
 
 ## API
 
-The world model is also a service: REST under `/api/world-model` and MCP tools at `/mcp`, on the same deploy, with an API key per caller. Upload research (PDF, Office, HTML, CSV, text), read it into proposed graph updates, import them through review, search everything ingested, read the model at any past version, and pose forecasts. See [docs/api.md](docs/api.md) and, for how a file becomes graph updates, [docs/guides/ingestion.md](docs/guides/ingestion.md).
+The world model is also a service: REST under `/v1/world-models/{id}` (contract: [docs/api/openapi.yaml](docs/api/openapi.yaml)) and MCP tools at `/mcp`, on the same deploy, with core-minted service tokens or scoped keys. Upload research (PDF, Office, HTML, CSV, text), read it into proposed graph updates, import them through review, search everything ingested, read the model at any past version, and pose forecasts. Each entity's attributes (`toyota.operating_profit`) are nested in the entity. See [docs/api/](docs/api/README.md) and, for how a file becomes graph updates, [docs/guides/ingestion.md](docs/guides/ingestion.md).
 
 ## Tests
 
-The badge above is the CI run on `main`. The table is the last full run (`scripts/coverage_gate.py`): tests per suite, and line and branch coverage per package. CI fails if a strict module loses a line or branch of coverage, or if the repository falls below its floor.
+The badge above is the CI run on `main`. The table is the last full run (`scripts/coverage_gate.py`): tests per suite, and line and branch coverage per package. CI fails if a strict module loses a line or branch of coverage, or if the repository falls below its floor. [tests/README.md](tests/README.md) describes every suite, how to run it, what needs local data or extras, and the design of the service's integration tests.
 
 <!-- tests:start -->
 
@@ -97,19 +97,14 @@ Slow scenario runs (`--runslow`) are not in these numbers. Regenerate with `scri
 
 ## Documentation
 
+[docs/README.md](docs/README.md) is the map: where to go for each kind of question. The usual first stops:
+
 | Read | For |
 |---|---|
-| [docs/design/README.md](docs/design/README.md) | **The design**: the architecture, 17 modules with specs, diagrams, the cognitive framings, Cognee vs Semantica, decisions, and the migration plan |
-| [docs/guides/demos.md](docs/guides/demos.md) | The five demos, the 24 examples, and how the review works |
-| [docs/guides/gui.md](docs/guides/gui.md) | A tour of the interface: the top bar, the canvas, the panels, and every shortcut |
-| [docs/guides/cli.md](docs/guides/cli.md) | The command line and configuration |
-| [docs/ml/stack.md](docs/ml/stack.md) | The ML stack as built, stated formally, with its adversarial review |
-| [docs/ml/roadmap.md](docs/ml/roadmap.md) | The plan to replace each heuristic with a method we can defend |
-| [docs/api.md](docs/api.md) | The outward API and MCP server: auth, routes, errors, and mounting it from core |
-| [docs/guides/ingestion.md](docs/guides/ingestion.md) | The ingestion pipeline and the lakehouse: parsing, extraction, event time, determinism, search |
-| [docs/guides/deployment.md](docs/guides/deployment.md) | The Railway dev deployment, sign-in, and running the container locally |
-| [docs/guides/development.md](docs/guides/development.md) | Tests, the repository layout, conventions, and the demo videos |
-| [docs/archive/plan.md](docs/archive/plan.md) | The original specification (historical), which the code's § references point to |
+| [docs/guides/](docs/README.md#where-to-go-for) | Running it: the demos, the interface, the CLI, ingestion, development, deployment |
+| [docs/api/](docs/api/README.md) | The outward API and MCP server: auth, routes, errors, and mounting it from core |
+| [docs/design/README.md](docs/design/README.md) | **The design**: architecture, data model, 17 module specs, diagrams, decisions |
+| [docs/vocab.md](docs/vocab.md) | Every term, defined once |
 
 Inside the demo, **How it works** (`H`) explains the model itself: the five stages of learning and the seven of inference, each with its flowchart; the literature review; and the implementation.
 

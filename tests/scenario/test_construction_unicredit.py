@@ -24,9 +24,9 @@ from axelrod_wm.model.construction import (
     validate_construction,
 )
 from axelrod_wm.repo.snapshots import MemoryBackend
+from tests.scenario import v1_reads as v1
 
 UCG = "unicredit"
-B = "/api/world-model"
 NII, REV, NP = "unicredit.net_interest_income", "unicredit.revenue", "unicredit.net_profit"
 ECB, BUND, UNEMP = "ecb.policy_rate", "bunds.yield_10y", "euro_economy.unemployment_rate"
 
@@ -415,7 +415,7 @@ def test_generalization_trace_an_oil_shock(g):
 
 # -- delivery: export and API ---------------------------------------------------------------------------------------------
 def test_new_objects_reach_the_export(client):
-    pack = client.get(f"{B}/context/v4").json()["domain_pack"]
+    pack = v1.pack(client)
     support = pack["domain_specific_support_objects"]
     bridge = {b["composition_id"]: b for b in support["financial_bridge"]}
     assert set(COMPOSITIONS) <= set(bridge)
@@ -434,10 +434,10 @@ def test_new_objects_reach_the_export(client):
 
 def test_new_objects_reach_the_api(client):
     ids = "unicredit.deposit_cost,unicredit.hedge_yield,unicredit.cet1_capital,unicredit.revenue,unicredit.italy_nii"
-    body = client.get(f"{B}/query", params={"node_ids": ids, "depth": 1}).json()
-    got = {v["id"] for v in body["values"]}
+    body = v1.graph(client, ids)
+    got = {a["id"] for e in body["entities"] for a in e["attributes"]}
     assert set(ids.split(",")) <= got and "unicredit.cet1_ratio" in got
-    view = client.get(f"{B}/construction/{UCG}").json()["construction"]
+    view = v1.construction(client, UCG)
     assert {c["id"] for c in view["compositions"]} == set(COMPOSITIONS) and not view["problems"]
-    tr = client.get(f"{B}/construction/{UCG}/trace", params={"start": ECB}).json()["trace"]
+    tr = v1.trace(client, UCG, ECB)
     assert tr["reaches_endpoint"]

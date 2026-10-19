@@ -481,11 +481,11 @@ def create_app(config_path: str | None = None, scenario: str = "oil_shock_demo",
     async def _llm(request: Request, exc: LLMNotConfigured) -> JSONResponse:
         return _error(501, str(exc))
 
+    from axelrod_wm.api import v1
     from axelrod_wm.api.routes import router
-    from axelrod_wm.api.service import router as service_router
     from axelrod_wm.api.ws import ws_router
 
-    app.include_router(service_router)
+    v1.install(app)
     app.include_router(router)
     from axelrod_wm.api.mcp import build_mcp, install_mcp
 

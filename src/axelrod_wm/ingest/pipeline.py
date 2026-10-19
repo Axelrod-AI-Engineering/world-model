@@ -39,6 +39,12 @@ PROFILE_CHARS = 3000          # the opening text that says what a document is ab
 SOURCE_TYPES = ("broker_research", "expert_call", "news", "central_bank", "data", "filing", "client_model", "other")
 
 
+def bundle_id(bundle: dict) -> str:
+    """A bundle's id: the hash of its content, without `collected_at` (when it was read, a clock), so the same file
+    read by any service, for any login, at any time gives the same bundle id."""
+    return digest({k: v for k, v in bundle.items() if k != "collected_at"})[:24]
+
+
 @dataclass
 class IngestResult:
     document: Document
@@ -189,7 +195,7 @@ class Ingestor:
                             llm_signals=n_llm, warnings=warnings)
 
     def _record(self, doc: Document, bundle: dict) -> BundleRecord:
-        rec = BundleRecord(tenant=doc.tenant, id=digest(bundle)[:24], doc_ids=[doc.id], created_at=doc.ingested_at,
+        rec = BundleRecord(tenant=doc.tenant, id=bundle_id(bundle), doc_ids=[doc.id], created_at=doc.ingested_at,
                            extractor_version=EXTRACTOR_VERSION, items=len(bundle["items"]),
                            signals=sum(len(i["signals"]) for i in bundle["items"]), bundle=bundle)
         return self.store.put_bundle(rec)

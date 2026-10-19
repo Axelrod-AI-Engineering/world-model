@@ -17,9 +17,9 @@ from axelrod_wm.api.app import create_app
 from axelrod_wm.context.construction import construction_view, trace
 from axelrod_wm.model.construction import model_levels, reconcile_identities, validate_construction
 from axelrod_wm.repo.snapshots import MemoryBackend
+from tests.scenario import v1_reads as v1
 
 CCB = "china_construction_bank"
-B = "/api/world-model"
 P = CCB + "."
 NII, OI, PBT, NP = P + "net_interest_income", P + "operating_income", P + "profit_before_tax", P + "operating_profit"
 NIM, NPL = P + "net_interest_margin", P + "npl_ratio"
@@ -388,7 +388,7 @@ def test_generalization_trace_a_china_growth_slowdown(g):
 
 # -- delivery: export and API ---------------------------------------------------------------------------------------------
 def test_new_objects_reach_the_export(client):
-    pack = client.get(f"{B}/context/v4").json()["domain_pack"]
+    pack = v1.pack(client)
     bridge = {b["composition_id"]: b for b in pack["domain_specific_support_objects"]["financial_bridge"]}
     assert set(COMPOSITIONS) <= set(bridge)
     paths = {p["axelrod"]["path_id"] for p in pack["transmission_paths"] if p.get("path_kind") == "business_construction"}
@@ -407,10 +407,10 @@ def test_new_objects_reach_the_export(client):
 
 def test_new_objects_reach_the_api(client):
     ids = f"{P}deposit_cost,{P}allowance_build,{P}cet1_capital,{P}operating_income"
-    body = client.get(f"{B}/query", params={"node_ids": ids, "depth": 1}).json()
-    got = {v["id"] for v in body["values"]}
+    body = v1.graph(client, ids)
+    got = {a["id"] for e in body["entities"] for a in e["attributes"]}
     assert set(ids.split(",")) <= got and P + "deposit_interest_expense" in got
-    view = client.get(f"{B}/construction/{CCB}").json()["construction"]
+    view = v1.construction(client, CCB)
     assert {c["id"] for c in view["compositions"]} == set(COMPOSITIONS) and not view["problems"]
-    tr = client.get(f"{B}/construction/{CCB}/trace", params={"start": LPR}).json()["trace"]
+    tr = v1.trace(client, CCB, LPR)
     assert tr["reaches_endpoint"]

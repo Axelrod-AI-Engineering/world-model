@@ -177,7 +177,7 @@ def test_dormant_paths_and_proxy_series(eng):
     g.subentities["acme.dom"] = g.subentities["acme.dom"].model_copy(update={"features": {"proxy_for": "swap 10y"}})
     v = construction_view(g, "acme")
     assert v["paths"][0]["active_when"] == "the state stake is above zero"
-    assert next(x for x in v["values"] if x["id"] == "acme.dom")["proxy_for"] == "swap 10y"
+    assert next(x for x in v["attributes"] if x["id"] == "acme.dom")["proxy_for"] == "swap 10y"
     assert "**Dormant unless:** the state stake is above zero." in to_markdown(v)
     pack = domain_pack(eng.wm, eng.ltm, pc=pack_config("acme_demo", "Acme"), book=["acme"], version=1, state_hash=None)
     path = next(p for p in pack["transmission_paths"] if p.get("path_kind") == "business_construction")

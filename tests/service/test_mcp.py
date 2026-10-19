@@ -1,5 +1,6 @@
 """The MCP server (api/mcp.py), through the SDK's own client over Streamable HTTP at /mcp: every tool answers from the
-service's routes as the caller's API key, and every failure comes back as a tool error naming core's error code."""
+v1 routes as the caller's credential, defaults to the organization's only world model, never decides a change, and
+every failure comes back as a tool error naming the problem's code."""
 
 from __future__ import annotations
 
@@ -9,27 +10,30 @@ from types import SimpleNamespace
 
 import httpx2
 import pytest
-from fastapi.testclient import TestClient
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 
-from axelrod_wm.api.app import create_app
 from axelrod_wm.api.mcp import _headers
-from axelrod_wm.repo.snapshots import MemoryBackend
+from tests.service.helpers import ALL_BUT_REVIEW, KEY, NOTE, Signer, decide_all, service
 
-KEY = "k" * 32
-NOTE = ("Rates note, October 5, 2026.\n\n"
-        "The BoJ raised its policy rate by 25bp to 1.25% on a 7-2 vote. USD/JPY fell to 152 as the yen strengthened.")
+SIGNER = Signer()
+GHOST = "g" * 32
+TOOLS = {
+    "world_model_list_world_models", "world_model_get_world_model", "world_model_list_versions", "world_model_graph",
+    "world_model_list_entities", "world_model_get_entity", "world_model_get_attribute", "world_model_list_observations",
+    "world_model_list_relationships", "world_model_get_relationship", "world_model_list_concepts",
+    "world_model_construction", "world_model_trace", "world_model_list_events", "world_model_impact_analysis",
+    "world_model_search", "world_model_ingest_document", "world_model_list_documents", "world_model_get_bundle",
+    "world_model_propose_changes", "world_model_list_changes", "world_model_get_change", "world_model_simulate",
+    "world_model_get_simulation", "world_model_simulation_brief", "world_model_export_v4", "world_model_get_job",
+}
 
 
 @pytest.fixture(scope="module")
 def client():
-    mp = pytest.MonkeyPatch()
-    mp.setenv("WORLD_MODEL_API_KEYS", f"harness:{KEY}:default")
-    app = create_app(scenario="sally_demo", storage=MemoryBackend(), trace_dir=None, play_delay=0.0)
-    with TestClient(app) as c:
+    keys = f"harness:{KEY}:default:{ALL_BUT_REVIEW},ghost:{GHOST}:nobody"
+    with service(SIGNER, WORLD_MODEL_API_KEYS=keys) as c:
         yield c
-    mp.undo()
 
 
 def session(client, body, key: str = KEY):
@@ -46,7 +50,7 @@ def session(client, body, key: str = KEY):
     return client.portal.call(main)
 
 
-def calls(client, *steps):
+def calls(client, *steps, key: str = KEY):
     """Call tools in order; each step is (name, args) or a function of the results so far giving (name, args)."""
 
     async def body(s):
@@ -57,7 +61,7 @@ def calls(client, *steps):
             out.append((r.is_error, r.content[0].text))
         return out
 
-    return session(client, body)
+    return session(client, body, key)
 
 
 def code_of(text: str) -> str:
@@ -71,87 +75,120 @@ def ok(result) -> dict:
     return json.loads(text)
 
 
-def test_the_server_lists_every_tool_with_annotations(client):
+def tools_of(client) -> dict:
     async def body(s):
         return (await s.list_tools()).tools
 
-    tools = {t.name: t for t in session(client, body)}
-    assert len(tools) == 19 and all(n.startswith("world_model_") for n in tools)
-    assert tools["world_model_query"].annotations.read_only_hint is True
-    assert tools["world_model_import_bundle"].annotations.read_only_hint is False
+    return {t.name: t for t in session(client, body)}
 
 
-def test_reads(client):
-    state, query, pinned, nodes, ent, val, tax, ctx = calls(
-        client, ("world_model_state", {}),
-        ("world_model_query", {"q": "Bank of Japan", "depth": 1}),
-        ("world_model_query", {"node_ids": ["boj"], "version": 1, "as_of": "2026-09-01T00:00:00Z", "limit": 5}),
-        ("world_model_search_nodes", {"q": "Tok", "limit": 3}),
-        ("world_model_get_entity", {"entity_id": "boj"}),
-        ("world_model_get_value", {"value_id": "boj.policy_rate"}),
-        ("world_model_taxonomy", {}),
-        ("world_model_context_v4", {}))
-    assert ok(state)["caller"] == "harness" and ok(state)["state"]["scenario"] == "sally_demo"
-    assert ok(query)["entities"] and ok(pinned)["state"]["version"] >= 1
-    assert ok(nodes)["nodes"] and ok(ent)["entity"]["id"] == "boj" and ok(val)["value"]["id"] == "boj.policy_rate"
-    assert ok(tax)["concepts"] and ok(ctx)["manifest"]["schema_version"] == "v4.1.4"
+def test_the_server_lists_every_tool_with_annotations(client):
+    tools = tools_of(client)
+    assert set(tools) == TOOLS
+    assert tools["world_model_graph"].annotations.read_only_hint is True
+    for name in ("world_model_ingest_document", "world_model_propose_changes", "world_model_simulate"):
+        assert tools[name].annotations.read_only_hint is False and tools[name].annotations.destructive_hint is False
+    assert not any(w in n for n in tools for w in ("decide", "approve", "reject"))
+    assert set(tools["world_model_get_attribute"].input_schema["required"]) == {"entity_id", "attribute"}
 
 
-def test_ingest_search_and_import_through_review(client):
-    b64 = base64.b64encode(NOTE.encode()).decode()
-    up, again, docs, search = calls(
+def test_reads_default_to_the_organizations_world_model(client):
+    wms, one, versions, graph, ents, ent, att, obs, rels, rel, concepts = calls(
+        client, ("world_model_list_world_models", {}), ("world_model_get_world_model", {}),
+        ("world_model_list_versions", {"limit": 2}),
+        ("world_model_graph", {"entities": ["boj"], "depth": 1, "version": 1}),
+        ("world_model_list_entities", {"q": "Toyota"}),
+        ("world_model_get_entity", {"entity_id": "toyota", "include_relationships": True}),
+        ("world_model_get_attribute", {"entity_id": "toyota", "attribute": "operating_profit",
+                                       "as_of": "2100-01-01T00:00:00Z"}),
+        ("world_model_list_observations", {"entity_id": "oil", "attribute": "brent"}),
+        ("world_model_list_relationships", {"entity": "toyota", "limit": 5}),
+        ("world_model_get_relationship", {"relationship_id": "m29"}),
+        ("world_model_list_concepts", {}))
+    assert [m["id"] for m in ok(wms)["data"]] == ["sally_demo"] and ok(one)["data"]["id"] == "sally_demo"
+    assert ok(versions)["meta"]["limit"] == 2 and ok(graph)["meta"]["version"]["number"] == 1
+    assert "toyota" in {e["id"] for e in ok(ents)["data"]} and ok(ent)["data"]["relationships"] is not None
+    assert ok(att)["data"]["id"] == "toyota.operating_profit" and "data" in ok(obs)
+    assert ok(rels)["data"] and ok(rel)["data"]["id"] == "m29" and isinstance(ok(rel)["evidence"], list)
+    assert ok(concepts)["data"]
+
+
+def test_construction_trace_search_and_export(client):
+    as_json, as_md, traced, hits, export = calls(
+        client, ("world_model_construction", {"entity_id": "toyota"}),
+        ("world_model_construction", {"entity_id": "toyota", "format": "markdown", "version": 1}),
+        ("world_model_trace", {"entity_id": "toyota", "start": "dollar_yen.usd_jpy"}),
+        ("world_model_search", {"q": "Toyota op", "mode": "prefix"}),
+        ("world_model_export_v4", {}))
+    assert ok(as_json)["data"]["entity_id"] == "toyota"
+    assert not as_md[0] and as_md[1].startswith("# Toyota Motor")
+    assert ok(traced)["data"]["entity_id"] == "toyota" and ok(hits)["data"]
+    assert ok(export)["data"]["manifest"]["schema_version"] == "v4.1.4"
+
+
+def test_ingest_propose_and_a_person_decides_outside_mcp(client):
+    b64 = base64.b64encode(NOTE).decode()
+    up, again, docs = calls(
         client,
         ("world_model_ingest_document", {"filename": "2026-10-05_note.md", "content_base64": b64, "source": "Desk",
                                          "source_type": "broker_research", "published_at": "2026-10-05T00:00:00Z"}),
-        ("world_model_ingest_document", {"filename": "copy.md", "text": NOTE}),
-        ("world_model_list_documents", {"order": "ingested_at"}),
-        ("world_model_search", {"q": "policy rate", "mode": "keyword"}))
-    res = ok(up)["results"][0]
-    assert res["new"] is True and ok(again)["results"][0]["new"] is False
-    assert ok(docs)["documents"] and ok(search)["hits"]
-    bid = res["bundle"]["id"]
-    bundle, imported, pending = calls(
+        ("world_model_ingest_document", {"filename": "copy.md", "text": NOTE.decode()}),
+        ("world_model_list_documents", {"order": "ingested_at"}))
+    job = ok(up)["data"]
+    res = job["result"]["detail"]["results"][0]
+    assert job["status"] == "succeeded" and res["new"] is True
+    assert ok(again)["data"]["result"]["detail"]["results"][0]["new"] is False and ok(docs)["data"]
+    bid = res["bundle_id"]
+    bundle, proposed, pending, polled = calls(
         client, ("world_model_get_bundle", {"bundle_id": bid}),
-        ("world_model_import_bundle", {"bundle_id": bid, "review": "queue"}),
-        ("world_model_list_proposals", {"status": "pending"}))
-    assert ok(bundle)["id"] == bid and ok(imported)["pending_proposals"]
-    first = ok(pending)["proposals"][0]["id"]
-    approve, rejected_no_note = calls(
-        client, ("world_model_decide_proposal", {"proposal_id": first, "decision": "approve", "note": "fine"}),
-        ("world_model_decide_proposal", {"proposal_id": first, "decision": "reject"}))
-    assert ok(approve)["proposal_id"] == first
-    assert rejected_no_note[0] and code_of(rejected_no_note[1]) in ("already_decided", "note_required")
-    while True:
-        (left,) = calls(client, ("world_model_list_proposals", {}))
-        ids = [p["id"] for p in ok(left)["proposals"]]
-        if not ids:
-            break
-        calls(client, *[("world_model_decide_proposal", {"proposal_id": i, "decision": "approve"}) for i in ids])
+        ("world_model_propose_changes", {"bundle_id": bid}),
+        ("world_model_list_changes", {}),
+        lambda out: ("world_model_get_job", {"job_id": ok(out[1])["data"]["id"]}))
+    assert ok(bundle)["data"]["id"] == bid and ok(bundle)["items"]
+    assert ok(proposed)["data"]["result"]["ids"] and ok(polled)["data"]["status"] == "succeeded"
+    first = ok(pending)["data"][0]
+    (change,) = calls(client, ("world_model_get_change", {"change_id": first["id"]}))
+    assert ok(change)["data"]["status"] == "pending" and ok(change)["operations"]
+    decide_all(client, SIGNER)
+    events, = calls(client, ("world_model_list_events", {"limit": 200}))
+    eid = first["event_id"]
+    assert eid in {e["id"] for e in ok(events)["data"]}
+    (impact,) = calls(client, ("world_model_impact_analysis", {"event_id": eid}))
+    assert ok(impact)["data"]["status"] == "completed"
 
 
-def test_forecasts(client):
-    fc, got, brief, ctx = calls(
-        client, ("world_model_forecast", {"thesis_id": "S-T3"}),
-        lambda out: ("world_model_get_forecast", {"forecast_id": ok(out[0])["forecast"]["id"]}),
-        lambda out: ("world_model_forecast_brief", {"forecast_id": ok(out[0])["forecast"]["id"]}),
-        lambda out: ("world_model_context_v4", {"forecast_id": ok(out[0])["forecast"]["id"]}))
-    fid = ok(fc)["forecast"]["id"]
-    assert ok(got)["forecast"]["id"] == fid and ok(brief)["question"] and ok(ctx)["forecast"]["forecast_id"] == fid
-    (q,) = calls(client, ("world_model_forecast", {"question": "What if the BoJ hiked by 25bp?", "horizon_days": 90}))
-    assert ok(q)["forecast"]["horizon_days"] == 90
+def test_simulate_and_read_the_simulation(client):
+    sim, q = calls(client, ("world_model_simulate", {"template_id": "S-T3"}),
+                   ("world_model_simulate", {"question": "What if the BoJ hiked by 25bp?", "horizon_days": 90}))
+    sid = ok(sim)["job"]["result"]["ids"][0]
+    assert ok(sim)["thesis"]["id"] and ok(q)["job"]["status"] == "succeeded"
+    got, brief, export = calls(client, ("world_model_get_simulation", {"simulation_id": sid}),
+                               ("world_model_simulation_brief", {"simulation_id": sid}),
+                               ("world_model_export_v4", {"simulation_id": sid}))
+    assert ok(got)["data"]["id"] == sid and ok(got)["coverage"]["summary"]
+    assert ok(brief)["data"]["question"] and ok(export)["data"]["forecast"]["forecast_id"] == sid
 
 
 @pytest.mark.parametrize("name, args, code", [
-    ("world_model_get_entity", {"entity_id": "nope"}, "node_not_found"),
+    ("world_model_get_entity", {"entity_id": "nope"}, "entity_not_found"),
+    ("world_model_get_world_model", {"world_model_id": "nope"}, "world_model_not_found"),
     ("world_model_get_bundle", {"bundle_id": "nope"}, "bundle_not_found"),
-    ("world_model_get_forecast", {"forecast_id": "FC-nope"}, "forecast_not_found"),
-    ("world_model_query", {"version": 10_000}, "version_not_found"),
+    ("world_model_get_simulation", {"simulation_id": "FC-nope"}, "simulation_not_found"),
+    ("world_model_graph", {"version": 10_000}, "version_not_found"),
+    ("world_model_construction", {"entity_id": "nobody", "format": "markdown"}, "entity_not_found"),
     ("world_model_ingest_document", {"filename": "x.txt"}, "invalid_request"),
     ("world_model_ingest_document", {"filename": "x.txt", "text": "a", "content_base64": "YQ=="}, "invalid_request"),
 ])
-def test_failures_are_tool_errors_with_cores_codes(client, name, args, code):
+def test_failures_are_tool_errors_with_the_problems_code(client, name, args, code):
     ((is_error, text),) = calls(client, (name, args))
     assert is_error and code_of(text) == code
+
+
+def test_an_organization_without_one_world_model_must_name_it(client):
+    ((is_error, text),) = calls(client, ("world_model_list_entities", {}), key=GHOST)
+    assert is_error and code_of(text) == "invalid_request" and "has 0" in text
+    ((is_error, text),) = calls(client, ("world_model_list_entities", {"world_model_id": "sally_demo"}), key=GHOST)
+    assert is_error and code_of(text) == "world_model_not_found"
 
 
 def test_a_wrong_key_cannot_reach_the_server(client):
@@ -161,65 +198,42 @@ def test_a_wrong_key_cannot_reach_the_server(client):
     with pytest.raises(ExceptionGroup):
         session(client, body, key="x" * 32)
     r = client.post("/mcp", json={}, headers={"Authorization": "Bearer " + "x" * 32})
-    assert r.status_code == 401 and r.json()["error"]["code"] == "authentication_required"
+    assert r.status_code == 401 and r.json()["code"] == "invalid_token"
 
 
-def test_a_response_that_is_not_json_is_a_tool_error(client, monkeypatch):
+@pytest.mark.parametrize("answer, code", [
+    (lambda httpx: httpx.Response(200, text="<html>ok</html>"), "bad_response"),
+    (lambda httpx: httpx.Response(502, text="<html>bad gateway</html>"), "error"),
+    (lambda httpx: httpx.Response(500, json=["oops"]), "error"),
+])
+def test_an_answer_that_is_not_the_contracts_is_a_tool_error(client, monkeypatch, answer, code):
     import httpx
 
-    async def not_json(self, method, url, **kw):
-        return httpx.Response(502, text="<html>bad gateway</html>")
+    async def fake(self, method, url, **kw):
+        return answer(httpx)
 
-    monkeypatch.setattr(httpx.AsyncClient, "request", not_json)
-    ((is_error, text),) = calls(client, ("world_model_state", {}))
-    assert is_error and code_of(text) == "bad_response"
-
-
-def test_a_json_answer_that_is_not_an_object_still_errors(client, monkeypatch):
-    import httpx
-
-    async def listed(self, method, url, **kw):
-        return httpx.Response(500, json=["oops"])
-
-    monkeypatch.setattr(httpx.AsyncClient, "request", listed)
-    ((is_error, text),) = calls(client, ("world_model_state", {}))
-    assert is_error and code_of(text) == "error"
+    monkeypatch.setattr(httpx.AsyncClient, "request", fake)
+    ((is_error, text),) = calls(client, ("world_model_get_world_model", {"world_model_id": "sally_demo"}))
+    assert is_error and code_of(text) == code
 
 
 @pytest.mark.parametrize("ctx, out", [
     (None, {}),
     (SimpleNamespace(headers=None), {}),
     (SimpleNamespace(headers={"Authorization": "Bearer a"}), {"authorization": "Bearer a"}),
-    (SimpleNamespace(headers={"authorization": "Bearer b"}), {"authorization": "Bearer b"}),
+    (SimpleNamespace(headers={"authorization": "Bearer b", "traceparent": "00-x", "X-Request-Id": "r1",
+                              "X-Axelrod-On-Behalf-Of": "acme/u1", "Cookie": "c"}),
+     {"authorization": "Bearer b", "traceparent": "00-x", "x-request-id": "r1"}),
     (SimpleNamespace(headers={"x": "y"}), {}),
 ])
-def test_the_callers_authorization_is_forwarded(ctx, out):
+def test_the_callers_credential_and_trace_are_forwarded_and_nothing_else(ctx, out):
     assert _headers(ctx) == out
 
 
-def test_construction_and_trace_tools(client):
-    as_json, as_md, traced, missing, missing_md = calls(
-        client, ("world_model_construction", {"entity_id": "toyota"}),
-        ("world_model_construction", {"entity_id": "toyota", "format": "markdown"}),
-        ("world_model_trace", {"entity_id": "toyota", "start": "dollar_yen.usd_jpy"}),
-        ("world_model_construction", {"entity_id": "nobody"}),
-        ("world_model_construction", {"entity_id": "nobody", "format": "markdown"}))
-    assert ok(as_json)["construction"]["name"] == "Toyota Motor"
-    assert not as_md[0] and as_md[1].startswith("# Toyota Motor: business construction")
-    assert ok(traced)["trace"]["entity_id"] == "toyota"
-    assert missing[0] and code_of(missing[1]) == "node_not_found"
-    assert missing_md[0] and code_of(missing_md[1]) == "node_not_found"
-
-
 def test_a_tool_called_outside_a_request_sends_no_headers():
-    from axelrod_wm.api.mcp import _headers
-
     class Outside:
         @property
         def headers(self):
             raise ValueError("no request")
 
-    assert _headers(Outside()) == {} and _headers(None) == {}
-    assert _headers(type("C", (), {"headers": {"Authorization": "Bearer k"}})()) == {"authorization": "Bearer k"}
-    on = {"Authorization": "Bearer k", "X-Axelrod-On-Behalf-Of": "acme/u1", "Cookie": "x"}
-    assert _headers(type("C", (), {"headers": on})()) == {"authorization": "Bearer k", "x-axelrod-on-behalf-of": "acme/u1"}
+    assert _headers(Outside()) == {}

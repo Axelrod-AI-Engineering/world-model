@@ -24,9 +24,9 @@ from axelrod_wm.context.construction import (
 )
 from axelrod_wm.model.construction import bundle_levels, model_levels, reconcile, validate_construction
 from axelrod_wm.repo.snapshots import MemoryBackend
+from tests.scenario import v1_reads as v1
 
 TM = "tokio_marine"
-B = "/api/world-model"
 ANI = "tokio_marine.operating_profit"
 # the client's local folder (gitignored; absent on CI): <repo>/data/sally_data/construction, or $SALLY_CONSTRUCTION
 LOCAL = Path(os.environ.get("SALLY_CONSTRUCTION") or Path(__file__).resolve().parents[2] / "data" / "sally_data" / "construction")
@@ -326,9 +326,7 @@ def test_additive_views_reconcile_at_the_model_medians(g):
 def test_a_forecast_reports_its_calculation_coverage(client):
     """A BoJ hike: the translation links and the reserve counter-effect carry a size; the hedge-cost and new-money links
     it reaches are excluded as uncalibrated, with their sign, and their inputs say why."""
-    body = client.post(f"{B}/forecasts", json={"question": "What if the BoJ hiked by 25bp next quarter?",
-                                               "horizon_days": 365}).json()
-    cov = body["forecast"]["coverage"]
+    cov = v1.simulate(client, "What if the BoJ hiked by 25bp next quarter?", 365)
     got = {c["interaction_id"] for c in cov["contributed"]}
     assert {"m19", "tm-c-fx-reserves", "m22", "m23"} <= got
     ex = {c["interaction_id"]: c for c in cov["excluded"]}
@@ -416,7 +414,7 @@ def test_generalization_trace_a_boj_hike(g):
 
 # -- delivery: export and API ---------------------------------------------------------------------------------------------
 def test_new_objects_reach_the_export(client):
-    pack = client.get(f"{B}/context/v4").json()["domain_pack"]
+    pack = v1.pack(client)
     bridge = {b["composition_id"]: b for b in pack["domain_specific_support_objects"]["financial_bridge"]}
     assert set(COMPOSITIONS) <= set(bridge)
     paths = {p["axelrod"]["path_id"] for p in pack["transmission_paths"] if p.get("path_kind") == "business_construction"}
@@ -432,12 +430,12 @@ def test_new_objects_reach_the_export(client):
 
 def test_new_objects_reach_the_api(client):
     ids = "tokio_marine.jpc_reinvestable_cash,tokio_marine.intl_profit_local,tokio_marine.esr"
-    body = client.get(f"{B}/query", params={"node_ids": ids, "depth": 1}).json()
-    got = {v["id"] for v in body["values"]}
+    body = v1.graph(client, ids)
+    got = {a["id"] for e in body["entities"] for a in e["attributes"]}
     assert set(ids.split(",")) <= got and "tokio_marine.jpc_new_investments" in got
-    view = client.get(f"{B}/construction/{TM}").json()["construction"]
+    view = v1.construction(client, TM)
     assert {c["id"] for c in view["compositions"]} == set(COMPOSITIONS) and not view["problems"]
-    tr = client.get(f"{B}/construction/{TM}/trace", params={"start": "jgbs.yield_30y"}).json()["trace"]
+    tr = v1.trace(client, TM, "jgbs.yield_30y")
     assert tr["reaches_endpoint"]
 
 
@@ -480,7 +478,7 @@ def test_validation_reinvestment_uplift_against_underwriting_deterioration(clien
     assert {"tm-i-jpc-nii-yield", "tm-i-jpc-nii-gross", "tm-i-uw-claims", "tm-a-jpc-nii", "tm-a-jpc-insurance", "m23"} <= used
     assert not used & {"tm-c-jgb10-nmy", "tm-c-jgb30-nmy", "m20", "m21"}
     # the export carries the identities; the context trace reaches Japan P&C profit from both shocks
-    pack = client.get(f"{B}/context/v4").json()["domain_pack"]
+    pack = v1.pack(client)
     ids = {x.get("identity_id") or x.get("id") for x in pack["domain_specific_support_objects"]["financial_identities"]}
     assert {"tm.id.jpc_gross_income", "tm.id.jpc_nii", "tm.id.jpc_uw"} <= ids
     for start in (J + "jpc_income_yield", J + "jpc_claims_incurred"):
@@ -512,7 +510,7 @@ def test_validation_asset_marks_against_solvency(client):
         assert v["esr_rates_up_50bp"] != 0          # the disclosure moves; the model cannot, until the branches are sized
     assert left.get("tm-c-jgb-bondmark") == left.get("tm-c-jgb-liability") == "uncalibrated"
     rels = {r["axelrod"]["interaction_id"]: r
-            for r in client.get(f"{B}/context/v4").json()["domain_pack"]["company_edge_relationships"]}
+            for r in v1.pack(client)["company_edge_relationships"]}
     assert rels["tm-c-xholding-esr"]["axelrod"]["state"]["asymmetry"]["falls"]["mu"] < 0
     assert rels["tm-c-jgb-bondmark"]["status"] == "represented_uncalibrated"
 
@@ -528,5 +526,5 @@ def test_validation_a_catastrophe_outside_both(client):
     assert peak[J + "jpc_insurance_profit"] == pytest.approx(-peak[J + "jpc_claims_incurred"], rel=0.03)  # the identity
     assert peak[J + "japan_pc_profit"] < 0 and peak[ANI] < 0
     assert {"tm-c-cat-profit", "tm-i-uw-claims"} <= used and left.get("tm-c-cat-recoveries") == "uncalibrated"
-    view = client.get(f"{B}/construction/{TM}").json()["construction"]
+    view = v1.construction(client, TM)
     assert "tm.path.catastrophe_reinsurance" in {p["id"] for p in view["paths"]}

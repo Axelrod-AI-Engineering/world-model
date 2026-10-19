@@ -26,9 +26,9 @@ from axelrod_wm.model.construction import (
     validate_construction,
 )
 from axelrod_wm.repo.snapshots import MemoryBackend
+from tests.scenario import v1_reads as v1
 
 KM = "komatsu"
-B = "/api/world-model"
 OP, SALES, CMU, NI = "komatsu.operating_profit", "komatsu.net_sales", "komatsu.cmu_sales", "komatsu.owners_net_income"
 SEGP = "komatsu.cmu_segment_result"
 USDJPY = "dollar_yen.usd_jpy"
@@ -399,7 +399,7 @@ def test_generalization_trace_an_oil_shock(g):
 
 # -- delivery: export and API ---------------------------------------------------------------------------------------------
 def test_new_objects_reach_the_export(client):
-    pack = client.get(f"{B}/context/v4").json()["domain_pack"]
+    pack = v1.pack(client)
     bridge = {b["composition_id"]: b for b in pack["domain_specific_support_objects"]["financial_bridge"]}
     assert set(COMPOSITIONS) <= set(bridge)
     paths = {p["axelrod"]["path_id"] for p in pack["transmission_paths"] if p.get("path_kind") == "business_construction"}
@@ -413,10 +413,10 @@ def test_new_objects_reach_the_export(client):
 
 def test_new_objects_reach_the_api(client):
     ids = "komatsu.cmu_segment_result,komatsu.mining_equipment_sales,komatsu.na_dealer_inventory,komatsu.net_sales"
-    body = client.get(f"{B}/query", params={"node_ids": ids, "depth": 1}).json()
-    got = {v["id"] for v in body["values"]}
+    body = v1.graph(client, ids)
+    got = {a["id"] for e in body["entities"] for a in e["attributes"]}
     assert set(ids.split(",")) <= got and "komatsu.price_realization" in got
-    view = client.get(f"{B}/construction/{KM}").json()["construction"]
+    view = v1.construction(client, KM)
     assert {c["id"] for c in view["compositions"]} == set(COMPOSITIONS) and not view["problems"]
-    tr = client.get(f"{B}/construction/{KM}/trace", params={"start": "copper.price"}).json()["trace"]
+    tr = v1.trace(client, KM, "copper.price")
     assert tr["reaches_endpoint"]

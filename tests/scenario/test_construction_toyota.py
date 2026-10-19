@@ -37,10 +37,10 @@ from axelrod_wm.model.construction import (
     validate_construction,
 )
 from axelrod_wm.repo.snapshots import MemoryBackend
+from tests.scenario import v1_reads as v1
 
 ROOT = Path(__file__).resolve().parents[2]
 LOCAL = ROOT / "data" / "sally_data" / "construction"     # the client's data: local only, absent on CI
-B = "/api/world-model"
 OP, NI = "toyota.operating_profit", "toyota.net_income"
 COMPS = {"ty.comp.reporting_segments", "ty.comp.regional_operating_income", "ty.comp.regional_external_revenue",
          "ty.comp.revenue_by_customer_location", "ty.comp.units_by_customer_region", "ty.comp.units_by_production_region",
@@ -607,12 +607,12 @@ def pose_case(client, tid: str, sid: str, delta: float, targets: list[str]) -> d
 
 
 def exported(client) -> dict:
-    pack = client.get(f"{B}/context/v4").json()["domain_pack"]
+    pack = v1.pack(client)
     return {r["axelrod"].get("interaction_id"): r for r in pack["company_edge_relationships"]}
 
 
 def context_trace(client, start: str) -> dict:
-    return client.get(f"{B}/construction/toyota/trace", params={"start": start, "through_totals": True}).json()["trace"]
+    return v1.trace(client, "toyota", start, through_totals=True)
 
 
 def test_validation_tariff_absorption_versus_price_recovery(client):
@@ -657,7 +657,7 @@ def test_validation_outside_the_cases_north_american_plant_stoppage(client):
 
 # -- delivery: export and API ---------------------------------------------------------------------------------------------
 def test_new_objects_reach_the_export(client):
-    pack = client.get(f"{B}/context/v4").json()["domain_pack"]
+    pack = v1.pack(client)
     bridge = {b["composition_id"]: b for b in pack["domain_specific_support_objects"]["financial_bridge"]}
     assert COMPS <= set(bridge)
     assert bridge["ty.comp.reporting_segments"]["overlaps_other_views"]
@@ -675,17 +675,18 @@ def test_new_objects_reach_the_export(client):
 
 def test_new_objects_reach_the_api(client):
     ids = "toyota.us_tariff_cost,toyota.automotive_operating_income,toyota.japan_export_units"
-    body = client.get(f"{B}/query", params={"node_ids": ids, "depth": 1}).json()
-    got = {v["id"] for v in body["values"]}
+    body = v1.graph(client, ids)
+    got = {a["id"] for e in body["entities"] for a in e["attributes"]}
     assert set(ids.split(",")) <= got
-    assert any(e["id"] == "ty_tariff_cost" for e in body["edges"])
-    view = client.get(f"{B}/construction/toyota").json()["construction"]
+    assert any(r["id"] == "ty_tariff_cost" for r in body["relationships"])
+    view = v1.construction(client, "toyota")
     assert len(view["paths"]) == len(PATHS) and len(view["compositions"]) == len(COMPS) and view["problems"] == []
-    steps = {s["interaction_id"]: s for p in view["paths"] if p["id"] == "ty.path.tariffs_sourcing" for s in p["steps"]}
+    steps = {s["relationship_id"]: s for p in view["paths"] if p["id"] == "ty.path.tariffs_sourcing" for s in p["steps"]}
     step = steps["ty_tariff_reprice"]
-    assert step["calibration"] == "uncalibrated" and step["effect"] is None and step["magnitude"].startswith("unknown")
+    # uncalibrated: a sign and no size (null, never 0)
+    assert step["calibration"] == "uncalibrated" and step["effect"] is None and step["sign"] in ("positive", "negative")
     assert steps["ty_tariff_cost"]["calibration"] == "calibrated" and steps["ty_tariff_cost"]["effect"] is not None
-    md = client.get(f"{B}/construction/toyota", params={"format": "markdown"}).text
+    md = v1.construction_markdown(client, "toyota")
     assert "### Tariffs and sourcing" in md and "Unresolved inputs" in md
-    tr = client.get(f"{B}/construction/toyota/trace", params={"start": "toyota.japan_production"}).json()["trace"]
+    tr = v1.trace(client, "toyota", "toyota.japan_production")
     assert tr["reaches_endpoint"]

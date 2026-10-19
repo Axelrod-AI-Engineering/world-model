@@ -7,6 +7,7 @@ each question links to the section that explains it.
 **Contents**
 
 - [What to read](#what-to-read)
+- [Settled in the API review (Oct 18)](#settled-in-the-api-review-oct-18)
 - [For Manav: the API and the data model](#for-manav-the-api-and-the-data-model)
 - [For Zsolt: authentication and core's MCP](#for-zsolt-authentication-and-cores-mcp)
 - [For both](#for-both)
@@ -23,11 +24,27 @@ each question links to the section that explains it.
 The API follows Manav's *Data Model and API Design Best Practices*. The decisions taken on Oct 18 are in
 [api.md §9](api.md#9-decisions).
 
+## Settled in the API review (Oct 18)
+
+The plan that follows from the review is in [architecture-plan.md](architecture-plan.md).
+
+- **Audit:** kept forever (D-22). Who may read it is still open.
+- **Access:** only internal staff and backend services reach the world model. Core's backend MCP reads only, to
+  start. Writes come from the web interface and the ingestion pipeline (D-21).
+- **Scopes:** one verb per action, used the same way on every resource. The rename is in progress.
+- **Idempotency:** keys are permanent and keyed on content too (D-23). This answers the first deferred item below.
+- **ETag and If-Match:** kept as built. Manav is reviewing them.
+- **One world model or several:** a structured analysis is in
+  [architecture-plan.md §4](architecture-plan.md#4-one-world-model-or-several), to decide together.
+- **Unified endpoint:** a separate top-level resource, name to be confirmed. It is designed as a proposal in
+  [api.md §4](api.md#4-resources-and-routes).
+
 ## For Manav: the API and the data model
 
 1. **Organization, world model and actor.** Should `organization`, `world_model` and the structured actor (`org`,
    `sub`, `azp`, `act`, `jti`) be first-class records in the canonical data model, or stay API metadata?
-   ([core-mcp-auth.md §9](core-mcp-auth.md#9-open-questions))
+   ([core-mcp-auth.md §9](core-mcp-auth.md#9-open-questions)) *Deferred until every term is defined: see the terms
+   table in [api.md](api.md).*
 2. **Scopes.** We built six scopes in four tiers:
    - read;
    - propose: `documents:write`, `changes:write`, `simulations:write`;
@@ -35,21 +52,22 @@ The API follows Manav's *Data Model and API Design Best Practices*. The decision
    - admin.
 
    Is that the right contract, or should v1 have the four tiers only? ([api.md §3](api.md#3-api-conventions))
+   *Settled: keep them granular, with one verb per action; they are being renamed.*
 3. **Shared models.** Should a shared base world model (Axelrod's) be readable across organizations? That needs a
    grants table rather than one owning organization per model.
-4. **Audit.** Who may read the audit log, and how long is it kept?
+4. **Audit.** Who may read the audit log? *How long it is kept is settled: forever.*
 5. **Nouns.** The API uses entity, attribute, relationship, evidence, event, thesis, simulation and change; the code
    keeps its own nouns behind the three-model separation. Do the API nouns match the canonical model you want?
    ([api.md §7](api.md#7-terms-grounded))
 6. **Deferred items.** Is it acceptable for v1 to ship without the following? ([api.md §9](api.md#9-decisions))
-   - durable idempotency (keys are kept in memory for a day);
+   - ~~durable idempotency~~ *settled: permanent keys, being built;*
    - jobs that outlive the request (a job finishes before its `202` returns, and clients already poll);
    - `POST /v1/world-models` and credential routes.
 
 ## For Zsolt: authentication and core's MCP
 
 The recommendation: core mints a short-lived signed token (ES256, 5 minutes) for each call, and the world model
-verifies it against core's JWKS. MCP calls get read and propose. Approval comes only from a person's decision in a
+verifies it against core's JWKS. MCP calls get read only, to start (settled in the API review). Approval comes only from a person's decision in a
 UI. Our side is built; core's side is a proposal ([§6](core-mcp-auth.md#6-changes-in-core)). Until core mints
 tokens, it calls with an organization key.
 
@@ -63,7 +81,8 @@ tokens, it calls with an organization key.
 5. **Review UI.** Where does human review live for client organizations: the world model's review UI, or core's
    future expert review screen? Two login systems split the audit trail until one wins.
 6. **Names in tokens.** May the token carry the user's display name, or should we look names up in core?
-7. **Direct MCP.** Should clients ever connect straight to the world model's `/mcp`, or only through core?
+7. **Direct MCP.** Should clients ever connect straight to the world model's `/mcp`, or only through core? *Settled
+   in the API review: never directly. Only internal staff and backend services reach the world model.*
 8. **Networking.** Are core and the world model service in one Railway project, so calls can use private
    networking?
 

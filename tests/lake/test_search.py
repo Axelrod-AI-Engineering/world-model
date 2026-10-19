@@ -82,21 +82,22 @@ def test_keyword_delegates_to_the_store(s, lake, ids):
     assert [(h.doc_id, h.ord) for h in hits] == [(ids["jpm"], 0)]
 
 
-def test_names_match_entity_and_value_name_prefixes(s):
+def test_names_match_entity_and_attribute_name_prefixes(s):
     hits = s.names("Toyo", limit=500)
     assert len(s.names("Toyo")) == 20                                       # the default limit
     assert (hits[0].kind, hits[0].ref, hits[0].score) == ("entity", "toyota", 1.0)
-    vals = hits[1:]                     # Toyota's values, however many its construction gives it
-    assert vals and all(h.kind == "value" and h.score == 0.9 and h.ref.startswith("toyota.") for h in vals)
+    vals = hits[1:]                     # Toyota's attributes, however many its construction gives it
+    assert vals and all(h.kind == "attribute" and h.score == 0.9 and h.ref.startswith("toyota.") for h in vals)
+    assert hits[0].entity_id == "toyota" and all(h.entity_id == "toyota" for h in vals)
     assert {"toyota.operating_profit", "toyota.share_price", "toyota.vehicle_sales"} <= {h.ref for h in vals}
     assert hits[0].text == "Toyota Motor" and hits[0].why == ["name prefix"]
     assert [h.ref for h in s.names("jp") if h.kind == "entity"] == ["jpmorgan", "jpy_eur", "jpy_usd"]  # JPM: an alias
 
 
-def test_names_include_values_after_entities(s, graph):
+def test_names_include_attributes_after_entities(s, graph):
     sid, sub = next((k, v) for k, v in sorted(graph.subentities.items()))
     hits = s.names(sub.name[:6])
-    vals = [h for h in hits if h.kind == "value"]
+    vals = [h for h in hits if h.kind == "attribute"]
     assert sid in [h.ref for h in vals] and all(h.score == 0.9 for h in vals)
     assert [h.kind for h in hits] == sorted((h.kind for h in hits), key=lambda k: k != "entity")
 
@@ -155,20 +156,21 @@ def test_a_chunk_hit_without_its_document_or_chunk_is_blank(s, lake):
 
 # -- graph ----------------------------------------------------------------------------------------------------------
 
-def test_graph_finds_a_named_value_its_neighbours_and_mentioning_chunks(s, ids):
+def test_graph_finds_a_named_attribute_its_neighbours_and_mentioning_chunks(s, ids):
     hits = s.graph_search("acme", "JPMorgan net interest income")
     assert keys(hits) == [
         ("entity", None, None, "jpmorgan"),
-        ("value", None, None, "jpmorgan.net_interest_income"),
-        ("value", None, None, "federal_reserve.policy_rate"),          # the policy rate drives NII
-        ("value", None, None, "jpmorgan.interest_expense"),            # Oct 18 (JPMorgan construction): NII's parts
-        ("value", None, None, "jpmorgan.interest_income"),
-        ("value", None, None, "jpmorgan.nii_ex_markets"),              # ... and the identity it is a term of
-        ("value", None, None, "jpmorgan.share_price"),                 # NII drives the share price
-        ("value", None, None, "us_treasuries.yield_10y"),              # the long end drives NII
+        ("attribute", None, None, "jpmorgan.net_interest_income"),
+        ("attribute", None, None, "federal_reserve.policy_rate"),          # the policy rate drives NII
+        ("attribute", None, None, "jpmorgan.interest_expense"),            # Oct 18 (JPMorgan construction): NII's parts
+        ("attribute", None, None, "jpmorgan.interest_income"),
+        ("attribute", None, None, "jpmorgan.nii_ex_markets"),              # ... and the identity it is a term of
+        ("attribute", None, None, "jpmorgan.share_price"),                 # NII drives the share price
+        ("attribute", None, None, "us_treasuries.yield_10y"),              # the long end drives NII
         ("chunk", ids["jpm"], 0, None),                                # the value and the entity, twice
         ("chunk", ids["jpm"], 1, None),                                # only the entity: the share price is excluded
     ]
+    assert [h.entity_id for h in hits[:3]] == ["jpmorgan", "jpmorgan", "federal_reserve"] and hits[8].entity_id is None
     assert hits[2].why == ["neighbour", "drives JPMorgan net interest income"]
     assert hits[6].why == ["neighbour", "JPMorgan net interest income drives"] and hits[6].score == 0.5
     assert [h.score for h in hits[8:]] == [1.0, 0.5] and hits[8].why == ["mentions"]
