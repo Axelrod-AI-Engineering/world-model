@@ -40,6 +40,7 @@
 - [Validation](#validation)
 - [Completion report](#completion-report)
 - [Repair round (Oct 19)](#repair-round-oct-19)
+- [Equities and Disruption repairs (Oct 19)](#equities-and-disruption-repairs-oct-19)
 <!-- /toc -->
 
 The construction lives in `data/worlds/sally_demo/construction/toyota.yaml` (values, links with their transitions,
@@ -1439,3 +1440,35 @@ Schema gaps recorded in the pack: the dated event instance, the minimum of three
 Retrieval-side conveniences (not a retrieval fix): the registry row's activation terms now start with the companies' names, aliases and
 tickers (alphabetical order had pushed "Toyota" out of the first 24); an earnings-quality search scope; `reading/` files `41_` to `44_`
 with START_HERE routing earnings, baseline, financing and input questions to them; unique macro `link_id`s.
+
+## Equities and Disruption repairs (Oct 19)
+
+The reviewer's second Oct 19 document: model repairs M01 to M08, completion checks C01 to C06, agent-prompt amendments
+(A01, A02) and observed runtime problems (R01 to R10). The reviewer audited the Oct 11 export, so most of M01 to M04 and
+M08 were already repaired in the round above; this round audits each item against the newer export and builds what
+was still missing. Figures stay in the local `repair.json`, extended by a second local script from the Q1 FY3/27 deck and
+the San Antonio release (checked against the release itself).
+
+| Item | Before this round | What changed (ids) |
+|---|---|---|
+| M01 baseline | Already repaired: reported against estimated, both operating-profit views reconcile at the dated baseline, the regional loss keeps its sign, counts regenerated | None (C02 confirms) |
+| M02 quarterly bridge | Already repaired: `ty.bridge.quarterly_earnings_q1_fy3_27` with the management explanations | None (C01 confirms) |
+| M03 financing | Already repaired: interest lines apart from fixed lines; US bridge blocked from the group | `ty.rule.fs_swap_scopes`: financial-services OP with and without swap valuation, two scopes of one line, never added |
+| M04 hybrids | Capacity already assumed; the plan and the battery-line work had no record | `PLAN_TY_CY2026_HEV_SALES` (a target, not capacity), `PRJ_TY_JP_HEV_BATTERY_CONVERSION` (a conversion with its stages, not expansion), `ty.rule.hev_within_electrified`; `ty_supply_hybrid` note |
+| M05 China, ASEAN | China measures present; the regional Chinese-brand share was still observed (a market value outside the company) | `related_values`: values of other nodes that the company's links read follow the observed rule; the share is an unverified assumption; the broker's one-country statement is its own record (`OBS_BROKER_...`); `ty_chinese_share` note |
+| M06 localization, tariff | No project instance; two stale notes said the duty identity was not built | `PRJ_TY_SAN_ANTONIO_TACOMA` (stage, dated facts, unknowns, OP and cash rules, supplier boundary); `ty.driver.us_duty` (the identity drives, the company's figure compares); notes on `ty_customs_base_cost`, `ty_tariff_cost`, `ty.id.us_duty` |
+| M07 cash | Roll-forward note already corrected; other cash movements classed as estimated | Other cash movements assumed (a stipulated zero); free cash flow derived from its reported operands; `ty.recon.industrial_cash_fy3_26` (blocked: opening liquidity, dividends paid, executed buybacks and other flows are not bound) |
+| M08 stock claims | Already repaired: the default OP-to-price link is an uncalibrated hypothesis | None |
+| C01 to C06 | Partly covered by MC1 to M10 | `model_checks` C01 to C06, each with the return package and three states (model correctness, runtime access, answer quality) |
+
+New export objects: `business_records` (`reading/45_earnings_business_<company>_NN.json`) and the completion checks in
+`44_`. The code is `context/earnings.build_business` and `context/repair_checks.completion_checks`.
+
+**A disagreement kept, not overwritten** (`ty.note.review_1`): the review lists the China slide's two profit
+measures the other way round. The records keep the deck's reading, which the slide 6 equity-method split confirms; it
+is raised with the reviewer.
+
+**Not this build's.** A01 and A02 are amendments to the answering agents' prompts (their owner's). R01 to R10 are
+observed runtime problems: searches returning no matches, and reads of a forecast or the catalogue instead of the
+company records. They are the runtime owner's. This build makes sure the records exist, are exported, and can be
+reached by id from `reading/00_START_HERE.md`.

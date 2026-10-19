@@ -25,13 +25,13 @@ import json
 from collections import defaultdict, deque
 from pathlib import Path
 
-from axelrod_wm.context.repair_checks import ASSUMPTIONS, run_checks
+from axelrod_wm.context.repair_checks import ASSUMPTIONS, completion_checks, run_checks
 from axelrod_wm.model.rate_exposure import Cohort, interest_increment
 
 REPAIR_FILE = "repair.json"
 SECTIONS = ("earnings_observations", "earnings_evidence_records", "earnings_bridges", "observation_estimate_pairs",
             "baseline_reconciliations", "financing_bridges", "input_classification", "assumption_records", "model_checks",
-            "fx_boundaries")
+            "fx_boundaries", "business_records")
 EVIDENCE_COUNT_DEFINITION = (
     "evidence_count is the number of DISTINCT SOURCE DOCUMENTS among the value's evidence_refs and reported observations "
     "(a document is its `document` path, or its source id when no path is given). evidence_ref_count is the number of "
@@ -167,6 +167,41 @@ def build_china(spec: dict, obs: dict[str, dict]) -> dict:
     return {"bridge_id": spec["measure_set_id"], "company_id": None, "title": spec["title"], "kind": "china_measures", "measures": ms, "rule": spec["rule"]}
 
 
+def _refs(x, obs: dict[str, dict]):
+    """Observation ids inside a record, replaced by the observation (compact) so a reader needs no second lookup."""
+    if isinstance(x, str) and x in obs:
+        return _compact(obs[x])
+    if isinstance(x, list):
+        return [_refs(i, obs) for i in x]
+    if isinstance(x, dict):
+        return {k: _refs(v, obs) for k, v in x.items()}
+    return x
+
+
+def build_business(repair: dict, obs: dict[str, dict]) -> list[dict]:
+    """The business records (projects, plans, classification and scope rules, the authoritative driver of an effect, a cash
+    reconciliation, review notes), with observation ids resolved and the arithmetic each kind carries."""
+    out = []
+    for r in repair.get("business_records", []):
+        rec = _refs(r, obs)
+        k = r["record_kind"]
+        if k == "classification":        # the part sits inside the whole in every period
+            rec["check"] = [{"period": p["period"], "part": p["value"], "whole": w["value"], "part_within_whole": p["value"] <= w["value"]}
+                            for p, w in zip(rec[r["part"]], rec[r["whole"]], strict=True)]
+        elif k == "scopes":              # two scopes of one line: their difference, never their sum
+            rec["difference"] = [{"period": a["period"], "a_minus_b": round(a["value"] - b["value"], 6), "unit": a["unit"]}
+                                 for a, b in zip(rec[r["a"]], rec[r["b"]], strict=True)]
+        elif k == "cash_reconciliation":
+            o = rec["operands"]
+            rec["derived"] = {"industrial_free_cash_flow": round(o["industrial_operating_cash_flow"]["value"] - o["capex"]["value"], 6),
+                              "formula": "industrial operating cash flow - capex", "unit": o["capex"]["unit"]}
+            rec["status"] = "blocked" if r.get("missing") else "ok"
+            rec["roll_forward"] = ("closing eligible liquidity = opening + industrial OCF - industrial capex + identified other cash movements - cash dividends - "
+                                   "executed buybacks; working capital and taxes are inside OCF and capex is not deducted twice")
+        out.append(rec)
+    return out
+
+
 # -- the dependence of outputs on assumptions ---------------------------------------------------------------------------------------------
 def _graph(pack: dict) -> tuple[dict[str, set[str]], dict[str, set[str]]]:
     fwd: dict[str, set[str]] = defaultdict(set)
@@ -222,7 +257,8 @@ def attach_repair(ctx: dict, repair: dict, days_dir: str | Path | None = None) -
         if o.get("metric_id") and o["kind"].startswith("reported actual"):
             by_metric[o["metric_id"]].append(o)
     classes = repair.get("input_classes", {})
-    values = {v["metric_id"]: v for v in ev["values"] if v.get("node_id") == cid}
+    related = set(repair.get("related_values", []))      # values of other nodes the company's links read (a market share)
+    values = {v["metric_id"]: v for v in ev["values"] if v.get("node_id") == cid or v["metric_id"] in related}
 
     # 1. the company's values: reported apart from estimated, counts regenerated, honest observed flag, input class
     n_reported = 0
@@ -308,7 +344,7 @@ def attach_repair(ctx: dict, repair: dict, days_dir: str | Path | None = None) -
                         "kind": "operating_income_walk", "unit": "billion JPY", "lines": walk, "sum": round(sum(x["billion_jpy"] for x in walk), 1),
                         "source": evid["EVD_TY_Q1_OP_WALK"]["source"]})
     obs_out = [{**o, "company_id": cid, "selected_baseline": bool(o.get("selected_baseline")),
-                "observed": True, "class": "reported"} for o in obs_all]
+                "observed": o.get("class", "reported") == "reported", "class": o.get("class", "reported")} for o in obs_all]
 
     # 4. observation / estimate pairs
     pairs = []
@@ -437,7 +473,10 @@ def attach_repair(ctx: dict, repair: dict, days_dir: str | Path | None = None) -
 
     # 8. assumptions and checks
     asm = [{**a, "company_id": cid, "observed": False, "class": "assumed", "assumption_id": a["assumption_id"]} for a in ASSUMPTIONS]
+    business = build_business(repair, obs)
+    repair = {**repair, "business_records": business}
     checks = run_checks(pack, repair, obs, values, bridges, recons, fb, fxb)
+    checks += completion_checks(pack, repair, values, bridges, recons, fb, checks)
     for c in checks:
         c["company_id"] = cid
 
@@ -473,6 +512,7 @@ def attach_repair(ctx: dict, repair: dict, days_dir: str | Path | None = None) -
     sup["assumption_records"] = asm
     sup["model_checks"] = checks
     sup["fx_boundaries"] = fxb
+    sup["business_records"] = [{**r, "company_id": cid} for r in business]
     sup["schema_gaps"] = [*sup["schema_gaps"], *SCHEMA_GAPS]
     ev["evidence_count_definition"] = EVIDENCE_COUNT_DEFINITION
     ev["observed_definition"] = OBSERVED_DEFINITION
@@ -486,7 +526,7 @@ def attach_repair(ctx: dict, repair: dict, days_dir: str | Path | None = None) -
     counts = {"values": len(values), "values_with_reported_observation": n_reported, "observations": len(obs_out), "evidence_records": len(evid_out),
               "bridges": len(bridges), "pairs": len(pairs), "reconciliations": len(recons), "reconciliations_not_ok": sels,
               "input_classes": dict(sorted(_count(o["class"] for o in cls_objs.values()).items())), "assumption_records": len(asm), "checks": len(checks),
-              "fx_boundaries": len(fxb), "timing_labelled_relationships": n_t,
+              "fx_boundaries": len(fxb), "business_records": len(business), "timing_labelled_relationships": n_t,
               "values_zero_count_with_refs": sum(1 for v in values.values() if v["evidence_count"] == 0 and v.get("evidence_refs"))}
     m["repair"]["counts"] = counts
     return counts

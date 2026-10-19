@@ -143,7 +143,7 @@ The deployment is drawn in [../guides/deployment.md](../guides/deployment.md).
 - [api.md](api.md): the outward API's design (domain model, conventions, routes, decisions), with its contract
   ([../api/openapi.yaml](../api/openapi.yaml)) and reference ([../api/README.md](../api/README.md)).
 - [core-mcp-auth.md](core-mcp-auth.md): how core's MCP server and other callers authenticate to it.
-- [specificity.md](specificity.md): the rules a model must meet to be specific enough (R1–R16), and where each is
+- [specificity.md](specificity.md): the rules a model must meet to be specific enough (R1–R17), and where each is
   enforced.
 
 ## 12. Modules

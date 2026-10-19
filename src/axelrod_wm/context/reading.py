@@ -15,7 +15,8 @@ at most `cap_kb` kilobytes, each holding whole objects of the pack unchanged, wi
     41_earnings_quarterly_<company>_NN.json   dated quarterly observations, management explanations, the earnings bridge (repair data)
     42_earnings_baseline_<company>_NN.json    the selected baseline's observations, observation/estimate pairs, reconciliations
     43_earnings_financing_<company>_NN.json   financing bridges, the subsidiary's reported lines, FX channel boundaries
-    44_earnings_inputs_<company>_NN.json      input classes, assumption records, the controlled model checks
+    44_earnings_inputs_<company>_NN.json      input classes, assumption records, the controlled model checks and completion checks
+    45_earnings_business_<company>_NN.json    project and plan records, classification and scope rules, drivers, the cash reconciliation
     90_index_ids_NN.json        every relationship, path, and support-object id -> its file (sorted, in as many files as it needs)
 
 Each object lands in exactly one shard; `verify_coverage` reads the written files back and checks that their union is
@@ -44,14 +45,14 @@ ID_KEY = {"company_edge_relationships": "relationship_id", "transmission_paths":
           SUP + "earnings_bridges": "bridge_id", SUP + "observation_estimate_pairs": "pair_id",
           SUP + "baseline_reconciliations": "reconciliation_id", SUP + "financing_bridges": "bridge_id",
           SUP + "input_classification": "classification_id", SUP + "assumption_records": "assumption_id",
-          SUP + "model_checks": "check_id", SUP + "fx_boundaries": "boundary_id"}
+          SUP + "model_checks": "check_id", SUP + "fx_boundaries": "boundary_id", SUP + "business_records": "record_id"}
 # Oct 19: the company-bound earnings objects (context/earnings.py), routed to bounded files by the question they answer
 EARNINGS = {"earnings_observations": None, "earnings_evidence_records": ("quarterly", 41), "earnings_bridges": ("quarterly", 41),
             "observation_estimate_pairs": ("baseline", 42), "baseline_reconciliations": ("baseline", 42),
             "financing_bridges": ("financing", 43), "fx_boundaries": ("financing", 43), "input_classification": ("inputs", 44),
-            "assumption_records": ("inputs", 44), "model_checks": ("inputs", 44)}
+            "assumption_records": ("inputs", 44), "model_checks": ("inputs", 44), "business_records": ("business", 45)}
 RANK = {"earnings_bridges": 0, "financing_bridges": 0, "baseline_reconciliations": 0, "model_checks": 0, "earnings_evidence_records": 1,
-        "observation_estimate_pairs": 1, "fx_boundaries": 1, "assumption_records": 1, "input_classification": 2, "earnings_observations": 3}
+        "observation_estimate_pairs": 1, "fx_boundaries": 1, "assumption_records": 1, "input_classification": 2, "earnings_observations": 3, "business_records": 0}
 EARNINGS_ROUTES = [
     ("The latest quarter: what moved attributable net income against operating profit, the lines below operating profit, one-time items, the China measures",
      "earnings_quarterly", "Start with the earnings bridge (`ty.bridge.quarterly_earnings_q1_fy3_27`: each period's arithmetic and the year-on-year change by line), "
@@ -63,7 +64,11 @@ EARNINGS_ROUTES = [
      "earnings_financing", "Open the financing bridge (`ty.fin.us_rate_to_group`) for the path from a US rate change to the US contribution and the blocked group endpoint, and `FXB_...` for the "
      "FX channels each calibrated sensitivity includes."),
     ("Which inputs are reported, derived, externally estimated or assumed, what depends on an assumption, and the controlled checks",
-     "earnings_inputs", "Open `CLASS_...` for an input, `ASM_...` for its assumption record, and the model checks (`MC1`..`MC4`, `M07`..`M10`) for fixtures with intermediate values."),
+     "earnings_inputs", "Open `CLASS_...` for an input, `ASM_...` for its assumption record, and the model checks (`MC1`..`MC4`, `M07`..`M10`) for fixtures with intermediate values; "
+     "the completion checks (`C01`..`C06`) return each check's package with model correctness, runtime access and answer quality kept apart."),
+    ("A project, plan or capacity claim; hybrid against electrified counts; financial-services OP with and without swap valuation; which record drives the US duty; the cash roll-forward",
+     "earnings_business", "Open the project and plan records (`PRJ_...`, `PLAN_...`: stage, dated facts, unknowns kept unknown), the rules (`ty.rule...`), the driver record (`ty.driver...`), "
+     "the cash reconciliation (`ty.recon...`) and the review notes (`ty.note...`)."),
 ]
 WHEN_ORDER = {10: "The pack's frame: companies, clusters, sector packs, caveats, metric families",
               20: "Mechanisms from a driver to a company metric: effect size, delay, validator, invalidator",
@@ -73,6 +78,7 @@ WHEN_ORDER = {10: "The pack's frame: companies, clusters, sector packs, caveats,
               42: "The selected dated baseline: observations, reported against estimated pairs, reconciliations before and after",
               43: "Financing bridges (rate to US contribution to the group endpoint) and the FX channel boundaries",
               44: "Input classes (reported, derived, externally estimated, assumed), assumption records, and the controlled model checks",
+              45: "Project and plan records, classification and scope rules, the driver of an effect, the cash reconciliation, review notes",
               50: "How a company's total splits into parts, and the identities that compute its metrics",
               60: "Macro nodes and links, edge vocabulary, schema gaps, model state, citation gaps",
               90: "To find the file holding a relationship, path, composition, identity, node, or link id"}

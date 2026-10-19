@@ -26,6 +26,7 @@ from axelrod_wm.model.period_math import (
     project_cash_flows,
     translate,
 )
+from axelrod_wm.model.rate_exposure import Cohort, apply_rate_shock, interest_increment
 
 
 def A(aid, name, binding, geography, scope, period, units, value, reason, calc, offsets, replace, source=None):
@@ -236,4 +237,106 @@ def run_checks(pack: dict, repair: dict, obs: dict, values: dict, bridges: list,
          "op_to_share_price_default": ("uncalibrated hypothesis; no numerical stock outcome" if sp and sp.get("qualification_status") == "uncalibrated hypothesis" else "see relationship")}, ok10,
         "a conditional cash constraint, not a Toyota policy prediction; the floor is the reviewer's sensitivity",
         ["permitted spend = max(0, min(cash authorization, share authorization x price, eligible headroom)) is not expressible: the payout is stipulated and validated against the three ceilings"])
+    return out
+
+
+# -- the completion checks of the Equities and Disruption repairs (C01-C06, Oct 19) -----------------------------------------------------------
+RUNTIME = "not tested here: whether an answering agent reads these records is the runtime owner's (observed problems R01-R10)"
+ANSWER = "not tested here: answer quality is judged on a rerun of the questions, kept apart from model correctness"
+
+
+def completion_checks(pack: dict, repair: dict, values: dict, bridges: list, recons: list, fin: dict, earlier: list[dict]) -> list[dict]:
+    """C01-C06: source reproductions and controlled fixtures, each returned with the package the instructions ask for (status, changed
+    ids, baseline, source period and passages, assumptions, intermediate values, reconciliation, unresolved endpoints) and three separate
+    completion states. The fixtures are hypothetical; none is a Toyota figure, and no expected answer is placed in a retrieval scope."""
+    out: list[dict] = []
+    by = {c["check_id"]: c for c in earlier}
+    base = repair["selected_baseline"]["baseline_id"]
+
+    def add(cid, title, repairs, maps_to, ok, changed, period, passages, assumptions, steps, recon, unresolved, status="run"):
+        out.append({"check_id": cid, "title": title, "repairs": repairs, "maps_to": maps_to, "status": status, "passes": ok,
+                    "changed_ids": changed, "selected_baseline": base, "source_period": period, "passages": passages, "assumptions": assumptions,
+                    "intermediate": steps, "reconciliation": recon, "unresolved_endpoints": unresolved,
+                    "completion_states": {"model_correctness": "passed" if ok else "failed", "runtime_access": RUNTIME, "answer_quality": ANSWER}})
+
+    # C01 quarterly earnings
+    qb = next((b for b in bridges if b.get("period_arithmetic")), None)
+    if qb is None:
+        add("C01", "Quarterly earnings from dated records", "M02", [], False, [], None, [], [], {}, None, ["no quarterly bridge in the repair data"], status="blocked")
+    else:
+        ar = qb["period_arithmetic"]
+        tol = 0.000002                      # ¥0.002bn in ¥tn, for rounded published rows
+        ok_rows = all(abs(ar[p]["pretax_rounding_residual"]) <= tol and abs(ar[p]["attributable_rounding_residual"]) <= tol for p in ar)
+        lines = {ln["line_id"]: ln for ln in qb["lines"]}
+        explained = sorted({e for ln in qb["lines"] for e in ln["explained_by"]})
+        fs_below = [i for i in lines if "financial_services" in i or "fs_" in i]
+        add("C01", "Quarterly earnings from dated records", "M02", ["quarterly bridge"], ok_rows and bool(explained) and not fs_below,
+            [qb["bridge_id"]], qb["periods"], explained,
+            [], {p: {k: ar[p][k] for k in ("pretax_from_lines", "pretax_reported", "attributable_from_pretax", "attributable_reported")} for p in ar},
+            {"tolerance_tn": tol, "year_on_year": qb["year_on_year"], "finance_segment_lines_below_op": fs_below},
+            ["repeatability of each below-OP item is classified apart from its accounting line; a below-OP item is not automatically non-recurring"])
+
+    # C02 baseline and both operating-profit views
+    mc1 = by.get("MC1", {})
+    na = values.get("toyota.north_america_operating_income", {})
+    na_rep = [r for r in na.get("reported", []) if r.get("selected_baseline")]
+    loss_kept = bool(na_rep) and na_rep[0]["value"] < 0
+    op = {r["composition_id"]: r for r in recons if r["composition_id"] in ("ty.comp.regional_operating_income", "ty.comp.reporting_segments")}
+    flagged = {k: r["after"]["difference"] for k, r in op.items() if r["after"]["status"] != "ok"}
+    add("C02", "Baseline and the two operating-profit views", "M01", ["MC1"], bool(mc1.get("passes")) and loss_kept and not flagged,
+        sorted(r["reconciliation_id"] for r in op.values()), repair["selected_baseline"]["period"], [r["source"] for r in (rr["adjustments"][0] for rr in op.values() if rr["adjustments"])],
+        [], {"views": {k: {"total": r["after"]["total_level"], "sum": r["after"]["sum"], "difference": r["after"]["difference"], "status": r["after"]["status"]} for k, r in op.items()},
+             "zero_shock": "each view evaluated at the selected baseline with no increment reproduces it (the after column)",
+             "north_america_reported": na_rep[0] if na_rep else None, "north_america_estimate": (na.get("estimate") or {}).get("mean")},
+        {"views_added_to_each_other": False, "unexplained_residuals": flagged},
+        ["a regional x business split is undisclosed"])
+
+    # C03 hybrid substitution at fixed units
+    lv = {"toyota.hybrid_substituted_units": 0.1, "toyota.hybrid_contribution_spread": 0.05}
+    v = _run(pack, "ty.id.hybrid_mix_op", lv)
+    v0 = _run(pack, "ty.id.hybrid_mix_op", {**lv, "toyota.hybrid_contribution_spread": 0.0})
+    conv = _run(pack, "ty.id.hybrid_mix_op", {**lv, "toyota.hybrid_substituted_units": 0.0})
+    projects = {r["record_id"]: r for r in repair.get("business_records", []) if r.get("record_kind") == "project"}
+    ok3 = v is not None and abs(v - 0.005) < 1e-12 and v0 == 0 and conv == 0
+    add("C03", "Hybrid substitution at fixed total units", "M04", ["MC2"], ok3, ["ty.id.hybrid_mix_op", *sorted(projects)], "controlled fixture", [],
+        ["ASM_TY_HYBRID_SUBSTITUTED", "ASM_TY_HYBRID_SPREAD", "ASM_TY_HYBRID_CAPACITY"],
+        {"substituted_units": 100_000, "spread_yen_per_unit": 50_000, "total_units_change": 0, "delta_op_tn": v, "delta_op_bn": None if v is None else round(v * 1000, 9),
+         "spread_removed_tn": v0, "capacity_conversion_alone_tn": conv},
+        None, ["net additional usable capacity, affected models and regions, qualified output dates, demand or backlog, displaced product, contribution spread"])
+
+    # C04 financing reset
+    inc = interest_increment([Cohort(50.0)], 1.0, 0.5)
+    zero = interest_increment([], 1.0, 0.5)
+    lines = {"funding_interest": 0.0, "lease_and_depreciation": 0.0}
+    shock = apply_rate_shock(lines, "funding_interest", [Cohort(50.0)], 1.0, 0.5)
+    yen_bn = inc * 150
+    ok4 = abs(inc - 0.25) < 1e-12 and abs(yen_bn - 37.5) < 1e-9 and zero == 0 and shock.changed == ("funding_interest",) and shock.lines["lease_and_depreciation"] == 0.0
+    add("C04", "Financing reset", "M03", ["MC4"], ok4, [x for x in ("ty.id.fs_interest_income", "ty.id.fs_funding_interest", fin.get("bridge_id")) if x], "controlled fixture (six months after reset)", [],
+        ["ASM_TY_US_FUNDING_RESET", "ASM_TY_FS_FIXED_LINES"],
+        {"eligible_debt_usd_bn": 50.0, "rate_change_bp": 100, "years_after_reset": 0.5, "incremental_expense_usd_bn": inc, "usd_jpy_stipulated": 150,
+         "incremental_expense_yen_bn": yen_bn, "zero_eligible_balance_usd_bn": zero, "lines_moved": list(shock.changed)},
+        {"endpoint": fin["endpoint_policy"]["treatment"], "statement": "not a disclosed Toyota sensitivity and not automatically group OP"},
+        fin["endpoint_policy"].get("to_unblock", []))
+
+    # C05 localization payback
+    pb0, pb2 = payback_years(200, 60, 20, 0), payback_years(200, 60, 20, 2)
+    flows = project_cash_flows(200, 60, 20, 2, 10)
+    first_benefit = min(t for t, cf in flows if cf > 0)
+    ok5 = abs(pb0 - 5) < 1e-12 and abs(pb2 - 7) < 1e-12 and first_benefit == 3
+    add("C05", "Localization payback with delayed benefits", "M06", ["M09"], ok5, sorted(projects), "controlled fixture", [],
+        ["ASM_TY_SOURCING_PROJECT"],
+        {"upfront_bn": 200, "avoided_duty_bn_per_year": 60, "extra_cash_costs_bn_per_year": 20, "steady_state_cash_benefit_bn": 40, "payback_years": pb0,
+         "payback_with_two_year_delay_from_spend": pb2, "first_year_with_benefit_after_delay": first_benefit},
+        {"op_and_cash_kept_apart": True, "npv": "needs dated cash flows and a discount rate (M09 shows one with an assumed rate)"},
+        ["no immediate OP benefit before production and eligible inventory recognition", "tariff eligibility and rates are scenario inputs"])
+
+    # C06 cash and buybacks
+    c = liquidity_close(15.0, 4.5, 2.3, 0.0, 1.2, 0.5)
+    cd = liquidity_close(15.0, 4.5, 2.3, 0.0, 1.2, 0.5, collection_delay=1.0)
+    cf = liquidity_close(15.0, 4.5, 2.3, 0.0, 1.2, 0.0, collection_delay=1.0)
+    ok6 = abs(c - 15.5) < 1e-12 and abs(cd - 14.5) < 1e-12 and abs(cf - 15.0) < 1e-12
+    cash = next((r for r in repair.get("business_records", []) if r.get("record_kind") == "cash_reconciliation"), None)
+    add("C06", "Cash capacity with a delayed collection", "M07", ["M10"], ok6, ["ty.id.industrial_fcf", "ty.sf.industrial_liquidity", "ty_fcf_liquidity"], "controlled fixture", [],
+        ["ASM_TY_CASH_PERIOD"], {"closing_tn": c, "closing_with_delay_tn": cd, "closing_without_buyback_tn": cf, "op_change": 0.0, "assumed_floor_tn": 15.0},
+        {"reported_roll_forward": None if cash is None else cash.get("status")}, ["the company's liquidity buffer is undisclosed; the floor is the reviewer's sensitivity"])
     return out
