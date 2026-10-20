@@ -38,6 +38,7 @@ business construction's in [specificity.md, Decisions](specificity.md#decisions)
 | D-22 | The audit log is kept forever: no deletion, no expiry | A retention window | Every change stays traceable; storage is negligible | Accepted (API review, Oct 18) |
 | D-23 | Idempotency keys are permanent, and creation is also keyed on content | Keys kept for a day | Determinism: the same content always gives the same result | Accepted (API review, Oct 18) |
 | D-24 | Search from a question starts at its nearest neighbours in the semantic space, then expands best-first by edge weight | Expanding one hop, or by hop count | The strongest transmission paths come first, whatever their length | Proposed |
+| D-25 | Core calls the world model with signed tokens only; each side keeps its secrets in one gitignored `.creds.<stage>` file and its non-secret settings in a checked-in stage profile (core's convention) | Static per-organization keys as a fallback, with variables set by hand in Railway | One secret per core stage (its signing key) and none for core on the world model side; settings are reviewable and survive an infrastructure apply | Decided (Oct 20, with Manav) |
 
 ## Where older documents disagree
 

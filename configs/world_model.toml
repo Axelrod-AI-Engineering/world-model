@@ -1,0 +1,11 @@
+# Intent: the world model service's non-secret settings, shared by every stage (src/axelrod_wm/settings.py).
+# A stage file, configs/world_model.<stage>.toml, overlays this one table by table. Secrets never go here: they live
+# in the gitignored .creds.<stage> file and, on Railway, in the variables scripts/railway-sync-creds.sh pushes from it.
+# A process variable of the same name (WORLD_MODEL_TRUSTED_ISSUERS, ...) overrides what these files say.
+
+[auth]
+# core stages whose service tokens are accepted; each is verified through that core's public JWKS, so no core
+# secret is held here. Empty: no tokens are accepted.
+trusted_issuers = []
+# organizations whose staff read the whole unified graph (default: the main login's organization)
+internal_orgs = []

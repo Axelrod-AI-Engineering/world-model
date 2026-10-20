@@ -1,0 +1,22 @@
+# Intent: non-secret settings for the hosted dev service (the only world model service; core's dev, staging and
+# production all call it). Inherits configs/world_model.toml. Its secrets (the logins, the session secret, static API
+# keys for non-core callers) live in the gitignored .creds.dev and reach Railway through scripts/railway-sync-creds.sh.
+
+[auth]
+# every core stage signs its own tokens; the world model trusts each through that stage's public JWKS
+trusted_issuers = [
+  {issuer = "https://dev.axelrod-ai.com", jwks_url = "https://dev.axelrod-ai.com/.well-known/jwks.json", audience = "world-model-dev"},
+  {issuer = "https://staging.axelrod-ai.com", jwks_url = "https://staging.axelrod-ai.com/.well-known/jwks.json", audience = "world-model-dev"},
+  {issuer = "https://insights.axelrod-ai.com", jwks_url = "https://insights.axelrod-ai.com/.well-known/jwks.json", audience = "world-model-dev"},
+]
+internal_orgs = ["axelrod-internal"]
+# the organization of the main login (whose name is a secret, in .creds.dev)
+main_login_org = "axelrod-internal"
+
+[auth.owners]
+# login = core organization: the organization whose world model the login's engine is
+sally = "sally-demo-org"
+
+[compartments]
+# compartment of the unified model = the core organization it is assigned to
+sally_focus = "sally-demo-org"

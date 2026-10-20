@@ -37,7 +37,9 @@ export default defineRailway((ctx) => {
       WORLD_MODEL_BASIC_AUTH_PASSWORD: preserve(),
       // logins that open their own scenario, username:password:scenario (api/auth.py); set in Railway only
       WORLD_MODEL_LOGINS: preserve(),
-      // the outward API's keys, caller:key:org[:scopes] (api/keys.py, docs/api/README.md); set in Railway only
+      // the outward API's keys, caller:key:org[:scopes] (api/keys.py, docs/api/README.md). The secrets above come from
+      // the gitignored .creds.dev through scripts/railway-sync-creds.sh; non-secret settings (trusted core issuers,
+      // owners, compartments) are checked in at configs/world_model.dev.toml (src/axelrod_wm/settings.py).
       WORLD_MODEL_API_KEYS: preserve(),
     },
     networking: {

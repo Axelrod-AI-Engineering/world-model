@@ -384,9 +384,11 @@ def create_app(config_path: str | None = None, scenario: str = "oil_shock_demo",
                load_on_startup: bool = True, play_delay: float = 0.4,
                cache_dir: str | Path | None = None, start_example: str | None = None,
                lake_dir: str | Path | None = None) -> FastAPI:
+    from axelrod_wm import settings
     from axelrod_wm.api.auth import extra_logins
     from axelrod_wm.repo.snapshots import FilesBackend
 
+    settings.load()             # the stage's checked-in profile and, locally, its .creds file (settings.py)
     if storage is None:
         # DECISION: the demo server keeps its state under var/axelrod/demo, so it never overwrites the
         # session that `axelrod init` and `axelrod update` keep under var/axelrod.

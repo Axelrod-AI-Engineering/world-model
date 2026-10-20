@@ -1,0 +1,8 @@
+# Intent: non-secret overrides for a world model run on this machine. Inherits configs/world_model.toml.
+# Secrets for local runs (a login, API keys for a local caller) go in the gitignored .creds.local.
+#
+# To accept tokens from a core run locally, add it as an issuer:
+# [auth]
+# trusted_issuers = [
+#   {issuer = "http://127.0.0.1:8000", jwks_url = "http://127.0.0.1:8000/.well-known/jwks.json", audience = "world-model-local"},
+# ]
