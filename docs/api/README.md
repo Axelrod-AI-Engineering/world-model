@@ -328,6 +328,21 @@ the MCP host) and calls `/v1/world-models/{id}/…`; the service caps such a tok
 
 ## Configuration
 
+Settings live in two places, following core's convention (`src/axelrod_wm/settings.py`):
+
+- **Non-secret settings are checked in:** `configs/world_model.toml`, overlaid by `configs/world_model.<stage>.toml`
+  (`[auth]`: `trusted_issuers`, `internal_orgs`, `main_login_org`, `deny`, `owners`; `[compartments]`). The loader
+  turns them into the variables below.
+- **Secrets are in one gitignored file per stage**, `.creds.<stage>` (dotenv): the logins, the session secret, static
+  API keys and model-provider keys. Locally the service reads it at start; for Railway,
+  `scripts/railway-sync-creds.sh <stage>` pushes it to the service's variables without printing a value or deploying.
+  A creds file holding a non-secret name, or a profile holding a secret, stops the server.
+- The stage is `WORLD_MODEL_PROFILE`, else Railway's environment name, else `local`. A process variable always wins,
+  then the creds file, then the profile.
+
+Core needs no secret here: its tokens are verified against each core stage's public JWKS. Its one secret, the
+signing key, lives in core's own `.creds.<stage>`.
+
 | Variable | Default | What it sets |
 |---|---|---|
 | `WORLD_MODEL_API_KEYS` | none | static keys, `caller:key:org[:scope+scope…]`. With no scopes listed, a key reads only (`world_model:read`). `changes:approve` is refused. Each caller may hold two keys, so keys can rotate by overlap |
@@ -342,7 +357,8 @@ the MCP host) and calls `/v1/world-models/{id}/…`; the service caps such a tok
 | `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `WORLD_MODEL_LLM_MODEL` | none | the provider's key and model |
 
 The organization of a login is its username. The main login's organization is `WORLD_MODEL_BASIC_AUTH_USERNAME`, or
-`default` with no logins. Secrets live in Railway's variables only, never in the repository.
+`default` with no logins; `main_login_org` in the profile maps it without naming the login. Secrets are never in the
+repository.
 
 ## Code and tests
 

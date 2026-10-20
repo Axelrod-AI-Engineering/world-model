@@ -31,3 +31,6 @@ junit.xml
 /Toyota world model export and retrieval repair instructions*.pdf
 /Toyota world model repair instructions*.pdf
 /Toyota Equities and Disruption Repairs*.pdf
+
+# credentials, one gitignored dotenv file per stage (src/axelrod_wm/settings.py)
+.creds.*

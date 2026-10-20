@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from datetime import date, datetime, timezone
 
 import pytest
@@ -16,6 +17,8 @@ START_DATE = date(2023, 1, 2)                     # day 0 of the constructed eng
 START = datetime(2023, 1, 2, tzinfo=timezone.utc)
 SEEDS = "data/scenarios/oil_shock_demo/superentity_seeds.yaml"
 VOCAB = load_vocabulary("data/taxonomy")
+# tests never read a stage profile or a developer's .creds file (src/axelrod_wm/settings.py)
+os.environ.setdefault("WORLD_MODEL_PROFILE", "none")
 
 
 def pytest_addoption(parser):

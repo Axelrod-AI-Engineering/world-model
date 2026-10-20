@@ -106,10 +106,15 @@ and how core authenticates is in [design/core-mcp-auth.md](../design/core-mcp-au
 - `WORLD_MODEL_API_KEYS` holds comma-separated `caller:key:org[:scope+scope…]` entries. A key acts as a service of
   that organization and opens only `/v1` and `/mcp`. Keys are at least 24 characters, never carry `changes:approve`,
   and a malformed entry stops the server from starting. A login's organization is its username unless
-  `WORLD_MODEL_OWNERS` (`login=org`) maps it. Like the passwords, these variables live in Railway only.
-- To add a caller: generate a key (`python -c "import secrets; print(secrets.token_urlsafe(32))"`), append
-  `name:key:org` to the variable in Railway, and redeploy. To rotate, add the new entry first (a caller may hold two
-  keys), then remove the old one.
+  the profile's `[auth.owners]` maps it.
+- **Where settings live.** Non-secret settings (trusted core issuers, owners, internal organizations, compartments)
+  are checked in at `configs/world_model.dev.toml`. Secrets (the logins, the session secret, static keys) live only in
+  the gitignored `.creds.dev`, and reach Railway with `scripts/railway-sync-creds.sh dev` (values through stdin, no
+  deploy). Core is not a static-key caller: it signs a token per call, which this service checks against core's
+  public JWKS, so no core secret is kept here.
+- To add a non-core caller: generate a key (`python -c "import secrets; print(secrets.token_urlsafe(32))"`), append
+  `name:key:org` to `WORLD_MODEL_API_KEYS` in `.creds.dev`, sync, and redeploy. To rotate, add the new entry first (a
+  caller may hold two keys), then remove the old one.
 - The image sets `WORLD_MODEL_LAKE_DIR` and `WORLD_MODEL_EMBED_CACHE` to the volume.
 
 ## Running the container locally
