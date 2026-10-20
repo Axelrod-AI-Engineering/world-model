@@ -1,0 +1,6 @@
+flowchart LR
+  A["Source material<br/>(local, gitignored)"]:::start ==> B["Audit and<br/>gap register"]:::step ==> C["Values"]:::step ==> D["Compositions"]:::step ==> E["Identities and<br/>stock-flows"]:::step ==> F["Paths and<br/>transitions"]:::step ==> G["Sizes from<br/>evidence"]:::step ==> H["Baselines and<br/>citations"]:::store ==> I{"check.py:<br/>structure, sources,<br/>inputs, reconciliation"}:::check ==> J["Tests and<br/>traces"]:::step ==> K["Export and<br/>reading set"]:::store ==> L["Review"]:::done
+  I -->|flag| D
+  L -->|findings| B
+  S["Input search<br/>(inputs.py)"]:::opt --> I
+  R["Stage and scope<br/>records"]:::opt --> G

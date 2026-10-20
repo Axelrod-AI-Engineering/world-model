@@ -15,21 +15,7 @@ in [design/specificity.md](../design/specificity.md).
 
 ## Overview
 
-```mermaid
-flowchart LR
-  A[Source material<br/>local, gitignored] --> B[Audit and gap register]
-  B --> C[Values]
-  C --> D[Compositions]
-  D --> E[Identities and stock-flows]
-  E --> F[Paths and transitions]
-  F --> G[Sizes]
-  G --> H[Baselines and citations]
-  H --> I[Check: structure, sources, inputs, reconciliation]
-  I --> J[Tests and traces]
-  J --> K[Export and reading set]
-  K --> L[Review]
-  L -->|feedback| B
-```
+![The construction pipeline: stages from source material to review, with the check and review loops](../design/diagrams/construction-pipeline.svg)
 
 The order is fixed: structure first, sizes last. A size is never fitted to structure that is not yet laid out.
 
@@ -37,6 +23,8 @@ The order is fixed: structure first, sizes last. A size is never fitted to struc
 
 A construction is one YAML file per company (`data/worlds/<world>/construction/<company>.yaml`), loaded into the
 world's graph.
+
+![The construction's objects and how they relate](../design/diagrams/construction-objects.svg)
 
 | Object | What it is |
 |---|---|
