@@ -1,0 +1,8 @@
+flowchart LR
+  S["Seed + state version +<br/>stable keys"]:::start ==> Q["Substreams per channel,<br/>value and shock"]:::step
+  Q ==> B["Base run<br/>S samples × H days"]:::inf
+  Q ==> K["Shocked run<br/>same draws"]:::inf
+  B ==> E["Effect = shocked − base,<br/>per sample"]:::step
+  K ==> E
+  E ==> O["Peak, horizon effect,<br/>orders and paths"]:::done
+  U["Uncalibrated links"]:::ext -.->|add nothing;<br/>listed in coverage| O
