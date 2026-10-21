@@ -16,13 +16,13 @@ from axelrod_wm.sim.imports import ImportRunner, load_bundle_file
 from axelrod_wm.sim.scenario import ScenarioScript
 from axelrod_wm.trace import RecordingTracer
 
-EMILY = "tests/fixtures/clients/scenarios/acme_demo/scenario.yaml"
+ACME = "tests/fixtures/clients/scenarios/acme_demo/scenario.yaml"
 
 
 def item(iid: str, at: str, rate: float) -> dict:
     return {"id": iid, "published_at": at, "source": "Synthetic newswire", "source_type": "central_bank",
-            "headline": f"BoJ sets its policy rate at {rate}%", "entities": ["boj"],
-            "signals": [{"type": "observe", "value_of": "boj.policy_rate", "value": rate, "quote": f"{rate}%"}]}
+            "headline": f"The central bank sets its policy rate at {rate}%", "entities": ["central_bank"],
+            "signals": [{"type": "observe", "value_of": "central_bank.policy_rate", "value": rate, "quote": f"{rate}%"}]}
 
 
 def bundle(*items: dict, title: str = "Test bundle") -> dict:
@@ -30,7 +30,7 @@ def bundle(*items: dict, title: str = "Test bundle") -> dict:
 
 
 def script(imports_dir: str | None, seeds: bool = True) -> ScenarioScript:
-    raw = load_scenario_yaml(EMILY)
+    raw = load_scenario_yaml(ACME)
     raw["imports_dir"] = imports_dir
     if not seeds:
         raw["initialization"]["seeds"] = None

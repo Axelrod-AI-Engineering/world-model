@@ -27,12 +27,12 @@ DOCS = [
         (0, "acme_bank", None, "Acme Bank"),
         (1, "acme_bank", "acme_bank.share_price", "Acme Bank shares"),
         (1, "acme_bank", None, "Acme Bank")]),
-    (b"boj", "acme", "BoJ watch", [
-        "The Bank of Japan raised its policy rate",
-        "The yen strengthened and Acme Motors shares fell",
-    ], [(0, "boj", "boj.policy_rate", "Bank of Japan policy rate"),
+    (b"rates", "acme", "Rates watch", [
+        "The central bank raised its policy rate",
+        "The dollar strengthened and Acme Motors shares fell",
+    ], [(0, "central_bank", "central_bank.policy_rate", "central bank policy rate"),
         (1, "acme_motors", "acme_motors.share_price", "Acme Motors shares"),
-        (1, "dollar_yen", None, "yen")]),
+        (1, "dollar", None, "dollar")]),
     (b"toy", "acme", "Acme Motors outlook", [
         "Acme Motors raised its operating profit forecast",
     ], [(0, "acme_motors", "acme_motors.operating_profit", "Acme Motors operating profit")]),
@@ -91,7 +91,7 @@ def test_names_match_entity_and_attribute_name_prefixes(s):
     assert hits[0].entity_id == "acme_motors" and all(h.entity_id == "acme_motors" for h in vals)
     assert {"acme_motors.operating_profit", "acme_motors.share_price", "acme_motors.vehicle_sales"} <= {h.ref for h in vals}
     assert hits[0].text == "Acme Motors" and hits[0].why == ["name prefix"]
-    assert [h.ref for h in s.names("ar") if h.kind == "entity"] == ["acme_re"]  # ARHD: an alias
+    assert [h.ref for h in s.names("acr") if h.kind == "entity"] == ["acme_re"]  # ACRE: an alias
 
 
 def test_names_include_attributes_after_entities(s, graph):
@@ -103,7 +103,7 @@ def test_names_include_attributes_after_entities(s, graph):
 
 
 def test_names_respect_limit_and_empty_query(s, lake):
-    assert len(s.names("j", limit=2)) == 2
+    assert len(s.names("cr", limit=2)) == 2
     assert s.names("   ") == [] and s.names("zzzz") == []
     assert Searcher(lake, EMB).names("Acme") == []
 
@@ -113,7 +113,7 @@ def test_prefix_puts_model_names_before_document_prefixes(s, ids):
     names = s.names("Acme Mo", limit=500)
     n = len(names)
     assert keys(hits)[:n] == [(h.kind, None, None, h.ref) for h in names]
-    assert {(h.doc_id, h.ord) for h in hits[n:]} == {(ids["toy"], 0), (ids["boj"], 1)}
+    assert {(h.doc_id, h.ord) for h in hits[n:]} == {(ids["toy"], 0), (ids["rates"], 1)}
     assert all(h.why == ["prefix"] for h in hits if h.kind == "chunk")
     assert len(s.prefix("acme", "Acme Mo", limit=1)) == 1
 
@@ -165,8 +165,8 @@ def test_graph_finds_a_named_attribute_its_neighbours_and_mentioning_chunks(s, i
         ("attribute", None, None, "acme_bank.interest_income"),
         ("attribute", None, None, "acme_bank.nii_ex_markets"),              # ... and the identity it is a term of
         ("attribute", None, None, "acme_bank.share_price"),                 # NII drives the share price
-        ("attribute", None, None, "federal_reserve.policy_rate"),          # the policy rate drives NII
-        ("attribute", None, None, "us_treasuries.yield_10y"),              # the long end drives NII
+        ("attribute", None, None, "central_bank.policy_rate"),          # the policy rate drives NII
+        ("attribute", None, None, "gov_bonds.yield_10y"),              # the long end drives NII
         ("chunk", ids["jpm"], 0, None),                                # the value and the entity, twice
         ("chunk", ids["jpm"], 1, None),                                # only the entity: the share price is excluded
     ]
@@ -187,13 +187,13 @@ def test_graph_named_entity_counts_every_mention(s, ids, graph):
     assert keys(hits)[0] == ("entity", None, None, "acme_motors")
     vals = set(graph.entities["acme_motors"].subentity_ids)
     assert not any(h.ref in vals for h in hits if "neighbour" in h.why)   # links inside the seeds are not neighbours
-    assert [(h.doc_id, h.ord) for h in hits if h.kind == "chunk"] == sorted([(ids["boj"], 1), (ids["toy"], 0)])
+    assert [(h.doc_id, h.ord) for h in hits if h.kind == "chunk"] == sorted([(ids["rates"], 1), (ids["toy"], 0)])
 
 
 def test_graph_falls_back_to_shared_name_words(s, ids):
-    hits = s.graph_search("acme", "keystone")                             # no full name: Keystone Capital shares a word
-    assert [h.ref for h in hits if h.kind == "entity"] == ["keystone_capital"]
-    assert all(h.kind != "chunk" for h in hits)                         # nothing mentions Keystone Capital
+    hits = s.graph_search("acme", "energy")                               # no full name: Ridge Energy shares a word
+    assert [h.ref for h in hits if h.kind == "entity"] == ["ridge_energy"]
+    assert all(h.kind != "chunk" for h in hits)                         # nothing mentions Ridge Energy
 
 
 def test_graph_without_matches_or_graph_is_empty(s, lake):
@@ -289,7 +289,7 @@ def test_gazetteer_is_cached_and_rebuilt_when_the_graph_changes(s, graph):
     assert s.gazetteer() is not gz and s.gazetteer().digest == gz.digest
 
 
-@pytest.mark.parametrize("q", ["Acme Bank net interest income", "Acme Motors", "yen", "keystone", "rates rose", "Acme"])
+@pytest.mark.parametrize("q", ["Acme Bank net interest income", "Acme Motors", "dollar", "energy", "rates rose", "Acme"])
 @pytest.mark.parametrize("mode", MODES)
 def test_the_same_query_returns_the_same_results(s, lake, graph, tmp_path, mode, q):
     first = s.search("acme", q, mode=mode)

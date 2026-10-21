@@ -1,578 +1,243 @@
-# What Acme's research expects of each thesis's path: a synthetic test fixture (invented companies; derived by renaming, nothing here describes a real company or client).
+# What Acme's research expects of each thesis's path: a synthetic test fixture (invented companies and themes).
 theses:
   S-T1:
     shock:
-    - boj.policy_rate
+    - crude_oil.price
     chains:
-    - - boj.policy_rate
-      - jgbs.yield_10y
-      - jgbs.yield_30y
-      - acme_re.japan_pc_profit
-      - acme_re.operating_profit
-    - - boj.policy_rate
-      - jgbs.yield_10y
-      - jgbs.yield_30y
-      - acme_mutual.domestic_profit
-      - acme_mutual.operating_profit
-    - - boj.policy_rate
-      - dollar_yen.usd_jpy
-      - acme_motors.operating_profit
-    - - boj.policy_rate
-      - dollar_yen.usd_jpy
-      - acme_machinery.operating_profit
-    - - boj.policy_rate
-      - dollar_yen.usd_jpy
-      - acme_re.international_profit
-      - acme_re.operating_profit
-    - - boj.policy_rate
-      - dollar_yen.usd_jpy
-      - acme_mutual.international_profit
-      - acme_mutual.operating_profit
-    - - boj.policy_rate
-      - dollar_yen.carry_positioning
-      - dollar_yen.usd_jpy
-    - - boj.policy_rate
-      - jgbs.yield_10y
-      - acme_telecom.operating_profit
+    - - crude_oil.price
+      - economy.headline_inflation
+    - - crude_oil.price
+      - shipping.freight_cost
+      - blue_freight.freight_revenue
+      - blue_freight.operating_profit
+    - - crude_oil.price
+      - blue_freight.fuel_cost
+      - blue_freight.operating_profit
+    - - crude_oil.price
+      - ridge_energy.operating_profit
+    - - crude_oil.price
+      - acme_motors.vehicle_sales
     channels:
-    - source: boj.policy_rate
-      target: jgbs.yield_10y
+    - source: crude_oil.price
+      target: economy.headline_inflation
       sign: +
       order: 1
       level: must
-      why: a higher policy rate lifts the front and belly of the government curve
-    - source: jgbs.yield_10y
-      target: jgbs.yield_30y
+      why: dearer fuel passes into consumer prices
+    - source: crude_oil.price
+      target: shipping.freight_cost
       sign: +
-      order: 2
-      level: should
-      why: 'the long end follows, but less than the belly: hikes flatten the curve and term premium drives the super-long end'
-    - source: boj.policy_rate
-      target: dollar_yen.usd_jpy
+      order: 1
+      level: must
+      why: fuel is most of a voyage's cost
+    - source: crude_oil.price
+      target: ridge_energy.operating_profit
+      sign: +
+      order: 1
+      level: must
+      why: a producer earns more per barrel
+    - source: crude_oil.price
+      target: blue_freight.fuel_cost
+      sign: +
+      order: 1
+      level: must
+      why: a shipper pays more for fuel
+    - source: crude_oil.price
+      target: acme_motors.vehicle_sales
       sign: '-'
       order: 1
       level: should
-      why: a narrower policy-rate gap strengthens the yen; weak and contested while the gap stays wide
-    - source: boj.policy_rate
-      target: dollar_yen.carry_positioning
-      sign: '-'
-      order: 1
-      level: should
-      why: higher funding costs make yen-funded carry less attractive and can force an unwind
-    - source: dollar_yen.carry_positioning
-      target: dollar_yen.usd_jpy
-      sign: +
-      order: 2
-      level: must
-      why: closing yen-funded positions means buying yen
-    - source: dollar_yen.usd_jpy
-      target: acme_motors.operating_profit
-      sign: +
-      order: 2
-      level: must
-      why: an exporter's yen profit falls as the yen strengthens
-    - source: dollar_yen.usd_jpy
-      target: acme_machinery.operating_profit
-      sign: +
-      order: 2
-      level: must
-      why: an exporter's yen profit falls as the yen strengthens
-    - source: dollar_yen.usd_jpy
-      target: acme_re.international_profit
-      sign: +
-      order: 2
-      level: must
-      why: overseas profit translates into fewer yen when the yen strengthens
-    - source: dollar_yen.usd_jpy
-      target: acme_mutual.international_profit
-      sign: +
-      order: 2
-      level: should
-      why: overseas profit translates into fewer yen when the yen strengthens
-    - source: jgbs.yield_30y
-      target: acme_re.japan_pc_profit
-      sign: +
-      order: 3
-      level: must
-      why: higher domestic reinvestment yields raise an insurer's investment income
-    - source: jgbs.yield_30y
-      target: acme_mutual.domestic_profit
-      sign: +
-      order: 3
-      level: should
-      why: higher domestic reinvestment yields raise an insurer's investment income
-    - source: acme_re.international_profit
-      target: acme_re.operating_profit
-      sign: +
-      order: 3
-      level: should
-      why: a segment's profit adds to group profit
-    - source: acme_re.japan_pc_profit
-      target: acme_re.operating_profit
-      sign: +
-      order: 4
-      level: should
-      why: a segment's profit adds to group profit
-    - source: acme_mutual.international_profit
-      target: acme_mutual.operating_profit
-      sign: +
-      order: 3
-      level: should
-      why: a segment's profit adds to group profit
-    - source: acme_mutual.domestic_profit
-      target: acme_mutual.operating_profit
-      sign: +
-      order: 4
-      level: should
-      why: a segment's profit adds to group profit
-    - source: jgbs.yield_10y
-      target: acme_telecom.operating_profit
+      why: dear fuel weighs on car demand
+    - source: blue_freight.fuel_cost
+      target: blue_freight.operating_profit
       sign: '-'
       order: 2
+      level: must
+      why: fuel is a cost against operating profit
+    - source: shipping.freight_cost
+      target: blue_freight.freight_revenue
+      sign: +
+      order: 2
       level: should
-      why: higher yields raise the cost of funding a debt-financed build-out (mostly below operating profit)
-    - source: boj.policy_rate
-      target: japan_capital_markets.equity_index
-      sign: '-'
-      order: 1
-      level: should
-      why: tighter money and a stronger yen weigh on an export-heavy equity market
+      why: higher rates lift freight revenue
     missing_links:
-    - source: jgbs.yield_10y
-      target: dollar_yen.usd_jpy
-      sign: '-'
+    - source: crude_oil.price
+      target: acme_re.operating_profit
+      sign: +
+      order: 1
       level: should
-      why: higher domestic yields draw domestic savings home from overseas assets, buying yen
+      why: a reinsurer with energy-linked claims reserves reprices them as crude moves
     outputs:
-      dollar_yen.usd_jpy: down
-      jgbs.yield_30y: up
-      acme_re.operating_profit: '?'
-      acme_mutual.operating_profit: '?'
+      crude_oil.price: up
+      economy.headline_inflation: up
+      shipping.freight_cost: up
+      ridge_energy.operating_profit: up
+      blue_freight.operating_profit: down
       acme_motors.operating_profit: down
-      acme_machinery.operating_profit: down
-      acme_telecom.operating_profit: '?'
+      economy.gdp_growth: '?'
   S-T2:
     shock:
-    - federal_reserve.policy_rate
+    - central_bank.policy_rate
     chains:
-    - - federal_reserve.policy_rate
-      - us_treasuries.yield_2y
-      - us_treasuries.yield_10y
-      - bunds.yield_10y
-    - - federal_reserve.policy_rate
-      - us_treasuries.yield_2y
-      - us_treasuries.yield_10y
-      - acme_re.international_profit
-    - - federal_reserve.policy_rate
-      - us_treasuries.yield_2y
-      - us_treasuries.yield_10y
-      - acme_mutual.international_profit
-    - - federal_reserve.policy_rate
-      - us_treasuries.yield_2y
-      - dollar_yen.usd_jpy
-      - acme_re.international_profit
-    - - federal_reserve.policy_rate
-      - us_treasuries.yield_2y
-      - dollar_yen.usd_jpy
-      - acme_mutual.international_profit
-    - - federal_reserve.policy_rate
+    - - central_bank.policy_rate
+      - gov_bonds.yield_2y
+      - gov_bonds.yield_10y
+      - acme_re.domestic_pc_profit
+    - - central_bank.policy_rate
       - acme_bank.net_interest_income
-    - - federal_reserve.policy_rate
+    - - central_bank.policy_rate
       - delta_bank.net_interest_income
-    - - federal_reserve.policy_rate
-      - us_capital_markets.deal_activity
-      - keystone_capital.ib_fees
-    - - federal_reserve.policy_rate
-      - us_treasuries.yield_2y
-      - us_capital_markets.market_volatility
-      - keystone_capital.trading_revenue
+    - - central_bank.policy_rate
+      - dollar.index
     channels:
-    - source: federal_reserve.policy_rate
-      target: us_treasuries.yield_2y
+    - source: central_bank.policy_rate
+      target: gov_bonds.yield_2y
       sign: +
       order: 1
       level: must
-      why: the two-year yield tracks the expected policy path
-    - source: us_treasuries.yield_2y
-      target: us_treasuries.yield_10y
-      sign: +
-      order: 2
-      level: should
-      why: 'the long end follows the front end, by less: policy moves twist the curve'
-    - source: us_treasuries.yield_10y
-      target: bunds.yield_10y
-      sign: +
-      order: 3
-      level: should
-      why: global long yields move together
-    - source: us_treasuries.yield_10y
-      target: acme_re.international_profit
-      sign: +
-      order: 3
-      level: must
-      why: lower reinvestment yields cut an insurer's investment income
-    - source: us_treasuries.yield_10y
-      target: acme_mutual.international_profit
-      sign: +
-      order: 3
-      level: should
-      why: lower reinvestment yields cut an insurer's investment income
-    - source: us_treasuries.yield_2y
-      target: dollar_yen.usd_jpy
+      why: the front of the curve follows the policy rate
+    - source: gov_bonds.yield_2y
+      target: gov_bonds.yield_10y
       sign: +
       order: 2
       level: must
-      why: a narrower US-Japan rate gap strengthens the yen
-    - source: dollar_yen.usd_jpy
-      target: acme_re.international_profit
-      sign: +
-      order: 3
-      level: must
-      why: overseas profit translates into fewer yen when the yen strengthens
-    - source: dollar_yen.usd_jpy
-      target: acme_mutual.international_profit
-      sign: +
-      order: 3
-      level: should
-      why: overseas profit translates into fewer yen when the yen strengthens
-    - source: federal_reserve.policy_rate
+      why: the ten-year follows the two-year, less than one for one
+    - source: central_bank.policy_rate
       target: acme_bank.net_interest_income
       sign: +
       order: 1
       level: must
-      why: an asset-sensitive bank earns less net interest when short rates fall
-    - source: federal_reserve.policy_rate
+      why: loans reprice faster than deposits
+    - source: central_bank.policy_rate
       target: delta_bank.net_interest_income
       sign: +
       order: 1
-      level: must
-      why: an asset-sensitive bank earns less net interest when short rates fall
-    - source: federal_reserve.policy_rate
-      target: us_capital_markets.deal_activity
-      sign: '-'
+      level: should
+      why: loans reprice faster than deposits
+    - source: central_bank.policy_rate
+      target: dollar.index
+      sign: +
       order: 1
       level: should
-      why: cheaper financing revives deals and issuance
-    - source: us_capital_markets.deal_activity
-      target: keystone_capital.ib_fees
-      sign: +
-      order: 2
-      level: should
-      why: advisory and underwriting fees follow deal volume
-    - source: us_capital_markets.deal_activity
-      target: acme_bank.ib_fees
-      sign: +
-      order: 2
-      level: should
-      why: advisory and underwriting fees follow deal volume
-    - source: us_treasuries.yield_2y
-      target: us_capital_markets.market_volatility
-      sign: '-'
-      order: 2
-      level: should
-      why: a large, fast repricing raises rate volatility whichever way rates move; under a cut that is a negative co-movement
-    - source: us_capital_markets.market_volatility
-      target: keystone_capital.trading_revenue
+      why: a lower rate weakens the currency
+    - source: gov_bonds.yield_10y
+      target: acme_re.domestic_pc_profit
       sign: +
       order: 3
       level: should
-      why: volatility drives client hedging and trading volumes
-    - source: us_treasuries.yield_10y
-      target: acme_bank.cet1_ratio
-      sign: '-'
-      order: 3
-      level: should
-      why: lower yields raise the value of fixed-rate bond holdings and so capital
+      why: lower reinvestment yields cut investment income
     missing_links:
-    - source: us_treasuries.yield_2y
-      target: dollar_yen.carry_positioning
+    - source: gov_bonds.yield_10y
+      target: acme_bank.net_interest_income
       sign: +
+      order: 2
       level: should
-      why: a narrower rate gap erodes the carry that yen-funded positions earn
-    - source: us_treasuries.yield_10y
-      target: us_capital_markets.deal_activity
-      sign: '-'
-      level: should
-      why: higher long yields raise acquisition financing costs and defer issuance
-    - source: federal_reserve.policy_rate
-      target: keystone_capital.wealth_revenue
-      sign: +
-      level: should
-      why: a wealth manager's net interest on client cash falls with short rates
+      why: a bank that rolls fixed-rate hedges earns less as long rates fall
     outputs:
-      us_treasuries.yield_10y: down
-      bunds.yield_10y: down
+      central_bank.policy_rate: down
+      gov_bonds.yield_10y: down
       acme_bank.net_interest_income: down
       delta_bank.net_interest_income: down
-      keystone_capital.trading_revenue: '?'
-      acme_re.international_profit: down
-      acme_mutual.international_profit: down
-      dollar_yen.usd_jpy: down
+      acme_re.domestic_pc_profit: down
+      dollar.index: down
   S-T3:
     shock:
-    - dollar_yen.carry_positioning
-    - dollar_yen.usd_jpy
+    - credit_markets.credit_spread
+    - dollar.index
     chains:
-    - - dollar_yen.carry_positioning
-      - us_capital_markets.market_volatility
-      - keystone_capital.trading_revenue
-    - - dollar_yen.carry_positioning
-      - us_capital_markets.market_volatility
-      - acme_bank.markets_revenue
-    - - dollar_yen.usd_jpy
+    - - credit_markets.credit_spread
+      - capital_markets.market_volatility
+      - delta_bank.markets_revenue
+    - - credit_markets.credit_spread
+      - acme_bank.ib_fees
+    - - dollar.index
       - acme_motors.operating_profit
-    - - dollar_yen.usd_jpy
-      - acme_machinery.operating_profit
-    - - dollar_yen.usd_jpy
+    - - dollar.index
       - acme_re.international_profit
-    - - dollar_yen.usd_jpy
-      - acme_mutual.international_profit
-    - - dollar_yen.usd_jpy
-      - japan_capital_markets.equity_index
+      - acme_re.operating_profit
     channels:
-    - source: dollar_yen.carry_positioning
-      target: us_capital_markets.market_volatility
-      sign: '-'
+    - source: credit_markets.credit_spread
+      target: capital_markets.market_volatility
+      sign: +
       order: 1
       level: must
-      why: a forced unwind of leveraged positions spikes cross-asset volatility
-    - source: us_capital_markets.market_volatility
-      target: keystone_capital.trading_revenue
-      sign: +
-      order: 2
-      level: should
-      why: volatility drives client hedging and trading volumes
-    - source: us_capital_markets.market_volatility
-      target: acme_bank.markets_revenue
-      sign: +
-      order: 2
-      level: should
-      why: volatility drives client hedging and trading volumes
-    - source: us_capital_markets.market_volatility
+      why: wider spreads come with larger market moves
+    - source: capital_markets.market_volatility
       target: delta_bank.markets_revenue
       sign: +
       order: 2
       level: should
-      why: volatility drives client hedging and trading volumes
-    - source: us_capital_markets.market_volatility
-      target: keystone_capital.wealth_revenue
+      why: trading desks earn more when markets move
+    - source: credit_markets.credit_spread
+      target: acme_bank.ib_fees
       sign: '-'
-      order: 2
+      order: 1
       level: should
-      why: falling asset prices shrink fee-based client assets
-    - source: dollar_yen.usd_jpy
+      why: issuers wait out wide spreads
+    - source: dollar.index
       target: acme_motors.operating_profit
-      sign: +
+      sign: '-'
       order: 1
       level: must
-      why: an exporter's yen profit falls as the yen strengthens
-    - source: dollar_yen.usd_jpy
-      target: acme_machinery.operating_profit
-      sign: +
-      order: 1
-      level: must
-      why: an exporter's yen profit falls as the yen strengthens
-    - source: dollar_yen.usd_jpy
+      why: an exporter's profit falls as the dollar strengthens
+    - source: dollar.index
       target: acme_re.international_profit
       sign: +
       order: 1
       level: must
-      why: overseas profit translates into fewer yen when the yen strengthens
-    - source: dollar_yen.usd_jpy
-      target: acme_mutual.international_profit
+      why: overseas profit translates into more dollars when the dollar strengthens
+    - source: acme_re.international_profit
+      target: acme_re.operating_profit
       sign: +
-      order: 1
+      order: 2
       level: should
-      why: overseas profit translates into fewer yen when the yen strengthens
-    - source: dollar_yen.usd_jpy
-      target: japan_capital_markets.equity_index
-      sign: +
-      order: 1
-      level: should
-      why: a stronger yen cuts exporters' earnings, which lead the index
-    missing_links: []
+      why: a segment's profit adds to group profit
     outputs:
-      dollar_yen.usd_jpy: down
-      us_capital_markets.market_volatility: up
-      keystone_capital.trading_revenue: up
-      acme_bank.markets_revenue: up
+      dollar.index: up
+      credit_markets.credit_spread: up
+      capital_markets.market_volatility: up
+      acme_bank.ib_fees: down
+      delta_bank.markets_revenue: up
       acme_motors.operating_profit: down
-      acme_machinery.operating_profit: down
-      acme_re.international_profit: down
-      acme_mutual.international_profit: down
+      acme_re.international_profit: up
+      acme_re.operating_profit: up
   S-T4:
     shock:
-    - pboc.loan_prime_rate
-    - china_economy.property_sales
+    - shipping.freight_cost
     chains:
-    - - pboc.loan_prime_rate
-      - harbor_bank.net_interest_margin
-      - harbor_bank.operating_profit
-    - - china_economy.property_sales
-      - harbor_bank.npl_ratio
-      - harbor_bank.operating_profit
-    - - pboc.loan_prime_rate
-      - china_economy.credit_growth
-      - harbor_bank.operating_profit
-    - - pboc.loan_prime_rate
-      - cgbs.yield_10y
-      - harbor_bank.net_interest_margin
-    - - china_economy.property_sales
-      - acme_machinery.construction_demand
-      - acme_machinery.operating_profit
+    - - shipping.freight_cost
+      - blue_freight.freight_revenue
+      - blue_freight.operating_profit
+    - - shipping.freight_cost
+      - economy.industrial_output
     channels:
-    - source: pboc.loan_prime_rate
-      target: harbor_bank.net_interest_margin
+    - source: shipping.freight_cost
+      target: blue_freight.freight_revenue
       sign: +
       order: 1
       level: must
-      why: loans reprice off the benchmark faster than deposits, so a cut squeezes the margin
-    - source: harbor_bank.net_interest_margin
-      target: harbor_bank.operating_profit
+      why: higher rates lift a shipper's revenue
+    - source: blue_freight.freight_revenue
+      target: blue_freight.operating_profit
       sign: +
       order: 2
-      level: must
-      why: the margin is the main driver of a lender's revenue
-    - source: china_economy.property_sales
-      target: harbor_bank.npl_ratio
-      sign: '-'
-      order: 1
-      level: must
-      why: a steadier housing market improves mortgage and developer loan quality
-    - source: harbor_bank.npl_ratio
-      target: harbor_bank.operating_profit
-      sign: '-'
-      order: 2
       level: should
-      why: fewer bad loans need fewer provisions
-    - source: pboc.loan_prime_rate
-      target: china_economy.credit_growth
+      why: revenue adds to operating profit
+    - source: shipping.freight_cost
+      target: economy.industrial_output
       sign: '-'
       order: 1
       level: should
-      why: cheaper loans support credit demand, though modestly when demand is weak
-    - source: china_economy.credit_growth
-      target: harbor_bank.operating_profit
-      sign: +
-      order: 2
-      level: should
-      why: loan growth expands the earning balance sheet
-    - source: pboc.loan_prime_rate
-      target: cgbs.yield_10y
-      sign: +
-      order: 1
-      level: should
-      why: government bond yields track the policy rate
-    - source: cgbs.yield_10y
-      target: harbor_bank.net_interest_margin
-      sign: +
-      order: 2
-      level: should
-      why: lower bond yields reduce what a bank earns on its securities book
-    - source: china_economy.property_sales
-      target: acme_machinery.construction_demand
-      sign: +
-      order: 1
-      level: should
-      why: housing starts drive excavator demand; China is a small share of this maker's sales
-    - source: acme_machinery.construction_demand
-      target: acme_machinery.operating_profit
-      sign: +
-      order: 2
-      level: should
-      why: equipment volume drives the maker's profit
+      why: dear freight slows factories
     missing_links:
-    - source: china_economy.property_sales
-      target: china_economy.credit_growth
-      sign: +
-      level: should
-      why: a housing recovery revives mortgage and household borrowing
-    outputs:
-      pboc.loan_prime_rate: down
-      china_economy.property_sales: up
-      harbor_bank.net_interest_margin: down
-      harbor_bank.npl_ratio: down
-      harbor_bank.operating_profit: '?'
-      acme_machinery.construction_demand: up
-      acme_machinery.operating_profit: up
-      acme_motors.vehicle_sales: '?'
-  S-T5:
-    shock:
-    - ecb.policy_rate
-    chains:
-    - - ecb.policy_rate
-      - northwind_bank.net_interest_income
-      - northwind_bank.share_price
-    - - ecb.policy_rate
-      - emerald_bank.net_interest_income
-      - emerald_bank.share_price
-    - - ecb.policy_rate
-      - bunds.yield_10y
-      - acme_mutual.international_profit
-    - - ecb.policy_rate
-      - bunds.yield_10y
-      - northwind_bank.cet1_ratio
-      - northwind_bank.share_price
-    channels:
-    - source: ecb.policy_rate
-      target: northwind_bank.net_interest_income
-      sign: +
-      order: 1
-      level: must
-      why: a deposit-rich bank's net interest falls as policy rates fall
-    - source: ecb.policy_rate
-      target: emerald_bank.net_interest_income
-      sign: +
-      order: 1
-      level: should
-      why: a deposit-rich bank's net interest falls as policy rates fall
-    - source: ecb.policy_rate
-      target: bunds.yield_10y
-      sign: +
-      order: 1
-      level: should
-      why: long yields follow the expected policy path
-    - source: northwind_bank.net_interest_income
-      target: northwind_bank.share_price
-      sign: +
-      order: 2
-      level: should
-      why: lower earnings and payouts lower the share price
-    - source: emerald_bank.net_interest_income
-      target: emerald_bank.share_price
-      sign: +
-      order: 2
-      level: should
-      why: lower earnings and payouts lower the share price
-    - source: bunds.yield_10y
-      target: acme_mutual.international_profit
-      sign: +
-      order: 2
-      level: should
-      why: lower reinvestment yields cut an insurer's investment income
-    - source: bunds.yield_10y
-      target: northwind_bank.cet1_ratio
+    - source: shipping.freight_cost
+      target: acme_motors.operating_profit
       sign: '-'
-      order: 2
+      order: 1
       level: should
-      why: lower yields raise the value of bond holdings and so capital
-    - source: northwind_bank.cet1_ratio
-      target: northwind_bank.share_price
-      sign: +
-      order: 3
-      level: should
-      why: surplus capital funds buybacks
-    missing_links:
-    - source: bunds.yield_10y
-      target: northwind_bank.net_interest_income
-      sign: +
-      level: should
-      why: a bank that hedges its deposits by rolling fixed-rate swaps earns less as long rates fall
+      why: parts and finished cars both ride the freight market
     outputs:
-      ecb.policy_rate: down
-      bunds.yield_10y: down
-      northwind_bank.net_interest_income: down
-      northwind_bank.share_price: down
-      emerald_bank.net_interest_income: down
-      emerald_bank.share_price: down
-      acme_mutual.international_profit: down
+      shipping.freight_cost: up
+      blue_freight.freight_revenue: up
+      blue_freight.operating_profit: up
+      economy.industrial_output: down

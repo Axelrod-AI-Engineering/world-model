@@ -78,5 +78,5 @@ def test_a_change_the_engine_decided_names_the_system():
 def test_a_world_without_question_templates(tmp_path):
     assert inverted_surfaces(SimpleNamespace(controller=SimpleNamespace(world_dir=lambda: None))) == []
     assert inverted_surfaces(SimpleNamespace(controller=SimpleNamespace(world_dir=lambda: tmp_path))) == []
-    (tmp_path / "templates.yaml").write_text("subjects:\n- {pattern: the yen, invert: true}\n- {pattern: oil}\n")
-    assert inverted_surfaces(SimpleNamespace(controller=SimpleNamespace(world_dir=lambda: tmp_path))) == ["the yen"]
+    (tmp_path / "templates.yaml").write_text("subjects:\n- {pattern: the euro, invert: true}\n- {pattern: oil}\n")
+    assert inverted_surfaces(SimpleNamespace(controller=SimpleNamespace(world_dir=lambda: tmp_path))) == ["the euro"]

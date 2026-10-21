@@ -29,11 +29,11 @@ ALL_BUT_APPROVE = "world_model:read+documents:create+changes:create+simulations:
 ISSUER, AUDIENCE, JWKS_URL = "https://core.test", "https://world-model.test", "https://core.test/.well-known/jwks.json"
 # synthetic research notes (made up for the tests; no real event is reported)
 NOTE = (b"Rates note, October 5, 2026.\n\n"
-        b"The BoJ raised its policy rate by 25bp to 1.25% on a 7-2 vote. USD/JPY fell to 152 as the yen strengthened.\n\n"
-        b"Acme Bank's net interest income rose 4% y/y. Lower Bund yields weigh on Northwind Bank's net interest income.")
-FED_NOTE = b"Data, September 1, 2026. The Fed held rates at 3.875%. Brent crude rose to $103 a barrel."
-ECB_NOTE = b"Rates wire, September 3, 2026. The ECB cut its deposit rate by 25bp."
-BOJ_NOTE = b"Rates wire, September 4, 2026. The BoJ raised its policy rate by 25bp to 1.25%."
+        b"The central bank raised its policy rate by 25bp to 4.25% on a 7-2 vote. The dollar index rose to 104 as crude oil fell to $80 a barrel.\n\n"
+        b"Acme Bank's net interest income rose 4% y/y. Wider credit spreads weigh on Delta Bank's markets revenue.")
+OIL_NOTE = b"Data, September 1, 2026. The central bank held rates at 4.0%. The crude price rose to $103 a barrel."
+SPREAD_NOTE = b"Rates wire, September 3, 2026. Credit spreads rose by 25bp."
+RATE_NOTE = b"Rates wire, September 4, 2026. The central bank raised its policy rate by 25bp to 4.25%."
 
 
 class Signer:

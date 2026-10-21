@@ -11,51 +11,33 @@ nodes:
   name: Energy to prices
   parent: gen:int:cost_push
   instances:
-  - m01
   - m02
   - m03
   - m05
+  - m29
 - id: gen:int:energy_to_activity
   name: Energy to activity
   parent: gen:int:root
   instances:
   - m04
-  - m31
-  - s09
-  - s42
-  - s45
-  - s47
+  - m15
+  - m25
+  - m27
+  - m28
 - id: gen:int:policy_reaction
   name: Policy reaction
   parent: gen:int:root
   instances:
   - m06
   - m07
-  - m08
-  - m09
-  - m10
-  - s01
 - id: gen:int:rate_pass_through
   name: Rate pass-through
   parent: gen:int:root
   instances:
+  - m08
+  - m09
   - m11
   - m12
-  - m13
-  - m14
-  - s05
-  - s06
-  - s07
-- id: gen:int:rate_gap_to_fx
-  name: Rate gap to the yen
-  parent: gen:int:root
-  instances:
-  - m15
-  - m16
-  - m17
-  - m18
-  - s72
-  - s73
 - id: gen:int:fx_translation
   name: FX translation
   parent: gen:int:root
@@ -64,10 +46,9 @@ nodes:
       source_attr:
       - fx_rate
   instances:
-  - m19
-  - m29
-  - m30
-  - s35
+  - m10
+  - m23
+  - m24
 - id: gen:int:reinvestment
   name: Reinvestment income
   parent: gen:int:root
@@ -79,24 +60,12 @@ nodes:
       - revenue_flow
   instances:
   - m20
-  - m21
-  - m33
-  - s36
-  - s37
-  - s38
-  - s41
-  - s49
 - id: gen:int:margin_channel
   name: Rates to bank income
   parent: gen:int:root
   instances:
-  - m25
-  - m26
-  - m28
-  - s27
-  - s32
-  - s75
-  - s76
+  - m17
+  - m18
 - id: gen:int:firm_financials
   name: Firm financials
   parent: gen:int:root
@@ -105,46 +74,24 @@ nodes:
       scope:
       - internal
   instances:
+  - m21
   - m22
-  - m23
+  - m31
   - m32
-  - s29
-  - s30
-  - s39
-  - s40
-  - s46
-  - s48
 - id: gen:int:asset_repricing
   name: Asset repricing
   parent: gen:int:root
   instances: []
 - id: gen:int:credit_channel
-  name: Credit and property
+  name: Credit conditions
   parent: gen:int:root
   instances:
-  - s03
-  - s04
-  - s28
-  - s31
-  - s77
+  - m13
+  - m14
 - id: gen:int:capital_markets
   name: Capital-markets activity
   parent: gen:int:root
   instances:
-  - s08
-  - s10
-  - s11
-  - s12
-  - s13
-  - s14
-  - s15
-  - s16
-  - s17
-  - s19
-  - s74
-- id: gen:int:capital_marks
-  name: Bond marks to capital
-  parent: gen:int:root
-  instances:
-  - s18
-  - s33
+  - m16
+  - m19
+  - m33

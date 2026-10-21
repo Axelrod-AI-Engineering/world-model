@@ -31,10 +31,7 @@ nodes:
       attribute_kinds:
       - policy_rate
   instances:
-  - federal_reserve
-  - ecb
-  - boj
-  - pboc
+  - central_bank
 - id: gen:obj:companies
   name: Companies
   parent: gen:obj:institutions
@@ -70,15 +67,6 @@ nodes:
       lag_days: 21
       duration_days: null
     generalization: gen:int:asset_repricing
-  - source: trading_revenue
-    target: share_price
-    label: drives
-    effect: 0.4
-    kernel:
-      delay_days: 1
-      lag_days: 21
-      duration_days: null
-    generalization: gen:int:asset_repricing
 - id: gen:obj:financials
   name: Financials
   parent: gen:obj:companies
@@ -86,7 +74,6 @@ nodes:
     required:
       sector:
       - banking
-      - investment_banking
       - insurance
 - id: gen:obj:bank
   name: Banks
@@ -98,18 +85,6 @@ nodes:
   instances:
   - delta_bank
   - acme_bank
-  - emerald_bank
-  - northwind_bank
-  - harbor_bank
-- id: gen:obj:investment_bank
-  name: Investment banking and wealth management
-  parent: gen:obj:financials
-  signature:
-    required:
-      sector:
-      - investment_banking
-  instances:
-  - keystone_capital
 - id: gen:obj:insurer
   name: Insurance
   parent: gen:obj:financials
@@ -118,24 +93,7 @@ nodes:
       sector:
       - insurance
   instances:
-  - acme_mutual
   - acme_re
-- id: gen:obj:industrials
-  name: Industrials
-  parent: gen:obj:companies
-  signature:
-    required:
-      sector:
-      - machinery
-- id: gen:obj:construction_mining_equipment
-  name: Construction and mining equipment
-  parent: gen:obj:industrials
-  signature:
-    required:
-      sector:
-      - machinery
-  instances:
-  - acme_machinery
 - id: gen:obj:consumer_discretionary
   name: Consumer discretionary
   parent: gen:obj:companies
@@ -152,22 +110,6 @@ nodes:
       - autos
   instances:
   - acme_motors
-- id: gen:obj:communication_services
-  name: Communication services
-  parent: gen:obj:companies
-  signature:
-    required:
-      sector:
-      - telecom
-- id: gen:obj:telecommunications
-  name: Telecommunications
-  parent: gen:obj:communication_services
-  signature:
-    required:
-      sector:
-      - telecom
-  instances:
-  - acme_telecom
 - id: gen:obj:economies
   name: Economies
   parent: gen:obj:root
@@ -176,10 +118,7 @@ nodes:
       kind:
       - macro_factor
   instances:
-  - us_economy
-  - euro_economy
-  - japan_economy
-  - china_economy
+  - economy
 - id: gen:obj:markets
   name: Markets and asset classes
   parent: gen:obj:root
@@ -195,7 +134,7 @@ nodes:
       market:
       - commodity
   instances:
-  - oil
+  - crude_oil
 - id: gen:obj:foreign_exchange
   name: Foreign exchange
   parent: gen:obj:markets
@@ -207,10 +146,7 @@ nodes:
       attribute_kinds:
       - fx_rate
   instances:
-  - dollar_yen
-  - jpy_usd
-  - usd_eur
-  - jpy_eur
+  - dollar
 - id: gen:obj:fixed_income
   name: Fixed income
   parent: gen:obj:markets
@@ -229,10 +165,7 @@ nodes:
       attribute_kinds:
       - bond_yield
   instances:
-  - us_treasuries
-  - jgbs
-  - cgbs
-  - bunds
+  - gov_bonds
 - id: gen:obj:capital_markets
   name: Capital markets
   parent: gen:obj:markets
@@ -241,10 +174,7 @@ nodes:
       market:
       - capital_markets
   instances:
-  - us_capital_markets
-  - china_capital_markets
-  - japan_capital_markets
-  - europe_capital_markets
+  - capital_markets
 - id: gen:obj:configuration
   name: Configuration
   parent: gen:obj:root
@@ -271,8 +201,42 @@ nodes:
   - S5
   - S6
   - S7
-  - S8
-  - S9
   - G1
   - G2
   - G3
+- id: gen:obj:energy
+  name: Energy
+  parent: gen:obj:companies
+  signature:
+    required:
+      sector:
+      - energy
+  instances:
+  - ridge_energy
+- id: gen:obj:transport
+  name: Transportation
+  parent: gen:obj:companies
+  signature:
+    required:
+      sector:
+      - shipping
+  instances:
+  - blue_freight
+- id: gen:obj:credit
+  name: Credit
+  parent: gen:obj:markets
+  signature:
+    required:
+      market:
+      - credit
+  instances:
+  - credit_markets
+- id: gen:obj:freight
+  name: Freight
+  parent: gen:obj:markets
+  signature:
+    required:
+      market:
+      - freight
+  instances:
+  - shipping

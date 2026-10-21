@@ -178,15 +178,15 @@ def test_an_echo_alone_still_opens_the_output_column():
 
 
 def test_interactions_within_one_order_are_drawn_once():
-    # carry and the yen are both first-order under a hike, and carry drives the yen: drawn, but never both ways
+    # carry and the currency are both first-order under a hike, and carry drives the currency: drawn, but never both ways
     values = {"in.x": _v(0, 1.0, shock="in.x"), "carry.x": _v(1, -0.8, ["in>carry"], shock="in.x"),
-              "yen.x": _v(1, -0.6, ["in>yen"], shock="in.x")}
-    edges = [_e("in.x", "carry.x", -0.8, "in>carry"), _e("in.x", "yen.x", -0.3, "in>yen"),
-             _e("carry.x", "yen.x", 0.5, "carry>yen"), _e("yen.x", "carry.x", 0.5, "yen>carry"),
-             _e("yen.x", "yen.x", 0.5, "yen>yen")]
-    g = isolate({"horizon": 20, "values": values, "edges": edges}, "relevant", outputs=["yen.x", "carry.x"])
+              "fx.x": _v(1, -0.6, ["in>fx"], shock="in.x")}
+    edges = [_e("in.x", "carry.x", -0.8, "in>carry"), _e("in.x", "fx.x", -0.3, "in>fx"),
+             _e("carry.x", "fx.x", 0.5, "carry>fx"), _e("fx.x", "carry.x", 0.5, "fx>carry"),
+             _e("fx.x", "fx.x", 0.5, "fx>fx")]
+    g = isolate({"horizon": 20, "values": values, "edges": edges}, "relevant", outputs=["fx.x", "carry.x"])
     pairs = {(e["source"], e["target"]) for e in g["edges"]}
-    assert ("carry.x", "yen.x") in pairs and ("yen.x", "carry.x") not in pairs and ("yen.x", "yen.x") not in pairs
+    assert ("carry.x", "fx.x") in pairs and ("fx.x", "carry.x") not in pairs and ("fx.x", "fx.x") not in pairs
 
 
 def test_a_path_step_that_is_not_shown_is_not_drawn():

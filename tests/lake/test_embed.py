@@ -53,7 +53,7 @@ def test_hashing_is_deterministic_and_unit_norm():
 
 def test_hashing_ignores_case_and_punctuation_but_not_words():
     e = HashingEmbedder(dim=64)
-    a, b, c = e.embed(["The BoJ hiked.", "the boj HIKED", "the ecb cut"])
+    a, b, c = e.embed(["The bank hiked.", "the bank HIKED", "the lender cut"])
     assert a == b and a != c and len(a) == 64 and e.name == "hashing-64"
     assert cosine(a, c) < 1.0
 

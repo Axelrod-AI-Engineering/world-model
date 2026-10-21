@@ -1,76 +1,89 @@
-# Acme's world (acme_demo): a synthetic test fixture. Invented companies and a macro layer of rates, the yen, and global yields.
-# Nothing here describes a real company or a real client.
+# Acme's world (acme_demo): a synthetic test fixture. Invented companies and a macro layer of energy, prices, rates, the dollar, and credit.
+# Written from scratch for the tests; nothing here describes a real company, market view, or client.
 decision_variables:
-- federal_reserve.policy_rate
-- boj.policy_rate
-- ecb.policy_rate
-- pboc.loan_prime_rate
+- central_bank.policy_rate
 entities:
-- id: oil
-  name: Oil
+- id: crude_oil
+  name: Crude oil
   kind: market
-  description: Brent crude. A sustained move above $100 feeds headline inflation within a quarter and weighs on growth after two.
-  category_tags:
+  description: 'Crude oil: price and supply. A sustained rise feeds headline inflation within a quarter, lifts freight, and weighs on growth after
+    two.'
+  category_tags: &id001
   - MF
   features:
     market: commodity
   aliases:
+  - oil
   - crude
-  - brent
   - oil prices
   subentities:
-  - id: oil.brent
-    name: Brent crude
+  - id: crude_oil.price
+    name: Crude oil price
     attribute_kind: commodity_price
     unit: $/bbl
     family: lognormal
-    mean: 92.0
+    mean: 85.0
     scale: 0.08
     aliases:
-    - brent
-    - crude
     - oil price
-- id: us_economy
-  name: United States economy
+    - crude price
+    - price of crude
+    - crude oil
+  - id: crude_oil.supply
+    name: Crude oil supply
+    attribute_kind: production_flow
+    unit: index
+    family: lognormal
+    mean: 100.0
+    scale: 0.04
+    aliases:
+    - oil supply
+    - oil output
+    - crude supply
+    - supply outage
+- id: economy
+  name: Acme economy
   kind: macro_factor
-  description: 'US inflation and growth: what the Fed reacts to.'
-  category_tags:
-  - MF
+  description: 'Prices, growth, and industrial activity in the Acme economy: what the central bank reacts to.'
+  category_tags: *id001
   features:
     region: US
   aliases:
-  - US
-  - United States
+  - the economy
+  - economy
   subentities:
-  - id: us_economy.headline_cpi
-    name: US headline CPI
-    attribute_kind: inflation_rate
-    unit: pct y/y
-    family: gaussian
-    prior:
-      family: gaussian
-      mu: 3.3
-      sigma: 0.3
-    scale: 0.3
-    aliases:
-    - US CPI
-    - US inflation
-    - headline CPI
-    - headline inflation
-  - id: us_economy.core_cpi
-    name: US core CPI
+  - id: economy.headline_inflation
+    name: Headline inflation
     attribute_kind: inflation_rate
     unit: pct y/y
     family: gaussian
     prior:
       family: gaussian
       mu: 3.0
+      sigma: 0.3
+    scale: 0.3
+    aliases:
+    - inflation
+    - headline CPI
+    - consumer prices
+    - CPI
+    - Acme CPI
+  - id: economy.core_inflation
+    name: Core inflation
+    attribute_kind: inflation_rate
+    unit: pct y/y
+    family: gaussian
+    prior:
+      family: gaussian
+      mu: 2.7
       sigma: 0.2
     scale: 0.2
     aliases:
-    - core inflation
-  - id: us_economy.gdp_growth
-    name: US real GDP growth
+    - core CPI
+    - underlying inflation
+    - Acme core CPI
+  - id: economy.gdp_growth
+    name: Real GDP growth
     attribute_kind: growth_rate
     unit: pct y/y
     family: gaussian
@@ -80,474 +93,181 @@ entities:
       sigma: 0.4
     scale: 0.4
     aliases:
-    - US growth
-- id: japan_economy
-  name: Japan economy
-  kind: macro_factor
-  description: 'Japanese inflation and wages: what decides whether the BoJ keeps hiking.'
-  category_tags:
-  - MF
-  features:
-    region: JP
-  aliases:
-  - Japan
-  subentities:
-  - id: japan_economy.core_cpi
-    name: Japan core CPI
-    attribute_kind: inflation_rate
-    unit: pct y/y
-    family: gaussian
-    prior:
-      family: gaussian
-      mu: 2.0
-      sigma: 0.3
-    scale: 0.3
-    aliases:
-    - Japan inflation
-    - Japan CPI
-    - Japanese CPI
-  - id: japan_economy.wage_growth
-    name: Japan wage growth
-    attribute_kind: growth_rate
-    unit: pct y/y
-    family: gaussian
-    prior:
-      family: gaussian
-      mu: 3.2
-      sigma: 0.5
-    scale: 0.5
-    aliases:
-    - shunto
-    - Japanese wages
-    - wage growth
-    - Japan wages
-  - id: japan_economy.gdp_growth
-    name: Japan real GDP growth
-    attribute_kind: growth_rate
-    unit: pct y/y
-    family: gaussian
-    prior:
-      family: gaussian
-      mu: 0.8
-      sigma: 0.4
-    scale: 0.4
-    aliases:
-    - Japan growth
-    - Japanese GDP
-- id: euro_economy
-  name: Europe economy
-  kind: macro_factor
-  description: 'Euro area inflation: what the ECB reacts to, and so what Italian bank margins follow.'
-  category_tags:
-  - MF
-  features:
-    region: EU
-  aliases:
-  - euro area
-  - eurozone
-  subentities:
-  - id: euro_economy.headline_cpi
-    name: Euro area inflation
-    attribute_kind: inflation_rate
-    unit: pct y/y
-    family: gaussian
-    prior:
-      family: gaussian
-      mu: 2.3
-      sigma: 0.3
-    scale: 0.3
-    aliases:
-    - euro inflation
-    - HICP
-    - eurozone inflation
-    - euro area HICP
-    - eurozone HICP
-    - headline CPI
-    - headline inflation
-- id: china_economy
-  name: China economy
-  kind: macro_factor
-  description: 'Chinese growth, credit, and the property market: what the PBoC eases against, and what Chinese banks'' asset quality and Acme Machinery''s
-    construction demand follow.'
-  category_tags:
-  - MF
-  features:
-    region: CN
-  aliases:
-  - China
-  - PRC
-  subentities:
-  - id: china_economy.credit_growth
-    name: China total social financing growth
-    attribute_kind: growth_rate
-    unit: pct y/y
-    family: gaussian
-    prior:
-      family: gaussian
-      mu: 8.2
-      sigma: 0.5
-    scale: 0.5
-    aliases:
-    - TSF
-    - credit growth
-    - social financing
-  - id: china_economy.property_sales
-    name: China property sales
-    attribute_kind: spending_flow
+    - growth
+    - GDP
+    - GDP growth
+    - Acme GDP growth
+  - id: economy.industrial_output
+    name: Industrial output
+    attribute_kind: production_flow
     unit: index
     family: lognormal
     mean: 100.0
-    scale: 0.08
+    scale: 0.03
     aliases:
-    - home sales
-    - property market
-    - housing sales
-- id: federal_reserve
-  name: Federal Reserve
-  short: Fed
+    - industrial production
+    - factory output
+- id: central_bank
+  name: Central bank
   kind: agency
-  description: 'The US central bank. Hold longer, hike, or cut: its path sets the dollar leg of the rate gap.'
-  category_tags:
-  - MF
+  description: The central bank. Its policy rate answers inflation and growth, anchors the front of the yield curve, and moves the dollar.
+  category_tags: *id001
   features:
     region: US
     function: monetary_policy
   aliases:
-  - Fed
-  - FOMC
+  - the central bank
+  - monetary authority
+  - Acme central bank
+  - ACB
   subentities:
-  - id: federal_reserve.policy_rate
-    name: Fed funds rate (midpoint)
+  - id: central_bank.policy_rate
+    name: Policy rate
     attribute_kind: policy_rate
     unit: pct
     family: gaussian
     prior:
       family: gaussian
-      mu: 3.875
+      mu: 4.0
       sigma: 0.25
     scale: 0.25
     aliases:
-    - fed funds
-    - Fed rate
-    - fed funds rate
-    - federal funds rate
-    - FFR
-    - fed funds target range
-    - fed funds target rate
+    - policy rates
+    - the policy rate
+    - benchmark rate
+    - base rate
     - interest rates
     - short-term rates
-    - policy rates
-- id: boj
-  name: Bank of Japan
-  short: BoJ
-  kind: agency
-  description: Japan's central bank, hiking in 25 bp steps. Its path sets the yen leg of the rate gap and the cost of the carry trade's funding.
-  category_tags:
-  - MF
-  features:
-    region: JP
-    function: monetary_policy
-  aliases:
-  - BoJ
-  - BOJ
-  subentities:
-  - id: boj.policy_rate
-    name: BoJ policy rate
-    attribute_kind: policy_rate
-    unit: pct
-    family: gaussian
-    prior:
-      family: gaussian
-      mu: 1.0
-      sigma: 0.25
-    scale: 0.25
-    aliases:
-    - BoJ rate
-    - Japan policy rate
-    - interest rates
-    - short-term rates
-    - policy rates
-- id: ecb
-  name: European Central Bank
-  short: ECB
-  kind: agency
-  description: The euro area's central bank. Its deposit rate drives European banks' interest income.
-  category_tags:
-  - MF
-  features:
-    region: EU
-    function: monetary_policy
-  aliases:
-  - ECB
-  subentities:
-  - id: ecb.policy_rate
-    name: ECB deposit rate
-    attribute_kind: policy_rate
-    unit: pct
-    family: gaussian
-    prior:
-      family: gaussian
-      mu: 2.25
-      sigma: 0.25
-    scale: 0.25
-    aliases:
-    - ECB rate
-    - deposit facility rate
-    - ECB deposit facility rate
-    - DFR
-    - interest rates
-    - short-term rates
-    - policy rates
-- id: pboc
-  name: People's Bank of China
-  short: PBoC
-  kind: agency
-  description: China's central bank. Cuts to the loan prime rate support credit and property, and compress Chinese banks' interest margins.
-  category_tags:
-  - MF
-  features:
-    region: CN
-    function: monetary_policy
-  aliases:
-  - PBoC
-  - PBOC
-  subentities:
-  - id: pboc.loan_prime_rate
-    name: 1-year loan prime rate
-    attribute_kind: policy_rate
-    unit: pct
-    family: gaussian
-    prior:
-      family: gaussian
-      mu: 3.0
-      sigma: 0.1
-    scale: 0.1
-    aliases:
-    - LPR
-    - loan prime rate
-    - Chinese policy rate
-    - 1-year LPR
-    - 1Y LPR
-    - interest rates
-    - short-term rates
-    - policy rates
-- id: us_treasuries
-  name: US Treasuries
-  short: UST
+    - Acme policy rate
+- id: gov_bonds
+  name: Government bonds
   kind: market
-  description: The US yield curve. The two-year follows the Fed's expected path; the five- and ten-year set what insurers reinvest at.
-  category_tags:
-  - MF
+  description: The government yield curve. The two-year follows the policy rate's expected path; the ten-year sets what insurers reinvest at.
+  category_tags: *id001
   features:
     region: US
     market: rates
   aliases:
-  - Treasuries
-  - UST
-  - US yields
+  - government bonds
+  - sovereign bonds
+  - bond market
+  - Acme bonds
   subentities:
-  - id: us_treasuries.yield_2y
-    name: UST 2Y yield
+  - id: gov_bonds.yield_2y
+    name: Two-year yield
     attribute_kind: bond_yield
     unit: pct
     family: gaussian
     prior:
       family: gaussian
-      mu: 4.2
+      mu: 4.1
       sigma: 0.2
     scale: 0.2
     aliases:
-    - two-year Treasury
-    - US 2-year
-    - 2-year Treasury
-    - 2-year Treasury yield
-    - UST 2Y
-    - US 2Y
-    - 2Y UST
-    - 2-year yield
     - two-year yield
+    - 2-year yield
+    - 2Y yield
     - 2yr yield
-  - id: us_treasuries.yield_10y
-    name: UST 10Y yield
+    - two-year government yield
+    - Acme 2Y yield
+  - id: gov_bonds.yield_10y
+    name: Ten-year yield
     attribute_kind: bond_yield
     unit: pct
     family: gaussian
     prior:
       family: gaussian
-      mu: 4.85
+      mu: 4.6
       sigma: 0.2
     scale: 0.2
     aliases:
-    - ten-year Treasury
-    - US 10-year
-    - 10-year Treasury
-    - 10-year Treasury yield
-    - 10-year UST
-    - UST 10Y
-    - US 10Y
-    - 10Y UST
-    - 10-year US Treasury
-    - 10-year yield
     - ten-year yield
-    - 10Y yield
-    - 10-year bond yield
-    - 10yr yield
-    - the 10-year
-    - the ten-year
-- id: jgbs
-  name: Japanese government bonds
-  short: JGB
-  kind: market
-  description: The JGB curve. Higher super-long yields lift Japanese insurers' reinvestment income, part of which their liabilities absorb.
-  category_tags:
-  - MF
-  features:
-    region: JP
-    market: rates
-  aliases:
-  - JGBs
-  - JGB
-  - Japanese yields
-  subentities:
-  - id: jgbs.yield_10y
-    name: JGB 10Y yield
-    attribute_kind: bond_yield
-    unit: pct
-    family: gaussian
-    prior:
-      family: gaussian
-      mu: 1.9
-      sigma: 0.15
-    scale: 0.15
-    aliases:
-    - ten-year JGB
-    - 10-year JGB
-    - JGB 10-year
-    - 10Y JGB
-    - JGB 10Y
-    - Japan 10-year
-    - Japanese 10-year
-    - Japan 10-year bond yield
     - 10-year yield
-    - ten-year yield
     - 10Y yield
-    - 10-year bond yield
     - 10yr yield
-    - the 10-year
+    - bond yields
+    - government yields
     - the ten-year
-  - id: jgbs.yield_30y
-    name: JGB 30Y yield
-    attribute_kind: bond_yield
-    unit: pct
-    family: gaussian
-    prior:
-      family: gaussian
-      mu: 3.85
-      sigma: 0.15
-    scale: 0.15
-    aliases:
-    - thirty-year JGB
-    - super-long JGB
-    - 30-year JGB
-    - JGB 30-year
-    - 30Y JGB
-    - JGB 30Y
-    - super-long JGB yield
-- id: dollar_yen
-  name: USD/JPY
+    - the 10-year
+    - Acme 10Y yield
+- id: dollar
+  name: Dollar
   kind: market
-  description: USD/JPY and the carry trade it funds. A narrowing US-Japan gap strengthens the yen (USD/JPY falls) and can unwind the carry.
-  category_tags:
-  - MF
+  description: The dollar against a trade-weighted basket. A higher policy rate strengthens it; it trims exporters' translated profit and lifts
+    overseas profit at home.
+  category_tags: *id001
   features:
     market: fx
   aliases:
-  - USD/JPY
-  - yen
-  - dollar-yen
+  - US dollar
+  - the dollar
+  - dollar basket
   subentities:
-  - id: dollar_yen.usd_jpy
-    name: USD/JPY
+  - id: dollar.index
+    name: Dollar index
     attribute_kind: fx_rate
-    unit: ¥ per $
+    unit: index
     family: lognormal
-    mean: 156.0
+    mean: 100.0
     scale: 0.03
     aliases:
-    - dollar-yen
-    - yen
-    - USDJPY
-    - USD-JPY
-    - dollar/yen
-    - JPY
-  - id: dollar_yen.carry_positioning
-    name: Yen carry positioning
-    attribute_kind: capital_flow
-    unit: index
-    family: gaussian
-    prior:
-      family: gaussian
-      mu: 0.0
-      sigma: 1.0
-    scale: 1.0
+    - DXY
+    - dollar index
+    - trade-weighted dollar
+    - the dollar
+    - dollar strength
+    - the euro
+    - euro
+  - id: dollar.eur_rate
+    name: Dollar in euros
+    attribute_kind: fx_rate
+    unit: € per $
+    family: lognormal
+    mean: 0.87
+    scale: 0.03
     aliases:
-    - carry trade
-    - carry positions
-- id: bunds
-  name: Europe government bonds
-  short: Bund
+    - dollar-euro
+    - euros per dollar
+    - EUR
+- id: credit_markets
+  name: Credit markets
   kind: market
-  description: The euro curve. The ECB anchors the short end; the ten-year sets what European insurers and banks reinvest at.
-  category_tags:
-  - MF
+  description: Corporate credit. Spreads widen when growth slows and money tightens, and they cool dealmaking and lift volatility.
+  category_tags: *id001
   features:
-    region: EU
-    market: rates
+    market: credit
   aliases:
-  - Bunds
-  - euro yields
-  - German yields
+  - credit
+  - credit spreads
   subentities:
-  - id: bunds.yield_10y
-    name: Bund 10Y yield
-    attribute_kind: bond_yield
-    unit: pct
+  - id: credit_markets.credit_spread
+    name: Credit spread
+    attribute_kind: stress_index
+    unit: bp
     family: gaussian
     prior:
       family: gaussian
-      mu: 2.7
-      sigma: 0.15
-    scale: 0.15
+      mu: 120.0
+      sigma: 25.0
+    scale: 25.0
     aliases:
-    - ten-year Bund
-    - euro 10-year
-    - 10-year Bund
-    - Bund 10-year
-    - 10Y Bund
-    - Bund 10Y
-    - German 10-year
-    - 10-year yield
-    - ten-year yield
-    - 10Y yield
-    - 10-year bond yield
-    - 10yr yield
-    - the 10-year
-    - the ten-year
-- id: us_capital_markets
-  name: US capital markets
+    - credit spreads
+    - spreads
+    - corporate spreads
+    - high-grade spreads
+- id: capital_markets
+  name: Capital markets
   kind: market
-  description: 'Dealmaking and volatility: underwriting and advisory follow deal activity; trading desks earn more when rates and currencies move.'
-  category_tags:
-  - MF
+  description: 'Equities, volatility, and dealmaking: underwriting and advisory follow deal activity; trading desks earn more when markets move.'
+  category_tags: *id001
   features:
-    region: US
     market: capital_markets
   aliases:
-  - capital markets
-  - Wall Street
+  - equity markets
+  - stock market
   - deal activity
   subentities:
-  - id: us_capital_markets.deal_activity
+  - id: capital_markets.deal_activity
     name: Deal and issuance activity
     attribute_kind: production_flow
     unit: index
@@ -559,8 +279,9 @@ entities:
     - issuance
     - dealmaking
     - IPOs
-  - id: us_capital_markets.market_volatility
-    name: Rates and FX volatility
+    - deal activity
+  - id: capital_markets.market_volatility
+    name: Market volatility
     attribute_kind: volatility
     unit: index
     family: lognormal
@@ -568,265 +289,46 @@ entities:
     scale: 0.1
     aliases:
     - volatility
+    - VIX
     - MOVE
+    - OVX
     - market volatility
-- id: jpy_usd
-  name: JPY/USD
+- id: shipping
+  name: Shipping
   kind: market
-  description: 'The yen priced in dollars: the inverse of USD/JPY, the way a dollar-based investor reads the yen.'
-  category_tags:
-  - MF
+  description: Freight markets. Fuel is most of a voyage's cost, so freight follows crude; dear freight slows industrial output.
+  category_tags: *id001
   features:
-    market: fx
+    market: freight
   aliases:
-  - JPY/USD
-  - JPYUSD
+  - freight
+  - freight market
   subentities:
-  - id: jpy_usd.rate
-    name: JPY/USD
-    attribute_kind: fx_rate
-    unit: $ per ¥100
+  - id: shipping.freight_cost
+    name: Freight cost index
+    attribute_kind: cost_index
+    unit: index
     family: lognormal
-    mean: 0.641
-    scale: 0.03
-    aliases:
-    - yen in dollars
-    - JPYUSD
-- id: usd_eur
-  name: USD/EUR
-  kind: market
-  description: The dollar priced in euros. A wider Fed-ECB gap strengthens the dollar (USD/EUR rises).
-  category_tags:
-  - MF
-  features:
-    market: fx
-  aliases:
-  - USD/EUR
-  - USDEUR
-  subentities:
-  - id: usd_eur.rate
-    name: USD/EUR
-    attribute_kind: fx_rate
-    unit: € per $
-    family: lognormal
-    mean: 0.87
-    scale: 0.03
-    aliases:
-    - dollar-euro
-    - USDEUR
-- id: jpy_eur
-  name: JPY/EUR
-  kind: market
-  description: 'The yen priced in euros: JPY/USD times USD/EUR. It translates Japanese insurers'' European profit.'
-  category_tags:
-  - MF
-  features:
-    market: fx
-  aliases:
-  - JPY/EUR
-  - JPYEUR
-  subentities:
-  - id: jpy_eur.rate
-    name: JPY/EUR
-    attribute_kind: fx_rate
-    unit: € per ¥100
-    family: lognormal
-    mean: 0.558
-    scale: 0.03
-    aliases:
-    - yen in euros
-    - JPYEUR
-- id: cgbs
-  name: China government bonds
-  short: CGB
-  kind: market
-  description: The Chinese government curve. The PBoC's easing pulls it down; lower yields shave Chinese banks' asset yields.
-  category_tags:
-  - MF
-  features:
-    region: CN
-    market: rates
-  aliases:
-  - CGBs
-  - CGB
-  - Chinese government bonds
-  - Chinese yields
-  subentities:
-  - id: cgbs.yield_10y
-    name: CGB 10Y yield
-    attribute_kind: bond_yield
-    unit: pct
-    family: gaussian
-    prior:
-      family: gaussian
-      mu: 1.85
-      sigma: 0.1
+    mean: 100.0
     scale: 0.1
     aliases:
-    - ten-year CGB
-    - China 10-year
-    - 10-year CGB
-    - CGB 10-year
-    - CGB 10Y
-    - China 10-year bond yield
-    - 10-year yield
-    - ten-year yield
-    - 10Y yield
-    - 10-year bond yield
-    - 10yr yield
-    - the 10-year
-    - the ten-year
-- id: china_capital_markets
-  name: China capital markets
-  kind: market
-  description: Chinese equities. Easing and a property recovery lift them; Chinese bank shares trade with them.
-  category_tags:
-  - MF
-  features:
-    region: CN
-    market: capital_markets
-  aliases:
-  - Chinese stocks
-  - China equities
-  - CSI 300
-  subentities:
-  - id: china_capital_markets.equity_index
-    name: China equity index (CSI 300)
-    attribute_kind: asset_price
-    unit: index
-    family: lognormal
-    mean: 100.0
-    scale: 0.08
-    aliases:
-    - CSI 300
-    - Chinese equities
-    - China stocks
-- id: japan_capital_markets
-  name: Japan capital markets
-  kind: market
-  description: Japanese equities. A weaker yen lifts the exporters that lead the index; BoJ hikes weigh on it.
-  category_tags:
-  - MF
-  features:
-    region: JP
-    market: capital_markets
-  aliases:
-  - Japanese stocks
-  - Japan equities
-  - TOPIX
-  - Nikkei
-  subentities:
-  - id: japan_capital_markets.equity_index
-    name: Japan equity index (TOPIX)
-    attribute_kind: asset_price
-    unit: index
-    family: lognormal
-    mean: 100.0
-    scale: 0.07
-    aliases:
-    - TOPIX
-    - Nikkei
-    - Japanese equities
-- id: europe_capital_markets
-  name: Europe capital markets
-  kind: market
-  description: European equities. ECB easing and lower Bund yields lift them; European bank shares trade with them.
-  category_tags:
-  - MF
-  features:
-    region: EU
-    market: capital_markets
-  aliases:
-  - European stocks
-  - European equities
-  - Euro Stoxx
-  subentities:
-  - id: europe_capital_markets.equity_index
-    name: Europe equity index (Euro Stoxx 50)
-    attribute_kind: asset_price
-    unit: index
-    family: lognormal
-    mean: 100.0
-    scale: 0.07
-    aliases:
-    - Euro Stoxx
-    - European equities
-    - Euro Stoxx 50
-- id: acme_re
-  name: Acme Re
-  kind: company
-  description: 'Japan''s largest P&C insurer, more than half of its profit from abroad. A weaker yen lifts translated overseas profit (partly
-    offset by foreign-currency claims reserves at home); higher US and JGB yields lift income only on the share of the portfolio that reinvests.
-    Business construction: construction/acme_re.yaml.'
-  category_tags:
-  - SC
-  features:
-    sector: insurance
-    region: JP
-  aliases:
-  - Acme Re Holdings
-  - 8766 AR
-  - ARHD
-  levels:
-    share_price: 6000.0
-  subentities:
-  - id: acme_re.international_profit
-    name: Acme Re international business profit
-    attribute_kind: revenue_flow
-    features:
-      view: reporting_segments
-      basis: 'ANI: international business adjusted net income, company definition (IFRS), yen at the period-average rate'
-      metric: international_adjusted_net_income
-    unit: ¥bn/yr
-    family: lognormal
-    mean: 640.0
-    scale: 0.06
-    aliases:
-    - international segment
-    - overseas profit
-    - international business
-  - id: acme_re.japan_pc_profit
-    name: Acme Re Japan P&C profit
-    attribute_kind: revenue_flow
-    features:
-      view: reporting_segments
-      basis: 'ANI: Japan P&C business adjusted net income, company definition (IFRS)'
-      metric: japan_pc_adjusted_net_income
-    unit: ¥bn/yr
-    family: lognormal
-    mean: 225.0
-    scale: 0.06
-    aliases:
-    - domestic P&C
-    - ARHD profit
-    - Japan P&C
-  - id: acme_re.operating_profit
-    name: Acme Re adjusted net income
-    attribute_kind: revenue_flow
-    features:
-      view: reporting_segments
-      basis: 'ANI: group adjusted net income, company definition (IFRS from FY3/27; excludes gains on business-related equities); not operating
-        profit and not J-GAAP segment profit'
-      metric: adjusted_net_income
-    unit: ¥bn/yr
-    family: lognormal
-    mean: 960.0
-    scale: 0.05
-    aliases:
-    - adjusted profit
-    - adjusted net profit
+    - freight rates
+    - freight costs
+    - shipping costs
+    - shipping rates
+    - container rates
 - id: acme_bank
   name: Acme Bank Corp
   short: Acme Bank
   kind: company
-  description: The largest US bank. Rates held higher for longer keep its net interest income up.
+  description: A large bank. Rates held higher for longer keep its net interest income up; dealmaking and volatility drive its fees and trading.
   category_tags:
   - SC
   features:
     sector: banking
     region: US
   aliases:
-  - ACME
+  - ACBK
   - Acme Bank
   levels:
     share_price: 300.0
@@ -837,7 +339,7 @@ entities:
     unit: $bn/yr
     features:
       view: product
-      basis: 'managed: firmwide net interest income incl. CIB Markets NII (fully taxable-equivalent)'
+      basis: firmwide net interest income
       metric: net_interest_income
     family: lognormal
     mean: 102.0
@@ -852,27 +354,27 @@ entities:
     unit: $bn/yr
     features:
       view: product
-      basis: 'line: investment banking fees (advisory, equity and debt underwriting), firmwide'
+      basis: 'line: investment banking fees, firmwide'
       metric: investment_banking_fees
     family: lognormal
     mean: 9.5
     scale: 0.08
     aliases:
-    - ACME IB fees
     - advisory and underwriting
+    - banking fees
   - id: acme_bank.markets_revenue
     name: Acme Bank markets revenue
     attribute_kind: revenue_flow
     unit: $bn/yr
     features:
       view: product
-      basis: 'segment product: CIB Fixed Income plus Equity Markets revenue, managed (incl. Markets NII)'
+      basis: 'line: fixed income and equity markets revenue'
       metric: markets_revenue
     family: lognormal
     mean: 32.0
     scale: 0.07
     aliases:
-    - ACME trading
+    - trading
     - markets
   - id: acme_bank.cet1_ratio
     name: Acme Bank CET1 ratio
@@ -880,7 +382,7 @@ entities:
     unit: pct
     features:
       view: capital
-      basis: CET1 capital over risk-weighted assets, standardized (binding approach), incl. AOCI
+      basis: CET1 capital over risk-weighted assets
       metric: cet1_ratio
     family: gaussian
     prior:
@@ -889,7 +391,7 @@ entities:
       sigma: 0.3
     scale: 0.3
     aliases:
-    - ACME capital
+    - capital
     - CET1
     - CET1 ratio
     - CET-1
@@ -900,7 +402,7 @@ entities:
   name: Delta Bank
   short: Delta
   kind: company
-  description: A global US bank in restructuring. Its interest income follows US rates; its services fees follow cross-border flows.
+  description: A bank in restructuring. Its interest income follows the policy rate; its services fees follow cross-border flows.
   category_tags:
   - SC
   features:
@@ -908,7 +410,8 @@ entities:
     region: US
   aliases:
   - Delta
-  - C
+  - DLTB
+  - D
   levels:
     share_price: 125.0
   subentities:
@@ -918,7 +421,7 @@ entities:
     unit: $bn/yr
     features:
       view: product
-      basis: 'line: firm net interest income incl. Markets NII (US GAAP); the guided measure is NII ex-Markets'
+      basis: 'line: net interest income incl. markets NII'
       metric: net_interest_income
     family: lognormal
     mean: 64.0
@@ -934,14 +437,12 @@ entities:
     unit: $bn/yr
     features:
       view: reporting_segments
-      basis: 'segment: Services revenues (Treasury and Trade Solutions plus Securities Services, NII and non-interest revenue), managed basis,
-        segments as recast in 2026'
-      metric: services_revenues
+      basis: 'segment: services revenue'
+      metric: services_revenue
     family: lognormal
     mean: 20.0
     scale: 0.05
     aliases:
-    - TTS
     - treasury and trade solutions
     - Delta services
   - id: delta_bank.markets_revenue
@@ -950,149 +451,100 @@ entities:
     unit: $bn/yr
     features:
       view: reporting_segments
-      basis: 'segment: Markets revenues (Fixed Income plus Equity Markets, incl. Markets NII), managed basis'
-      metric: markets_revenues
+      basis: 'segment: markets revenue'
+      metric: markets_revenue
     family: lognormal
     mean: 21.0
     scale: 0.07
     aliases:
     - Delta trading
-- id: keystone_capital
-  name: Keystone Capital
+- id: acme_re
+  name: Acme Re
+  short: Acme Re
   kind: company
-  description: A US investment bank and wealth manager. Trading thrives on rate volatility; a hawkish Fed weighs on dealmaking.
+  description: 'A reinsurer with a large overseas arm. A stronger dollar lifts translated overseas profit (partly offset by hedging cost); higher
+    yields lift income only on the share of the portfolio that reinvests. Business construction: construction/acme_re.yaml.'
   category_tags:
   - SC
   features:
-    sector: investment_banking
+    sector: insurance
     region: US
   aliases:
-  - KC
+  - Acme Re Holdings
+  - ACRE
   levels:
-    share_price: 185.0
+    share_price: 6000.0
   subentities:
-  - id: keystone_capital.trading_revenue
-    name: Keystone Capital trading revenue
-    attribute_kind: revenue_flow
-    unit: $bn/yr
-    features:
-      view: product
-      basis: 'segment product total: ISG sales and trading net revenues, Equity plus Fixed Income (incl. their fees and net interest; excl. ISG
-        other)'
-      metric: sales_and_trading_revenues
-    family: lognormal
-    mean: 28.0
-    scale: 0.08
-    aliases:
-    - markets revenue
-  - id: keystone_capital.ib_fees
-    name: Keystone Capital investment banking revenue
-    attribute_kind: revenue_flow
-    unit: $bn/yr
-    features:
-      view: product
-      basis: 'segment product total: ISG investment banking revenues (advisory plus equity and fixed income underwriting); not the firm investment
-        banking line'
-      metric: isg_investment_banking_revenues
-    family: lognormal
-    mean: 6.5
-    scale: 0.09
-    aliases:
-    - KC IB
-    - advisory
-    - underwriting
-  - id: keystone_capital.wealth_revenue
-    name: Keystone Capital wealth management revenue
+  - id: acme_re.international_profit
+    name: Acme Re international business profit
     attribute_kind: revenue_flow
     unit: $bn/yr
     features:
       view: reporting_segments
-      basis: 'segment: Wealth Management net revenues (incl. intersegment amounts)'
-      metric: wm_net_revenues
+      basis: international business adjusted net income, company definition
+      metric: international_adjusted_net_income
     family: lognormal
-    mean: 30.0
+    mean: 640.0
+    scale: 0.06
+    aliases:
+    - international segment
+    - overseas profit
+    - international business
+  - id: acme_re.domestic_pc_profit
+    name: Acme Re domestic P&C profit
+    attribute_kind: revenue_flow
+    unit: $bn/yr
+    features:
+      view: reporting_segments
+      basis: domestic P&C business adjusted net income, company definition
+      metric: domestic_pc_adjusted_net_income
+    family: lognormal
+    mean: 225.0
+    scale: 0.06
+    aliases:
+    - domestic P&C
+    - home P&C
+    - domestic property and casualty
+    - ACRE domestic profit
+  - id: acme_re.operating_profit
+    name: Acme Re adjusted net income
+    attribute_kind: revenue_flow
+    unit: $bn/yr
+    features:
+      view: reporting_segments
+      basis: group adjusted net income, company definition; not operating profit
+      metric: adjusted_net_income
+    family: lognormal
+    mean: 960.0
     scale: 0.05
     aliases:
-    - wealth management
-    - KC wealth
-- id: northwind_bank
-  name: Northwind Bank
-  kind: company
-  description: An Italian bank with German and Central European franchises. ECB rates set its net interest income.
-  category_tags:
-  - SC
-  features:
-    sector: banking
-    region: EU
-  aliases:
-  - UCG
-  levels:
-    share_price: 80.0
-  subentities:
-  - id: northwind_bank.net_interest_income
-    name: Northwind Bank net interest income
-    attribute_kind: revenue_flow
-    unit: €bn/yr
-    features:
-      view: product
-      basis: 'reclassified P&L: group net interest income (IFRS), standalone, as reported (restated quarters may differ)'
-      metric: net_interest_income
-    family: lognormal
-    mean: 14.5
-    scale: 0.04
-    aliases:
-    - Northwind Bank NII
-    - NII
-    - net interest income
-    - net II
-  - id: northwind_bank.cet1_ratio
-    name: Northwind Bank CET1 ratio
-    attribute_kind: structural_level
-    unit: pct
-    features:
-      view: capital
-      basis: CET1 capital over risk-weighted assets, standalone (before any Commerzbank consolidation)
-      metric: cet1_ratio
-    family: gaussian
-    prior:
-      family: gaussian
-      mu: 15.9
-      sigma: 0.3
-    scale: 0.3
-    aliases:
-    - Northwind Bank capital
-    - CET1
-    - CET1 ratio
-    - CET-1
-    - CET-1 ratio
-    - Common Equity Tier 1 ratio
-    - Common Equity Tier 1 Capital Ratio
+    - adjusted profit
+    - adjusted net profit
 - id: acme_motors
   name: Acme Motors
   short: Acme Motors
   kind: company
-  description: 'Automaker reporting automotive, financial-services and other businesses, and five regions; builds far more in Japan than it sells
-    there, so Japan''s export margin and the yen matter (each yen of USD/JPY moves operating profit by tens of billions of yen), while North America
-    sells more than it builds and carries the tariff and finance exposure. China volume runs largely through equity-accounted JVs. Construction:
+  description: 'An automaker with automotive, financial-services and other businesses in several regions. It builds more at home than it sells
+    there, so the dollar matters: a stronger dollar trims operating profit, and North America carries the tariff and finance exposure. Construction:
     construction/acme_motors.yaml.'
   category_tags:
   - SC
   features:
     sector: autos
-    region: JP
+    region: US
   aliases:
   - Acme Motors
-  - 7203 AM
+  - ACMO
   levels:
     share_price: 2800.0
   subentities:
   - id: acme_motors.operating_profit
     name: Acme Motors operating profit
     attribute_kind: revenue_flow
-    unit: ¥tn/yr
+    unit: $bn/yr
     features:
       view: reporting_segments
-      basis: consolidated operating income (IFRS); the total of the business-segment and the regional views, which overlap
+      basis: consolidated operating income; the total of the business-segment and the regional views, which overlap
     family: lognormal
     mean: 3.4
     scale: 0.08
@@ -1109,7 +561,7 @@ entities:
     unit: m units/yr
     features:
       view: product
-      basis: Acme Motors and Lexus retail units, including units retailed by equity-accounted JVs; not consolidated vehicle sales (acme_motors.consolidated_units)
+      basis: retail units worldwide, including units sold through joint ventures
     family: lognormal
     mean: 10.5
     scale: 0.04
@@ -1118,280 +570,293 @@ entities:
     - unit sales
     - vehicle sales
     - global vehicle sales
-- id: acme_machinery
-  name: Acme Machinery
+- id: ridge_energy
+  name: Ridge Energy
+  short: Ridge
   kind: company
-  description: 'A Japanese construction and mining equipment maker: construction, mining and utility equipment (new machines plus a large parts
-    and service aftermarket, sold in eight regions), retail finance and industrial machinery. Mining follows miners'' capex and fleet hours, construction
-    follows regional building activity, and a weaker yen lifts its profit (docs/construction/acme_machinery.md).'
+  description: An oil producer. Its profit follows the crude price on the barrels it pumps.
   category_tags:
   - SC
   features:
-    sector: machinery
-    region: JP
+    sector: energy
+    region: US
   aliases:
-  - 6301 AX
+  - Ridge
+  - RDGE
   levels:
-    share_price: 5000.0
+    share_price: 48.0
   subentities:
-  - id: acme_machinery.operating_profit
-    name: Acme Machinery operating profit
+  - id: ridge_energy.operating_profit
+    name: Ridge Energy operating profit
     attribute_kind: revenue_flow
-    unit: ¥bn/yr
+    unit: $bn/yr
     features:
-      view: reporting_segments
-      basis: 'consolidated operating income, US GAAP: segment profit plus corporate, eliminations and other operating items'
+      view: product
+      basis: consolidated operating profit
     family: lognormal
-    mean: 600.0
-    scale: 0.08
-    aliases:
-    - Acme Machinery earnings
-    - OP
-    - Op. profit
-    - operating profit
-    - operating income
-    - EBIT
-  - id: acme_machinery.mining_demand
-    name: Mining equipment demand
-    attribute_kind: production_flow
-    unit: index
-    features:
-      view: operating_state
-      basis: industry demand for mining equipment (the company's demand outlook, units); not Acme Machinery's orders
-    family: lognormal
-    mean: 100.0
-    scale: 0.06
-    aliases:
-    - mining capex
-    - mining machinery demand
-    - demand for mining equipment
-  - id: acme_machinery.construction_demand
-    name: Construction equipment demand
-    attribute_kind: production_flow
-    unit: index
-    features:
-      view: operating_state
-      basis: global industry demand for the major construction equipment products (units); a reduced-form index, not Acme Machinery's regional sales
-    family: lognormal
-    mean: 100.0
-    scale: 0.06
-    aliases:
-    - construction demand
-    - construction equipment
-    - construction machinery demand
-    - demand for construction equipment
-- id: acme_telecom
-  name: Acme Telecom
-  kind: company
-  description: Acme Telecom's Japanese telecom arm, now building AI data centers. Higher JGB yields raise the cost of that build.
-  category_tags:
-  - SC
-  features:
-    sector: telecom
-    region: JP
-  aliases:
-  - 9434 AT
-  - Acme Telecom.
-  levels:
-    share_price: 235.0
-  subentities:
-  - id: acme_telecom.operating_profit
-    name: Acme Telecom operating income
-    attribute_kind: revenue_flow
-    unit: ¥bn/yr
-    family: lognormal
-    mean: 1100.0
-    scale: 0.06
-    aliases:
-    - Acme Telecom earnings
-    - OP
-    - Op. profit
-    - operating profit
-    - operating income
-    - EBIT
-    features:
-      view: reporting_segments
-      basis: IFRS consolidated operating income (incl. one-off items in segment income; before finance costs and minorities)
-      metric: operating_income
-  - id: acme_telecom.ai_capex
-    name: Acme Telecom AI data-center investment
-    attribute_kind: spending_flow
-    unit: ¥bn/yr
-    family: lognormal
-    mean: 300.0
+    mean: 6.0
     scale: 0.1
     aliases:
-    - AI data centers
-    - AI capex
-    - GPU investment
+    - Ridge profit
+    - operating profit
+    - earnings
+  - id: ridge_energy.oil_output
+    name: Ridge Energy oil output
+    attribute_kind: production_flow
+    unit: mb/d
     features:
       view: operating_state
-      basis: investment in AI data centres and compute (GPUs, servers, buildings); its split across PP&E capex, leases and other investing is
-        not disclosed in the sources read
-      metric: ai_investment
-- id: harbor_bank
-  name: Harbor Bank
-  short: HBK
+      basis: barrels produced per day
+    family: lognormal
+    mean: 1.8
+    scale: 0.05
+    aliases:
+    - production
+    - barrels pumped
+    - oil production
+- id: blue_freight
+  name: Blue Freight
+  short: Blue
   kind: company
-  description: One of China's big four state banks, heavy in mortgages. Loan prime rate cuts compress its margin; the property market sets its
-    asset quality.
+  description: A container shipper. Freight rates lift its revenue; fuel is its largest cost, so crude squeezes its margin.
   category_tags:
   - SC
   features:
-    sector: banking
-    region: CN
+    sector: shipping
+    region: US
   aliases:
-  - HBK
-  - 939 HK
-  - 601939 CN
+  - Blue
+  - BLFR
   levels:
-    share_price: 7.5
+    share_price: 22.0
   subentities:
-  - id: harbor_bank.net_interest_margin
-    name: HBK net interest margin
-    attribute_kind: margin
-    unit: pct
-    features:
-      view: operating_state
-      basis: 'IFRS: net interest income over average interest-earning assets, group'
-      metric: net_interest_margin
-    family: gaussian
-    prior:
-      family: gaussian
-      mu: 1.42
-      sigma: 0.05
-    scale: 0.05
-    aliases:
-    - HBK NIM
-    - Chinese bank margins
-    - NIM
-    - net interest margin
-  - id: harbor_bank.npl_ratio
-    name: HBK non-performing loan ratio
-    attribute_kind: structural_level
-    unit: pct
-    features:
-      view: credit
-      basis: 'non-performing loans (five-category classification: substandard, doubtful, loss) over gross loans, group'
-      metric: npl_ratio
-    family: gaussian
-    prior:
-      family: gaussian
-      mu: 1.33
-      sigma: 0.05
-    scale: 0.05
-    aliases:
-    - HBK NPLs
-    - asset quality
-    - NPL ratio
-  - id: harbor_bank.operating_profit
-    name: HBK net profit
+  - id: blue_freight.operating_profit
+    name: Blue Freight operating profit
     attribute_kind: revenue_flow
-    unit: CNY bn/yr
+    unit: $bn/yr
     features:
-      view: reporting_segments
-      basis: IFRS net profit, group incl. minority interests (the id is kept for Acme's expected paths; it is not an operating line)
-      metric: net_profit
+      view: product
+      basis: consolidated operating profit
     family: lognormal
-    mean: 335.0
-    scale: 0.04
+    mean: 2.2
+    scale: 0.12
     aliases:
-    - HBK earnings
-- id: emerald_bank
-  name: Emerald Bank
-  short: Emerald
+    - Blue profit
+    - operating profit
+    - earnings
+  - id: blue_freight.freight_revenue
+    name: Blue Freight freight revenue
+    attribute_kind: revenue_flow
+    unit: $bn/yr
+    features:
+      view: product
+      basis: 'line: freight revenue'
+    family: lognormal
+    mean: 18.0
+    scale: 0.06
+    aliases:
+    - freight revenue
+    - shipping revenue
+  - id: blue_freight.fuel_cost
+    name: Blue Freight fuel cost
+    attribute_kind: revenue_flow
+    unit: $bn/yr
+    features:
+      view: product
+      basis: 'line: fuel cost'
+    family: lognormal
+    mean: 4.5
+    scale: 0.08
+    aliases:
+    - fuel bill
+    - bunker cost
+    - fuel cost
+- id: union_bank
+  name: Union central bank
+  kind: agency
+  description: The central bank of the neighbouring currency union. Its policy rate anchors its own yield curve and sets its banks' interest income.
+  category_tags:
+  - MF
+  features:
+    region: EU
+    function: monetary_policy
+  aliases:
+  - the union bank
+  - UCB
+  subentities:
+  - id: union_bank.policy_rate
+    name: Union policy rate
+    attribute_kind: policy_rate
+    unit: pct
+    family: gaussian
+    prior:
+      family: gaussian
+      mu: 2.5
+      sigma: 0.25
+    scale: 0.25
+    aliases:
+    - policy rates
+    - the policy rate
+    - benchmark rate
+    - base rate
+    - interest rates
+    - short-term rates
+- id: union_bonds
+  name: Union government bonds
+  kind: market
+  description: The union's yield curve; its ten-year sets what the union's banks reinvest at.
+  category_tags:
+  - MF
+  features:
+    region: EU
+    market: rates
+  aliases:
+  - union bonds
+  subentities:
+  - id: union_bonds.yield_10y
+    name: Union ten-year yield
+    attribute_kind: bond_yield
+    unit: pct
+    family: gaussian
+    prior:
+      family: gaussian
+      mu: 2.9
+      sigma: 0.2
+    scale: 0.2
+    aliases:
+    - ten-year yield
+    - 10-year yield
+    - 10Y yield
+    - 10yr yield
+    - bond yields
+    - government yields
+    - the ten-year
+    - the 10-year
+- id: union_economy
+  name: Union economy
+  kind: macro_factor
+  description: 'Prices and growth in the neighbouring currency union: what its central bank reacts to.'
+  category_tags:
+  - MF
+  features:
+    region: EU
+  aliases:
+  - the union
+  subentities:
+  - id: union_economy.headline_inflation
+    name: Union headline inflation
+    attribute_kind: inflation_rate
+    unit: pct y/y
+    family: gaussian
+    prior:
+      family: gaussian
+      mu: 2.6
+      sigma: 0.3
+    scale: 0.3
+    aliases:
+    - inflation
+    - headline CPI
+    - consumer prices
+    - CPI
+  - id: union_economy.core_inflation
+    name: Union core inflation
+    attribute_kind: inflation_rate
+    unit: pct y/y
+    family: gaussian
+    prior:
+      family: gaussian
+      mu: 2.2
+      sigma: 0.2
+    scale: 0.2
+    aliases:
+    - core CPI
+    - Union core CPI
+    - underlying inflation
+  - id: union_economy.gdp_growth
+    name: Union real GDP growth
+    attribute_kind: growth_rate
+    unit: pct y/y
+    family: gaussian
+    prior:
+      family: gaussian
+      mu: 0.9
+      sigma: 0.4
+    scale: 0.4
+    aliases:
+    - growth
+    - GDP
+    - GDP growth
+- id: union_capital_markets
+  name: Union capital markets
+  kind: market
+  description: The union's equity market.
+  category_tags:
+  - MF
+  features:
+    region: EU
+    market: capital_markets
+  aliases:
+  - union equities
+  subentities:
+  - id: union_capital_markets.equity_index
+    name: Union equity market level
+    attribute_kind: asset_price
+    unit: index
+    family: lognormal
+    mean: 5400.0
+    scale: 0.08
+    aliases:
+    - union stocks
+    - union equities
+- id: harvest_bank
+  name: Harvest Bank
+  short: Harvest
   kind: company
-  description: 'Ireland''s largest bank, deposit-rich and among Europe''s most rate-sensitive: ECB cuts flow almost straight into its net interest
-    income.'
+  description: A bank of the neighbouring currency union. The union policy rate and its ten-year yield set its net interest income.
   category_tags:
   - SC
   features:
     sector: banking
     region: EU
   aliases:
-  - Emerald
-  - Emerald Banks
-  - E5G ID
+  - HVBK
   levels:
-    share_price: 7.0
+    share_price: 80.0
   subentities:
-  - id: emerald_bank.net_interest_income
-    name: Emerald net interest income
+  - id: harvest_bank.net_interest_income
+    name: Harvest Bank net interest income
     attribute_kind: revenue_flow
     unit: €bn/yr
     features:
       view: product
-      basis: 'IFRS: group net interest income (Ireland and UK, EUR), incl. net interest on the structural hedge'
+      basis: 'line: group net interest income'
       metric: net_interest_income
     family: lognormal
-    mean: 3.7
-    scale: 0.05
+    mean: 14.5
+    scale: 0.04
     aliases:
-    - Emerald NII
+    - Harvest NII
     - NII
     - net interest income
     - net II
-- id: acme_mutual
-  name: Acme Mutual Insurance
-  short: Acme Mutual
-  kind: company
-  description: 'A Japanese P&C insurer group (Acme Mutual, Acme Mutual Casualty) with a growing overseas book (AM Amlin, Asia) and two life companies.
-    A weaker yen lifts translated overseas profit; higher yields lift income only on the money that reinvests. Business construction: construction/acme_mutual.yaml.'
-  category_tags:
-  - SC
-  features:
-    sector: insurance
-    region: JP
-  aliases:
-  - Acme Mutual Insurance Group
-  - 8725 AM
-  - Acme Mutual
-  levels:
-    share_price: 3300.0
-  subentities:
-  - id: acme_mutual.international_profit
-    name: Acme Mutual international business profit
-    attribute_kind: revenue_flow
+  - id: harvest_bank.cet1_ratio
+    name: Harvest Bank CET1 ratio
+    attribute_kind: structural_level
+    unit: pct
     features:
-      view: reporting_segments
-      basis: 'GAP: international business adjusted profit, company definition, yen at reporting rates'
-      metric: international_adjusted_profit
-    unit: ¥bn/yr
-    family: lognormal
-    mean: 160.0
-    scale: 0.07
+      view: capital
+      basis: CET1 capital over risk-weighted assets
+      metric: cet1_ratio
+    family: gaussian
+    prior:
+      family: gaussian
+      mu: 15.9
+      sigma: 0.3
+    scale: 0.3
     aliases:
-    - Acme Mutual overseas
-    - AM Amlin
-    - international business
-  - id: acme_mutual.domestic_profit
-    name: Acme Mutual domestic P&C profit
-    attribute_kind: revenue_flow
-    features:
-      view: reporting_segments
-      basis: 'GAP: domestic non-life adjusted profit (Acme Mutual and Acme Mutual Casualty), company definition'
-      metric: domestic_nonlife_adjusted_profit
-    unit: ¥bn/yr
-    family: lognormal
-    mean: 260.0
-    scale: 0.06
-    aliases:
-    - Acme Mutual domestic
-    - domestic P&C
-    - Japan P&C
-  - id: acme_mutual.operating_profit
-    name: Acme Mutual group adjusted profit
-    attribute_kind: revenue_flow
-    features:
-      view: reporting_segments
-      basis: 'GAP: group adjusted profit, company definition (J-GAAP based; not net income and not operating profit)'
-      metric: group_adjusted_profit
-    unit: ¥bn/yr
-    family: lognormal
-    mean: 620.0
-    scale: 0.05
-    aliases:
-    - Acme Mutual adjusted profit
-    - Acme Mutual earnings
-    - adjusted net profit
-    - adjusted profit
+    - Harvest capital
+    - CET1
+    - CET1 ratio
+    - CET-1
+    - CET-1 ratio
+    - Common Equity Tier 1 ratio

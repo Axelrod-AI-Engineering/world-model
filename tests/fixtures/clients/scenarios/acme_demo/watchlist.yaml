@@ -1,14 +1,10 @@
 name: Acme's book
-description: 'Invented names on the rates, yen, and global-yields thesis: banks, insurers, exporters, and a carrier.'
+description: 'Invented names on the energy, rates, dollar, and credit themes: banks, a reinsurer, an automaker, a producer, and a shipper, in two regions.'
 entities:
 - acme_bank
-- keystone_capital
 - delta_bank
-- harbor_bank
-- northwind_bank
-- emerald_bank
 - acme_re
-- acme_mutual
 - acme_motors
-- acme_machinery
-- acme_telecom
+- ridge_energy
+- blue_freight
+- harvest_bank

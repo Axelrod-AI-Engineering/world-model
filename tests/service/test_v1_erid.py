@@ -77,7 +77,7 @@ def test_mirrored_reads_narrow_to_the_compartment(c):
     assert data(c.get(f"{E}/entities/acme_bank"))["id"] == "acme_bank"
     view = data(c.get(f"{E}/entities/acme_motors/construction", params=FOCUS))
     assert view["entity_id"] == "acme_motors" and view["compositions"] and view["paths"]
-    tr = data(c.get(f"{E}/entities/acme_motors/traces", params={**FOCUS, "from": "dollar_yen.usd_jpy"}))
+    tr = data(c.get(f"{E}/entities/acme_motors/traces", params={**FOCUS, "from": "dollar.index"}))
     assert tr["reaches_endpoint"]
     g = data(c.get(f"{E}/graph", params={**FOCUS, "entities": "acme_motors", "depth": 1}))
     assert "acme_motors" in {e["id"] for e in g["entities"]} and "acme_bank" not in {e["id"] for e in g["entities"]}
@@ -112,7 +112,7 @@ def test_scopes_apply_as_on_a_world_model(c):
 
 def test_what_the_unified_model_learns_reaches_the_compartment(c):
     before = c.get(f"{E}/entities/acme_motors", params=FOCUS).json()["meta"]["version"]["number"]
-    res = upload(c, b"Oct 25, 2026. USD/JPY rose to 158 as the yen weakened.", "yen.txt")
+    res = upload(c, b"Oct 25, 2026. The dollar index rose to 104 as the dollar strengthened.", "dollar.txt")
     propose(c, res["bundle_id"])
     decide_all(c, SIGNER)
     assert c.get(f"{E}/entities/acme_motors", params=FOCUS).json()["meta"]["version"]["number"] > before

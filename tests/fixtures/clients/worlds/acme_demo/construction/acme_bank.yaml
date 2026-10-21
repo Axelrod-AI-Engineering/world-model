@@ -1,8 +1,8 @@
 # Acme Bank: business construction
 # A synthetic test fixture: invented companies and round numbers. Nothing here describes a real company or client.
 subentities:
-- entity: us_capital_markets
-  id: us_capital_markets.equity_index
+- entity: capital_markets
+  id: capital_markets.equity_index
   name: US equity market level
   attribute_kind: asset_price
   unit: index
@@ -387,7 +387,7 @@ interactions:
       sources:
       - acme.pub
 - id: ab-c-ust-nii
-  source: us_treasuries.yield_10y
+  source: gov_bonds.yield_10y
   target: acme_bank.net_interest_income
   label: lifts interest income
   effect:
@@ -397,8 +397,8 @@ interactions:
     delay_days: 30
     lag_days: 120
     duration_days: null
-- id: ab-c-fed-depcost
-  source: federal_reserve.policy_rate
+- id: ab-c-rate-depcost
+  source: central_bank.policy_rate
   target: acme_bank.deposit_cost
   label: passes a share of a rate move to deposit rates
   state:
@@ -426,8 +426,8 @@ interactions:
     unresolved:
     - input: deposit beta by segment
       status: not_yet_reviewed
-- id: ab-c-fed-loanyield
-  source: federal_reserve.policy_rate
+- id: ab-c-rate-loanyield
+  source: central_bank.policy_rate
   target: acme_bank.loan_coupon
   label: reprices floating loans
   effect:
@@ -438,7 +438,7 @@ interactions:
     lag_days: 60
     duration_days: null
 - id: ab-c-vol-mkts
-  source: us_capital_markets.market_volatility
+  source: capital_markets.market_volatility
   target: acme_bank.markets_revenue
   label: lifts trading revenue
   effect:
@@ -449,7 +449,7 @@ interactions:
     lag_days: 30
     duration_days: 180
 - id: ab-c-deals-ib
-  source: us_capital_markets.deal_activity
+  source: capital_markets.deal_activity
   target: acme_bank.ib_fees
   label: lifts underwriting and advisory fees
   effect:
@@ -478,10 +478,10 @@ paths:
 - id: ab.path.rates_nii
   name: Policy rate to loan income
   entity_id: acme_bank
-  trigger: the Fed raises the policy rate
+  trigger: the central bank raises the policy rate
   endpoint: acme_bank.interest_income
   steps:
-  - interaction_id: ab-c-fed-loanyield
+  - interaction_id: ab-c-rate-loanyield
   - interaction_id: ab.id.loan_income:acme_bank.loan_coupon
 compositions:
 - id: ab.comp.revenue_by_line

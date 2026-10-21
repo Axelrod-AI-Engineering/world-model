@@ -121,10 +121,10 @@ def ids(c):
     job = data(c.post(f"{WM}/theses/{thesis}/simulations"), 202)
     comp = data(c.get(f"{WM}/entities/acme_motors/compositions"))[0]["id"]
     path = data(c.get(f"{WM}/entities/acme_motors/paths"))[0]["id"]
-    evidence = data(c.get(f"{WM}/relationships/m29/evidence"))
+    evidence = data(c.get(f"{WM}/relationships/m24/evidence"))
     return {
         "world_model_id": "acme_demo", "version_ref": "1", "entity_id": "acme_motors", "attribute_key": "operating_profit",
-        "composition_id": comp, "path_id": path, "relationship_id": "m29",
+        "composition_id": comp, "path_id": path, "relationship_id": "m24",
         "evidence_id": evidence[0]["id"] if evidence else "EV-none",
         "concept_id": data(c.get(f"{WM}/concepts"))[0]["id"], "group_id": data(c.get(f"{WM}/groups"))[0]["id"],
         "event_id": data(c.get(f"{WM}/events"))[0]["id"], "document_id": res["document_id"], "ordinal": "0",
@@ -133,7 +133,7 @@ def ids(c):
     }
 
 
-QUERY = {"/world-models/{world_model_id}/entities/{entity_id}/traces": {"from": "dollar_yen.usd_jpy"}}
+QUERY = {"/world-models/{world_model_id}/entities/{entity_id}/traces": {"from": "dollar.index"}}
 ADMIN_HEADERS = {}
 
 
@@ -164,7 +164,7 @@ def test_every_missing_resource_is_a_declared_problem(c, ids, path):
 
 def test_the_writes_answer_as_declared(c, ids):
     p = "/world-models/{world_model_id}"
-    files = [("files", ("w.txt", b"Oct 22, 2026. The ECB cut its deposit rate by 25bp.", "text/plain"))]
+    files = [("files", ("w.txt", b"Oct 22, 2026. Credit spreads rose by 25bp.", "text/plain"))]
     r = c.post(f"{WM}/documents", files=files)
     check(op_of("post", p + "/documents"), r)
     doc = r.json()["data"]["result"]["detail"]["results"][0]
@@ -187,7 +187,7 @@ def test_the_writes_answer_as_declared(c, ids):
     check(op_of("post", p + "/changes/{change_id}/rejections"),
           c.post(url + "/rejections", json={"reason": "no"}, headers={**SIGNER.bearer(), "If-Match": etag}))
     decide_all(c, SIGNER)
-    check(op_of("post", p + "/theses"), c.post(f"{WM}/theses", json={"question": "What if the BoJ hiked by 25bp?"}))
+    check(op_of("post", p + "/theses"), c.post(f"{WM}/theses", json={"question": "What if the central bank hiked by 25bp?"}))
     check(op_of("post", p + "/theses"), c.post(f"{WM}/theses", json={"nonsense": 1}))
     check(op_of("post", p + "/theses/{thesis_id}/simulations"), c.post(f"{WM}/theses/{ids['thesis_id']}/simulations"))
     check(op_of("post", p + "/theses/{thesis_id}/simulations"), c.post(f"{WM}/theses/T-nope/simulations"))

@@ -26,7 +26,7 @@ def acme_graph():
 
 
 def acme_inverted() -> frozenset[str]:
-    """The world's subject patterns marked invert: true ("the yen" names USD/JPY's reciprocal)."""
+    """The world's subject patterns marked invert: true ("the euro" names the dollar index's reciprocal)."""
     with open("tests/fixtures/clients/worlds/acme_demo/templates.yaml") as f:
         subjects = yaml.safe_load(f)["subjects"]
     return frozenset(s["pattern"] for s in subjects if s.get("invert"))

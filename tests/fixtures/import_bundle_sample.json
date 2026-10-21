@@ -12,16 +12,16 @@
       "source": "Synthetic newswire",
       "source_type": "central_bank",
       "kind": "news",
-      "headline": "BoJ raises its policy rate to 1.25%",
-      "summary": "The Bank of Japan raised its policy rate by 25 bp to 1.25%, citing firm wage growth.",
-      "entities": ["boj"],
+      "headline": "Central bank raises its policy rate to 4.25%",
+      "summary": "The central bank raised its policy rate by 25 bp to 4.25%, citing sticky core inflation.",
+      "entities": ["central_bank"],
       "category": "rates",
       "stance": "hawkish",
       "relevance": 0.9,
       "confidence": 0.9,
       "signals": [
-        {"type": "observe", "value_of": "boj.policy_rate", "value": 1.25, "quote": "raised its policy rate by 25 bp to 1.25%"},
-        {"type": "support", "source": "japan_economy.wage_growth", "target": "boj.policy_rate", "quote": "citing firm wage growth"}
+        {"type": "observe", "value_of": "central_bank.policy_rate", "value": 4.25, "quote": "raised its policy rate by 25 bp to 4.25%"},
+        {"type": "support", "source": "economy.core_inflation", "target": "central_bank.policy_rate", "quote": "citing sticky core inflation"}
       ]
     },
     {
@@ -30,13 +30,13 @@
       "source": "Synthetic research desk",
       "source_type": "broker_research",
       "kind": "analyst",
-      "headline": "Brent holds above $100",
-      "summary": "Brent has stayed above $100 for a third month; the desk expects headline inflation to follow within a quarter.",
-      "entities": ["oil", "us_economy"],
+      "headline": "Crude holds above $100",
+      "summary": "Crude has stayed above $100 for a third month; the desk expects headline inflation to follow within a quarter.",
+      "entities": ["crude_oil", "economy"],
       "category": "commodities",
       "relevance": 0.7,
       "signals": [
-        {"type": "observe", "value_of": "oil.brent", "value": 104.0, "quote": "Brent has stayed above $100"},
+        {"type": "observe", "value_of": "crude_oil.price", "value": 104.0, "quote": "Crude has stayed above $100"},
         {"type": "observe", "value_of": "nowhere.value", "value": 1.0}
       ]
     },
@@ -46,13 +46,13 @@
       "source": "Synthetic expert call",
       "source_type": "expert_call",
       "kind": "analyst",
-      "headline": "Expert: a stronger yen would cut exporters' margins",
-      "summary": "A former treasurer expects a stronger yen to weigh on Acme Telecom's handset costs too.",
-      "entities": ["acme_telecom", "dollar_yen"],
+      "headline": "Expert: a stronger dollar would cut energy exporters' revenue",
+      "summary": "A former treasurer expects a stronger dollar to weigh on Ridge Energy's export revenue too.",
+      "entities": ["ridge_energy", "dollar"],
       "category": "fx",
       "signals": [
-        {"type": "link", "source": "dollar_yen.usd_jpy", "target": "acme_telecom.operating_profit", "label": "a weaker yen raises handset costs",
-         "effect": -0.15, "delay_days": 30, "lag_days": 90, "quote": "a stronger yen to weigh on Acme Telecom's handset costs"}
+        {"type": "link", "source": "dollar.index", "target": "ridge_energy.operating_profit", "label": "a stronger dollar trims export revenue",
+         "effect": -0.15, "delay_days": 30, "lag_days": 90, "quote": "a stronger dollar to weigh on Ridge Energy's export revenue"}
       ]
     }
   ]

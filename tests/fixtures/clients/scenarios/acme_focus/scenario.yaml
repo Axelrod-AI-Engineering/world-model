@@ -1,4 +1,4 @@
-# Acme's demo narrowed to two names (engine/focus.py): a synthetic test fixture (invented companies; derived by renaming, nothing here describes a real company or client).
+# Acme's demo narrowed to two names (engine/focus.py): a synthetic test fixture (invented companies and themes; nothing here describes a real company or client).
 id: acme_focus
 title: 'Acme''s demo, focused: Acme Motors and Acme Re and the players they connect to'
 focus:
@@ -7,24 +7,24 @@ focus:
   - acme_motors
   - acme_re
   overrides:
-    S7:
-      name: Acme Re's reinvestment
-      description: Acme Re reinvests at Japanese, US, and euro yields, translates overseas profit at USD/JPY and JPY/EUR, and trades with Japanese equities.
-    S8:
-      name: Yen exporter
-      description: 'Acme Motors: each yen of USD/JPY moves its profit; global demand sets its volumes.'
+    S5:
+      name: Reinsurer's reinvestment
+      description: Acme Re reinvests at government yields, translates overseas profit at the dollar, and marks its bonds with credit spreads.
+    S6:
+      name: Dollar-sensitive exporter
+      description: 'Acme Motors: a stronger dollar trims its profit; crude and growth set its volumes.'
     S-T2:
-      question: 'Global yields fall: the Fed cuts 100 bp and Treasury and Bund yields drop. What happens to insurers'' reinvestment and the yen?'
-    S-T4:
-      question: 'China eases: the PBoC cuts the loan prime rate 25 bp and property stabilizes. What does it do to Acme Motors''s volumes?'
-    china_economy:
-      description: 'Chinese growth, credit, and the property market: what the PBoC eases against, and what Chinese car demand follows.'
+      question: 'The central bank cuts 100 bp: yields fall. What happens to the reinsurer''s reinvestment and the dollar?'
+    S-T3:
+      question: 'A stronger dollar and wider credit spreads: what does it do to Acme Motors''s profit and Acme Re''s overseas profit?'
+    economy:
+      description: 'Prices, growth, and industrial activity: what the central bank reacts to, and what car demand follows.'
     watchlist:
       name: Acme's book, focused
-      description: 'Two names on the rates, yen, and global-yields thesis: a Japanese insurer and a Japanese exporter.'
+      description: 'Two names on the dollar, yields, and energy themes: a reinsurer and an automaker.'
 context_pack:
-  domain_pack_id: PACK_ACME_EXPORTER_AND_INSURER_FOCUS
-  name: Acme Exporter and Insurer Focus
-  slug: acme_exporter_insurer_focus
+  domain_pack_id: PACK_ACME_AUTOMAKER_AND_REINSURER_FOCUS
+  name: Acme Automaker and Reinsurer Focus
+  slug: acme_automaker_reinsurer_focus
   file_index: '037'
   edge_id_start: 60

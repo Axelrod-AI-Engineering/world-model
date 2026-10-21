@@ -131,7 +131,7 @@ def test_update_document_changes_the_stored_fields(lake):
 
 
 def test_delete_document_removes_everything_it_owns(lake):
-    doc = add_doc(lake, b"del", ["oil prices rose", "yen weakened"])
+    doc = add_doc(lake, b"del", ["oil prices rose", "dollar weakened"])
     keep = add_doc(lake, b"keep", ["oil prices fell"])
     lake.put_mentions("acme", doc.id, [mention(doc.id, 0, "oil")])
     lake.put_embeddings("acme", doc.id, "m", [[1.0], [0.5]])
@@ -166,8 +166,8 @@ def test_text_round_trips_and_is_replaced(lake):
 
 
 def test_chunks_come_back_in_order_and_are_replaced_with_their_index(lake):
-    doc = add_doc(lake, b"c", ["alpha yen", "beta oil", "gamma rates"])
-    shuffled = make_chunks("acme", doc.id, ["alpha yen", "beta oil", "gamma rates"])[::-1]
+    doc = add_doc(lake, b"c", ["alpha dollar", "beta oil", "gamma rates"])
+    shuffled = make_chunks("acme", doc.id, ["alpha dollar", "beta oil", "gamma rates"])[::-1]
     lake.put_chunks("acme", doc.id, shuffled)
     assert [c.ord for c in lake.get_chunks("acme", doc.id)] == [0, 1, 2]
     lake.put_chunks("acme", doc.id, make_chunks("acme", doc.id, ["delta copper"]))
@@ -181,17 +181,17 @@ def test_chunks_come_back_in_order_and_are_replaced_with_their_index(lake):
 def test_mentions_filter_by_any_combination(lake):
     lake.put_mentions("acme", "d1", [mention("d1", 1, "zenith_motors", "zenith_motors.share_price", "Zenith Motors shares"),
                                      mention("d1", 0, "zenith_motors", None, "Zenith Motors"),
-                                     mention("d1", 0, "boj", "boj.policy_rate", "BoJ rate")])
+                                     mention("d1", 0, "central_bank", "central_bank.policy_rate", "policy rate")])
     lake.put_mentions("acme", "d2", [mention("d2", 0, "zenith_motors", None, "Zenith Motors")])
     lake.put_mentions("bravo", "d1", [mention("d1", 0, "zenith_motors", tenant="bravo")])
     every = lake.mentions_of("acme")
-    assert [(m.doc_id, m.ord, m.entity_id) for m in every] == [("d1", 0, "boj"), ("d1", 0, "zenith_motors"),
+    assert [(m.doc_id, m.ord, m.entity_id) for m in every] == [("d1", 0, "central_bank"), ("d1", 0, "zenith_motors"),
                                                                 ("d1", 1, "zenith_motors"), ("d2", 0, "zenith_motors")]
     assert len(lake.mentions_of("acme", entity_id="zenith_motors")) == 3
     assert [m.surface for m in lake.mentions_of("acme", subentity_id="zenith_motors.share_price")] == ["Zenith Motors shares"]
-    assert [m.entity_id for m in lake.mentions_of("acme", doc_id="d1")] == ["boj", "zenith_motors", "zenith_motors"]
+    assert [m.entity_id for m in lake.mentions_of("acme", doc_id="d1")] == ["central_bank", "zenith_motors", "zenith_motors"]
     assert [m.ord for m in lake.mentions_of("acme", entity_id="zenith_motors", doc_id="d1")] == [0, 1]
-    assert lake.mentions_of("acme", entity_id="zenith_motors", subentity_id="boj.policy_rate") == []
+    assert lake.mentions_of("acme", entity_id="zenith_motors", subentity_id="central_bank.policy_rate") == []
     assert len(lake.mentions_of("acme", entity_id="zenith_motors", subentity_id="zenith_motors.share_price", doc_id="d1")) == 1
     lake.put_mentions("acme", "d1", [])                                # replaced, not appended
     assert [m.doc_id for m in lake.mentions_of("acme")] == ["d2"]
@@ -215,12 +215,12 @@ def test_embeddings_round_trip_as_float32_and_are_replaced(lake):
 # -- keyword search -------------------------------------------------------------------------------------------------
 
 def test_fts_query_quotes_every_word():
-    assert fts_query("BoJ hikes rates") == '"BoJ" "hikes" "rates"'
-    assert fts_query("BoJ hikes", any_term=True) == '"BoJ" OR "hikes"'
+    assert fts_query("Bank hikes rates") == '"Bank" "hikes" "rates"'
+    assert fts_query("Bank hikes", any_term=True) == '"Bank" OR "hikes"'
     assert fts_query("Toyo", prefix=True) == '"Toyo"*'
     assert fts_query("net inter", prefix=True, any_term=True) == '"net" OR "inter"*'
     assert fts_query("O'Neil's ...U.S. -AT&T- yields.") == '"O\'Neil\'s" "U.S" "AT&T" "yields"'
-    assert fts_query('NEAR(oil "yen") AND -x*') == '"NEAR" "oil" "yen" "AND" "x"'
+    assert fts_query('NEAR(oil "dollar") AND -x*') == '"NEAR" "oil" "dollar" "AND" "x"'
 
 
 @pytest.mark.parametrize("q", ["", "   ", "***", '"', "- . & '", "()"])
@@ -230,9 +230,9 @@ def test_fts_query_without_words_is_none(q):
 
 @pytest.fixture
 def corpus(lake):
-    a = add_doc(lake, b"a", ["Acme Motors raised its operating profit forecast", "The yen weakened against the dollar"],
+    a = add_doc(lake, b"a", ["Acme Motors raised its operating profit forecast", "The dollar strengthened against the euro"],
                 title="Acme Motors Q3", filename="acme_motors.pdf", event_time=T0 + DAY)
-    b = add_doc(lake, b"b", ["Oil prices rose as Brent crude rallied", "Acme Motors shares rose"], title="Oil note")
+    b = add_doc(lake, b"b", ["Oil prices rose as crude rallied", "Acme Motors shares rose"], title="Oil note")
     add_doc(lake, b"other tenant", ["Acme Motors operating profit"], tenant="bravo")
     return a, b
 
@@ -254,8 +254,8 @@ def test_keyword_search_stems_words(lake, corpus):
 
 
 def test_keyword_search_falls_back_to_any_word(lake, corpus):
-    hits = lake.keyword_search("acme", "yen copper")
-    assert [h.text for h in hits] == ["The yen weakened against the dollar"]
+    hits = lake.keyword_search("acme", "euro copper")
+    assert [h.text for h in hits] == ["The dollar strengthened against the euro"]
     assert hits[0].why == ["keyword", "any word"]
 
 
@@ -268,7 +268,7 @@ def test_keyword_search_prefix_matches_the_last_word(lake, corpus):
     hits = lake.keyword_search("acme", "mot", prefix=True)
     assert len(hits) == 2 and all(h.why == ["prefix"] for h in hits)
     assert [h.text for h in lake.keyword_search("acme", "oil pri", prefix=True)] == [
-        "Oil prices rose as Brent crude rallied"]
+        "Oil prices rose as crude rallied"]
 
 
 def test_prefix_search_matches_words_not_their_stems(lake, corpus):
@@ -276,7 +276,7 @@ def test_prefix_search_matches_words_not_their_stems(lake, corpus):
     assert [h.text for h in lake.keyword_search("acme", "opera", prefix=True)] == [
         "Acme Motors raised its operating profit forecast"]
     assert [h.text for h in lake.keyword_search("acme", "rall", prefix=True)] == [
-        "Oil prices rose as Brent crude rallied"]
+        "Oil prices rose as crude rallied"]
 
 
 def test_keyword_search_ranks_deterministically_and_respects_limit(lake, corpus):
@@ -368,13 +368,13 @@ def test_stats_count_each_table_for_the_tenant(lake):
 
 def test_a_reopened_lake_reads_what_was_written_and_close_releases_it(tmp_path):
     lake = SQLiteLake(tmp_path / "x")
-    doc = add_doc(lake, b"persist", ["Brent crude rallied"])
+    doc = add_doc(lake, b"persist", ["Crude oil rallied"])
     lake.close()
     reopened = SQLiteLake(tmp_path / "x")
     try:
         assert reopened.get_document("acme", doc.id) == doc
         assert reopened.raw_bytes("acme", doc.id) == b"persist"
-        assert len(reopened.keyword_search("acme", "brent")) == 1
+        assert len(reopened.keyword_search("acme", "crude")) == 1
     finally:
         reopened.close()
     with pytest.raises(sqlite3.ProgrammingError):

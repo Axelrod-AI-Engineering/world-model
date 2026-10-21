@@ -1,50 +1,46 @@
-# Acme's ready-made questions: a synthetic test fixture (invented companies; derived by renaming, nothing here describes a real company or client).
+# Acme's ready-made questions: a synthetic test fixture (invented companies and themes).
 theses:
 - id: S-T1
-  question: 'The BoJ hikes to 1.5% while the Fed holds: JGB yields rise and the yen strengthens. Who gains and who is squeezed?'
+  question: 'An oil supply shock: an outage sends crude up 30% for six months. Who gains and who is squeezed?'
   mode: scaffolded
   horizon_days: 180
   targets:
-  - dollar_yen.usd_jpy
-  - jgbs.yield_30y
-  - acme_re.operating_profit
-  - acme_mutual.operating_profit
+  - crude_oil.price
+  - economy.headline_inflation
+  - economy.gdp_growth
+  - shipping.freight_cost
+  - ridge_energy.operating_profit
+  - blue_freight.operating_profit
   - acme_motors.operating_profit
-  - acme_machinery.operating_profit
-  - acme_telecom.operating_profit
   target_groups:
   - kind: superentity
-    ref: G2
-  - kind: superentity
     ref: G3
+  - kind: superentity
+    ref: S1
   event:
     kind: hypothetical
     event_type: policy
-    occurred_at: 2026-10-15 00:00:00+00:00
+    occurred_at: '2026-10-15 00:00:00+00:00'
     ops:
     - op: change_value
       target:
         kind: concrete
-        subentity_id: boj.policy_rate
-      delta: 0.5
-      mode: absolute
+        subentity_id: crude_oil.price
+      delta: 0.3
+      mode: relative
       persistence: step
-      intervention: true
-      window_days: 270
-      at: 2026-10-15 00:00:00+00:00
+      at: '2026-10-15 00:00:00+00:00'
 - id: S-T2
-  question: 'Global yields fall: the Fed cuts 100 bp and Treasury and Bund yields drop. What happens to bank interest income and insurers'' reinvestment?'
+  question: 'The central bank cuts 100 bp: yields fall. What happens to bank interest income and the reinsurer''s reinvestment?'
   mode: scaffolded
   horizon_days: 365
   targets:
-  - us_treasuries.yield_10y
-  - bunds.yield_10y
+  - central_bank.policy_rate
+  - gov_bonds.yield_10y
   - acme_bank.net_interest_income
   - delta_bank.net_interest_income
-  - keystone_capital.trading_revenue
-  - acme_re.international_profit
-  - acme_mutual.international_profit
-  - dollar_yen.usd_jpy
+  - acme_re.domestic_pc_profit
+  - dollar.index
   target_groups:
   - kind: superentity
     ref: G1
@@ -53,125 +49,81 @@ theses:
   event:
     kind: hypothetical
     event_type: policy
-    occurred_at: 2026-10-15 00:00:00+00:00
+    occurred_at: '2026-10-15 00:00:00+00:00'
     ops:
     - op: change_value
       target:
         kind: concrete
-        subentity_id: federal_reserve.policy_rate
+        subentity_id: central_bank.policy_rate
       delta: -1.0
       mode: absolute
       persistence: step
       intervention: true
       window_days: 365
-      at: 2026-10-15 00:00:00+00:00
+      at: '2026-10-15 00:00:00+00:00'
 - id: S-T3
-  question: 'The yen carry trade unwinds: positioning collapses and USD/JPY falls 8%. Where does it land in the book?'
+  question: 'A stronger dollar and wider credit spreads: the dollar index rises 8% and spreads blow out. Where does it land in the book?'
   mode: scaffolded
   horizon_days: 120
   targets:
-  - dollar_yen.usd_jpy
-  - us_capital_markets.market_volatility
-  - keystone_capital.trading_revenue
-  - acme_bank.markets_revenue
+  - dollar.index
+  - credit_markets.credit_spread
+  - capital_markets.market_volatility
+  - acme_bank.ib_fees
+  - delta_bank.markets_revenue
   - acme_motors.operating_profit
-  - acme_machinery.operating_profit
   - acme_re.international_profit
-  - acme_mutual.international_profit
+  - acme_re.operating_profit
   target_groups:
   - kind: superentity
-    ref: G3
-  - kind: superentity
-    ref: S4
-  event:
-    kind: hypothetical
-    event_type: policy
-    occurred_at: 2026-10-15 00:00:00+00:00
-    ops:
-    - op: change_value
-      target:
-        kind: concrete
-        subentity_id: dollar_yen.carry_positioning
-      delta: -2.0
-      mode: standardized
-      persistence: step
-      at: 2026-10-15 00:00:00+00:00
-    - op: change_value
-      target:
-        kind: concrete
-        subentity_id: dollar_yen.usd_jpy
-      delta: -0.08
-      mode: relative
-      persistence: step
-      at: 2026-10-15 00:00:00+00:00
-- id: S-T4
-  question: 'China eases: the PBoC cuts the loan prime rate 25 bp and property stabilizes. What does it do to HBK and Acme Machinery?'
-  mode: scaffolded
-  horizon_days: 365
-  targets:
-  - pboc.loan_prime_rate
-  - china_economy.property_sales
-  - harbor_bank.net_interest_margin
-  - harbor_bank.npl_ratio
-  - harbor_bank.operating_profit
-  - acme_machinery.construction_demand
-  - acme_machinery.operating_profit
-  - acme_motors.vehicle_sales
-  target_groups:
+    ref: S3
   - kind: superentity
     ref: S6
-  - kind: entity
-    ref: acme_machinery
   event:
     kind: hypothetical
     event_type: policy
-    occurred_at: 2026-10-15 00:00:00+00:00
+    occurred_at: '2026-10-15 00:00:00+00:00'
     ops:
     - op: change_value
       target:
         kind: concrete
-        subentity_id: pboc.loan_prime_rate
-      delta: -0.25
-      mode: absolute
+        subentity_id: credit_markets.credit_spread
+      delta: 2.0
+      mode: standardized
       persistence: step
-      intervention: true
-      window_days: 365
-      at: 2026-10-15 00:00:00+00:00
+      at: '2026-10-15 00:00:00+00:00'
     - op: change_value
       target:
         kind: concrete
-        subentity_id: china_economy.property_sales
+        subentity_id: dollar.index
       delta: 0.08
       mode: relative
       persistence: step
-      at: 2026-10-15 00:00:00+00:00
-- id: S-T5
-  question: The ECB cuts 50 bp more than expected. How exposed are Northwind Bank and Emerald?
+      at: '2026-10-15 00:00:00+00:00'
+- id: S-T4
+  question: 'Shipping costs spike: freight rates double. What does it do to Blue Freight and Acme Motors?'
   mode: scaffolded
   horizon_days: 270
   targets:
-  - ecb.policy_rate
-  - bunds.yield_10y
-  - northwind_bank.net_interest_income
-  - northwind_bank.share_price
-  - emerald_bank.net_interest_income
-  - emerald_bank.share_price
-  - acme_mutual.international_profit
+  - shipping.freight_cost
+  - blue_freight.freight_revenue
+  - blue_freight.operating_profit
+  - economy.industrial_output
   target_groups:
   - kind: superentity
-    ref: S5
+    ref: S7
+  - kind: entity
+    ref: blue_freight
   event:
     kind: hypothetical
     event_type: policy
-    occurred_at: 2026-10-15 00:00:00+00:00
+    occurred_at: '2026-10-15 00:00:00+00:00'
     ops:
     - op: change_value
       target:
         kind: concrete
-        subentity_id: ecb.policy_rate
-      delta: -0.5
-      mode: absolute
+        subentity_id: shipping.freight_cost
+      delta: 1.0
+      mode: relative
       persistence: step
-      intervention: true
-      window_days: 270
-      at: 2026-10-15 00:00:00+00:00
+      at: '2026-10-15 00:00:00+00:00'

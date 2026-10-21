@@ -123,7 +123,7 @@ flow on v1, starts from a fresh service (`tests/service/helpers.py`: `service()`
 restarted service reuses), and uses synthetic, dated notes only. Callers propose with a static key; a person decides
 with a service token (`conftest.py`: `review_all`). They are marked `integration`.
 
-**Budget.** About 50 seconds for the suite on a laptop (each flow 3–15 s; booting the Sally demo takes about 1 s). A
+**Budget.** About 50 seconds for the suite on a laptop (each flow 3–15 s; booting the Acme demo takes about 1 s). A
 new flow should stay under 20 s; one that needs longer is marked `slow` as well.
 
 | # | Flow | What it proves | Status |

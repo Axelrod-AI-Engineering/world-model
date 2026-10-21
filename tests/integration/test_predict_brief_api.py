@@ -65,14 +65,14 @@ def test_annotations_are_logged_and_never_change_the_model(client, posed):
     fid = posed["forecast"]["id"]
     v = client.get("/api/health").json()["version"]
     state = client.get("/api/state").json()
-    a = client.post(f"/api/forecasts/{fid}/annotations", json={"anchor": "section:bottom", "text": "Check against the BoJ minutes."})
+    a = client.post(f"/api/forecasts/{fid}/annotations", json={"anchor": "section:bottom", "text": "Check against the central bank minutes."})
     assert a.status_code == 200, a.text
     note = a.json()
     assert note["anchor"] == "section:bottom" and note["forecast_id"] == fid and note["id"].startswith("AN-")
-    b = client.post(f"/api/forecasts/{fid}/annotations", json={"anchor": "row:dollar_yen.usd_jpy", "text": "Too fast?"}).json()
+    b = client.post(f"/api/forecasts/{fid}/annotations", json={"anchor": "row:dollar.index", "text": "Too fast?"}).json()
     assert [n["id"] for n in client.get(f"/api/forecasts/{fid}/annotations").json()] == [note["id"], b["id"]]
     assert [n["text"] for n in client.get(f"/api/forecasts/{fid}/brief").json()["annotations"]] == [
-        "Check against the BoJ minutes.", "Too fast?"]
+        "Check against the central bank minutes.", "Too fast?"]
     assert client.delete(f"/api/forecasts/{fid}/annotations/{b['id']}").status_code == 200
     assert [n["id"] for n in client.get(f"/api/forecasts/{fid}/annotations").json()] == [note["id"]]
     # inference never learns: no version, no state change

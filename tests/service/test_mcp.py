@@ -98,20 +98,20 @@ def test_reads_default_to_the_organizations_world_model(client):
     wms, one, versions, graph, ents, ent, att, obs, rels, rel, concepts = calls(
         client, ("world_model_list_world_models", {}), ("world_model_get_world_model", {}),
         ("world_model_list_versions", {"limit": 2}),
-        ("world_model_graph", {"entities": ["boj"], "depth": 1, "version": 1}),
+        ("world_model_graph", {"entities": ["central_bank"], "depth": 1, "version": 1}),
         ("world_model_list_entities", {"q": "Acme Motors"}),
         ("world_model_get_entity", {"entity_id": "acme_motors", "include_relationships": True}),
         ("world_model_get_attribute", {"entity_id": "acme_motors", "attribute": "operating_profit",
                                        "as_of": "2100-01-01T00:00:00Z"}),
-        ("world_model_list_observations", {"entity_id": "oil", "attribute": "brent"}),
+        ("world_model_list_observations", {"entity_id": "crude_oil", "attribute": "price"}),
         ("world_model_list_relationships", {"entity": "acme_motors", "limit": 5}),
-        ("world_model_get_relationship", {"relationship_id": "m29"}),
+        ("world_model_get_relationship", {"relationship_id": "m24"}),
         ("world_model_list_concepts", {}))
     assert [m["id"] for m in ok(wms)["data"]] == ["acme_demo"] and ok(one)["data"]["id"] == "acme_demo"
     assert ok(versions)["meta"]["limit"] == 2 and ok(graph)["meta"]["version"]["number"] == 1
     assert "acme_motors" in {e["id"] for e in ok(ents)["data"]} and ok(ent)["data"]["relationships"] is not None
     assert ok(att)["data"]["id"] == "acme_motors.operating_profit" and "data" in ok(obs)
-    assert ok(rels)["data"] and ok(rel)["data"]["id"] == "m29" and isinstance(ok(rel)["evidence"], list)
+    assert ok(rels)["data"] and ok(rel)["data"]["id"] == "m24" and isinstance(ok(rel)["evidence"], list)
     assert ok(concepts)["data"]
 
 
@@ -120,11 +120,11 @@ def test_the_golden_test_reads(client):
     totals, observations with occurred_at), plus states, compositions and paths, through the tools."""
     rels, deep, obs, att, states, comps, paths = calls(
         client, ("world_model_list_relationships", {"entity": "acme_motors", "limit": 200}),
-        ("world_model_trace", {"entity_id": "acme_motors", "start": "dollar_yen.usd_jpy", "through_totals": True,
+        ("world_model_trace", {"entity_id": "acme_motors", "start": "dollar.index", "through_totals": True,
                                "max_depth": 12}),
-        ("world_model_list_observations", {"entity_id": "oil", "attribute": "brent", "limit": 200}),
-        ("world_model_get_attribute", {"entity_id": "oil", "attribute": "brent"}),
-        ("world_model_list_states", {"entity_id": "oil", "attribute": "brent", "start": "2000-01-01T00:00:00Z",
+        ("world_model_list_observations", {"entity_id": "crude_oil", "attribute": "price", "limit": 200}),
+        ("world_model_get_attribute", {"entity_id": "crude_oil", "attribute": "price"}),
+        ("world_model_list_states", {"entity_id": "crude_oil", "attribute": "price", "start": "2000-01-01T00:00:00Z",
                                      "end": "2100-01-01T00:00:00Z", "limit": 5}),
         ("world_model_list_compositions", {"entity_id": "acme_motors"}),
         ("world_model_list_paths", {"entity_id": "acme_motors", "limit": 200}))
@@ -146,17 +146,17 @@ def test_the_unified_world_model_and_its_compartments(client):
         ("world_model_list_entities", {"world_model_id": "erid", "compartment": "acme_focus", "limit": 200}),
         ("world_model_get_entity", {"entity_id": "acme_motors", "world_model_id": "erid", "compartment": "acme_focus"}),
         ("world_model_get_entity", {"entity_id": "acme_bank", "world_model_id": "erid", "compartment": "acme_focus"}),
-        ("world_model_get_relationship", {"relationship_id": "m29", "world_model_id": "erid"}),
+        ("world_model_get_relationship", {"relationship_id": "m24", "world_model_id": "erid"}),
         ("world_model_construction", {"entity_id": "acme_motors", "world_model_id": "erid", "compartment": "acme_focus",
                                       "format": "markdown"}),
-        ("world_model_trace", {"entity_id": "acme_motors", "start": "dollar_yen.usd_jpy", "world_model_id": "erid",
+        ("world_model_trace", {"entity_id": "acme_motors", "start": "dollar.index", "world_model_id": "erid",
                                "compartment": "acme_focus"}),
         ("world_model_graph", {"world_model_id": "erid", "compartment": "acme_focus", "entities": ["acme_motors"]}),
         ("world_model_get_attribute", {"entity_id": "acme_motors", "attribute": "operating_profit", "world_model_id": "erid",
                                        "compartment": "acme_focus"}),
-        ("world_model_list_observations", {"entity_id": "oil", "attribute": "brent", "world_model_id": "erid",
+        ("world_model_list_observations", {"entity_id": "crude_oil", "attribute": "price", "world_model_id": "erid",
                                            "compartment": "acme_focus"}),
-        ("world_model_list_states", {"entity_id": "oil", "attribute": "brent", "world_model_id": "erid"}),
+        ("world_model_list_states", {"entity_id": "crude_oil", "attribute": "price", "world_model_id": "erid"}),
         ("world_model_list_compositions", {"entity_id": "acme_motors", "world_model_id": "erid",
                                            "compartment": "acme_focus"}),
         ("world_model_list_paths", {"entity_id": "acme_motors", "world_model_id": "erid", "compartment": "acme_focus"}),
@@ -164,7 +164,7 @@ def test_the_unified_world_model_and_its_compartments(client):
     assert ok(u)["data"]["id"] == "erid" and [c["id"] for c in ok(comps)["data"]] == ["acme_focus"]
     assert len(ok(narrowed)["data"]) < len(ok(whole)["data"]) and ok(ent)["data"]["id"] == "acme_motors"
     assert gone[0] and code_of(gone[1]) == "entity_not_found"
-    assert ok(rel)["data"]["id"] == "m29" and not md[0] and md[1].startswith("# Acme Motors")
+    assert ok(rel)["data"]["id"] == "m24" and not md[0] and md[1].startswith("# Acme Motors")
     assert ok(tr)["data"]["reaches_endpoint"] and "acme_bank" not in {e["id"] for e in ok(graph)["data"]["entities"]}
     assert ok(att)["data"]["id"] == "acme_motors.operating_profit" and "data" in ok(obs) and "data" in ok(states)
     assert ok(cs)["data"] and ok(ps)["data"] and ok(versions)["data"]
@@ -197,7 +197,7 @@ def test_construction_trace_search_and_export(client):
     as_json, as_md, traced, hits, export = calls(
         client, ("world_model_construction", {"entity_id": "acme_motors"}),
         ("world_model_construction", {"entity_id": "acme_motors", "format": "markdown", "version": 1}),
-        ("world_model_trace", {"entity_id": "acme_motors", "start": "dollar_yen.usd_jpy"}),
+        ("world_model_trace", {"entity_id": "acme_motors", "start": "dollar.index"}),
         ("world_model_search", {"q": "Acme Motors op", "mode": "prefix"}),
         ("world_model_export_v4", {}))
     assert ok(as_json)["data"]["entity_id"] == "acme_motors"
@@ -239,7 +239,7 @@ def test_ingest_propose_and_a_person_decides_outside_mcp(client):
 
 def test_simulate_and_read_the_simulation(client):
     sim, q = calls(client, ("world_model_simulate", {"template_id": "S-T3"}),
-                   ("world_model_simulate", {"question": "What if the BoJ hiked by 25bp?", "horizon_days": 90}))
+                   ("world_model_simulate", {"question": "What if the central bank hiked by 25bp?", "horizon_days": 90}))
     sid = ok(sim)["job"]["result"]["ids"][0]
     assert ok(sim)["thesis"]["id"] and ok(q)["job"]["status"] == "succeeded"
     got, brief, export = calls(client, ("world_model_get_simulation", {"simulation_id": sid}),

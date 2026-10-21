@@ -2,25 +2,25 @@
 # A synthetic test fixture: invented companies and round numbers. Nothing here describes a real company or client.
 subentities:
 - entity: acme_re
-  id: acme_re.japan_life_profit
-  name: Acme Re Japan Life adjusted net income
+  id: acme_re.domestic_life_profit
+  name: Acme Re domestic life adjusted net income
   attribute_kind: revenue_flow
-  unit: ¥bn/yr
+  unit: $bn/yr
   family: lognormal
   mean: 60.0
   scale: 0.1
   aliases:
-  - Japan Life
+  - domestic life segment
   - domestic life
   features:
     view: reporting_segments
-    basis: 'segment: Japan life adjusted net income'
+    basis: 'segment: domestic life adjusted net income'
     prior: synthetic
 - entity: acme_re
   id: acme_re.solution_profit
   name: Acme Re solutions profit
   attribute_kind: revenue_flow
-  unit: ¥bn/yr
+  unit: $bn/yr
   family: gaussian
   prior:
     family: gaussian
@@ -35,7 +35,7 @@ subentities:
   id: acme_re.cross_holding_book
   name: Acme Re cross-holding book value
   attribute_kind: balance
-  unit: ¥bn
+  unit: $bn
   family: lognormal
   mean: 1500.0
   scale: 0.12
@@ -50,7 +50,7 @@ subentities:
   id: acme_re.cross_holding_sales
   name: Acme Re cross-holding sales
   attribute_kind: revenue_flow
-  unit: ¥bn/yr
+  unit: $bn/yr
   family: lognormal
   mean: 90.0
   scale: 0.2
@@ -139,7 +139,7 @@ subentities:
   id: acme_re.hedge_cost
   name: Acme Re FX hedge cost
   attribute_kind: revenue_flow
-  unit: ¥bn/yr
+  unit: $bn/yr
   family: gaussian
   prior:
     family: gaussian
@@ -154,7 +154,7 @@ subentities:
   id: acme_re.overseas_capital
   name: Acme Re overseas capital
   attribute_kind: balance
-  unit: ¥bn
+  unit: $bn
   family: lognormal
   mean: 4000.0
   scale: 0.05
@@ -176,7 +176,7 @@ subentities:
     prior: synthetic
 interactions:
 - id: ar-a-life
-  source: acme_re.japan_life_profit
+  source: acme_re.domestic_life_profit
   target: acme_re.operating_profit
   label: adds to adjusted net income
   edge_type: accounting
@@ -188,7 +188,7 @@ interactions:
     lag_days: 1
     duration_days: null
   transition:
-    mechanism: Acme Re Japan Life adjusted net income is one part of Acme Re adjusted net income; the weight is its scale over the total's
+    mechanism: Acme Re domestic life adjusted net income is one part of Acme Re adjusted net income; the weight is its scale over the total's
     timing:
       onset: same reporting period
       build: none
@@ -229,7 +229,7 @@ interactions:
       - acme.pub
 - id: ar-c-reinvest
   source: acme_re.new_minus_book_coupon
-  target: acme_re.japan_pc_profit
+  target: acme_re.domestic_pc_profit
   label: adds to income while new money beats the book
   effect:
     mu: 0.2
@@ -259,21 +259,21 @@ interactions:
       found_in:
       - acme.pub
       note: a sector figure stands in
-- id: ar-c-yen-hedge
-  source: dollar_yen.usd_jpy
+- id: ar-c-fx-hedge
+  source: dollar.index
   target: acme_re.hedge_cost
   label: raises hedging cost
   calibration: uncalibrated
   transition:
-    mechanism: A weaker yen raises the cost of hedging overseas capital
+    mechanism: A stronger dollar raises the cost of hedging overseas capital
     sign: '-'
-- id: ar-c-jgb-equity
-  source: jgbs.yield_10y
-  target: japan_capital_markets.equity_index
+- id: ar-c-yield-equity
+  source: gov_bonds.yield_10y
+  target: capital_markets.equity_index
   label: weighs on equity valuations
   calibration: uncalibrated
   transition:
-    mechanism: Higher domestic yields raise the discount rate on Japanese equities
+    mechanism: Higher yields raise the discount rate on equities
     sign: '-'
 - id: ar-c-hedge-profit
   source: acme_re.hedge_cost
@@ -283,9 +283,9 @@ interactions:
   transition:
     mechanism: Hedging cost is a charge against overseas profit
     sign: +
-- id: ar-c-jgb-life
-  source: jgbs.yield_10y
-  target: acme_re.japan_life_profit
+- id: ar-c-yield-life
+  source: gov_bonds.yield_10y
+  target: acme_re.domestic_life_profit
   label: marks down bond holdings
   effect:
     mu: -0.1
@@ -302,8 +302,8 @@ interactions:
   transition:
     mechanism: Selling business-related equities reduces the book held
     sign: '-'
-- id: ar-c-boj-sales
-  source: boj.policy_rate
+- id: ar-c-rate-sales
+  source: central_bank.policy_rate
   target: acme_re.sale_rate
   label: speeds cross-holding sales
   effect:
@@ -315,25 +315,25 @@ interactions:
     duration_days: null
 paths:
 - id: ar.path.reinvest
-  name: JGB yields to Japan P&C profit
+  name: Yields to domestic P&C profit
   entity_id: acme_re
-  trigger: super-long JGB yields rise
+  trigger: government yields rise
   endpoint: acme_re.operating_profit
   steps:
-  - interaction_id: m21
-  - interaction_id: m23
+  - interaction_id: m20
+  - interaction_id: m22
 compositions:
 - id: ar.comp.segments
   entity_id: acme_re
   view: reporting_segments
   basis: adjusted net income by business
-  unit: ¥bn/yr
-  period: fiscal year ending March
+  unit: $bn/yr
+  period: fiscal year ending December
   total: acme_re.operating_profit
   members:
   - acme_re.international_profit
-  - acme_re.japan_pc_profit
-  - acme_re.japan_life_profit
+  - acme_re.domestic_pc_profit
+  - acme_re.domestic_life_profit
   residual: acme_re.solution_profit
 identities:
 - id: ar.id.sales
@@ -344,7 +344,7 @@ identities:
   - acme_re.cross_holding_book
   - acme_re.sale_rate
   coefficient: 0.01
-  unit_check: ¥bn = ¥bn x % x 0.01
+  unit_check: $bn = $bn x % x 0.01
 - id: ar.id.spread
   entity_id: acme_re
   form: difference

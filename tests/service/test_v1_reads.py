@@ -7,7 +7,7 @@ from __future__ import annotations
 import pytest
 
 from tests.service.helpers import (
-    FED_NOTE,
+    OIL_NOTE,
     V1,
     WM,
     Signer,
@@ -31,14 +31,14 @@ def c():
 
 @pytest.fixture(scope="module")
 def moved(c):
-    """The model before and after one reviewed change: a synthetic data note (Brent at $103), approved by a person."""
+    """The model before and after one reviewed change: a synthetic data note (crude at $103), approved by a person."""
     before = data(c.get(WM))
     v_before = c.get(WM).json()["meta"]["version"]
-    brent = data(c.get(f"{WM}/entities/oil/attributes/brent"))
-    res = upload(c, FED_NOTE, "2026-09-01_data.txt", source="Data desk", source_type="data")
+    crude = data(c.get(f"{WM}/entities/crude_oil/attributes/price"))
+    res = upload(c, OIL_NOTE, "2026-09-01_data.txt", source="Data desk", source_type="data")
     propose(c, res["bundle_id"])
     decided = decide_all(c, SIGNER)
-    return {"before": before, "version": v_before, "brent": brent, "decided": decided, "bundle_id": res["bundle_id"]}
+    return {"before": before, "version": v_before, "crude": crude, "decided": decided, "bundle_id": res["bundle_id"]}
 
 
 # -- the credential, world models, versions --------------------------------------------------------------------------
@@ -57,7 +57,7 @@ def test_world_models_list_and_one(c):
     assert [m["id"] for m in body["data"]] == ["acme_demo"] and body["meta"]["next_cursor"] is None
     one = c.get(WM)
     wm = one.json()["data"]
-    assert wm["organization"] == "default" and wm["counts"]["attributes"] > 100 and wm["latest_version"] >= 1
+    assert wm["organization"] == "default" and wm["counts"]["attributes"] > 80 and wm["latest_version"] >= 1
     assert one.headers["etag"] == f'"{one.json()["meta"]["version"]["state_hash"]}"'
     assert c.get(f"{V1}/world-models", params={"limit": 1, "cursor": "eyJvIjoxLCJ2IjpudWxsfQ"}).json()["data"] == []
 
@@ -98,9 +98,9 @@ def test_entities_by_type_concept_group_and_name(c):
     grouped = data(c.get(f"{WM}/entities", params={"group": group["id"], "limit": 200}))
     assert {e["id"] for e in grouped} == set(group["bindings"].values())
     by_attr = data(c.get(f"{WM}/entities", params={"q": "policy rate"}))
-    boj = next(e for e in by_attr if e["id"] == "boj")
-    assert [a["key"] for a in boj["attributes"]] == ["policy_rate"]
-    by_name = data(c.get(f"{WM}/entities", params={"q": "7203 AM"}))
+    bank = next(e for e in by_attr if e["id"] == "central_bank")
+    assert [a["key"] for a in bank["attributes"]] == ["policy_rate"]
+    by_name = data(c.get(f"{WM}/entities", params={"q": "ACMO"}))
     assert [e["id"] for e in by_name] == ["acme_motors"] and len(by_name[0]["attributes"]) == by_name[0]["attribute_count"]
     prefix = data(c.get(f"{WM}/entities", params={"q": "acme mo", "limit": 200}))
     assert prefix[0]["id"] == "acme_motors"
@@ -127,7 +127,7 @@ def test_an_attribute_by_key_or_full_id(c, ref):
                                                                                                     "inferred")
 
 
-@pytest.mark.parametrize("path, code", [("/entities/acme_motors/attributes/boj.policy_rate", "attribute_not_found"),
+@pytest.mark.parametrize("path, code", [("/entities/acme_motors/attributes/central_bank.policy_rate", "attribute_not_found"),
                                         ("/entities/acme_motors/attributes/policy_rate", "attribute_not_found"),
                                         ("/entities/nobody/attributes/operating_profit", "entity_not_found")])
 def test_an_attribute_outside_its_entity_is_not_found(c, path, code):
@@ -141,19 +141,19 @@ def test_an_entitys_attributes_page(c):
 
 
 def test_observations_and_states_after_a_reviewed_change(c, moved):
-    obs = data(c.get(f"{WM}/entities/oil/attributes/brent/observations", params={"limit": 200}))
-    assert obs and all(o["attribute_id"] == "oil.brent" and o["epistemic_type"] == "observed" for o in obs)
+    obs = data(c.get(f"{WM}/entities/crude_oil/attributes/price/observations", params={"limit": 200}))
+    assert obs and all(o["attribute_id"] == "crude_oil.price" and o["epistemic_type"] == "observed" for o in obs)
     assert abs(obs[-1]["value"] - 103) < 3 and obs[-1]["observed_at"] >= obs[-1]["valid_at"][:10]
-    latest = data(c.get(f"{WM}/entities/oil/attributes/brent"))["latest_observation"]
+    latest = data(c.get(f"{WM}/entities/crude_oil/attributes/price"))["latest_observation"]
     assert latest == obs[-1]
-    early = data(c.get(f"{WM}/entities/oil/attributes/brent/observations",
+    early = data(c.get(f"{WM}/entities/crude_oil/attributes/price/observations",
                        params={"valid_to": "2026-08-31T00:00:00", "valid_from": "2020-01-01T00:00:00Z"}))
     assert all(o["valid_at"] < "2026-08-31T00:00:01" for o in early)
-    states = data(c.get(f"{WM}/entities/oil/attributes/brent/states", params={"limit": 200}))
+    states = data(c.get(f"{WM}/entities/crude_oil/attributes/price/states", params={"limit": 200}))
     assert states and all(s["sd"] >= 0 for s in states)
-    window = data(c.get(f"{WM}/entities/oil/attributes/brent/states", params={"from": "2100-01-01T00:00:00Z"}))
+    window = data(c.get(f"{WM}/entities/crude_oil/attributes/price/states", params={"from": "2100-01-01T00:00:00Z"}))
     assert window == []
-    assert data(c.get(f"{WM}/entities/oil/attributes/brent/states", params={"to": "2000-01-01T00:00:00Z"})) == []
+    assert data(c.get(f"{WM}/entities/crude_oil/attributes/price/states", params={"to": "2000-01-01T00:00:00Z"})) == []
 
 
 # -- construction -------------------------------------------------------------------------------------------------------------
@@ -182,21 +182,21 @@ def test_construction_json_markdown_and_traces(c):
     assert md.headers["x-request-id"]
     accept = c.get(f"{WM}/entities/acme_motors/construction", headers={"Accept": "text/markdown"})
     assert accept.text == md.text
-    by_key = data(c.get(f"{WM}/entities/acme_motors/traces", params={"from": "japan_production"}))
-    by_id = data(c.get(f"{WM}/entities/acme_motors/traces", params={"from": "acme_motors.japan_production"}))
-    assert by_key == by_id and by_key["from_attribute_id"] == "acme_motors.japan_production" and by_key["routes"]
-    other = data(c.get(f"{WM}/entities/acme_motors/traces", params={"from": "dollar_yen.usd_jpy"}))
+    by_key = data(c.get(f"{WM}/entities/acme_motors/traces", params={"from": "home_production"}))
+    by_id = data(c.get(f"{WM}/entities/acme_motors/traces", params={"from": "acme_motors.home_production"}))
+    assert by_key == by_id and by_key["from_attribute_id"] == "acme_motors.home_production" and by_key["routes"]
+    other = data(c.get(f"{WM}/entities/acme_motors/traces", params={"from": "dollar.index"}))
     assert other["reaches_endpoint"] and other["routes"][0]["steps"][0]["relationship_id"]
     assert other["through_totals"] is False
-    deep = data(c.get(f"{WM}/entities/acme_motors/traces", params={"from": "dollar_yen.usd_jpy", "through_totals": True,
+    deep = data(c.get(f"{WM}/entities/acme_motors/traces", params={"from": "dollar.index", "through_totals": True,
                                                                "max_depth": 12}))
     assert deep["through_totals"] is True and len(deep["routes"]) >= len(other["routes"])
     longest = max(len(r["steps"]) for r in deep["routes"])
     assert longest >= max(len(r["steps"]) for r in other["routes"])
-    short = data(c.get(f"{WM}/entities/acme_motors/traces", params={"from": "dollar_yen.usd_jpy", "max_depth": 1}))
+    short = data(c.get(f"{WM}/entities/acme_motors/traces", params={"from": "dollar.index", "max_depth": 1}))
     assert all(len(r["steps"]) <= 1 for r in short["routes"])
     for bad in (0, 17):
-        problem(c.get(f"{WM}/entities/acme_motors/traces", params={"from": "dollar_yen.usd_jpy", "max_depth": bad}), 422,
+        problem(c.get(f"{WM}/entities/acme_motors/traces", params={"from": "dollar.index", "max_depth": bad}), 422,
                 "invalid_request")
     problem(c.get(f"{WM}/entities/acme_motors/traces", params={"from": "nope"}), 404, "attribute_not_found")
     problem(c.get(f"{WM}/entities/nobody/traces", params={"from": "x"}), 404, "entity_not_found")
@@ -211,15 +211,15 @@ def test_relationships_filtered(c):
     assert unsized and all(r["effect"] is None and r["kernel"]["lag_days"] is None for r in unsized)
     acc = data(c.get(f"{WM}/relationships", params={"type": "accounting", "limit": 20}))
     assert acc and all(r["type"] == "accounting" for r in acc)
-    src = data(c.get(f"{WM}/relationships", params={"source": "dollar_yen.usd_jpy", "target": "acme_motors.operating_profit"}))
-    assert [r["id"] for r in src] == ["m29"]
+    src = data(c.get(f"{WM}/relationships", params={"source": "dollar.index", "target": "acme_motors.operating_profit"}))
+    assert [r["id"] for r in src] == ["m24"]
     assert data(c.get(f"{WM}/relationships", params={"status": "retired"})) == []
     every = c.get(f"{WM}/relationships", params={"status": "all", "limit": 1}).json()
     assert every["meta"]["next_cursor"]
 
 
 def test_a_relationship_its_evidence_and_an_evidence_record(c, moved):
-    r = c.get(f"{WM}/relationships/m29")
+    r = c.get(f"{WM}/relationships/m24")
     rel = data(r)
     assert rel["sign"] in ("positive", "negative") and 0 <= rel["confidence"] <= 1 and r.headers["etag"]
     assert rel["status"] == "active" and rel["valid_to"] is None and rel["epistemic_type"]
@@ -244,14 +244,14 @@ def test_concepts_and_groups(c):
 
 # -- the graph and the export ---------------------------------------------------------------------------------------------------
 def test_the_graph_from_entities_attributes_names_or_everything(c):
-    g = data(c.get(f"{WM}/graph", params={"entities": "boj", "attributes": "jgbs.yield_10y", "depth": 0}))
-    assert {a["id"] for a in attributes(g)} >= {"boj.policy_rate", "jgbs.yield_10y"} and not g["truncated"]
-    g1 = data(c.get(f"{WM}/graph", params={"attributes": "boj.policy_rate", "depth": 1}))
+    g = data(c.get(f"{WM}/graph", params={"entities": "central_bank", "attributes": "gov_bonds.yield_10y", "depth": 0}))
+    assert {a["id"] for a in attributes(g)} >= {"central_bank.policy_rate", "gov_bonds.yield_10y"} and not g["truncated"]
+    g1 = data(c.get(f"{WM}/graph", params={"attributes": "central_bank.policy_rate", "depth": 1}))
     ids = {a["id"] for a in attributes(g1)}
     assert len(ids) > 1 and all(r["source_attribute_id"] in ids and r["target_attribute_id"] in ids
                                 for r in g1["relationships"])
-    named = data(c.get(f"{WM}/graph", params={"q": "Bank of Japan", "depth": 0}))
-    assert "boj" in {e["id"] for e in named["entities"]}
+    named = data(c.get(f"{WM}/graph", params={"q": "central bank", "depth": 0}))
+    assert "central_bank" in {e["id"] for e in named["entities"]}
     every = data(c.get(f"{WM}/graph", params={"depth": 0, "limit": 5}))
     assert len(attributes(every)) == 5 and every["truncated"] is True
     problem(c.get(f"{WM}/graph", params={"entities": "nobody"}), 404, "entity_not_found")
@@ -265,10 +265,10 @@ def test_the_export(c):
 
 
 # -- pinning -----------------------------------------------------------------------------------------------------------------------
-PINNED = ["/entities", "/entities/oil", "/entities/oil/attributes", "/entities/oil/attributes/brent",
-          "/entities/oil/attributes/brent/observations", "/entities/oil/attributes/brent/states",
+PINNED = ["/entities", "/entities/crude_oil", "/entities/crude_oil/attributes", "/entities/crude_oil/attributes/price",
+          "/entities/crude_oil/attributes/price/observations", "/entities/crude_oil/attributes/price/states",
           "/entities/acme_motors/compositions", "/entities/acme_motors/paths", "/entities/acme_motors/construction",
-          "/relationships", "/relationships/m29", "/relationships/m29/evidence", "/concepts", "/groups", "/graph"]
+          "/relationships", "/relationships/m24", "/relationships/m24/evidence", "/concepts", "/groups", "/graph"]
 
 
 @pytest.mark.parametrize("path", PINNED)
@@ -286,13 +286,13 @@ def test_every_pinned_read_answers_a_version_and_refuses_what_is_not_held(c, mov
 
 def test_a_pinned_read_shows_the_state_before_a_change(c, moved):
     v = moved["version"]["number"]
-    then = c.get(f"{WM}/entities/oil/attributes/brent", params={"version": v})
-    assert data(then) == moved["brent"] and then.headers["etag"] == f'"{moved["version"]["state_hash"]}"'
-    now = data(c.get(f"{WM}/entities/oil/attributes/brent"))
-    assert abs(now["level"]["mean"] - 103) < abs(moved["brent"]["level"]["mean"] - 103)
-    dated = data(c.get(f"{WM}/entities/oil/attributes/brent", params={"as_of": "2026-08-31T23:59:59Z"}))
-    assert abs(dated["level"]["mean"] - moved["brent"]["level"]["mean"]) < abs(now["level"]["mean"]
-                                                                              - moved["brent"]["level"]["mean"])
+    then = c.get(f"{WM}/entities/crude_oil/attributes/price", params={"version": v})
+    assert data(then) == moved["crude"] and then.headers["etag"] == f'"{moved["version"]["state_hash"]}"'
+    now = data(c.get(f"{WM}/entities/crude_oil/attributes/price"))
+    assert abs(now["level"]["mean"] - 103) < abs(moved["crude"]["level"]["mean"] - 103)
+    dated = data(c.get(f"{WM}/entities/crude_oil/attributes/price", params={"as_of": "2026-08-31T23:59:59Z"}))
+    assert abs(dated["level"]["mean"] - moved["crude"]["level"]["mean"]) < abs(now["level"]["mean"]
+                                                                              - moved["crude"]["level"]["mean"])
 
 
 def test_an_unchanged_read_is_a_304(c):

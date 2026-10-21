@@ -17,9 +17,9 @@ from axelrod_wm.lake.store import content_id
 from tests.ingest.conftest import NOW
 
 T = "acme"
-NOTE = (b"# BoJ watch\n\nPublished 2026-10-05.\n\nThe BoJ raised its policy rate by 25bp to 1.25%. JGB yields rose."
-        b"\n\nAcme Re said overseas profit should benefit.\n\nNothing about the model here.")
-TOKIO = "Acme Re said overseas profit should benefit."
+NOTE = (b"# Central bank watch\n\nPublished 2026-10-05.\n\nThe central bank raised its policy rate by 25bp to 4.25%. "
+        b"Government bonds 10Y yield rose.\n\nAcme Re said overseas profit should benefit.\n\nNothing about the model here.")
+OVERSEAS = "Acme Re said overseas profit should benefit."
 
 
 def quotes_hold(bundle: dict) -> None:
@@ -39,16 +39,16 @@ class FakeProvider:
     def complete(self, system: str, user: str) -> str:
         self.calls.append(user.split("Passage:\n", 1)[1])
         return json.dumps({"signals": [
-            {"type": "support", "source": "dollar_yen.usd_jpy", "target": "acme_re.international_profit",
-             "quote": TOKIO}]})
+            {"type": "support", "source": "dollar.index", "target": "acme_re.international_profit",
+             "quote": OVERSEAS}]})
 
 
 # -- storing --------------------------------------------------------------------------------------------------------------
 def test_utc():
     naive = datetime(2026, 10, 5, 9)
     assert _utc(naive) == datetime(2026, 10, 5, 9, tzinfo=UTC)
-    tokyo = datetime(2026, 10, 5, 9, tzinfo=timezone(timedelta(hours=9)))
-    assert _utc(tokyo) is tokyo
+    offset = datetime(2026, 10, 5, 9, tzinfo=timezone(timedelta(hours=9)))
+    assert _utc(offset) is offset
 
 
 def test_store_file_stores_once_by_content(ingestor):
@@ -91,7 +91,7 @@ def test_parse_failure_marks_the_document_failed(ingestor, lake, graph):
 
 
 def test_missing_raw_bytes_parse_as_empty(ingestor, lake, graph, tmp_path):
-    doc, _ = ingestor.store_file(T, b"Brent rose.", "a.txt")
+    doc, _ = ingestor.store_file(T, b"Crude oil price rose.", "a.txt")
     for p in (tmp_path / "lake").rglob(f"{doc.id}*"):
         p.unlink()
     res = ingestor.process(T, doc.id, graph)
@@ -101,7 +101,7 @@ def test_missing_raw_bytes_parse_as_empty(ingestor, lake, graph, tmp_path):
 def test_ingest_markdown_end_to_end(ingestor, lake, graph):
     res = ingestor.ingest_file(T, NOTE, "note.md", graph, source="Desk", source_type="broker_research")
     doc = res.document
-    assert res.new and doc.status == "extracted" and doc.title == "BoJ watch"
+    assert res.new and doc.status == "extracted" and doc.title == "Central bank watch"
     assert doc.published_at == doc.event_time == datetime(2026, 10, 5, tzinfo=UTC) and doc.ingested_at == NOW
     assert doc.meta == {"format": "markdown"}
     text, parser = lake.get_text(T, doc.id)
@@ -111,18 +111,18 @@ def test_ingest_markdown_end_to_end(ingestor, lake, graph):
     assert all(text[c.start:c.end] == c.text for c in chunks)
     assert len(lake.embeddings(T, "hashing-256")) == 5
     ms = lake.mentions_of(T, doc_id=doc.id)
-    assert res.mentions == len(ms) and {m.entity_id for m in ms} == {"boj", "jgbs", "acme_re"}
+    assert res.mentions == len(ms) and {m.entity_id for m in ms} == {"central_bank", "gov_bonds", "acme_re"}
     rec = res.bundle
     assert rec.id == bundle_id(rec.bundle) and rec.doc_ids == [doc.id] and rec.created_at == NOW
     assert rec.extractor_version == EXTRACTOR_VERSION and lake.get_bundle(T, rec.id) == rec
     b = rec.bundle
-    assert b["title"] == "BoJ watch" and b["collected_by"] == f"axelrod ingest {EXTRACTOR_VERSION}"
+    assert b["title"] == "Central bank watch" and b["collected_by"] == f"axelrod ingest {EXTRACTOR_VERSION}"
     assert b["synthetic"] is False and b["collected_at"] == NOW.isoformat().replace("+00:00", "Z")
     (item,) = b["items"]
     assert item["id"] == f"D{doc.id[:10]}-0002" and item["kind"] == "analyst" and item["source"] == "Desk"
-    # "raised its policy rate by 25bp to 1.25%": a level and a move, both claimed
-    assert [(s["type"], s["value_of"]) for s in item["signals"]] == [("observe", "boj.policy_rate"),
-                                                                     ("move", "boj.policy_rate")]
+    # "raised its policy rate by 25bp to 4.25%": a level and a move, both claimed
+    assert [(s["type"], s["value_of"]) for s in item["signals"]] == [("observe", "central_bank.policy_rate"),
+                                                                     ("move", "central_bank.policy_rate")]
     assert res.signals == rec.signals == 2 and rec.items == 1 and res.llm_signals == 0 and res.warnings == []
     assert b["description"] == (f"Extracted from note.md ({doc.id}) against the world model's names (gazetteer "
                                 f"{Gazetteer(graph).digest}): 2 signal(s) in 1 item(s).")
@@ -139,7 +139,7 @@ def test_a_document_with_nothing_for_the_model_warns(ingestor, graph):
 @pytest.mark.parametrize("source_type,kind", [("data", "data"), ("filing", "filing"), ("expert_call", "analyst"),
                                               ("news", "news"), ("other", "news")])
 def test_item_kind_follows_the_source_type(ingestor, graph, source_type, kind):
-    res = ingestor.ingest_file(T, b"Brent crude rose 3%.", f"{source_type}.txt", graph, source_type=source_type)
+    res = ingestor.ingest_file(T, b"Crude oil price rose 3%.", f"{source_type}.txt", graph, source_type=source_type)
     assert res.bundle.bundle["items"][0]["kind"] == kind == KIND_OF.get(source_type, "news")
     assert source_type in SOURCE_TYPES
 
@@ -153,16 +153,16 @@ def test_event_time_prefers_the_given_date(ingestor, graph):
 
 
 def test_event_time_from_text_then_file_name_then_ingestion(ingestor, graph):
-    a = ingestor.ingest_file(T, b"Dated 2026-10-05: Brent rose.", "x_2026-08-01.txt", graph).document
-    b = ingestor.ingest_file(T, b"Brent rose.", "x_2026-08-01.txt", graph).document
-    c = ingestor.ingest_file(T, b"Brent fell.", "x.txt", graph).document
+    a = ingestor.ingest_file(T, b"Dated 2026-10-05: Crude oil price rose.", "x_2026-08-01.txt", graph).document
+    b = ingestor.ingest_file(T, b"Crude oil price rose.", "x_2026-08-01.txt", graph).document
+    c = ingestor.ingest_file(T, b"Crude oil price fell.", "x.txt", graph).document
     assert a.event_time == datetime(2026, 10, 5, tzinfo=UTC)
     assert b.event_time == b.published_at == datetime(2026, 8, 1, tzinfo=UTC)
     assert c.event_time == NOW and c.published_at is None
 
 
 def test_title_falls_back_to_the_file_name(ingestor, graph):
-    res = ingestor.ingest_file(T, b"name,rate\nBoJ,1.25\n", "rates.csv", graph)
+    res = ingestor.ingest_file(T, b"name,rate\nCentral bank,4.25\n", "rates.csv", graph)
     assert res.document.title == "rates.csv" and res.bundle.bundle["title"] == "rates.csv"
 
 
@@ -176,10 +176,10 @@ def test_reprocessing_keeps_the_title_and_date(ingestor, graph):
 # -- import bundles uploaded as files -------------------------------------------------------------------------------------
 def test_an_import_bundle_is_passed_through(ingestor, lake, graph):
     bundle = {"format": "axelrod.import/v1", "title": "Agent bundle", "items": [
-        {"id": "EM-1", "published_at": "2026-10-01T06:00:00Z", "source": "Agent", "headline": "BoJ hikes",
-         "summary": "The BoJ raised rates to 1.25%.", "entities": ["boj"],
-         "signals": [{"type": "observe", "value_of": "boj.policy_rate", "value": 1.25,
-                      "quote": "The BoJ raised rates to 1.25%."}]}]}
+        {"id": "EM-1", "published_at": "2026-10-01T06:00:00Z", "source": "Agent", "headline": "Central bank hikes",
+         "summary": "The central bank raised rates to 4.25%.", "entities": ["central_bank"],
+         "signals": [{"type": "observe", "value_of": "central_bank.policy_rate", "value": 4.25,
+                      "quote": "The central bank raised rates to 4.25%."}]}]}
     res = ingestor.ingest_file(T, json.dumps(bundle).encode(), "bundle.json", graph)
     assert res.new and res.document.status == "extracted" and res.document.title == "Agent bundle"
     assert res.document.meta == {"format": "bundle"} and res.chunks == 1 and res.signals == 1 and res.mentions == 0
@@ -201,14 +201,14 @@ def test_llm_step_reads_only_chunks_with_entities_and_no_rule_signals(lake, inve
     p = FakeProvider()
     ing = Ingestor(lake, HashingEmbedder(), provider=p, clock=lambda: NOW, inverted=inverted)
     res = ing.ingest_file(T, NOTE, "note.md", graph, source_type="news")
-    # the heading names the BoJ (nothing for the rules) and the Acme Re line names a value (nothing either);
+    # the heading names the central bank (nothing for the rules) and the Acme Re line names a value (nothing either);
     # the rules' paragraph and the line naming nothing are never sent
-    assert p.calls == ["# BoJ watch", TOKIO]
+    assert p.calls == ["# Central bank watch", OVERSEAS]
     items = res.bundle.bundle["items"]
     assert [i["tags"] for i in items] == [["extracted"], ["extracted", "llm"]]
     llm_item = items[1]
-    assert llm_item["signals"] == [{"type": "support", "source": "dollar_yen.usd_jpy",
-                                    "target": "acme_re.international_profit", "strength": 0.5, "quote": TOKIO,
+    assert llm_item["signals"] == [{"type": "support", "source": "dollar.index",
+                                    "target": "acme_re.international_profit", "strength": 0.5, "quote": OVERSEAS,
                                     "note": "llm:fake-1"}]
     assert llm_item["confidence"] == 0.5 and llm_item["category"] == "earnings"
     assert res.llm_signals == 1 and res.signals == 3
@@ -220,8 +220,8 @@ def test_llm_step_reads_only_chunks_with_entities_and_no_rule_signals(lake, inve
 
 # -- many files ---------------------------------------------------------------------------------------------------------
 def test_ingest_many_returns_event_time_order_then_id(ingestor, graph):
-    files = [(b"Brent rose. 2026-10-09", "c.txt"), (b"Brent fell. 2026-10-01", "a.txt"),
-             (b"Brent rose 3%.", "b_2026-10-01.txt"), (b"Brent fell 2%.", "d.txt")]
+    files = [(b"Crude rose. 2026-10-09", "c.txt"), (b"Crude fell. 2026-10-01", "a.txt"),
+             (b"Crude rose 3%.", "b_2026-10-01.txt"), (b"Crude fell 2%.", "d.txt")]
     out = ingestor.ingest_many(T, files, graph, source_type="news")
     keys = [(r.document.event_time, r.document.id) for r in out]
     assert keys == sorted(keys)

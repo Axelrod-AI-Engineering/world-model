@@ -33,18 +33,18 @@ def moves(rules: Rules, text: str, **reading) -> list[tuple]:
 
 # -- forecasts are not observations ----------------------------------------------------------------------------------------
 @pytest.mark.parametrize("text,reading", [
-    ("Northwind Bank net interest income is seen up 4% y/y.", {}),                         # a preview
-    ("Bank of Japan preview: a 25bp BoJ rate hike incoming", {}),
-    ("Japan core CPI is projected to accelerate.", {}),                               # a projection
-    ("Our base case is a further BoJ rate hike, taking the policy rate to 1.50%.", {}),
-    ("Markets are pricing in four BoJ rate hikes of 25bp.", {}),                      # the market's pricing
-    ("Guidance based on a fed funds rate of 4.00%.", {}),                             # an assumption
+    ("Delta net interest income is seen up 4% y/y.", {}),                                   # a preview
+    ("Credit spreads preview: a 25bp central bank rate hike incoming", {}),
+    ("Core inflation is projected to accelerate.", {}),                               # a projection
+    ("Our base case is a further central bank rate hike, taking the policy rate to 4.50%.", {}),
+    ("Markets are pricing in four central bank rate hikes of 25bp.", {}),             # the market's pricing
+    ("Guidance based on a policy rate of 4.00%.", {}),                                # an assumption
     ("Management expects Delta markets revenue up mid-single digits.", {}),            # another's expectation
     ("Others have guided to lower M&A.", {}),
     ("There should be a coming acceleration of M&A.", {}),
-    ("Acme Machinery operating profit will grow by 10%.", {}),                               # a prediction
-    ("Euro area inflation over FY26-28E is 0.5% higher.", {}),                        # a change over estimated years
-    ("We see a downward bias to our China GDP growth forecast.", {}),                 # the forecast's direction
+    ("Ridge Energy operating profit will grow by 10%.", {}),                                 # a prediction
+    ("Industrial output over FY26-28E is 0.5% higher.", {}),                          # a change over estimated years
+    ("We see a downward bias to our GDP growth forecast.", {}),                       # the forecast's direction
 ])
 def test_previews_and_predictions_claim_nothing(rules, text, reading):
     assert moves(rules, text, date=OCT, **reading) == []
@@ -54,12 +54,12 @@ def test_previews_and_predictions_claim_nothing(rules, text, reading):
     # a revision of a forecast or of guidance is news
     ("Acme Bank raised its NII guidance to $105.5bn from $103bn.",
      ("move", "acme_bank.net_interest_income", 0.0243, "relative")),
-    ("We raised our Northwind Bank NII forecasts.", ("move", "northwind_bank.net_interest_income", 0.5, "standardized")),
+    ("We raised our Delta NII forecasts.", ("move", "delta_bank.net_interest_income", 0.5, "standardized")),
     # what is said around a mention, not past it, frames it
-    ("Following the September hike, the Fed rate rose 25bp; markets are pricing in more hikes.",
-     ("move", "federal_reserve.policy_rate", 0.25, "absolute")),
-    ("Acme Machinery operating profit rose 5% and will increasingly depend on mining demand.",
-     ("move", "acme_machinery.operating_profit", 0.05, "relative")),
+    ("Following the September hike, the central bank raised rates 25bp; markets are pricing in more hikes.",
+     ("move", "central_bank.policy_rate", 0.25, "absolute")),
+    ("Ridge Energy operating profit rose 5% and will increasingly depend on pumped volumes.",
+     ("move", "ridge_energy.operating_profit", 0.05, "relative")),
 ])
 def test_revisions_and_reports_still_count(rules, text, want):
     assert want in moves(rules, text, date=OCT)
@@ -73,13 +73,13 @@ def test_the_part_of_a_sentence_that_frames_a_mention():
 
 # -- tables: the latest actual column ---------------------------------------------------------------------------------
 def test_a_year_end_level_before_a_later_quarter_is_history(rules):
-    assert read(rules, "Northwind Bank CET1 ratio (%) 14.7 15.0", header=header_of("12/25 12/26E"), date=OCT) == []
+    assert read(rules, "Delta CET1 ratio (%) 14.7 15.0", header=header_of("12/25 12/26E"), date=OCT) == []
 
 
 def test_a_market_price_is_read_on_a_date_not_at_a_period_end(rules):
-    assert read(rules, "USD/JPY 150.1 152.3", header=header_of("2Q26 3Q26"), date=OCT) == []
-    assert read(rules, "USD/JPY 150.1 152.3", header=header_of("30 Sep 1 Oct"), date=OCT) == [
-        ("observe", "dollar_yen.usd_jpy", 152.3)]
+    assert read(rules, "Dollar index 104.1 105.3", header=header_of("2Q26 3Q26"), date=OCT) == []
+    assert read(rules, "Dollar index 104.1 105.3", header=header_of("30 Sep 1 Oct"), date=OCT) == [
+        ("observe", "dollar.index", 105.3)]
 
 
 QUARTERS = header_of("USD |  | FY2025 | Q1-2026 | Q2-2026 | Q3-2026 | Q4-2026 | FY2026")
@@ -127,14 +127,14 @@ def test_modelled_columns():
 
 
 def test_side_by_side_blocks_of_the_same_periods(rules):
-    row = "Northwind Bank net interest income 14.8 15.7 14.9 15.8 1% 1%"
+    row = "Delta net interest income 14.8 15.7 14.9 15.8 1% 1%"
     assert read(rules, row, header=header_of("2026E 2027E 2026E 2027E"), date=OCT) == []
 
 
 # -- wrong value or entity ---------------------------------------------------------------------------------------------------
 def test_a_part_in_a_mixed_list_is_not_the_whole(rules):
-    text = "Equity vol (VIX -12%) fell, while rates volatility (MOVE +6%) rose."
-    assert not [s for s in moves(rules, text) if s[1] == "us_capital_markets.market_volatility"]
+    text = "Equity vol (VIX -12%) fell, while credit volatility (MOVE +6%) rose."
+    assert not [s for s in moves(rules, text) if s[1] == "capital_markets.market_volatility"]
     text = "MOVE (+6%) and OVX (+8%) rose."                                 # parts that moved one way
     m = next(x for x in rules.gz.find(text) if x.subentity_id)
     assert not rules._component(text, m)
@@ -154,25 +154,25 @@ def test_a_known_acronym_is_no_other_actor(rules):
 
 
 def test_its_after_a_stranger_is_the_stranger(rules):
-    text = "NTT's share price lagged. However, its share price rebounded."
-    assert moves(rules, text, subject="acme_telecom") == []
-    assert moves(rules, "Prices lagged. However, its share price rebounded.", subject="acme_telecom") == [
-        ("move", "acme_telecom.share_price", 0.5, "standardized")]
+    text = "Orchid's share price lagged. However, its share price rebounded."
+    assert moves(rules, text, subject="blue_freight") == []
+    assert moves(rules, "Prices lagged. However, its share price rebounded.", subject="blue_freight") == [
+        ("move", "blue_freight.share_price", 0.5, "standardized")]
 
 
 def test_another_basis_and_aims(rules):
-    assert moves(rules, "Stripping out subsidies, Japan core CPI was 2.3% y/y.") == []
-    assert moves(rules, "Buybacks (up to ¥220bn) to improve Acme Re shareholder returns.") == []
-    assert _aim("committed to reducing ") and not _aim("voted to raise the ") and not _aim("the BoJ to raise ")
+    assert moves(rules, "Stripping out subsidies, core inflation was 2.3% y/y.") == []
+    assert moves(rules, "Buybacks (up to $220bn) to improve Acme Re shareholder returns.") == []
+    assert _aim("committed to reducing ") and not _aim("voted to raise the ") and not _aim("the Board to raise ")
 
 
 # -- quarters, months, and pauses ------------------------------------------------------------------------------------------
 @pytest.mark.parametrize("text", [
     "Relative to 2Q26, Delta net interest income is down 2%.",              # a quarter's sequential change
-    "US core CPI rose 0.3% in August.",                                    # a month's print
-    "China credit growth rose sequentially.",
-    "China credit growth rose 1% m/m.",
-    "The PBoC loan prime rate cuts are on hold, unchanged since May.",     # a pause
+    "Core inflation rose 0.3% in August.",                                 # a month's print
+    "Core inflation rose sequentially.",
+    "Core inflation rose 1% m/m.",
+    "The central bank rate cuts are on hold, unchanged since May.",        # a pause
 ])
 def test_sequential_monthly_and_paused_are_no_moves(rules, text):
     assert [s for s in moves(rules, text) if s[0] == "move"] == []
@@ -184,33 +184,34 @@ def test_a_year_on_year_change_against_a_quarter_still_counts(rules):
 
 
 def test_a_flow_after_its_change_is_a_period_unless_the_year_is_named(rules):
-    text = "Acme Re Japan Life adjusted net income rose 16% to ¥72bn after the March 2026 deal."
-    assert moves(rules, text) == [("move", "acme_re.japan_life_profit", 0.16, "relative")]
-    text = "For the full year, Acme Re Japan Life adjusted net income rose 16% to ¥72bn."
-    assert ("observe", "acme_re.japan_life_profit", 72.0) in moves(rules, text)
+    text = "Acme Re domestic life adjusted net income rose 16% to $72bn after the March 2026 deal."
+    assert moves(rules, text) == [("move", "acme_re.domestic_life_profit", 0.16, "relative")]
+    text = "For the full year, Acme Re domestic life adjusted net income rose 16% to $72bn."
+    assert ("observe", "acme_re.domestic_life_profit", 72.0) in moves(rules, text)
 
 
 # -- scenarios and episodes ------------------------------------------------------------------------------------------------
 def test_a_scenarios_bullets_are_supposed_until_prose_resumes(rules):
-    text = ("Upside Scenario,\n$80, +42%\n• US GDP growth stronger than expected\n"
-            "The Fed raised rates by 25bp in September.")
-    assert moves(rules, text, date=OCT) == [("move", "federal_reserve.policy_rate", 0.25, "absolute")]
+    text = ("Upside Scenario,\n$80, +42%\n• GDP growth stronger than expected\n"
+            "The central bank raised rates by 25bp in September.")
+    assert moves(rules, text, date=OCT) == [("move", "central_bank.policy_rate", 0.25, "absolute")]
 
 
 def test_an_episode_dated_by_day_and_month_after_an_earlier_year(rules):
-    text = "The 2024 yen shock was sharp. As the yen rose 10% between 30 July and 5 August, Japan equities fell 16%."
+    text = ("The 2024 euro shock was sharp. As the government bonds 10Y yield rose 10bp between 30 July and 5 August, "
+            "US equities fell 16%.")
     assert moves(rules, text, date=OCT) == []
-    assert ("support", "dollar_yen.usd_jpy", "japan_capital_markets.equity_index") in read(rules, text, date=OCT)
-    text = "The yen rose 10% between 30 July and 5 August."
-    assert moves(rules, text, date=OCT) == [("move", "dollar_yen.usd_jpy", -0.1, "relative")]
+    assert ("support", "gov_bonds.yield_10y", "capital_markets.equity_index") in read(rules, text, date=OCT)
+    text = "The euro rose 10% between 30 July and 5 August."          # an inverted surface: the dollar index fell
+    assert moves(rules, text, date=OCT) == [("move", "dollar.index", -0.1, "relative")]
 
 
 def test_past_episodes_are_history(rules):
-    assert moves(rules, "Across past episodes of yen strength, the yen appreciated by 25%.") == []
+    assert moves(rules, "Across past episodes of euro strength, the euro appreciated by 25%.") == []
 
 
 def test_an_estimated_end_of_a_channel_is_no_move(rules):
-    text = "We est. slightly higher NII in 4Q due to higher US short-term rates."
+    text = "We est. slightly higher NII in 4Q due to higher central bank policy rates."
     assert moves(rules, text, subject="acme_bank") == []
 
 

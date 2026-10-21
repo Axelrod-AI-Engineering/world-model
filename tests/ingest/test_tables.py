@@ -62,14 +62,14 @@ def test_header_of_a_line():
     h = header_of("Fiscal Year Ending 03/26 03/27e 03/28e 03/29e")
     assert [p.text for p in h.periods] == ["03/26", "03/27e", "03/28e", "03/29e"] and h.cells == ()
     assert [p.text for p in header_of("1 Oct 3M 6M 12M").periods] == ["1 Oct", "3M", "6M", "12M"]
-    assert [p.kind for p in header_of("(¥) Previous Current").periods] == ["prev", "cur"]
+    assert [p.kind for p in header_of("($) Previous Current").periods] == ["prev", "cur"]
     # periods at the end of a wordy line still head a table
     assert len(header_of("Operating profit (ordinary profit ex realised gains) 2023 2024 2025E").periods) == 3
 
 
 @pytest.mark.parametrize("text", [
     "Operating profit 607.2 657.1 571.2",                 # figures that are not periods: a row
-    "Price (31 Jul 2026) ¥6,994",
+    "Price (31 Jul 2026) $6,994",
     "The 2025 results beat the plan for most lines and the 2026 outlook improved meaningfully again.",
     "2025 2026 " + "word " * 80,                          # too long
     "only 2026 here",
@@ -181,4 +181,4 @@ def test_a_header_row_among_labels_and_its_current_column():
     assert [p.text for p in h.periods] == ["31-Dec-2025", "31-Mar-2026", "Current"] and h.cells == (2, 3, 4)
     assert pick(list(h.periods), flow=False, date=datetime(2026, 10, 5, tzinfo=UTC)) == 2
     # a row with a figure of its own is a row, not a header
-    assert header_of("BoJ | % | 31-Dec-2025 | 31-Mar-2026 | 0.75 | x | y | z") is None
+    assert header_of("Bank | % | 31-Dec-2025 | 31-Mar-2026 | 0.75 | x | y | z") is None

@@ -95,20 +95,22 @@ def test_http_errors_raise(monkeypatch, provider):
 
 # -- the prompt -----------------------------------------------------------------------------------------------------------
 def test_prompt_lists_the_named_entities_values_and_their_links(graph):
-    p = _prompt(TEXT, graph, ["acme_re", "boj"])
+    p = _prompt(TEXT, graph, ["acme_re", "central_bank"])
     lines = p.split("\n")
     assert lines[0] == "Values you may name (id: name, unit):"
-    assert "- boj.policy_rate: BoJ policy rate, pct" in lines
-    assert "- acme_re.international_profit: Acme Re international business profit, ¥bn/yr" in lines
+    assert "- central_bank.policy_rate: Policy rate, pct" in lines
+    assert "- acme_re.international_profit: Acme Re international business profit, $bn/yr" in lines
     k = lines.index("Links the model already holds (source -> target, label):")
     links = lines[k + 1:lines.index("")]
-    # every link touching a named entity, in link-id order (m13 before m19 before s41)
-    assert links.index("- boj.policy_rate -> jgbs.yield_10y: lifts") < links.index(
-        "- dollar_yen.usd_jpy -> acme_re.international_profit: translates overseas profit") < links.index(
-        "- bunds.yield_10y -> acme_re.international_profit: lifts European reinvestment income")
-    assert not any("federal_reserve.policy_rate -> acme_bank" in ln for ln in links)
+    # every link touching a named entity, in link-id order (m08 before m10 before m20 before m23)
+    assert links.index("- central_bank.policy_rate -> gov_bonds.yield_2y: anchors") < links.index(
+        "- central_bank.policy_rate -> dollar.index: strengthens") < links.index(
+        "- gov_bonds.yield_10y -> acme_re.domestic_pc_profit: lifts reinvestment income") < links.index(
+        "- dollar.index -> acme_re.international_profit: lifts translated profit")
+    assert "- central_bank.policy_rate -> acme_bank.net_interest_income: widens margins" in links
+    assert not any("crude_oil.price -> economy.headline_inflation" in ln for ln in links)
     assert lines[-2:] == ["Passage:", TEXT]
-    assert _prompt(TEXT, graph, ["boj", "acme_re"]) == p
+    assert _prompt(TEXT, graph, ["central_bank", "acme_re"]) == p
 
 
 def test_prompt_without_links_or_with_missing_values():
@@ -135,22 +137,22 @@ def test_parse(raw, want):
 
 def test_validate_keeps_only_well_formed_known_quoted_signals(graph):
     q = "Acme Re said overseas profit should benefit."
-    good_link = {"type": "link", "source": "us_treasuries.yield_10y", "target": "acme_re.operating_profit",
+    good_link = {"type": "link", "source": "gov_bonds.yield_10y", "target": "acme_re.operating_profit",
                  "label": "lifts", "effect": 0.2, "quote": q}
-    good_support = {"type": "support", "source": "dollar_yen.usd_jpy", "target": "acme_re.international_profit",
+    good_support = {"type": "support", "source": "dollar.index", "target": "acme_re.international_profit",
                     "quote": q}
     good_move = {"type": "move", "value_of": "acme_re.international_profit", "delta": 0.05, "mode": "relative",
                  "quote": q, "note": "translation"}
-    good_observe = {"type": "observe", "value_of": "boj.policy_rate", "value": 1.0, "quote": "Acme Bank was quiet."}
+    good_observe = {"type": "observe", "value_of": "central_bank.policy_rate", "value": 4.0, "quote": "Acme Bank was quiet."}
     bad = [
         {"type": "move", "value_of": "no.such", "delta": 0.1, "quote": q},                      # unknown id
-        {"type": "link", "source": "boj.policy_rate", "target": "nope", "label": "x", "effect": 0.1, "quote": q},
-        {"type": "move", "value_of": "boj.policy_rate", "delta": 0.1, "quote": "not in the passage"},
-        {"type": "move", "value_of": "boj.policy_rate", "delta": 0.1},                           # no quote
-        {"type": "move", "value_of": "boj.policy_rate", "delta": "big", "quote": q},              # malformed
+        {"type": "link", "source": "central_bank.policy_rate", "target": "nope", "label": "x", "effect": 0.1, "quote": q},
+        {"type": "move", "value_of": "central_bank.policy_rate", "delta": 0.1, "quote": "not in the passage"},
+        {"type": "move", "value_of": "central_bank.policy_rate", "delta": 0.1},                           # no quote
+        {"type": "move", "value_of": "central_bank.policy_rate", "delta": "big", "quote": q},              # malformed
         {"type": "guess", "quote": q},                                                            # unknown type
-        {"type": "move", "value_of": "boj.policy_rate", "delta": 0.1, "quote": q, "extra": 1},    # extra field
-        {"type": "contradict", "source": "boj.policy_rate", "target": "acme_re.international_profit",
+        {"type": "move", "value_of": "central_bank.policy_rate", "delta": 0.1, "quote": q, "extra": 1},    # extra field
+        {"type": "contradict", "source": "central_bank.policy_rate", "target": "acme_re.international_profit",
          "quote": q},                                                                             # no such link
     ]
     got = validate([bad[0], good_link, *bad[1:], good_support, good_move, good_observe], TEXT, graph)
@@ -171,7 +173,7 @@ class FakeProvider:
 
 
 ANSWER = json.dumps({"signals": [
-    {"type": "support", "source": "dollar_yen.usd_jpy", "target": "acme_re.international_profit",
+    {"type": "support", "source": "dollar.index", "target": "acme_re.international_profit",
      "quote": "Acme Re said overseas profit should benefit.", "note": "translation"},
     {"type": "move", "value_of": "acme_re.international_profit", "delta": 0.05, "mode": "relative",
      "quote": "Acme Re said overseas profit should benefit."},

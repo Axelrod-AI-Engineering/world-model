@@ -28,7 +28,7 @@ subentities:
   id: acme_motors.automotive_operating_income
   name: Acme Motors automotive operating income
   attribute_kind: revenue_flow
-  unit: ¥bn/yr
+  unit: $m/yr
   family: lognormal
   mean: 3900.0
   scale: 0.09
@@ -40,7 +40,7 @@ subentities:
   id: acme_motors.financial_services_operating_income
   name: Acme Motors financial services operating income
   attribute_kind: revenue_flow
-  unit: ¥bn/yr
+  unit: $m/yr
   family: lognormal
   mean: 520.0
   scale: 0.1
@@ -52,7 +52,7 @@ subentities:
   id: acme_motors.other_operating_income
   name: Acme Motors other operating income
   attribute_kind: revenue_flow
-  unit: ¥bn/yr
+  unit: $m/yr
   family: gaussian
   prior:
     family: gaussian
@@ -67,7 +67,7 @@ subentities:
   id: acme_motors.segment_eliminations
   name: Acme Motors segment eliminations
   attribute_kind: revenue_flow
-  unit: ¥bn/yr
+  unit: $m/yr
   family: gaussian
   prior:
     family: gaussian
@@ -82,7 +82,7 @@ subentities:
   id: acme_motors.north_america_operating_income
   name: Acme Motors North America operating income
   attribute_kind: revenue_flow
-  unit: ¥bn/yr
+  unit: $m/yr
   family: lognormal
   mean: 1600.0
   scale: 0.1
@@ -91,22 +91,22 @@ subentities:
     basis: 'region: North America'
     prior: synthetic
 - entity: acme_motors
-  id: acme_motors.japan_operating_income
-  name: Acme Motors Japan operating income
+  id: acme_motors.home_operating_income
+  name: Acme Motors home-market operating income
   attribute_kind: revenue_flow
-  unit: ¥bn/yr
+  unit: $m/yr
   family: lognormal
   mean: 2000.0
   scale: 0.08
   features:
     view: regions
-    basis: 'region: Japan'
+    basis: 'region: home market'
     prior: synthetic
 - entity: acme_motors
   id: acme_motors.other_regions_operating_income
   name: Acme Motors other regions operating income
   attribute_kind: revenue_flow
-  unit: ¥bn/yr
+  unit: $m/yr
   family: gaussian
   prior:
     family: gaussian
@@ -121,7 +121,7 @@ subentities:
   id: acme_motors.net_revenue
   name: Acme Motors net revenue
   attribute_kind: revenue_flow
-  unit: ¥bn/yr
+  unit: $m/yr
   family: lognormal
   mean: 45000.0
   scale: 0.04
@@ -136,7 +136,7 @@ subentities:
   id: acme_motors.revenue_per_unit
   name: Acme Motors revenue per vehicle
   attribute_kind: revenue_flow
-  unit: ¥m
+  unit: $k
   family: lognormal
   mean: 4.5
   scale: 0.03
@@ -147,8 +147,8 @@ subentities:
     basis: net revenue over consolidated units
     prior: synthetic
 - entity: acme_motors
-  id: acme_motors.japan_production
-  name: Acme Motors Japan production
+  id: acme_motors.home_production
+  name: Acme Motors home-market production
   attribute_kind: production_flow
   unit: k units/yr
   family: lognormal
@@ -158,7 +158,7 @@ subentities:
   - domestic production
   features:
     view: operating_state
-    basis: vehicles built in Japan
+    basis: vehicles built in the home market
     prior: synthetic
 - entity: acme_motors
   id: acme_motors.inventory_days
@@ -181,7 +181,7 @@ subentities:
   id: acme_motors.incentive_spend
   name: Acme Motors US incentive spend
   attribute_kind: revenue_flow
-  unit: ¥bn/yr
+  unit: $m/yr
   family: lognormal
   mean: 300.0
   scale: 0.1
@@ -193,7 +193,7 @@ subentities:
   id: acme_motors.price_recovery
   name: Acme Motors price recovery
   attribute_kind: revenue_flow
-  unit: ¥bn/yr
+  unit: $m/yr
   family: lognormal
   mean: 120.0
   scale: 0.15
@@ -205,7 +205,7 @@ subentities:
   id: acme_motors.material_cost
   name: Acme Motors material cost
   attribute_kind: revenue_flow
-  unit: ¥bn/yr
+  unit: $m/yr
   family: lognormal
   mean: 900.0
   scale: 0.1
@@ -217,7 +217,7 @@ subentities:
   id: acme_motors.warranty_cost
   name: Acme Motors warranty cost
   attribute_kind: revenue_flow
-  unit: ¥bn/yr
+  unit: $m/yr
   family: lognormal
   mean: 250.0
   scale: 0.12
@@ -229,7 +229,7 @@ subentities:
   id: acme_motors.rd_spend
   name: Acme Motors research and development spend
   attribute_kind: revenue_flow
-  unit: ¥bn/yr
+  unit: $m/yr
   family: lognormal
   mean: 1200.0
   scale: 0.05
@@ -241,7 +241,7 @@ subentities:
   id: acme_motors.hybrid_share
   name: Acme Motors hybrid share of sales
   attribute_kind: revenue_flow
-  unit: ¥bn/yr
+  unit: $m/yr
   family: lognormal
   mean: 40.0
   scale: 0.1
@@ -253,7 +253,7 @@ subentities:
   id: acme_motors.fx_translation
   name: Acme Motors FX translation effect
   attribute_kind: revenue_flow
-  unit: ¥bn/yr
+  unit: $m/yr
   family: lognormal
   mean: 150.0
   scale: 0.2
@@ -265,7 +265,7 @@ subentities:
   id: acme_motors.dealer_stock
   name: Acme Motors dealer stock
   attribute_kind: revenue_flow
-  unit: ¥bn/yr
+  unit: $m/yr
   family: lognormal
   mean: 800.0
   scale: 0.08
@@ -418,7 +418,7 @@ interactions:
       - acme.pub
       - 'corpus: incentive per unit'
 - id: am-c-prod-sales
-  source: acme_motors.japan_production
+  source: acme_motors.home_production
   target: acme_motors.vehicle_sales
   label: supplies units
   effect:
@@ -440,14 +440,14 @@ interactions:
     lag_days: 60
     duration_days: null
 paths:
-- id: am.path.yen_profit
-  name: Yen to automotive profit
+- id: am.path.dollar_profit
+  name: Dollar to operating profit
   entity_id: acme_motors
-  trigger: the yen weakens
+  trigger: the dollar strengthens
   endpoint: acme_motors.operating_profit
   description: The exporter path.
   steps:
-  - interaction_id: m29
+  - interaction_id: m24
 - id: am.path.tariff
   name: Tariffs to North America profit
   entity_id: acme_motors
@@ -459,7 +459,7 @@ paths:
 - id: am.path.units
   name: Production to profit
   entity_id: acme_motors
-  trigger: Japan production rises
+  trigger: home production rises
   endpoint: acme_motors.automotive_operating_income
   steps:
   - interaction_id: am-c-prod-sales
@@ -470,8 +470,8 @@ compositions:
   entity_id: acme_motors
   view: reporting_segments
   basis: operating profit by segment
-  unit: ¥bn/yr
-  period: fiscal year ending March
+  unit: $m/yr
+  period: fiscal year ending December
   total: acme_motors.operating_profit
   members:
   - acme_motors.automotive_operating_income
@@ -482,13 +482,13 @@ compositions:
   entity_id: acme_motors
   view: regions
   basis: operating profit by region
-  unit: ¥bn/yr
-  period: fiscal year ending March
+  unit: $m/yr
+  period: fiscal year ending December
   total: acme_motors.operating_profit
   drives: false
   members:
   - acme_motors.north_america_operating_income
-  - acme_motors.japan_operating_income
+  - acme_motors.home_operating_income
   residual: acme_motors.other_regions_operating_income
 identities:
 - id: am.id.revenue
@@ -499,4 +499,4 @@ identities:
   - acme_motors.vehicle_sales
   - acme_motors.revenue_per_unit
   coefficient: 1.0
-  unit_check: ¥bn = k units x ¥m
+  unit_check: $m = k units x $k

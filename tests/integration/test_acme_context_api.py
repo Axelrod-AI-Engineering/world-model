@@ -1,4 +1,4 @@
-"""Acme's demo (Oct 15): eleven names seeded, with five ready theses; each forecast carries a scenario table (bull,
+"""Acme's demo (Oct 15): seven invented names seeded, with four ready theses; each forecast carries a scenario table (bull,
 base, and bear bands of its draws, read for the book), and the world model exports as context for a client's agents in
 their v4.1.4 world-model format (GET /api/context/v4). The research itself is local only, so these tests use none."""
 
@@ -10,8 +10,7 @@ from fastapi.testclient import TestClient
 from axelrod_wm.api.app import create_app
 from axelrod_wm.repo.snapshots import MemoryBackend
 
-BOOK = {"acme_bank", "keystone_capital", "delta_bank", "harbor_bank", "northwind_bank", "emerald_bank",
-        "acme_re", "acme_mutual", "acme_motors", "acme_machinery", "acme_telecom"}
+BOOK = {"acme_bank", "delta_bank", "harvest_bank", "acme_re", "acme_motors", "ridge_energy", "blue_freight"}
 
 
 @pytest.fixture(scope="module")
@@ -34,7 +33,7 @@ def test_the_seeded_model_holds_the_book_and_its_groups(client):
     view = client.get("/api/state").json()
     assert BOOK <= {e["id"] for e in view["entities"]}
     assert {"G1", "G2", "G3", "S4", "S6", "S7"} <= {h["pattern_id"] for h in view["hulls"]}
-    assert {t["id"] for t in client.get("/api/scenario-theses").json()} == {"S-T1", "S-T2", "S-T3", "S-T4", "S-T5"}
+    assert {t["id"] for t in client.get("/api/scenario-theses").json()} == {"S-T1", "S-T2", "S-T3", "S-T4"}
 
 
 def test_a_forecast_carries_a_scenario_table_for_the_book(posed):
@@ -89,7 +88,7 @@ def test_the_context_export_follows_the_clients_v4_layout(client, posed):
     pack, ev, fc, reg = ctx["domain_pack"], ctx["evidence"], ctx["forecast"], ctx["registry_entry"]
     assert pack["schema_version"] == "v4.1.4_modular_domain_pack"
     assert pack["file_role"] == "DOMAIN_PACK__LOAD_AFTER_CORE_WHEN_ACTIVATED"
-    assert pack["domain_pack_id"] == "PACK_ACME_RATES_BANKS_INSURERS_EXPORTERS" and pack["file_index"] == "036"
+    assert pack["domain_pack_id"] == "PACK_ACME_ENERGY_RATES_CREDIT" and pack["file_index"] == "036"
     for sec, (keys, idk, rx) in REQUIRED.items():
         items = pack[sec]
         assert items, sec
@@ -126,28 +125,26 @@ def test_the_context_without_a_forecast_and_for_an_unknown_one(client):
     assert client.get("/api/context/v4", params={"forecast": "FC-nope"}).status_code == 404
 
 
-def test_the_yen_is_read_as_the_reciprocal_of_dollar_yen(client):
-    r = client.post("/api/theses", json={"question": "What if the yen rose by 5% next month?"})
+def test_the_euro_is_read_as_the_reciprocal_of_the_dollar_index(client):
+    r = client.post("/api/theses", json={"question": "What if the euro rose by 5% next month?"})
     assert r.status_code == 200, r.text
     th = client.get(f"/api/theses/{r.json()['forecast']['thesis_id']}").json()
     op = th["event"]["ops"][0]
-    assert op["target"]["subentity_id"] == "dollar_yen.usd_jpy"
+    assert op["target"]["subentity_id"] == "dollar.index"
     assert op["delta"] == pytest.approx(1 / 1.05 - 1)
 
 
 def test_entities_carry_their_concepts_for_outlines(client):
     ents = {e["id"]: e for e in client.get("/api/state").json()["entities"]}
-    jpm, boj, jgbs = ents["acme_bank"], ents["boj"], ents["jgbs"]
+    bank, central, bonds = ents["acme_bank"], ents["central_bank"], ents["gov_bonds"]
     # the V1.0 taxonomy: institutions (central banks; companies by sector and industry), economies, markets and asset classes
-    assert jpm["kind_name"] == "Banks" and jpm["concept_branch"] == "gen:obj:institutions" and jpm["concept_branch_name"] == "Institutions"
-    assert jpm["concept_path"] == ["gen:obj:institutions", "gen:obj:companies", "gen:obj:financials", "gen:obj:bank"]
-    assert ents["keystone_capital"]["kind_name"] == "Investment banking and wealth management"
-    assert boj["kind_name"] == "Central banks" and boj["concept_path"][1] == "gen:obj:public_institutions"
-    assert jgbs["kind_name"] == "Sovereign bonds" and jgbs["concept_branch"] == "gen:obj:markets"
-    assert {ents[e]["kind_name"] for e in ("dollar_yen", "jpy_usd", "usd_eur", "jpy_eur")} == {"Foreign exchange"}
-    assert {ents[e]["kind_name"] for e in ("us_capital_markets", "china_capital_markets", "japan_capital_markets",
-                                           "europe_capital_markets")} == {"Capital markets"}
-    assert ents["cgbs"]["kind_name"] == "Sovereign bonds" and ents["china_economy"]["kind_name"] == "Economies"
+    assert bank["kind_name"] == "Banks" and bank["concept_branch"] == "gen:obj:institutions" and bank["concept_branch_name"] == "Institutions"
+    assert bank["concept_path"] == ["gen:obj:institutions", "gen:obj:companies", "gen:obj:financials", "gen:obj:bank"]
+    assert ents["ridge_energy"]["kind_name"] == "Energy" and ents["blue_freight"]["kind_name"] == "Transportation"
+    assert central["kind_name"] == "Central banks" and central["concept_path"][1] == "gen:obj:public_institutions"
+    assert bonds["kind_name"] == "Sovereign bonds" and bonds["concept_branch"] == "gen:obj:markets"
+    assert ents["dollar"]["kind_name"] == "Foreign exchange" and ents["capital_markets"]["kind_name"] == "Capital markets"
+    assert ents["crude_oil"]["kind_name"] == "Commodities" and ents["economy"]["kind_name"] == "Economies"
 
 
 def test_forecast_views_are_compact(client, posed):

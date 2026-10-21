@@ -1,9 +1,19 @@
-# Acme's world (acme_demo): a synthetic test fixture. Invented companies and a macro layer of rates, the yen, and global yields.
-# Nothing here describes a real company or a real client.
+# Acme's world (acme_demo): a synthetic test fixture. Links of the macro layer and its companies.
+# Written from scratch for the tests; nothing here describes a real company, market view, or client.
 interactions:
 - id: m01
-  source: oil.brent
-  target: us_economy.headline_cpi
+  source: crude_oil.supply
+  target: crude_oil.price
+  label: tightens
+  effect:
+    mu: -0.6
+  kernel:
+    delay_days: 5
+    lag_days: 30
+    duration_days: 240
+- id: m02
+  source: crude_oil.price
+  target: economy.headline_inflation
   label: raises
   effect:
     mu: 0.45
@@ -11,39 +21,29 @@ interactions:
     delay_days: 20
     lag_days: 75
     duration_days: 300
-- id: m02
-  source: oil.brent
-  target: japan_economy.core_cpi
-  label: raises
-  effect:
-    mu: 0.3
-  kernel:
-    delay_days: 30
-    lag_days: 90
-    duration_days: 300
 - id: m03
-  source: oil.brent
-  target: euro_economy.headline_cpi
+  source: crude_oil.price
+  target: shipping.freight_cost
   label: raises
   effect:
     mu: 0.4
   kernel:
-    delay_days: 20
-    lag_days: 75
-    duration_days: 300
+    delay_days: 10
+    lag_days: 45
+    duration_days: 240
 - id: m04
-  source: oil.brent
-  target: us_economy.gdp_growth
+  source: crude_oil.price
+  target: economy.gdp_growth
   label: weighs on
   effect:
-    mu: -0.25
+    mu: -0.02
   kernel:
     delay_days: 60
     lag_days: 180
     duration_days: 360
 - id: m05
-  source: us_economy.headline_cpi
-  target: us_economy.core_cpi
+  source: economy.headline_inflation
+  target: economy.core_inflation
   label: spreads to
   effect:
     mu: 0.35
@@ -52,9 +52,9 @@ interactions:
     lag_days: 120
     duration_days: null
 - id: m06
-  source: us_economy.core_cpi
-  target: federal_reserve.policy_rate
-  label: keeps the Fed tight
+  source: economy.core_inflation
+  target: central_bank.policy_rate
+  label: keeps the bank tight
   effect:
     mu: 0.5
   kernel:
@@ -62,9 +62,9 @@ interactions:
     lag_days: 60
     duration_days: null
 - id: m07
-  source: us_economy.gdp_growth
-  target: federal_reserve.policy_rate
-  label: lets the Fed hold
+  source: economy.gdp_growth
+  target: central_bank.policy_rate
+  label: lets the bank hold
   effect:
     mu: 0.35
   kernel:
@@ -72,38 +72,8 @@ interactions:
     lag_days: 90
     duration_days: null
 - id: m08
-  source: japan_economy.core_cpi
-  target: boj.policy_rate
-  label: pushes the BoJ to hike
-  effect:
-    mu: 0.4
-  kernel:
-    delay_days: 45
-    lag_days: 90
-    duration_days: null
-- id: m09
-  source: japan_economy.wage_growth
-  target: boj.policy_rate
-  label: pushes the BoJ to hike
-  effect:
-    mu: 0.45
-  kernel:
-    delay_days: 60
-    lag_days: 120
-    duration_days: null
-- id: m10
-  source: euro_economy.headline_cpi
-  target: ecb.policy_rate
-  label: keeps the ECB tight
-  effect:
-    mu: 0.45
-  kernel:
-    delay_days: 30
-    lag_days: 75
-    duration_days: null
-- id: m11
-  source: federal_reserve.policy_rate
-  target: us_treasuries.yield_2y
+  source: central_bank.policy_rate
+  target: gov_bonds.yield_2y
   label: anchors
   effect:
     mu: 0.85
@@ -111,9 +81,9 @@ interactions:
     delay_days: 1
     lag_days: 10
     duration_days: null
-- id: m12
-  source: us_treasuries.yield_2y
-  target: us_treasuries.yield_10y
+- id: m09
+  source: gov_bonds.yield_2y
+  target: gov_bonds.yield_10y
   label: lifts
   effect:
     mu: 0.5
@@ -121,89 +91,122 @@ interactions:
     delay_days: 1
     lag_days: 14
     duration_days: null
-- id: m13
-  source: boj.policy_rate
-  target: jgbs.yield_10y
-  label: lifts
+- id: m10
+  source: central_bank.policy_rate
+  target: dollar.index
+  label: strengthens
   effect:
     mu: 0.6
   kernel:
     delay_days: 1
-    lag_days: 14
+    lag_days: 30
     duration_days: null
-- id: m14
-  source: jgbs.yield_10y
-  target: jgbs.yield_30y
-  label: lifts
-  effect:
-    mu: 0.6
-  kernel:
-    delay_days: 1
-    lag_days: 21
-    duration_days: null
-- id: m15
-  source: us_treasuries.yield_2y
-  target: dollar_yen.usd_jpy
-  label: widens the gap, weakening the yen
+- id: m11
+  source: central_bank.policy_rate
+  target: credit_markets.credit_spread
+  label: widens
   effect:
     mu: 0.2
   kernel:
-    delay_days: 1
-    lag_days: 20
+    delay_days: 10
+    lag_days: 60
     duration_days: null
-- id: m16
-  source: boj.policy_rate
-  target: dollar_yen.usd_jpy
-  label: narrows the gap, strengthening the yen
+- id: m12
+  source: economy.gdp_growth
+  target: credit_markets.credit_spread
+  label: narrows
   effect:
-    mu: -0.2
+    mu: -0.3
+  kernel:
+    delay_days: 10
+    lag_days: 90
+    duration_days: null
+- id: m13
+  source: credit_markets.credit_spread
+  target: capital_markets.market_volatility
+  label: lifts
+  effect:
+    mu: 0.4
   kernel:
     delay_days: 1
-    lag_days: 20
-    duration_days: null
-- id: m17
-  source: boj.policy_rate
-  target: dollar_yen.carry_positioning
-  label: raises carry funding costs
-  effect:
-    mu: -0.5
-  kernel:
-    delay_days: 3
     lag_days: 20
     duration_days: 180
-- id: m18
-  source: dollar_yen.carry_positioning
-  target: dollar_yen.usd_jpy
-  label: holds the yen down
+- id: m14
+  source: credit_markets.credit_spread
+  target: capital_markets.deal_activity
+  label: cools
   effect:
-    mu: 0.35
+    mu: -0.4
   kernel:
-    delay_days: 1
-    lag_days: 10
-    duration_days: 240
-- id: m19
-  source: dollar_yen.usd_jpy
-  target: acme_re.international_profit
-  label: translates overseas profit
+    delay_days: 10
+    lag_days: 90
+    duration_days: null
+- id: m15
+  source: shipping.freight_cost
+  target: economy.industrial_output
+  label: weighs on
   effect:
-    mu: 0.45
+    mu: -0.15
+  kernel:
+    delay_days: 30
+    lag_days: 120
+    duration_days: null
+- id: m16
+  source: economy.gdp_growth
+  target: economy.industrial_output
+  label: lifts
+  effect:
+    mu: 0.5
+  kernel:
+    delay_days: 20
+    lag_days: 90
+    duration_days: null
+- id: m17
+  source: central_bank.policy_rate
+  target: acme_bank.net_interest_income
+  label: widens margins
+  state:
+    asymmetry:
+      rises:
+        mu: 0.36
+        sigma: 0.013
+      falls:
+        mu: 0.37
+        sigma: 0.013
   kernel:
     delay_days: 30
     lag_days: 90
     duration_days: null
-- id: m20
-  source: us_treasuries.yield_10y
-  target: acme_re.international_profit
-  label: lifts reinvestment income
-  effect:
-    mu: 0.25
+- id: m18
+  source: central_bank.policy_rate
+  target: delta_bank.net_interest_income
+  label: widens margins
+  state:
+    asymmetry:
+      rises:
+        mu: 0.3
+        sigma: 0.02
+      falls:
+        mu: 0.34
+        sigma: 0.02
   kernel:
-    delay_days: 60
-    lag_days: 180
+    delay_days: 30
+    lag_days: 90
     duration_days: null
-- id: m21
-  source: jgbs.yield_30y
-  target: acme_re.japan_pc_profit
+- id: m19
+  source: capital_markets.market_volatility
+  target: delta_bank.markets_revenue
+  label: lifts trading revenue
+  effect:
+    mu: 0.3
+    sigma: 0.1
+  kernel:
+    delay_days: 1
+    lag_days: 30
+    duration_days: 180
+- id: m20
+  source: gov_bonds.yield_10y
+  target: acme_re.domestic_pc_profit
   label: lifts reinvestment income
   effect:
     mu: 0.3
@@ -211,7 +214,7 @@ interactions:
     delay_days: 20
     lag_days: 90
     duration_days: null
-- id: m22
+- id: m21
   source: acme_re.international_profit
   target: acme_re.operating_profit
   label: adds to
@@ -223,8 +226,8 @@ interactions:
     delay_days: 0
     lag_days: 1
     duration_days: null
-- id: m23
-  source: acme_re.japan_pc_profit
+- id: m22
+  source: acme_re.domestic_pc_profit
   target: acme_re.operating_profit
   label: adds to
   edge_type: accounting
@@ -235,693 +238,211 @@ interactions:
     delay_days: 0
     lag_days: 1
     duration_days: null
-- id: m25
-  source: federal_reserve.policy_rate
-  target: acme_bank.net_interest_income
-  label: widens margins
-  state:
-    asymmetry:
-      rises:
-        mu: 0.3569
-        sigma: 0.0128
-      falls:
-        mu: 0.3648
-        sigma: 0.0128
-  kernel:
-    delay_days: 30
-    lag_days: 90
-    duration_days: null
-- id: m26
-  source: federal_reserve.policy_rate
-  target: delta_bank.net_interest_income
-  label: widens margins
-  effect:
-    mu: 0.1
-  kernel:
-    delay_days: 30
-    lag_days: 90
-    duration_days: null
-- id: m28
-  source: ecb.policy_rate
-  target: northwind_bank.net_interest_income
-  label: sets margins
-  effect:
-    mu: 0.1153
-    sigma: 0.0063
-  kernel:
-    delay_days: 30
-    lag_days: 90
-    duration_days: null
-- id: m29
-  source: dollar_yen.usd_jpy
-  target: acme_motors.operating_profit
-  label: a weaker yen lifts
-  effect:
-    mu: 0.5365
-    sigma: 0.2468
-  kernel:
-    delay_days: 30
-    lag_days: 90
-    duration_days: null
-- id: m30
-  source: dollar_yen.usd_jpy
-  target: acme_machinery.operating_profit
-  label: a weaker yen lifts
-  effect:
-    mu: 0.4385
-    sigma: 0.0485
-  kernel:
-    delay_days: 30
-    lag_days: 90
-    duration_days: null
-- id: m31
-  source: oil.brent
-  target: acme_machinery.mining_demand
-  label: funds mining capex
-  effect:
-    mu: 0.3
-  kernel:
-    delay_days: 90
-    lag_days: 180
-    duration_days: null
-- id: m32
-  source: acme_machinery.mining_demand
-  target: acme_machinery.operating_profit
-  label: drives
+- id: m23
+  source: dollar.index
+  target: acme_re.international_profit
+  label: lifts translated profit
   effect:
     mu: 0.4
-  kernel:
-    delay_days: 30
-    lag_days: 120
-    duration_days: null
-- id: m33
-  source: jgbs.yield_10y
-  target: acme_telecom.operating_profit
-  label: raises the AI build's funding cost
-  effect:
-    mu: -0.2
-  kernel:
-    delay_days: 60
-    lag_days: 180
-    duration_days: null
-- id: s01
-  source: japan_economy.gdp_growth
-  target: boj.policy_rate
-  label: lets the BoJ keep hiking
-  effect:
-    mu: 0.3
-  kernel:
-    delay_days: 45
-    lag_days: 120
-    duration_days: null
-- id: s03
-  source: pboc.loan_prime_rate
-  target: china_economy.credit_growth
-  label: cuts lift credit
-  effect:
-    mu: -0.4
-  kernel:
-    delay_days: 30
-    lag_days: 120
-    duration_days: null
-- id: s04
-  source: pboc.loan_prime_rate
-  target: china_economy.property_sales
-  label: cuts support home buying
-  effect:
-    mu: -0.35
-  kernel:
-    delay_days: 45
-    lag_days: 150
-    duration_days: null
-- id: s05
-  source: ecb.policy_rate
-  target: bunds.yield_10y
-  label: anchors
-  effect:
-    mu: 0.55
-  kernel:
-    delay_days: 1
-    lag_days: 14
-    duration_days: null
-- id: s06
-  source: us_treasuries.yield_10y
-  target: bunds.yield_10y
-  label: spills over
-  effect:
-    mu: 0.35
-  kernel:
-    delay_days: 1
-    lag_days: 10
-    duration_days: null
-- id: s07
-  source: us_treasuries.yield_10y
-  target: jgbs.yield_10y
-  label: spills over
-  effect:
-    mu: 0.2
-  kernel:
-    delay_days: 1
-    lag_days: 10
-    duration_days: null
-- id: s08
-  source: federal_reserve.policy_rate
-  target: us_capital_markets.deal_activity
-  label: tight money slows dealmaking
-  effect:
-    mu: -0.3
-  kernel:
-    delay_days: 30
-    lag_days: 120
-    duration_days: null
-- id: s09
-  source: us_economy.gdp_growth
-  target: us_capital_markets.deal_activity
-  label: growth lifts dealmaking
-  effect:
-    mu: 0.35
-  kernel:
-    delay_days: 30
-    lag_days: 120
-    duration_days: null
-- id: s10
-  source: dollar_yen.carry_positioning
-  target: us_capital_markets.market_volatility
-  label: an unwinding carry spikes volatility
-  effect:
-    mu: -0.45
-  kernel:
-    delay_days: 1
-    lag_days: 7
-    duration_days: 90
-- id: s11
-  source: us_treasuries.yield_2y
-  target: us_capital_markets.market_volatility
-  label: a falling front end comes with more rate volatility
-  effect:
-    mu: -0.2
-  kernel:
-    delay_days: 1
-    lag_days: 14
-    duration_days: 120
-- id: s12
-  source: us_capital_markets.deal_activity
-  target: acme_bank.ib_fees
-  label: drives
-  effect:
-    mu: 0.6
-  kernel:
-    delay_days: 14
-    lag_days: 60
-    duration_days: null
-- id: s13
-  source: us_capital_markets.deal_activity
-  target: keystone_capital.ib_fees
-  label: drives
-  effect:
-    mu: 0.7
-  kernel:
-    delay_days: 14
-    lag_days: 60
-    duration_days: null
-- id: s14
-  source: us_capital_markets.market_volatility
-  target: acme_bank.markets_revenue
-  label: lifts trading
-  effect:
-    mu: 0.35
-  kernel:
-    delay_days: 1
-    lag_days: 30
-    duration_days: 120
-- id: s15
-  source: us_capital_markets.market_volatility
-  target: keystone_capital.trading_revenue
-  label: lifts trading
-  effect:
-    mu: 0.4
-  kernel:
-    delay_days: 1
-    lag_days: 30
-    duration_days: 120
-- id: s16
-  source: us_capital_markets.market_volatility
-  target: delta_bank.markets_revenue
-  label: lifts trading
-  effect:
-    mu: 0.3
-  kernel:
-    delay_days: 1
-    lag_days: 30
-    duration_days: 120
-- id: s17
-  source: us_capital_markets.market_volatility
-  target: keystone_capital.wealth_revenue
-  label: sours client assets
-  effect:
-    mu: -0.2
-  kernel:
-    delay_days: 7
-    lag_days: 60
-    duration_days: 180
-- id: s18
-  source: us_treasuries.yield_10y
-  target: acme_bank.cet1_ratio
-  label: marks down bond holdings
-  effect:
-    mu: -0.25
-  kernel:
-    delay_days: 1
-    lag_days: 30
-    duration_days: null
-- id: s19
-  source: us_economy.gdp_growth
-  target: delta_bank.services_revenue
-  label: cross-border flows lift
-  effect:
-    mu: 0.3
-  kernel:
-    delay_days: 30
-    lag_days: 90
-    duration_days: null
-- id: s27
-  source: pboc.loan_prime_rate
-  target: harbor_bank.net_interest_margin
-  label: sets loan yields
-  effect:
-    mu: 0.6
-  kernel:
-    delay_days: 30
-    lag_days: 120
-    duration_days: null
-- id: s28
-  source: china_economy.property_sales
-  target: harbor_bank.npl_ratio
-  label: a weak property market sours mortgages
-  effect:
-    mu: -0.4
-  kernel:
-    delay_days: 60
-    lag_days: 240
-    duration_days: null
-- id: s29
-  source: harbor_bank.net_interest_margin
-  target: harbor_bank.operating_profit
-  label: drives
-  effect:
-    mu: 0.55
-  kernel:
-    delay_days: 14
-    lag_days: 90
-    duration_days: null
-- id: s30
-  source: harbor_bank.npl_ratio
-  target: harbor_bank.operating_profit
-  label: provisions weigh on
-  effect:
-    mu: -0.3
-  kernel:
-    delay_days: 14
-    lag_days: 90
-    duration_days: null
-- id: s31
-  source: china_economy.credit_growth
-  target: harbor_bank.operating_profit
-  label: loan growth lifts
-  effect:
-    mu: 0.2
-  kernel:
-    delay_days: 30
-    lag_days: 120
-    duration_days: null
-- id: s32
-  source: ecb.policy_rate
-  target: emerald_bank.net_interest_income
-  label: passes straight into
-  effect:
-    mu: 0.65
-  kernel:
-    delay_days: 30
-    lag_days: 90
-    duration_days: null
-- id: s33
-  source: bunds.yield_10y
-  target: northwind_bank.cet1_ratio
-  label: marks bond holdings
-  effect:
-    mu: -0.15
-  kernel:
-    delay_days: 1
-    lag_days: 30
-    duration_days: null
-- id: s35
-  source: dollar_yen.usd_jpy
-  target: acme_mutual.international_profit
-  label: translates overseas profit
-  effect:
-    mu: 0.4
-  kernel:
-    delay_days: 30
-    lag_days: 90
-    duration_days: null
-- id: s36
-  source: us_treasuries.yield_10y
-  target: acme_mutual.international_profit
-  label: lifts reinvestment income
-  effect:
-    mu: 0.2
-  kernel:
-    delay_days: 60
-    lag_days: 180
-    duration_days: null
-- id: s37
-  source: bunds.yield_10y
-  target: acme_mutual.international_profit
-  label: lifts European reinvestment income
-  effect:
-    mu: 0.15
-  kernel:
-    delay_days: 60
-    lag_days: 180
-    duration_days: null
-- id: s38
-  source: jgbs.yield_30y
-  target: acme_mutual.domestic_profit
-  label: lifts reinvestment income
-  effect:
-    mu: 0.3
+    sigma: 0.1
   kernel:
     delay_days: 20
     lag_days: 90
     duration_days: null
-- id: s39
-  source: acme_mutual.international_profit
-  target: acme_mutual.operating_profit
-  label: adds to
-  edge_type: accounting
+- id: m24
+  source: dollar.index
+  target: acme_motors.operating_profit
+  label: a stronger dollar trims
   effect:
-    mu: 0.36
-    sigma: 0.001
-  kernel:
-    delay_days: 0
-    lag_days: 1
-    duration_days: null
-- id: s40
-  source: acme_mutual.domestic_profit
-  target: acme_mutual.operating_profit
-  label: adds to
-  edge_type: accounting
-  effect:
-    mu: 0.5
-    sigma: 0.001
-  kernel:
-    delay_days: 0
-    lag_days: 1
-    duration_days: null
-- id: s41
-  source: bunds.yield_10y
-  target: acme_re.international_profit
-  label: lifts European reinvestment income
-  effect:
-    mu: 0.1
-  kernel:
-    delay_days: 60
-    lag_days: 180
-    duration_days: null
-- id: s42
-  source: us_economy.gdp_growth
-  target: acme_motors.vehicle_sales
-  label: US demand lifts
-  effect:
-    mu: 0.3
-  kernel:
-    delay_days: 30
-    lag_days: 120
-    duration_days: null
-- id: s45
-  source: china_economy.property_sales
-  target: acme_machinery.construction_demand
-  label: construction starts drive
-  effect:
-    mu: 0.4
-  kernel:
-    delay_days: 60
-    lag_days: 180
-    duration_days: null
-- id: s46
-  source: acme_machinery.construction_demand
-  target: acme_machinery.operating_profit
-  label: drives
-  effect:
-    mu: 0.3
-  kernel:
-    delay_days: 30
-    lag_days: 120
-    duration_days: null
-- id: s47
-  source: japan_economy.gdp_growth
-  target: acme_telecom.operating_profit
-  label: domestic demand lifts
-  effect:
-    mu: 0.15
-  kernel:
-    delay_days: 30
-    lag_days: 120
-    duration_days: null
-- id: s48
-  source: acme_telecom.ai_capex
-  target: acme_telecom.operating_profit
-  label: depreciation weighs on near-term profit
-  effect:
-    mu: -0.2
-  kernel:
-    delay_days: 90
-    lag_days: 240
-    duration_days: null
-- id: s49
-  source: jgbs.yield_10y
-  target: acme_telecom.ai_capex
-  label: higher funding costs slow the build
-  effect:
-    mu: -0.2
-  kernel:
-    delay_days: 60
-    lag_days: 180
-    duration_days: null
-- id: s50
-  source: dollar_yen.usd_jpy
-  target: jpy_usd.rate
-  label: is the inverse of
-  effect:
-    mu: -1.0
-  kernel:
-    delay_days: 1
-    lag_days: 1
-    duration_days: null
-- id: s51
-  source: federal_reserve.policy_rate
-  target: usd_eur.rate
-  label: a wider Fed lead strengthens the dollar
-  effect:
-    mu: 0.3
-  kernel:
-    delay_days: 1
-    lag_days: 30
-    duration_days: null
-- id: s52
-  source: ecb.policy_rate
-  target: usd_eur.rate
-  label: ECB hikes strengthen the euro
-  effect:
-    mu: -0.3
-  kernel:
-    delay_days: 1
-    lag_days: 30
-    duration_days: null
-- id: s53
-  source: jpy_usd.rate
-  target: jpy_eur.rate
-  label: crosses through the dollar
-  effect:
-    mu: 1.0
-  kernel:
-    delay_days: 1
-    lag_days: 1
-    duration_days: null
-- id: s54
-  source: usd_eur.rate
-  target: jpy_eur.rate
-  label: crosses through the dollar
-  effect:
-    mu: 1.0
-  kernel:
-    delay_days: 1
-    lag_days: 1
-    duration_days: null
-- id: s55
-  source: jpy_eur.rate
-  target: acme_re.international_profit
-  label: a stronger yen shrinks translated European profit
-  effect:
-    mu: -0.1
+    mu: -0.5
+    sigma: 0.25
   kernel:
     delay_days: 30
     lag_days: 90
     duration_days: null
-- id: s56
-  source: pboc.loan_prime_rate
-  target: cgbs.yield_10y
+- id: m25
+  source: crude_oil.price
+  target: acme_motors.vehicle_sales
+  label: weighs on
+  effect:
+    mu: -0.5
+    sigma: 0.08
+  kernel:
+    delay_days: 30
+    lag_days: 120
+    duration_days: null
+- id: m26
+  source: economy.gdp_growth
+  target: acme_motors.vehicle_sales
+  label: lifts
+  effect:
+    mu: 0.4
+    sigma: 0.1
+  kernel:
+    delay_days: 30
+    lag_days: 90
+    duration_days: null
+- id: m27
+  source: crude_oil.price
+  target: ridge_energy.operating_profit
+  label: lifts
+  effect:
+    mu: 0.6
+    sigma: 0.1
+  kernel:
+    delay_days: 5
+    lag_days: 45
+    duration_days: null
+- id: m28
+  source: ridge_energy.oil_output
+  target: ridge_energy.operating_profit
+  label: lifts
+  effect:
+    mu: 0.5
+    sigma: 0.1
+  kernel:
+    delay_days: 10
+    lag_days: 60
+    duration_days: null
+- id: m29
+  source: crude_oil.price
+  target: blue_freight.fuel_cost
+  label: raises
+  effect:
+    mu: 0.5
+    sigma: 0.1
+  kernel:
+    delay_days: 5
+    lag_days: 45
+    duration_days: null
+- id: m30
+  source: shipping.freight_cost
+  target: blue_freight.freight_revenue
+  label: lifts
+  effect:
+    mu: 0.4
+    sigma: 0.1
+  kernel:
+    delay_days: 10
+    lag_days: 60
+    duration_days: null
+- id: m31
+  source: blue_freight.freight_revenue
+  target: blue_freight.operating_profit
+  label: adds to
+  edge_type: accounting
+  effect:
+    mu: 0.7
+    sigma: 0.001
+  kernel:
+    delay_days: 0
+    lag_days: 1
+    duration_days: null
+- id: m32
+  source: blue_freight.fuel_cost
+  target: blue_freight.operating_profit
+  label: weighs on
+  edge_type: accounting
+  effect:
+    mu: -0.45
+    sigma: 0.001
+  kernel:
+    delay_days: 0
+    lag_days: 1
+    duration_days: null
+- id: m33
+  source: credit_markets.credit_spread
+  target: acme_bank.ib_fees
+  label: weighs on
+  effect:
+    mu: -0.15
+    sigma: 0.06
+  kernel:
+    delay_days: 10
+    lag_days: 90
+    duration_days: null
+- id: m34
+  source: union_bank.policy_rate
+  target: union_bonds.yield_10y
   label: anchors
   effect:
     mu: 0.6
   kernel:
     delay_days: 1
-    lag_days: 30
+    lag_days: 14
     duration_days: null
-- id: s58
-  source: cgbs.yield_10y
-  target: harbor_bank.net_interest_margin
-  label: bond yields set asset yields
+- id: m35
+  source: union_bank.policy_rate
+  target: harvest_bank.net_interest_income
+  label: widens margins
   effect:
-    mu: 0.2
+    mu: 0.4
+    sigma: 0.1
   kernel:
-    delay_days: 60
-    lag_days: 180
+    delay_days: 30
+    lag_days: 90
     duration_days: null
-- id: s59
-  source: pboc.loan_prime_rate
-  target: china_capital_markets.equity_index
-  label: easing lifts
+- id: m36
+  source: union_bonds.yield_10y
+  target: union_capital_markets.equity_index
+  label: weighs on
   effect:
-    mu: -0.3
-  kernel:
-    delay_days: 5
-    lag_days: 30
-    duration_days: null
-- id: s60
-  source: china_economy.property_sales
-  target: china_capital_markets.equity_index
-  label: a property recovery lifts
-  effect:
-    mu: 0.3
+    mu: -0.2
+    sigma: 0.08
   kernel:
     delay_days: 10
     lag_days: 60
     duration_days: null
-- id: s62
-  source: dollar_yen.usd_jpy
-  target: japan_capital_markets.equity_index
-  label: a weaker yen lifts the exporters that lead
+- id: m37
+  source: union_economy.headline_inflation
+  target: union_bank.policy_rate
+  label: keeps the union bank tight
   effect:
-    mu: 0.4
-  kernel:
-    delay_days: 1
-    lag_days: 20
-    duration_days: null
-- id: s63
-  source: boj.policy_rate
-  target: japan_capital_markets.equity_index
-  label: hikes weigh on
-  effect:
-    mu: -0.25
-  kernel:
-    delay_days: 1
-    lag_days: 30
-    duration_days: null
-- id: s64
-  source: japan_economy.gdp_growth
-  target: japan_capital_markets.equity_index
-  label: growth lifts
-  effect:
-    mu: 0.25
+    mu: 0.45
   kernel:
     delay_days: 30
-    lag_days: 90
+    lag_days: 75
     duration_days: null
-- id: s66
-  source: ecb.policy_rate
-  target: europe_capital_markets.equity_index
-  label: easing lifts
+- id: m38
+  source: union_bonds.yield_10y
+  target: harvest_bank.net_interest_income
+  label: lifts
   effect:
-    mu: -0.15
+    mu: 0.35
+    sigma: 0.1
   kernel:
-    delay_days: 5
-    lag_days: 30
+    delay_days: 30
+    lag_days: 120
     duration_days: null
-- id: s67
-  source: bunds.yield_10y
-  target: europe_capital_markets.equity_index
-  label: lower yields lift
+- id: m39
+  source: dollar.index
+  target: capital_markets.equity_index
+  label: weighs on
   effect:
     mu: -0.2
+    sigma: 0.08
   kernel:
-    delay_days: 1
-    lag_days: 30
-    duration_days: null
-- id: s72
-  source: jgbs.yield_10y
-  target: dollar_yen.usd_jpy
-  label: draws savings home, strengthening the yen
-  effect:
-    mu: -0.15
-  kernel:
-    delay_days: 5
-    lag_days: 30
-    duration_days: null
-- id: s73
-  source: us_treasuries.yield_2y
-  target: dollar_yen.carry_positioning
-  label: a wider rate gap pays the carry trade
-  effect:
-    mu: 0.3
-  kernel:
-    delay_days: 3
-    lag_days: 20
-    duration_days: 180
-- id: s74
-  source: us_treasuries.yield_10y
-  target: us_capital_markets.deal_activity
-  label: dearer financing defers deals
-  effect:
-    mu: -0.2
-  kernel:
-    delay_days: 14
+    delay_days: 10
     lag_days: 60
     duration_days: null
-- id: s75
-  source: federal_reserve.policy_rate
-  target: keystone_capital.wealth_revenue
-  label: earns on client cash
-  state:
-    asymmetry:
-      rises:
-        mu: 0.0341
-        sigma: 0.0017
-      falls:
-        mu: 0.0421
-        sigma: 0.0017
-  kernel:
-    delay_days: 30
-    lag_days: 90
-    duration_days: null
-- id: s76
-  source: bunds.yield_10y
-  target: northwind_bank.net_interest_income
-  label: rolls the deposit hedge at the new yield
+- id: m40
+  source: union_economy.core_inflation
+  target: union_bank.policy_rate
+  label: keeps the union bank tight
   effect:
-    mu: 0.1119
-    sigma: 0.0031
+    mu: 0.5
   kernel:
     delay_days: 30
-    lag_days: 180
+    lag_days: 60
     duration_days: null
-- id: s77
-  source: china_economy.property_sales
-  target: china_economy.credit_growth
-  label: a housing recovery revives borrowing
+
+- id: m41
+  source: dollar.index
+  target: credit_markets.credit_spread
+  label: tightens conditions
   effect:
     mu: 0.3
   kernel:
-    delay_days: 30
-    lag_days: 90
+    delay_days: 5
+    lag_days: 45
     duration_days: null

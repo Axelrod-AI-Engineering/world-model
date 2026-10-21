@@ -35,11 +35,11 @@ def test_the_profile_overlays_the_base_and_refuses_unknown_tables_and_keys(tmp_p
     (tmp_path / "world_model.dev.toml").write_text(
         '[auth]\ninternal_orgs = ["ours"]\nmain_login_org = "ours"\ndeny = ["kid:old"]\n'
         'trusted_issuers = [{issuer = "https://c", jwks_url = "https://c/jwks", audience = "wm"}]\n'
-        '[auth.owners]\nsally = "s-org"\n[compartments]\nfocus = "s-org"\n')
+        '[auth.owners]\nacme = "s-org"\n[compartments]\nfocus = "s-org"\n')
     p = settings.read_profile("dev", tmp_path)
     assert p["auth"]["internal_orgs"] == ["ours"]
     assert settings.profile_env(p, "main") == {
-        "WORLD_MODEL_TRUSTED_ISSUERS": "https://c;https://c/jwks;wm", "WORLD_MODEL_OWNERS": "sally=s-org,main=ours",
+        "WORLD_MODEL_TRUSTED_ISSUERS": "https://c;https://c/jwks;wm", "WORLD_MODEL_OWNERS": "acme=s-org,main=ours",
         "WORLD_MODEL_INTERNAL_ORGS": "ours", "WORLD_MODEL_DENY": "kid:old", "WORLD_MODEL_COMPARTMENTS": "focus=s-org"}
     assert settings.profile_env(settings.read_profile("staging", tmp_path)) == {"WORLD_MODEL_INTERNAL_ORGS": "base"}
     assert settings.profile_env({}) == {}

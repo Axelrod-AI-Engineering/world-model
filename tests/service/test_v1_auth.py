@@ -146,7 +146,7 @@ def test_another_organizations_documents_stay_its_own(c):
 
 # -- decisions by a person --------------------------------------------------------------------------------------------------
 def test_only_a_person_decides(c):
-    res = upload(c, b"Oct 6, 2026. The BoJ raised its policy rate by 25bp to 1.25%.", "boj.txt")
+    res = upload(c, b"Oct 6, 2026. The central bank raised its policy rate by 25bp to 4.25%.", "rate.txt")
     first = propose(c, res["bundle_id"])["result"]["ids"][0]
     url = f"{WM}/changes/{first}/approvals"
     agent = dict(org="admin", act={"sub": "mcp-client:claude", "name": "Claude"})

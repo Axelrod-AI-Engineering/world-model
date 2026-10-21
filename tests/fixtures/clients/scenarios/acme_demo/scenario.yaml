@@ -1,6 +1,6 @@
-# Acme's demo, an imports scenario: a synthetic test fixture (invented companies; derived by renaming, nothing here describes a real company or client).
+# Acme's demo, an imports scenario: a synthetic test fixture (invented companies and themes; nothing here describes a real company or client).
 id: acme_demo
-title: 'Acme''s demo: eleven invented names, from daily research to forecasts and agent context'
+title: 'Acme''s demo: six invented names on an energy and industrials theme, from daily research to forecasts and agent context'
 canvas: seeded
 imports: true
 imports_dir: tests/fixtures/clients/days
@@ -13,8 +13,8 @@ initialization:
 config_overrides: configs/acme_demo.yaml
 steps: []
 context_pack:
-  domain_pack_id: PACK_ACME_RATES_BANKS_INSURERS_EXPORTERS
-  name: Acme Rates / Banks, Insurers, and Exporters
-  slug: acme_rates_banks_insurers_exporters
+  domain_pack_id: PACK_ACME_ENERGY_RATES_CREDIT
+  name: Acme Energy, Rates, and Credit
+  slug: acme_energy_rates_credit
   file_index: '036'
   edge_id_start: 60

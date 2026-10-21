@@ -16,13 +16,13 @@ SIGN = {"+": "positive", "-": "negative"}
 
 def test_a_simulation_names_its_unquantified_relationships_everywhere_it_is_read():
     with service(SIGNER) as c:
-        thesis = data(c.post(f"{WM}/theses", json={"question": "What if the BoJ hiked by 25bp next quarter?"}), 201)
+        thesis = data(c.post(f"{WM}/theses", json={"question": "What if the central bank hiked by 25bp next quarter?"}), 201)
         job = data(c.post(f"{WM}/theses/{thesis['id']}/simulations"), 202)
         sid = job["result"]["ids"][0]
         sim = data(c.get(f"{WM}/simulations/{sid}"))
         cov = data(c.get(f"{WM}/simulations/{sid}/coverage"))
         unq = sim["unquantified_relationships"]
-        assert unq, "the BoJ shock reaches uncalibrated relationships in acme_demo"
+        assert unq, "the policy-rate shock reaches uncalibrated relationships in acme_demo"
         excluded = {e["interaction_id"]: e for e in cov["excluded"]}
         for u in unq:
             e = excluded[u["interaction_id"]]

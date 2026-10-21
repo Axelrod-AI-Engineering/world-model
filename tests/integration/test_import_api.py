@@ -38,7 +38,7 @@ def test_seeded_model(client):
     st = client.get("/api/sim/status").json()
     assert st["imports"] is True and st["canvas"] == "seeded" and st["examples"] is None
     view = client.get("/api/state").json()
-    assert {"boj", "dollar_yen", "acme_re", "acme_motors"} <= {e["id"] for e in view["entities"]}
+    assert {"central_bank", "dollar", "acme_re", "acme_motors"} <= {e["id"] for e in view["entities"]}
     assert {h["pattern_id"] for h in view["hulls"]} >= {"S1", "S3", "G1"}
     ready = client.get("/api/scenario-theses").json()
     assert {t["id"] for t in ready} >= {"S-T1", "S-T4"}
@@ -72,7 +72,7 @@ def test_preview_import_and_review_in_date_order(client):
 def test_ready_made_question_forecasts_the_book(client):
     fv = client.post("/api/theses/S-T1/pose").json()
     moved = {v["id"] for v in fv["transmission"]["values"]}
-    assert "dollar_yen.usd_jpy" in moved or "dollar_yen.usd_jpy" in {s["id"] for s in fv["transmission"]["shocked"]}
+    assert "crude_oil.price" in moved or "crude_oil.price" in {s["id"] for s in fv["transmission"]["shocked"]}
     book = {n["id"]: n["status"] for n in fv["transmission"]["watchlist"]["names"]}
     assert book["acme_re"] in ("moves", "small")
 
