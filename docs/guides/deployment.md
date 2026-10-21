@@ -112,6 +112,8 @@ The root is `WORLD_MODEL_CLIENT_DIR`. It defaults to `data/clients` (gitignored)
 
 A path in a client `scenario.yaml` (`construction_dir`, `taxonomy_dir`, `seeds`, `layout`, `config_overrides`, `imports_dir`) is read against the root that holds the scenario, then against the repository, so a client scenario writes `worlds/<name>` for its own world and `data/taxonomy` for the shared one (`src/axelrod_wm/clients.py`).
 
+A login in `WORLD_MODEL_LOGINS` whose scenario is not under any client root opens the main engine, with a warning in the log, instead of stopping the server. To put a client's content on dev, copy its folders to `/app/var/clients` on the volume (for example `tar cz -C data/clients . | railway ssh -s world-model -e dev -- tar xz -C /app/var/clients`, after `railway ssh keys add`), then redeploy.
+
 To load client content on dev, copy the folder onto the volume (for example `railway ssh`, then `tar` into `/app/var/clients`) and restart; this is done by hand, outside the infrastructure code. The non-secret ids that name client scenarios stay in `configs/world_model.dev.toml` (`[compartments]`, `[auth.owners]`): a compartment whose scenario is absent is simply not served.
 
 ## The API and its keys

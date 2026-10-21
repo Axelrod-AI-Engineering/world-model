@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import threading
 import time
@@ -18,7 +19,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
 
-from axelrod_wm.clients import load_scenario_yaml, scenario_dirs
+from axelrod_wm.clients import find_scenario, load_scenario_yaml, scenario_dirs
 from axelrod_wm.control.controller import ControllerError
 from axelrod_wm.events.graph_update import EventValidationError
 from axelrod_wm.inference.decisions import DecisionError
@@ -28,6 +29,8 @@ from axelrod_wm.repo.snapshots import RestoreError, StorageBackend
 from axelrod_wm.sim.runner import ScenarioRunner, build_runner
 from axelrod_wm.sim.scenario import REPO_ROOT
 from axelrod_wm.trace import BroadcastTracer
+
+logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
 
@@ -411,6 +414,12 @@ def create_app(config_path: str | None = None, scenario: str = "oil_shock_demo",
     # engine is still one shared session for everyone who signs in with that login.
     by_login: dict[str, AppState] = {}
     for login in extra_logins():
+        if find_scenario(login.scenario) is None:
+            # a client scenario not on this machine or volume (WORLD_MODEL_CLIENT_DIR): the login opens the main engine
+            # rather than stopping the server at startup
+            logger.warning("login %s: scenario %s not found under the client roots; it opens the main engine",
+                           login.username, login.scenario)
+            continue
         by_login[login.username] = AppState(
             login.scenario, config_path, storage=FilesBackend(path=Path(f"var/axelrod/demo-{login.username}")),
             trace_dir=Path(trace_dir) / login.username if trace_dir is not None else None, play_delay=play_delay,

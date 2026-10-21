@@ -123,3 +123,16 @@ def test_a_client_that_never_says_hello(client, monkeypatch):
     monkeypatch.setattr(ws, "HELLO_TIMEOUT_S", 0.05)
     with client.websocket_connect("/ws") as sock:
         assert sock.receive_json()["type"] == "status"
+
+
+def test_a_login_whose_scenario_is_missing_opens_the_main_engine(monkeypatch, caplog, tmp_path):
+    from axelrod_wm.api.app import create_app
+
+    _clear_auth_env(monkeypatch)
+    monkeypatch.setenv("WORLD_MODEL_BASIC_AUTH_USERNAME", "main")
+    monkeypatch.setenv("WORLD_MODEL_BASIC_AUTH_PASSWORD", "test-password")
+    monkeypatch.setenv("WORLD_MODEL_LOGINS", "eve:other-password:acme_demo,zed:third-password:not_on_this_machine")
+    with caplog.at_level("WARNING", logger="axelrod_wm.api.app"):
+        app = create_app(storage=MemoryBackend(), load_on_startup=False, trace_dir=None, cache_dir=tmp_path)
+    assert set(app.state.axelrod_by_login) == {"eve"}
+    assert "zed: scenario not_on_this_machine not found" in caplog.text
