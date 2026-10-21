@@ -143,10 +143,10 @@ def test_the_index_and_overviews_lead_to_the_shards(tmp_path, ctx):
 
 
 def test_a_small_cap_splits_the_index_and_a_large_one_keeps_it_whole(tmp_path, ctx):
-    small, _m, _ = export(tmp_path, ctx, cap_kb=30, name="small")
+    small, _m, _ = export(tmp_path, ctx, cap_kb=6, name="small")
     assert read_index(small)["parts"] > 1
     # (the guide lists every file, so it grows with their number; the data files keep to the cap)
-    assert all(p.stat().st_size <= 30 * 1024 for p in (small / "reading").glob("[1-9]*"))
+    assert all(p.stat().st_size <= 6 * 1024 for p in (small / "reading").glob("[1-9]*"))
 
 
 def test_a_repeated_id_in_the_pack_is_indexed_to_every_file_that_holds_it(tmp_path, ctx):

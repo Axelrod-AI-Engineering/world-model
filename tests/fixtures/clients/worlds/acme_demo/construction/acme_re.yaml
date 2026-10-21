@@ -267,6 +267,22 @@ interactions:
   transition:
     mechanism: A weaker yen raises the cost of hedging overseas capital
     sign: '-'
+- id: ar-c-jgb-equity
+  source: jgbs.yield_10y
+  target: japan_capital_markets.equity_index
+  label: weighs on equity valuations
+  calibration: uncalibrated
+  transition:
+    mechanism: Higher domestic yields raise the discount rate on Japanese equities
+    sign: '-'
+- id: ar-c-hedge-profit
+  source: acme_re.hedge_cost
+  target: acme_re.international_profit
+  label: weighs on international profit
+  calibration: uncalibrated
+  transition:
+    mechanism: Hedging cost is a charge against overseas profit
+    sign: +
 - id: ar-c-jgb-life
   source: jgbs.yield_10y
   target: acme_re.japan_life_profit
