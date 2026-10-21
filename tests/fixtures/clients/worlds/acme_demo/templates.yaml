@@ -1,0 +1,122 @@
+# Question rules for acme_demo: a synthetic test fixture (invented companies; derived by renaming, nothing here describes a real company or client).
+subjects:
+- pattern: 'acme re(?:''s)?(?: international| overseas)(?: profit| segment)?'
+  subentity: acme_re.international_profit
+- pattern: 'acme re(?:''s)?(?: shares| stock| share price)?'
+  subentity: acme_re.share_price
+- pattern: 'acme mutual(?: insurance)?'
+  subentity: acme_mutual.share_price
+- pattern: harbor bank|hbk
+  subentity: harbor_bank.share_price
+- pattern: 'emerald(?: bank)?'
+  subentity: emerald_bank.share_price
+- pattern: japan(?:ese)? (?:stocks|equities|stock market)|topix|nikkei
+  subentity: japan_capital_markets.equity_index
+- pattern: chin(?:a|ese) (?:stocks|equities|stock market)|csi 300
+  subentity: china_capital_markets.equity_index
+- pattern: 'europe(?:an)? (?:stocks|equities|stock market)|euro stoxx(?: 50)?'
+  subentity: europe_capital_markets.equity_index
+- pattern: chin(?:a|ese) (?:government )?bonds?|chin(?:a|ese) bond yields|cgbs?|chinese yields
+  subentity: cgbs.yield_10y
+- pattern: jpy/usd|jpyusd
+  subentity: jpy_usd.rate
+- pattern: usd/eur|usdeur
+  subentity: usd_eur.rate
+- pattern: jpy/eur|jpyeur
+  subentity: jpy_eur.rate
+- pattern: (?:the )?pboc|people's bank of china|loan prime rate|lpr|chinese rates?
+  subentity: pboc.loan_prime_rate
+- pattern: chin(?:a|ese) property|chin(?:a|ese) (?:home|housing) sales
+  subentity: china_economy.property_sales
+- pattern: bunds?|euro(?:pean)? yields|german yields
+  subentity: bunds.yield_10y
+- pattern: (?:market |rates? |fx )?volatility|move index
+  subentity: us_capital_markets.market_volatility
+- pattern: deal(?:making| activity)|m&a|issuance
+  subentity: us_capital_markets.deal_activity
+- pattern: 'acme motors(?:''s)?(?: profit| earnings)'
+  subentity: acme_motors.operating_profit
+- pattern: acme motors
+  subentity: acme_motors.share_price
+- pattern: acme machinery
+  subentity: acme_machinery.share_price
+- pattern: 'acme telecom(?: corp)?'
+  subentity: acme_telecom.share_price
+- pattern: acme bank|acme
+  subentity: acme_bank.share_price
+- pattern: 'delta(?: bank)?'
+  subentity: delta_bank.share_price
+- pattern: keystone capital
+  subentity: keystone_capital.share_price
+- pattern: northwind bank
+  subentity: northwind_bank.share_price
+- pattern: 'yen carry(?: trade)?|carry trade|carry positions?'
+  subentity: dollar_yen.carry_positioning
+- pattern: (?:the )?boj|bank of japan|japan(?:ese)? (?:policy )?rates?
+  subentity: boj.policy_rate
+- pattern: (?:the )?ecb|euro(?:pean)? rates?
+  subentity: ecb.policy_rate
+- pattern: dollar-yen|usd/jpy|usdjpy
+  subentity: dollar_yen.usd_jpy
+- pattern: (?:the )?(?:japanese )?(?:yen|jpy)
+  subentity: dollar_yen.usd_jpy
+  invert: true
+- pattern: (?:the )?euro
+  subentity: usd_eur.rate
+  invert: true
+- pattern: (?:30|thirty)[- ]year jgbs?|super-long jgbs?
+  subentity: jgbs.yield_30y
+- pattern: jgbs?|jgb yields|japanese yields
+  subentity: jgbs.yield_10y
+- pattern: (?:2|two)[- ]year (?:treasur(?:y|ies)|yields?)
+  subentity: us_treasuries.yield_2y
+- pattern: treasur(?:y|ies)|us yields|bond yields
+  subentity: us_treasuries.yield_10y
+- pattern: japan(?:ese)? wages?|shunto
+  subentity: japan_economy.wage_growth
+- pattern: japan(?:ese)? inflation
+  subentity: japan_economy.core_cpi
+- pattern: 'euro(?: area)? inflation'
+  subentity: euro_economy.headline_cpi
+- pattern: 'oil(?: prices?)?|brent|crude'
+  subentity: oil.brent
+- pattern: (?:the )?fed(?:eral reserve)?|(?:us )?policy rates?|interest rates|rates
+  subentity: federal_reserve.policy_rate
+- pattern: (?:us )?growth|gdp
+  subentity: us_economy.gdp_growth
+- pattern: inflation|cpi
+  subentity: us_economy.headline_cpi
+verbs:
+- pattern: (?:prices? )?(?:doubled|double|doubles)
+  mode: relative
+  delta: 1.0
+- pattern: (?:halved|halve|halves|fell by half)
+  mode: relative
+  delta: -0.5
+- pattern: '(?:rose|rise|rises|jumped|jump|jumps|climbed|climb|increased|increase|went up|go up|surged|hiked|hike|raised|raise)s?(?: [a-z]+)? by (?P<num>[0-9.]+) ?(?P<unit>%|percent|bp|basis points|sd|standard deviations)?'
+  sign: 1.0
+- pattern: '(?:fell|fall|falls|dropped|drop|drops|declined|decline|decreased|decrease|went down|go down|cut|cuts)s?(?: [a-z]+)? by (?P<num>[0-9.]+) ?(?P<unit>%|percent|bp|basis points|sd|standard deviations)?'
+  sign: -1.0
+- pattern: (?:held|hold|holds|stayed|stay) (?:steady|flat|unchanged)
+  mode: absolute
+  delta: 0.0
+- pattern: (?:spiked|spike|spikes|soared|soar|soars|surged|surge|surges)
+  mode: standardized
+  delta: 2.0
+- pattern: (?:crashed|crash|crashes|collapsed|collapse|collapses|plunged|plunge|plunges)
+  mode: standardized
+  delta: -2.0
+- pattern: (?:unwound|unwinds|unwinding|unwind)
+  mode: standardized
+  delta: -2.0
+timeframes:
+- pattern: next quarter|in three months|in 3 months
+  days: 90
+- pattern: next month|in a month
+  days: 30
+- pattern: next year|in a year
+  days: 365
+- pattern: next week
+  days: 7
+- pattern: tomorrow|today|now
+  days: 0

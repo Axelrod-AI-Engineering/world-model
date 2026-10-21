@@ -18,8 +18,8 @@ from tests.ingest.conftest import NOW
 
 T = "acme"
 NOTE = (b"# BoJ watch\n\nPublished 2026-10-05.\n\nThe BoJ raised its policy rate by 25bp to 1.25%. JGB yields rose."
-        b"\n\nTokio Marine said overseas profit should benefit.\n\nNothing about the model here.")
-TOKIO = "Tokio Marine said overseas profit should benefit."
+        b"\n\nAcme Re said overseas profit should benefit.\n\nNothing about the model here.")
+TOKIO = "Acme Re said overseas profit should benefit."
 
 
 def quotes_hold(bundle: dict) -> None:
@@ -39,7 +39,7 @@ class FakeProvider:
     def complete(self, system: str, user: str) -> str:
         self.calls.append(user.split("Passage:\n", 1)[1])
         return json.dumps({"signals": [
-            {"type": "support", "source": "dollar_yen.usd_jpy", "target": "tokio_marine.international_profit",
+            {"type": "support", "source": "dollar_yen.usd_jpy", "target": "acme_re.international_profit",
              "quote": TOKIO}]})
 
 
@@ -111,7 +111,7 @@ def test_ingest_markdown_end_to_end(ingestor, lake, graph):
     assert all(text[c.start:c.end] == c.text for c in chunks)
     assert len(lake.embeddings(T, "hashing-256")) == 5
     ms = lake.mentions_of(T, doc_id=doc.id)
-    assert res.mentions == len(ms) and {m.entity_id for m in ms} == {"boj", "jgbs", "tokio_marine"}
+    assert res.mentions == len(ms) and {m.entity_id for m in ms} == {"boj", "jgbs", "acme_re"}
     rec = res.bundle
     assert rec.id == bundle_id(rec.bundle) and rec.doc_ids == [doc.id] and rec.created_at == NOW
     assert rec.extractor_version == EXTRACTOR_VERSION and lake.get_bundle(T, rec.id) == rec
@@ -201,14 +201,14 @@ def test_llm_step_reads_only_chunks_with_entities_and_no_rule_signals(lake, inve
     p = FakeProvider()
     ing = Ingestor(lake, HashingEmbedder(), provider=p, clock=lambda: NOW, inverted=inverted)
     res = ing.ingest_file(T, NOTE, "note.md", graph, source_type="news")
-    # the heading names the BoJ (nothing for the rules) and the Tokio Marine line names a value (nothing either);
+    # the heading names the BoJ (nothing for the rules) and the Acme Re line names a value (nothing either);
     # the rules' paragraph and the line naming nothing are never sent
     assert p.calls == ["# BoJ watch", TOKIO]
     items = res.bundle.bundle["items"]
     assert [i["tags"] for i in items] == [["extracted"], ["extracted", "llm"]]
     llm_item = items[1]
     assert llm_item["signals"] == [{"type": "support", "source": "dollar_yen.usd_jpy",
-                                    "target": "tokio_marine.international_profit", "strength": 0.5, "quote": TOKIO,
+                                    "target": "acme_re.international_profit", "strength": 0.5, "quote": TOKIO,
                                     "note": "llm:fake-1"}]
     assert llm_item["confidence"] == 0.5 and llm_item["category"] == "earnings"
     assert res.llm_signals == 1 and res.signals == 3

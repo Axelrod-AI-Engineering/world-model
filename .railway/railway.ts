@@ -32,6 +32,9 @@ export default defineRailway((ctx) => {
       PORT: "8080",
       // the scenario the main login opens on (scripts/start-railway.sh reads it); Emily's login opens hers (below)
       WORLD_MODEL_SCENARIO: "prod_demo",
+      // client scenarios, worlds, and configs are never in the image or the repository: they are loaded from the
+      // volume (src/axelrod_wm/clients.py, docs/guides/deployment.md#client-content)
+      WORLD_MODEL_CLIENT_DIR: "/app/var/clients",
       WORLD_MODEL_REQUIRE_BASIC_AUTH: "1",
       WORLD_MODEL_BASIC_AUTH_USERNAME: preserve(),
       WORLD_MODEL_BASIC_AUTH_PASSWORD: preserve(),

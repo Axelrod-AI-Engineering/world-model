@@ -1,4 +1,4 @@
-"""Sally's focused world (data/scenarios/sally_focus, engine/focus.py, Oct 18): Toyota and Tokio Marine and the players
+"""Sally's focused world (<client root>/scenarios/sally_focus, engine/focus.py, Oct 18): Toyota and Tokio Marine and the players
 they connect to, with none of her other nine covered companies. Both worlds load once; the focused one must hold each
 focus company's construction exactly as sally_demo does, keep no trace of the removed companies, and run its theses."""
 
@@ -8,7 +8,7 @@ import pytest
 
 from axelrod_wm.context.construction import construction_view, trace
 from axelrod_wm.engine.focus import focus_result
-from axelrod_wm.engine.initialize import REPO_ROOT, read_construction
+from axelrod_wm.engine.initialize import read_construction
 from axelrod_wm.model.construction import validate_construction
 from axelrod_wm.model.ids import entity_of
 from axelrod_wm.sim.scenario import (
@@ -18,6 +18,9 @@ from axelrod_wm.sim.scenario import (
     load_watchlist,
     thesis_from_spec,
 )
+from tests.clients import client_path, skip_without_client
+
+skip_without_client('sally_demo', 'sally_focus')
 
 FOCUS = ["toyota", "tokio_marine"]
 REMOVED = {"jpmorgan", "citigroup", "morgan_stanley", "unicredit", "china_construction_bank", "aib_group",
@@ -62,7 +65,7 @@ def test_no_removed_company_or_any_of_its_values_appears(g):
     assert not [s for s in g.subentities if entity_of(s) in REMOVED]
     for i in g.interactions.values():
         assert entity_of(i.source_id) not in REMOVED and entity_of(i.target_id) not in REMOVED, i.id
-    _data, origin = read_construction(REPO_ROOT / "data" / "worlds" / "sally_demo")
+    _data, origin = read_construction(client_path("worlds/sally_demo"))
     assert not [iid for iid in g.interactions if origin.get(iid) in REMOVED]     # their constructions go whole
     for x in [*g.paths.values(), *g.compositions.values(), *g.identities.values(), *g.stock_flows.values(),
               *g.matrices.values()]:

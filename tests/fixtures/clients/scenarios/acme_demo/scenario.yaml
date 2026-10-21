@@ -1,0 +1,20 @@
+# Acme's demo, an imports scenario: a synthetic test fixture (invented companies; derived by renaming, nothing here describes a real company or client).
+id: acme_demo
+title: 'Acme''s demo: eleven invented names, from daily research to forecasts and agent context'
+canvas: seeded
+imports: true
+imports_dir: tests/fixtures/clients/days
+start: 2026-08-03
+seed: 17
+initialization:
+  construction_dir: worlds/acme_demo
+  taxonomy_dir: worlds/acme_demo/taxonomy
+  seeds: scenarios/acme_demo/superentity_seeds.yaml
+config_overrides: configs/acme_demo.yaml
+steps: []
+context_pack:
+  domain_pack_id: PACK_ACME_RATES_BANKS_INSURERS_EXPORTERS
+  name: Acme Rates / Banks, Insurers, and Exporters
+  slug: acme_rates_banks_insurers_exporters
+  file_index: '036'
+  edge_id_start: 60

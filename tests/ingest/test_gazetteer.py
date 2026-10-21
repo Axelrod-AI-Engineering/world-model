@@ -22,8 +22,8 @@ def fake_graph(entities: dict, values: dict):
 
 # -- tokens and forms --------------------------------------------------------------------------------------------------
 def test_tokens_keep_joined_words_and_drop_possessive_s():
-    assert [t for t, _a, _b in tokens("JPMorgan's USD/JPY S&P 1.25% Tokio Marine’s s 's")] == [
-        "JPMorgan", "USD/JPY", "S&P", "1.25", "%", "Tokio", "Marine", "s"]
+    assert [t for t, _a, _b in tokens("Acmebank's USD/JPY S&P 1.25% Acme Re’s s 's")] == [
+        "Acmebank", "USD/JPY", "S&P", "1.25", "%", "Acme", "Re", "s"]
     assert [t for t, _a, _b in tokens("s rose")] == ["s", "rose"]          # a leading s is a word
 
 
@@ -34,14 +34,14 @@ def test_norm_lowercases_and_drops_plural_s(word, form):
     assert norm(word) == form
 
 
-@pytest.mark.parametrize("surface,sensitive", [("BoJ", True), ("ECB", True), ("MS", True), ("CCB", True),
-                                               ("PBoC", True), ("Fed", False), ("Citi", False), ("brent", False),
+@pytest.mark.parametrize("surface,sensitive", [("BoJ", True), ("ECB", True), ("KC", True), ("HBK", True),
+                                               ("PBoC", True), ("Fed", False), ("Delta", False), ("brent", False),
                                                ("USD/JPY", False), ("FOMCX1", False)])
 def test_case_sensitive_surfaces_are_short_and_mostly_capitals(surface, sensitive):
     assert _case_sensitive(surface) is sensitive
 
 
-# -- matching against Sally's world -------------------------------------------------------------------------------------
+# -- matching against Acme's world -------------------------------------------------------------------------------------
 def test_names_and_aliases_match_in_any_case_when_not_capitals(gz):
     assert found(gz, "Bank of Japan, bank of japan, BANK OF JAPAN.") == [("entity", "boj", None, "Bank of Japan"),
                                                                           ("entity", "boj", None, "bank of japan"),
@@ -50,26 +50,26 @@ def test_names_and_aliases_match_in_any_case_when_not_capitals(gz):
 
 def test_capital_surfaces_match_only_in_their_case(gz):
     assert found(gz, "BOJ and BoJ and Boj and boj.") == [("entity", "boj", None, "BOJ"), ("entity", "boj", None, "BoJ")]
-    assert found(gz, "MS shares fell. ms. Smith said so.") == [("entity", "morgan_stanley", None, "MS")]
+    assert found(gz, "KC shares fell. ms. Smith said so.") == [("entity", "keystone_capital", None, "KC")]
 
 
 def test_one_letter_surfaces_never_match(gz):
-    assert "C" in gz.entities["citigroup"].aliases
-    assert found(gz, "C rose. Citi rose.") == [("entity", "citigroup", None, "Citi")]
+    assert "C" in gz.entities["delta_bank"].aliases
+    assert found(gz, "C rose. Delta rose.") == [("entity", "delta_bank", None, "Delta")]
 
 
 def test_possessives_and_plurals(gz):
-    assert found(gz, "JPMorgan's net interest income rose.") == [
-        ("value", "jpmorgan", "jpmorgan.net_interest_income", "JPMorgan's net interest income")]
-    assert found(gz, "JPMorgan’s NII rose.") == [("entity", "jpmorgan", None, "JPMorgan"),
-                                                    ("value", "jpmorgan", "jpmorgan.net_interest_income", "NII")]
+    assert found(gz, "Acme Bank's net interest income rose.") == [
+        ("value", "acme_bank", "acme_bank.net_interest_income", "Acme Bank's net interest income")]
+    assert found(gz, "Acme Bank’s NII rose.") == [("entity", "acme_bank", None, "Acme Bank"),
+                                                    ("value", "acme_bank", "acme_bank.net_interest_income", "NII")]
     assert found(gz, "UST 2Y yields jumped.") == [("value", "us_treasuries", "us_treasuries.yield_2y", "UST 2Y yields")]
 
 
 def test_longest_match_wins(gz):
-    assert found(gz, "Tokio Marine Holdings said Tokio Marine adjusted net income rose.") == [
-        ("entity", "tokio_marine", None, "Tokio Marine Holdings"),
-        ("value", "tokio_marine", "tokio_marine.operating_profit", "Tokio Marine adjusted net income")]
+    assert found(gz, "Acme Re Holdings said Acme Re adjusted net income rose.") == [
+        ("entity", "acme_re", None, "Acme Re Holdings"),
+        ("value", "acme_re", "acme_re.operating_profit", "Acme Re adjusted net income")]
     assert found(gz, "JGB 10Y yield")[0] == ("value", "jgbs", "jgbs.yield_10y", "JGB 10Y yield")
 
 
@@ -81,13 +81,13 @@ def test_a_span_naming_an_entity_and_a_value_is_the_value(gz):
 def test_value_phrase_resolves_to_the_entity_before_it(gz):
     assert found(gz, "Bund yields rose.") == [("entity", "bunds", None, "Bund"),
                                               ("value", "bunds", "bunds.yield_10y", "yields")]
-    assert found(gz, "JPMorgan said net interest income rose.")[-1] == (
-        "value", "jpmorgan", "jpmorgan.net_interest_income", "net interest income")
+    assert found(gz, "Acme Bank said net interest income rose.")[-1] == (
+        "value", "acme_bank", "acme_bank.net_interest_income", "net interest income")
 
 
 def test_value_phrase_prefers_the_nearest_entity_before(gz):
-    got = found(gz, "Citi and JPMorgan said net interest income rose.")
-    assert got[-1] == ("value", "jpmorgan", "jpmorgan.net_interest_income", "net interest income")
+    got = found(gz, "Delta and Acme Bank said net interest income rose.")
+    assert got[-1] == ("value", "acme_bank", "acme_bank.net_interest_income", "net interest income")
 
 
 def test_value_phrase_resolves_to_the_entity_after_it_when_none_before(gz):
@@ -96,8 +96,8 @@ def test_value_phrase_resolves_to_the_entity_after_it_when_none_before(gz):
 
 
 def test_value_phrase_resolves_to_the_context_entity_when_the_sentence_names_none(gz):
-    assert found(gz, "Net interest income rose.", "unicredit") == [
-        ("value", "unicredit", "unicredit.net_interest_income", "Net interest income")]
+    assert found(gz, "Net interest income rose.", "northwind_bank") == [
+        ("value", "northwind_bank", "northwind_bank.net_interest_income", "Net interest income")]
 
 
 def test_value_phrase_stays_unresolved_without_an_owner(gz):
@@ -118,7 +118,7 @@ def test_head_word_resolves_only_for_an_entity_with_one_value_of_that_head(gz):
 def test_slot_phrases_drop_the_entity_words_and_parentheticals(gz):
     assert gz.slots["fund rate"] == {"federal_reserve": "federal_reserve.policy_rate"}      # "Fed funds rate (midpoint)"
     assert set(gz.slots["equity index"]) == {"china_capital_markets", "europe_capital_markets", "japan_capital_markets",
-                                             "us_capital_markets"}     # Oct 18: the US level (JPMorgan construction)
+                                             "us_capital_markets"}     # Oct 18: the US level (Acme Bank construction)
     assert gz.slots["10y yield"]["bunds"] == "bunds.yield_10y"                               # "Bund 10Y yield"
     assert not any("(" in k or "midpoint" in k for k in gz.slots)
 
@@ -179,12 +179,12 @@ def v(gz: Gazetteer, text: str, context: str | None = None, **kw) -> list[tuple]
 
 
 def test_shared_and_company_aliases_are_slots(gz):
-    assert set(gz.slots["nii"]) == {"aib_group", "citigroup", "jpmorgan", "unicredit"}     # NII is several banks'
+    assert set(gz.slots["nii"]) == {"emerald_bank", "delta_bank", "acme_bank", "northwind_bank"}     # NII is several banks'
     assert v(gz, "NII rose.") == []                                                          # whose? not said
-    assert v(gz, "UniCredit NII rose.") == [("unicredit.net_interest_income", "UniCredit NII", "name")]
-    assert v(gz, "Citi said NII rose.") == [("citigroup.net_interest_income", "NII", "sentence")]
-    # a one-word lower-case alias of a company's value names nothing ("markets" for JPMorgan's markets revenue)
-    assert "market" not in gz.slots and v(gz, "JPMorgan said markets rallied.") == []
+    assert v(gz, "Northwind Bank NII rose.") == [("northwind_bank.net_interest_income", "Northwind Bank NII", "name")]
+    assert v(gz, "Delta said NII rose.") == [("delta_bank.net_interest_income", "NII", "sentence")]
+    # a one-word lower-case alias of a company's value names nothing ("markets" for Acme Bank's markets revenue)
+    assert "market" not in gz.slots and v(gz, "Acme Bank said markets rallied.") == []
 
 
 def test_a_loose_value_alias_is_dropped_in_another_region(gz):
@@ -194,25 +194,25 @@ def test_a_loose_value_alias_is_dropped_in_another_region(gz):
 
 
 def test_head_words_need_their_name_right_before(gz):
-    assert v(gz, "Komatsu's profit rose.") == [("komatsu.operating_profit", "profit", "sentence")]
-    assert v(gz, "Komatsu said profit rose.") == []
+    assert v(gz, "Acme Machinery's profit rose.") == [("acme_machinery.operating_profit", "profit", "sentence")]
+    assert v(gz, "Acme Machinery said profit rose.") == []
     assert v(gz, "The Fed raised rates.") == [("federal_reserve.policy_rate", "rates", "sentence")]
-    assert v(gz, "Net income rose.", subject="komatsu") == []
+    assert v(gz, "Net income rose.", subject="acme_machinery") == []
 
 
 def test_head_words_on_key_data_lines_name_the_subject(gz):
-    assert v(gz, "Price (31 Jul 2026) ¥6,994", subject="komatsu") == [("komatsu.share_price", "Price", "subject")]
-    assert v(gz, "Shr price, close (Oct 7, 2026) ¥2,901", subject="toyota") == [
-        ("toyota.share_price", "price", "subject")]
+    assert v(gz, "Price (31 Jul 2026) ¥6,994", subject="acme_machinery") == [("acme_machinery.share_price", "Price", "subject")]
+    assert v(gz, "Shr price, close (Oct 7, 2026) ¥2,901", subject="acme_motors") == [
+        ("acme_motors.share_price", "price", "subject")]
     long = "As of yesterday the stock's closing price was ¥6,994, up on the day after the results came in strong."
-    assert v(gz, long, subject="komatsu") == [("komatsu.share_price", "price", "subject")]
-    assert v(gz, "Price Index rebased to 100", subject="komatsu") == []
+    assert v(gz, long, subject="acme_machinery") == [("acme_machinery.share_price", "price", "subject")]
+    assert v(gz, "Price Index rebased to 100", subject="acme_machinery") == []
     assert v(gz, "The long sentence about a price that goes on and on, much longer than a key-data line could be.",
-             subject="komatsu") == []
+             subject="acme_machinery") == []
 
 
 def test_currency_codes_beside_figures_are_not_the_currency(gz):
-    assert v(gz, "Price 240 JPY", subject="softbank_corp") == [("softbank_corp.share_price", "Price", "subject")]
+    assert v(gz, "Price 240 JPY", subject="acme_telecom") == [("acme_telecom.share_price", "Price", "subject")]
     assert v(gz, "The JPY weakened.") == [("dollar_yen.usd_jpy", "JPY", "name")]
 
 
@@ -232,32 +232,32 @@ def test_market_values_by_region(gz):
 
 
 def test_context_and_subject(gz):
-    assert v(gz, "Net interest income rose.", "unicredit", subject="unicredit")[0][2] == "context"
+    assert v(gz, "Net interest income rose.", "northwind_bank", subject="northwind_bank")[0][2] == "context"
     # in a report on one company, a peer named in the previous sentence does not take its figures
-    assert v(gz, "Net interest income rose.", "citigroup", subject="unicredit") == [
-        ("unicredit.net_interest_income", "Net interest income", "subject")]
-    assert v(gz, "Net interest income rose.", subject="unicredit")[0][2] == "subject"
+    assert v(gz, "Net interest income rose.", "delta_bank", subject="northwind_bank") == [
+        ("northwind_bank.net_interest_income", "Net interest income", "subject")]
+    assert v(gz, "Net interest income rose.", subject="northwind_bank")[0][2] == "subject"
     # ... nor when the sentence names another company, the model's or a ticker in the possessive
-    assert v(gz, "Citi and net interest income rose.", subject="unicredit")[0][0] == "citigroup.net_interest_income"
-    assert v(gz, "BAMI's net interest income rose.", subject="unicredit") == []
+    assert v(gz, "Delta and net interest income rose.", subject="northwind_bank")[0][0] == "delta_bank.net_interest_income"
+    assert v(gz, "BAMI's net interest income rose.", subject="northwind_bank") == []
 
 
 def test_profile(gz):
-    assert gz.profile("Komatsu note", "Komatsu raised guidance.") == ("komatsu", "JP")
+    assert gz.profile("Acme Machinery note", "Acme Machinery raised guidance.") == ("acme_machinery", "JP")
     # the title names one company, the opening text names it not but other companies: no subject
-    assert gz.profile("JPM preview", "Morgan Stanley and Citi reported.") == (None, "US")
-    assert gz.profile("601939 CN", "China's banks: data.") == ("china_construction_bank", "CN")
+    assert gz.profile("ACME preview", "Keystone Capital and Delta reported.") == (None, "US")
+    assert gz.profile("601939 CN", "China's banks: data.") == ("harbor_bank", "CN")
     # several in the title (the publisher among them): the one the opening text names most
-    assert gz.profile("Morgan Stanley on Toyota", "Toyota rose. Toyota fell. Toyota guided.") == ("toyota", "JP")
+    assert gz.profile("Keystone Capital on Acme Motors", "Acme Motors rose. Acme Motors fell. Acme Motors guided.") == ("acme_motors", "JP")
     # none in the title: a company named at least three times, twice as often as any other
-    assert gz.profile("note", "Citi. Citi. Citi. JPMorgan.") == ("citigroup", "US")
-    assert gz.profile("note", "Citi. Citi. JPMorgan. JPMorgan.") == (None, "US")
-    assert gz.profile("note", "Citi. Citi. Citi. JPMorgan. JPMorgan.")[0] is None
+    assert gz.profile("note", "Delta. Delta. Delta. Acme Bank.") == ("delta_bank", "US")
+    assert gz.profile("note", "Delta. Delta. Acme Bank. Acme Bank.") == (None, "US")
+    assert gz.profile("note", "Delta. Delta. Delta. Acme Bank. Acme Bank.")[0] is None
     # a sector report lists many tickers
-    assert gz.profile("JPM preview", "JPM, BAC, USB, PNC, FITB & CFG. JPMorgan leads.")[0] is None
+    assert gz.profile("ACME preview", "ACME, BAC, USB, PNC, FITB & CFG. Acme Bank leads.")[0] is None
     # ... though a list of measures is no list of tickers
-    assert gz.profile("model.xlsx", "Citigroup (C US). Citi: NII, NIR and EPS, DPS, TBVPS & PPNR. Citi. (XYZ)") == (
-        "citigroup", "US")
+    assert gz.profile("model.xlsx", "Delta Bank (C US). Delta: NII, NIR and EPS, DPS, TBVPS & PPNR. Delta. (XYZ)") == (
+        "delta_bank", "US")
     assert gz.profile("note", "Nothing named.") == (None, None)
     assert gz.profile("note", "The Fed and the ECB and the BoJ.") == (None, None)       # no majority region
 
@@ -284,26 +284,26 @@ def test_policy_actions_named_without_their_rate(gz):
 
 def test_other_companies_and_publishers(gz):
     # a ticker heading a table row is another company's row
-    assert v(gz, "WFC 1.88 1.84 with 1% higher NII", subject="jpmorgan") == []
-    assert v(gz, "Net interest income rose.", "jpmorgan") == [("jpmorgan.net_interest_income", "Net interest income",
+    assert v(gz, "WFC 1.88 1.84 with 1% higher NII", subject="acme_bank") == []
+    assert v(gz, "Net interest income rose.", "acme_bank") == [("acme_bank.net_interest_income", "Net interest income",
                                                                 "context")]
-    assert v(gz, "BAC's net interest income rose.", "jpmorgan") == []
+    assert v(gz, "BAC's net interest income rose.", "acme_bank") == []
     # the broker that publishes a note is not its subject
-    assert gz.profile("Morgan Stanley Research - Toyota note", "Morgan Stanley & Co. Toyota. Morgan Stanley Research.") \
-        == ("toyota", "JP")
+    assert gz.profile("Keystone Capital Research - Acme Motors note", "Keystone Capital & Co. Acme Motors. Keystone Capital Research.") \
+        == ("acme_motors", "JP")
 
 
 def test_a_table_rows_names_belong_to_their_cells(gz):
-    assert v(gz, "CET1 ratio (%) | 13.1 | JPM P&L from FY27", subject="unicredit") == [
-        ("unicredit.cet1_ratio", "CET1 ratio", "subject")]
-    assert v(gz, "NII | 13.1 | as Citi reported") == []                    # another cell names Citi
-    assert v(gz, "UniCredit CET1 ratio | 13.1")[0][0] == "unicredit.cet1_ratio"
+    assert v(gz, "CET1 ratio (%) | 13.1 | ACME P&L from FY27", subject="northwind_bank") == [
+        ("northwind_bank.cet1_ratio", "CET1 ratio", "subject")]
+    assert v(gz, "NII | 13.1 | as Delta reported") == []                    # another cell names Delta
+    assert v(gz, "Northwind Bank CET1 ratio | 13.1")[0][0] == "northwind_bank.cet1_ratio"
 
 
 def test_a_reporting_ticker_is_another_company(gz):
-    assert v(gz, "Note: BAC guided to higher net interest income.", "jpmorgan") == []
-    assert v(gz, "NII guided higher, and net interest income rose.", "jpmorgan")[0][0] == "jpmorgan.net_interest_income"
-    assert v(gz, "BAC guided to NII up 6%; JPMorgan guided to more.") == []
-    assert v(gz, "Toyota said NII was flat at JPMorgan.") == []
-    assert v(gz, "JPMorgan guided to NII of $105bn; PNC guided to NII up 15%.") == [
-        ("jpmorgan.net_interest_income", "NII", "sentence")]
+    assert v(gz, "Note: BAC guided to higher net interest income.", "acme_bank") == []
+    assert v(gz, "NII guided higher, and net interest income rose.", "acme_bank")[0][0] == "acme_bank.net_interest_income"
+    assert v(gz, "BAC guided to NII up 6%; Acme Bank guided to more.") == []
+    assert v(gz, "Acme Motors said NII was flat at Acme Bank.") == []
+    assert v(gz, "Acme Bank guided to NII of $105bn; PNC guided to NII up 15%.") == [
+        ("acme_bank.net_interest_income", "NII", "sentence")]

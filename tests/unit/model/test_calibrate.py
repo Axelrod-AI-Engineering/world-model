@@ -346,4 +346,5 @@ def test_the_script_prints_and_writes(acme, tmp_path, capsys):
     assert "no forecast of this world's scenarios" in capsys.readouterr().out
     assert script.main([str(d), "a0", "--source-change", "1", "--target-change", "1", "--evidence", "x"]) == 1
     assert "REFUSED" in capsys.readouterr().out
-    assert script.world_dir("sally_demo").resolve() == ROOT / "data" / "worlds" / "sally_demo"
+    assert script.world_dir("small_demo").resolve() == ROOT / "data" / "worlds" / "small_demo"
+    assert script.world_dir("acme_demo").resolve() == (ROOT / "tests" / "fixtures" / "clients" / "worlds" / "acme_demo").resolve()      # a client world, by name

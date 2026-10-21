@@ -24,12 +24,12 @@ from axelrod_wm.ingest.bench import (
 
 OBS = {"type": "observe", "value_of": "boj.policy_rate", "value": 1.25, "quote": "to 1.25%"}
 UP = {"type": "move", "value_of": "jgbs.yield_10y", "delta": 0.1, "mode": "absolute", "quote": "rose 10bp"}
-SUP = {"type": "support", "source": "dollar_yen.usd_jpy", "target": "toyota.operating_profit", "quote": "weak yen"}
+SUP = {"type": "support", "source": "dollar_yen.usd_jpy", "target": "acme_motors.operating_profit", "quote": "weak yen"}
 
 
 def test_ends_names_a_value_or_a_pair():
     assert ends(OBS) == ("boj.policy_rate",)
-    assert ends(SUP) == ("dollar_yen.usd_jpy", "toyota.operating_profit")
+    assert ends(SUP) == ("dollar_yen.usd_jpy", "acme_motors.operating_profit")
 
 
 @pytest.mark.parametrize("pred, gold, ok", [
@@ -49,7 +49,7 @@ def test_ends_names_a_value_or_a_pair():
     ({**SUP, "type": "contradict"}, SUP, False),
     ({**SUP, "type": "contradict"}, {**SUP, "type": "contradict"}, True),
     (SUP, {**SUP, "type": "contradict"}, False),
-    ({**SUP, "target": "komatsu.operating_profit"}, SUP, False),
+    ({**SUP, "target": "acme_machinery.operating_profit"}, SUP, False),
 ])
 def test_agreement(pred, gold, ok):
     assert agrees(pred, gold) is ok

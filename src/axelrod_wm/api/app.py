@@ -18,6 +18,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
 
+from axelrod_wm.clients import load_scenario_yaml, scenario_dirs
 from axelrod_wm.control.controller import ControllerError
 from axelrod_wm.events.graph_update import EventValidationError
 from axelrod_wm.inference.decisions import DecisionError
@@ -38,10 +39,20 @@ DEMOS: list[tuple[str, str, str]] = [
     ("small_demo", "Small demo", "A blank canvas, built one example at a time"),
     ("prod_demo", "Production demo", "The same examples after three years of synthetic history"),
     ("oil_shock_demo", "Full demo", "The oil-shock scenario: 53 actors and ideas, 18 scripted steps"),
-    ("emily_demo", "Emily's demo", "A PM's model brought up to date by importing research"),
-    ("sally_demo", "Sally's demo", "Eleven names from daily research, with forecasts as context for agents"),
 ]
-DEMO_IDS = {d[0] for d in DEMOS}
+
+
+def demo_menu() -> list[tuple[str, str, str]]:
+    """The menu: the repository's demos, then the client demos (Oct 21) in the client roots: a scenario that takes imports
+    and is not a focused view, labelled from its title ("Sally's demo: eleven names, ..." -> label, note)."""
+    out = list(DEMOS)
+    for d in scenario_dirs()[1:]:
+        for p in sorted(d.glob("*/scenario.yaml")):
+            raw = load_scenario_yaml(p)
+            if raw.get("imports") and not raw.get("focus"):
+                label, _, note = str(raw.get("title") or raw["id"]).partition(": ")
+                out.append((raw["id"], label, note))
+    return out
 
 
 class AppState:
@@ -161,7 +172,7 @@ class AppState:
         from axelrod_wm.sim.scenario import ScenarioScript
 
         out = []
-        for sid, label, note in DEMOS:
+        for sid, label, note in demo_menu():
             ready = sid in self.runners and self.runners[sid].loaded
             cold = False
             if not ready:
@@ -218,7 +229,7 @@ class AppState:
     async def switch(self, scenario: str) -> dict:
         """Switch to a demo. One already open swaps in at once; another is built in the background, with its progress
         in `switching` (GET /api/demos), and swaps in when it is ready."""
-        if scenario not in DEMO_IDS:
+        if scenario not in {d[0] for d in demo_menu()}:
             raise KeyError(scenario)
         if scenario == self.scenario and self.runner is not None and self.runner.loaded:
             return self.demos()

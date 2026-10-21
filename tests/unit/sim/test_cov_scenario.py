@@ -6,7 +6,6 @@ from datetime import date, datetime, timezone
 
 import yaml
 
-from axelrod_wm.sim import scenario as sc
 from axelrod_wm.sim.scenario import (
     SCENARIOS_DIR,
     ScenarioScript,
@@ -69,18 +68,20 @@ def test_user_events_and_decisions():
 
 
 def test_list_scenarios(tmp_path, monkeypatch):
-    ids = {s["id"] for s in list_scenarios()}
-    assert {"oil_shock_demo", "small_demo", "prod_demo"} <= ids
-    (tmp_path / "a_full").mkdir()
-    (tmp_path / "a_full" / "scenario.yaml").write_text(yaml.safe_dump(
+    monkeypatch.setenv("WORLD_MODEL_CLIENT_DIR", str(tmp_path / "missing"))        # a root that does not exist
+    repo = [s["id"] for s in list_scenarios()]
+    assert {"oil_shock_demo", "small_demo", "prod_demo"} <= set(repo)
+    root = tmp_path / "scenarios"
+    (root / "a_full").mkdir(parents=True)
+    (root / "a_full" / "scenario.yaml").write_text(yaml.safe_dump(
         {"id": "full", "title": "Full", "canvas": "blank", "examples": "small", "imports": True}))
-    (tmp_path / "b_empty").mkdir()
-    (tmp_path / "b_empty" / "scenario.yaml").write_text("")
-    (tmp_path / "c_no_script").mkdir()
-    monkeypatch.setattr(sc, "SCENARIOS_DIR", tmp_path)
-    assert list_scenarios() == [
+    (root / "b_empty").mkdir()
+    (root / "b_empty" / "scenario.yaml").write_text("")
+    (root / "c_no_script").mkdir()
+    monkeypatch.setenv("WORLD_MODEL_CLIENT_DIR", str(tmp_path))                    # a client root's, after the repository's
+    listed = list_scenarios()
+    assert [s["id"] for s in listed][:len(repo)] == repo
+    assert listed[len(repo):] == [
         {"id": "full", "title": "Full", "canvas": "blank", "examples": "small", "imports": True},
         {"id": "b_empty", "title": "b_empty", "canvas": "scripted", "examples": None, "imports": False},
     ]
-    monkeypatch.setattr(sc, "SCENARIOS_DIR", tmp_path / "missing")
-    assert list_scenarios() == []

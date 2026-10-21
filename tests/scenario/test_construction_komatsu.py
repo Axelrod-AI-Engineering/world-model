@@ -1,5 +1,5 @@
 """Komatsu's business construction (Oct 18): the compositions, operating and financial paths, and their transitions in
-data/worlds/sally_demo/construction/komatsu.yaml, checked in the loaded model, in the v4.1.4 export, and through the
+<client root>/worlds/sally_demo/construction/komatsu.yaml, checked in the loaded model, in the v4.1.4 export, and through the
 service API (docs/construction/komatsu.md has the gap register these tests close). An industrial after Toyota, with
 its own economics: construction, mining and utility equipment sold as new machines and a large aftermarket in eight
 regions, a captive finance arm, industrial machinery, disclosed yen sensitivities, mining capex and fleet hours,
@@ -26,7 +26,10 @@ from axelrod_wm.model.construction import (
     validate_construction,
 )
 from axelrod_wm.repo.snapshots import MemoryBackend
+from tests.clients import client_path, skip_without_client
 from tests.scenario import v1_reads as v1
+
+skip_without_client('sally_demo')
 
 KM = "komatsu"
 OP, SALES, CMU, NI = "komatsu.operating_profit", "komatsu.net_sales", "komatsu.cmu_sales", "komatsu.owners_net_income"
@@ -84,7 +87,7 @@ NEW_CALIBRATED = {  # the only new sizes, each from a disclosure or a broker's s
 }
 # the round-one conversion tags (identity:/stock-flow:/state:/matrix:) are gone: each step is converted or says why not
 NOTES = {i["id"]: i.get("note") or "" for i in
-         yaml.safe_load(open("data/worlds/sally_demo/construction/komatsu.yaml"))["interactions"]}
+         yaml.safe_load(open(client_path("worlds/sally_demo/construction/komatsu.yaml")))["interactions"]}
 TAGS = ("identity:", "stock-flow:", "state:", "matrix:")
 SOURCES = {"km.wb", "km.r1", "km.r2", "km.r3", "km.r4", "km.x1", "km.x2", "km.peer", "km.pub"}
 

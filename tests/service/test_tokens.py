@@ -75,7 +75,7 @@ def test_what_looks_like_a_jwt():
 def test_a_good_token_is_its_principal(signer, clock):
     p = verifier(clock).verify(signer.token(scope="world_model:read changes:create telepathy", jti="j1"))
     assert p == Principal(kind="token", org="default", sub="org_user_9",
-                          scopes=frozenset({"world_model:read", "changes:create"}), name="Sally Reviewer",
+                          scopes=frozenset({"world_model:read", "changes:create"}), name="Ada Reviewer",
                           azp="core-web", act=None, jti="j1")
     assert p.human and p.actor()["jti"] == "j1"
 

@@ -23,14 +23,14 @@ from axelrod_wm.repo.snapshots import FilesBackend, MemoryBackend
 
 ROOT = Path(__file__).resolve().parents[2]
 V1 = "/v1"
-WM = "/v1/world-models/sally_demo"
+WM = "/v1/world-models/acme_demo"
 KEY = "k" * 32
 ALL_BUT_APPROVE = "world_model:read+documents:create+changes:create+simulations:create+admin"
 ISSUER, AUDIENCE, JWKS_URL = "https://core.test", "https://world-model.test", "https://core.test/.well-known/jwks.json"
 # synthetic research notes (made up for the tests; no real event is reported)
 NOTE = (b"Rates note, October 5, 2026.\n\n"
         b"The BoJ raised its policy rate by 25bp to 1.25% on a 7-2 vote. USD/JPY fell to 152 as the yen strengthened.\n\n"
-        b"JPMorgan's net interest income rose 4% y/y. Lower Bund yields weigh on UniCredit's net interest income.")
+        b"Acme Bank's net interest income rose 4% y/y. Lower Bund yields weigh on Northwind Bank's net interest income.")
 FED_NOTE = b"Data, September 1, 2026. The Fed held rates at 3.875%. Brent crude rose to $103 a barrel."
 ECB_NOTE = b"Rates wire, September 3, 2026. The ECB cut its deposit rate by 25bp."
 BOJ_NOTE = b"Rates wire, September 4, 2026. The BoJ raised its policy rate by 25bp to 1.25%."
@@ -58,7 +58,7 @@ class Signer:
         return httpx.MockTransport(answer)
 
     def token(self, *, sub: str = "org_user_9", org: str = "default", scope: str = "world_model:read changes:approve",
-              azp: str | None = "core-web", act: dict | None = None, name: str | None = "Sally Reviewer",
+              azp: str | None = "core-web", act: dict | None = None, name: str | None = "Ada Reviewer",
               ttl: int = 300, headers: dict | None = None, key: Any = None, **claims: Any) -> str:
         now = int(time.time())
         body = {"iss": ISSUER, "aud": AUDIENCE, "iat": now, "exp": now + ttl, "jti": uuid.uuid4().hex, "sub": sub,
@@ -76,7 +76,7 @@ def env(keys: str = f"tester:{KEY}:default:{ALL_BUT_APPROVE}", **extra: str) -> 
 
 
 @contextmanager
-def service(signer: Signer | None = None, root: Path | None = None, scenario: str = "sally_demo",
+def service(signer: Signer | None = None, root: Path | None = None, scenario: str = "acme_demo",
             headers: dict | None = None, **settings: str) -> Iterator[TestClient]:
     """The service on its own engine and lakehouse, with keys and a trusted issuer (`settings` adds to or replaces the
     environment; pass WORLD_MODEL_API_KEYS="" and WORLD_MODEL_TRUSTED_ISSUERS="" for an open local run)."""

@@ -64,7 +64,7 @@ def test_the_lakehouse_survives_a_restart_and_a_replay_rebuilds_the_model(tmp_pa
     with service(SIGNER, tmp_path) as c:
         # the lakehouse: all of it, unchanged
         assert kept_of(c, res) == kept and kept["raw"] == RATES_NOTE
-        assert [m.id for m in c.app.state.lake.world_models()] == ["sally_demo"]
+        assert [m.id for m in c.app.state.lake.world_models()] == ["acme_demo"]
         # idempotency keys and jobs are permanent: the same key, and the same content, get the first answers
         replayed = c.post(f"{WM}/documents", files=[("files", ("keyed.txt", b"Oct 9, 2026. The ECB held.",
                                                                 "text/plain"))], headers={"Idempotency-Key": "restart-1"})

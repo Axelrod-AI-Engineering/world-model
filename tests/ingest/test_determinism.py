@@ -17,21 +17,21 @@ from axelrod_wm.lake.embed import HashingEmbedder
 from axelrod_wm.lake.sqlite import SQLiteLake
 from axelrod_wm.lake.store import canonical_json, digest
 from tests.ingest.builders import docx, para, pdf, pptx, xlsx
-from tests.ingest.conftest import NOW, sally_graph, sally_inverted
+from tests.ingest.conftest import NOW, acme_graph, acme_inverted
 
 T = "desk"
 ROOT = Path(__file__).resolve().parents[2]
 
 BOJ = ("The BoJ raised its policy rate by 25bp to 1.25%. JGB yields rose 10bp, and Bund yields rose 10bp. "
-       "The yen strengthened 2%. Higher JGB yields lift Tokio Marine Japan P&C profit.")
-BANKS = ("JPMorgan's net interest income rose 4% in Q3. Citi net interest income was $64 billion. "
-         "The Fed rate weighs on JPMorgan net interest income.")
+       "The yen strengthened 2%. Higher JGB yields lift Acme Re Japan P&C profit.")
+BANKS = ("Acme Bank's net interest income rose 4% in Q3. Delta net interest income was $64 billion. "
+         "The Fed rate weighs on Acme Bank net interest income.")
 
 
 def documents() -> dict[str, bytes]:
     """The corpus, built once: several formats, each with claims of several kinds."""
     return {
-        "boj_2026-10-05.md": f"# BoJ watch\n\n{BOJ}\n\n- Brent crude lifts Komatsu operating profit.\n".encode(),
+        "boj_2026-10-05.md": f"# BoJ watch\n\n{BOJ}\n\n- Brent crude lifts Acme Machinery operating profit.\n".encode(),
         "banks.html": (f"<html><head><title>US banks</title><script>Brent fell 9%.</script></head><body>"
                        f"<p>{BANKS}</p><table><tr><td>Brent crude</td><td>rose 3%</td></tr></table></body></html>"
                        ).encode(),
@@ -40,8 +40,8 @@ def documents() -> dict[str, bytes]:
         "rates.xlsx": xlsx({"Levels": [["Value", "Level"], ["BoJ policy rate at", "1.25%"],
                                        ["US core CPI rose", "0.3 percentage points"]],
                             "Notes": [["USD/JPY fell to ¥152."], [None], ["Brent crude hit $95."]]}),
-        "wire.txt": "Toyota operating profit reached ¥3.5 trillion.\nThe yen weakened.\n".encode("utf-16"),
-        "deck.pptx": pptx({2: ["UniCredit net interest income rose 3%."], 1: ["ECB held rates at 2.25%."]}),
+        "wire.txt": "Acme Motors operating profit reached ¥3.5 trillion.\nThe yen weakened.\n".encode("utf-16"),
+        "deck.pptx": pptx({2: ["Northwind Bank net interest income rose 3%."], 1: ["ECB held rates at 2.25%."]}),
         "scan.pdf": pdf(["October 9, 2026", "UST 2Y yields jumped 15bp."]),
         "table.csv": b"series,unit,2026-09-30,2026-10-01\nBrent crude,$/bbl,94,95\nUSD/JPY,yen,151,152\n",
     }
@@ -68,7 +68,7 @@ def snapshot(lake: SQLiteLake, results) -> dict:
 def ingest_all(lake_dir: Path, files: list[tuple[bytes, str]], graph) -> tuple[dict, list[str]]:
     lake = SQLiteLake(lake_dir)
     try:
-        ing = Ingestor(lake, HashingEmbedder(), clock=lambda: NOW, inverted=sally_inverted())
+        ing = Ingestor(lake, HashingEmbedder(), clock=lambda: NOW, inverted=acme_inverted())
         results = ing.ingest_many(T, files, graph, source="Desk", source_type="broker_research")
         return snapshot(lake, results), [r.document.filename for r in results]
     finally:
@@ -78,7 +78,7 @@ def ingest_all(lake_dir: Path, files: list[tuple[bytes, str]], graph) -> tuple[d
 def run_dir(src: str, lake_dir: str) -> str:
     """For a fresh process: ingest every file in `src` (sorted) and print the snapshot as canonical JSON."""
     files = [(p.read_bytes(), p.name) for p in sorted(Path(src).iterdir())]
-    snap, order = ingest_all(Path(lake_dir), files, sally_graph())
+    snap, order = ingest_all(Path(lake_dir), files, acme_graph())
     return canonical_json({"snapshot": snap, "order": order})
 
 

@@ -1,6 +1,6 @@
 ---
 name: world-model-construction
-description: Build a company's business construction in an Axelrod world model at the specificity a buy-side analyst expects - compositions that reconcile, named operating and financial paths with explicit transitions, evidence-backed sizes, cited sources, searched inputs and calculation coverage. Use when adding or upgrading a company in a world (e.g. data/worlds/sally_demo), or when a reviewer says the model jumps from a macro driver to profit.
+description: Build a company's business construction in an Axelrod world model at the specificity a buy-side analyst expects - compositions that reconcile, named operating and financial paths with explicit transitions, evidence-backed sizes, cited sources, searched inputs and calculation coverage. Use when adding or upgrading a company in a world (e.g. worlds/sally_demo in the client root), or when a reviewer says the model jumps from a macro driver to profit.
 ---
 
 # Building a company's business construction
@@ -26,7 +26,7 @@ only after a search. A forecast says what it could not calculate.
 
 ## Inputs
 
-- The world: `data/worlds/<world>/` (entities, interactions, taxonomy, `construction/`).
+- The world: `data/worlds/<world>/`, or `worlds/<world>/` in the client root for a client's (`WORLD_MODEL_CLIENT_DIR`, default `data/clients`: entities, interactions, taxonomy, `construction/`).
 - The client's material for the company, local and gitignored: workbooks, research, filings, transcripts and
   presentations.
 - The reviewer's feedback, if any.
@@ -39,7 +39,7 @@ Build in this order: composition → operating paths → mapping into the accoun
    missing from the export may still exist internally. Classify each existing requirement as already owned, missing,
    modify lightly, or do not touch (existing ids, valid statistical records, shared governance). Flag concepts the
    schema cannot represent.
-2. **Gap register first** (`docs/construction/<company>.md`). Write one entry per gap:
+2. **Gap register first** (`docs/construction/<company>.md`, in the client root for a client's company: local, not tracked). Write one entry per gap:
    - what is missing or wrong, and what exists now, with object ids;
    - what to add;
    - the evidence needed;

@@ -1,0 +1,8 @@
+# Acme's demo: no sources are polled, and every change waits for a person.
+propagation:
+  samples: 200
+review:
+  policy: review_all
+update:
+  sources: []
+  pause_for_review: true

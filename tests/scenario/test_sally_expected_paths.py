@@ -1,4 +1,4 @@
-"""Sally's theses against what her research expects (data/scenarios/sally_demo/expected_paths.yaml, Oct 17).
+"""Sally's theses against what her research expects (<client root>/scenarios/sally_demo/expected_paths.yaml, Oct 17).
 
 Each ready thesis is posed on the loaded world and its transmission path (the canvas's default "relevant" grid) is
 read against the spec: every output moves the way the research expects, every channel the research states plainly
@@ -11,9 +11,12 @@ import pytest
 import yaml
 
 from axelrod_wm.inference.paths import isolate
+from tests.clients import client_path, skip_without_client
 
-SPEC = yaml.safe_load(open("data/scenarios/sally_demo/expected_paths.yaml"))["theses"]
-TARGETS = {t["id"]: t["targets"] for t in yaml.safe_load(open("data/scenarios/sally_demo/theses.yaml"))["theses"]}
+skip_without_client('sally_demo')
+
+SPEC = yaml.safe_load(open(client_path("scenarios/sally_demo/expected_paths.yaml")))["theses"]
+TARGETS = {t["id"]: t["targets"] for t in yaml.safe_load(open(client_path("scenarios/sally_demo/theses.yaml")))["theses"]}
 MOVES = 0.02          # an expected direction must show at least this many sd at the horizon
 
 

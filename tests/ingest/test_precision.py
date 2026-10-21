@@ -33,16 +33,16 @@ def moves(rules: Rules, text: str, **reading) -> list[tuple]:
 
 # -- forecasts are not observations ----------------------------------------------------------------------------------------
 @pytest.mark.parametrize("text,reading", [
-    ("UniCredit net interest income is seen up 4% y/y.", {}),                         # a preview
+    ("Northwind Bank net interest income is seen up 4% y/y.", {}),                         # a preview
     ("Bank of Japan preview: a 25bp BoJ rate hike incoming", {}),
     ("Japan core CPI is projected to accelerate.", {}),                               # a projection
     ("Our base case is a further BoJ rate hike, taking the policy rate to 1.50%.", {}),
     ("Markets are pricing in four BoJ rate hikes of 25bp.", {}),                      # the market's pricing
     ("Guidance based on a fed funds rate of 4.00%.", {}),                             # an assumption
-    ("Management expects Citi markets revenue up mid-single digits.", {}),            # another's expectation
+    ("Management expects Delta markets revenue up mid-single digits.", {}),            # another's expectation
     ("Others have guided to lower M&A.", {}),
     ("There should be a coming acceleration of M&A.", {}),
-    ("Komatsu operating profit will grow by 10%.", {}),                               # a prediction
+    ("Acme Machinery operating profit will grow by 10%.", {}),                               # a prediction
     ("Euro area inflation over FY26-28E is 0.5% higher.", {}),                        # a change over estimated years
     ("We see a downward bias to our China GDP growth forecast.", {}),                 # the forecast's direction
 ])
@@ -52,14 +52,14 @@ def test_previews_and_predictions_claim_nothing(rules, text, reading):
 
 @pytest.mark.parametrize("text,want", [
     # a revision of a forecast or of guidance is news
-    ("JPMorgan raised its NII guidance to $105.5bn from $103bn.",
-     ("move", "jpmorgan.net_interest_income", 0.0243, "relative")),
-    ("We raised our UniCredit NII forecasts.", ("move", "unicredit.net_interest_income", 0.5, "standardized")),
+    ("Acme Bank raised its NII guidance to $105.5bn from $103bn.",
+     ("move", "acme_bank.net_interest_income", 0.0243, "relative")),
+    ("We raised our Northwind Bank NII forecasts.", ("move", "northwind_bank.net_interest_income", 0.5, "standardized")),
     # what is said around a mention, not past it, frames it
     ("Following the September hike, the Fed rate rose 25bp; markets are pricing in more hikes.",
      ("move", "federal_reserve.policy_rate", 0.25, "absolute")),
-    ("Komatsu operating profit rose 5% and will increasingly depend on mining demand.",
-     ("move", "komatsu.operating_profit", 0.05, "relative")),
+    ("Acme Machinery operating profit rose 5% and will increasingly depend on mining demand.",
+     ("move", "acme_machinery.operating_profit", 0.05, "relative")),
 ])
 def test_revisions_and_reports_still_count(rules, text, want):
     assert want in moves(rules, text, date=OCT)
@@ -73,7 +73,7 @@ def test_the_part_of_a_sentence_that_frames_a_mention():
 
 # -- tables: the latest actual column ---------------------------------------------------------------------------------
 def test_a_year_end_level_before_a_later_quarter_is_history(rules):
-    assert read(rules, "UniCredit CET1 ratio (%) 14.7 15.0", header=header_of("12/25 12/26E"), date=OCT) == []
+    assert read(rules, "Northwind Bank CET1 ratio (%) 14.7 15.0", header=header_of("12/25 12/26E"), date=OCT) == []
 
 
 def test_a_market_price_is_read_on_a_date_not_at_a_period_end(rules):
@@ -87,15 +87,15 @@ QUARTERS = header_of("USD |  | FY2025 | Q1-2026 | Q2-2026 | Q3-2026 | Q4-2026 | 
 
 def test_a_model_completes_a_year_half_reported_with_less_confidence(rules):
     row = "Net Interest Income, mm |  | 95000 | 25000 | 26000 | 27000.5 | 28000.5 | 106001.0"
-    claims, _ = claims_of_chunk(rules, 0, row, Reading(subject="jpmorgan", header=QUARTERS, date=OCT))
+    claims, _ = claims_of_chunk(rules, 0, row, Reading(subject="acme_bank", header=QUARTERS, date=OCT))
     assert [(f.value_of, round(f.value, 3), f.confidence) for f in claims.found] == [
-        ("jpmorgan.net_interest_income", 106.001, 0.7)]
+        ("acme_bank.net_interest_income", 106.001, 0.7)]
 
 
 def test_a_model_completes_a_year_only_one_quarter_in(rules):
     row = "Net Interest Income, mm |  | 90000 | 95000 | 25000 | 26000.5 | 27000.5 | 28000.5 | 106001.5"
     header = header_of("USD |  | FY2024 | FY2025 | Q1-2026 | Q2-2026 | Q3-2026 | Q4-2026 | FY2026")
-    assert read(rules, row, subject="jpmorgan", header=header, date=OCT) == []
+    assert read(rules, row, subject="acme_bank", header=header, date=OCT) == []
 
 
 @pytest.mark.parametrize("row", [
@@ -106,18 +106,18 @@ def test_a_model_completes_a_year_only_one_quarter_in(rules):
     "Net income (incl. net interest income), mm |  | 95000 | 25000 | 26000 | 27000 | 28000 | 106000",
 ])
 def test_sheet_rows_that_are_no_current_level(rules, row):
-    assert read(rules, row, subject="jpmorgan", header=QUARTERS, date=OCT) == []
+    assert read(rules, row, subject="acme_bank", header=QUARTERS, date=OCT) == []
 
 
 def test_a_cumulative_row_reads_its_year(rules):
     row = "Cumulative Net Interest Income, mm |  | 95000 | 25000 | 51000 | 77000 | 103000 | 103000"
-    assert read(rules, row, subject="jpmorgan", header=QUARTERS, date=OCT) == [
-        ("observe", "jpmorgan.net_interest_income", 103.0)]
+    assert read(rules, row, subject="acme_bank", header=QUARTERS, date=OCT) == [
+        ("observe", "acme_bank.net_interest_income", 103.0)]
 
 
 def test_a_level_whose_figures_run_past_the_dated_columns(rules):
     row = "Common Equity Tier 1 Capital Ratio, % |  | 0.1428 | 0.1419 | 0.1500 | 0.1510"
-    assert read(rules, row, subject="jpmorgan", header=header_of("USD |  | Q1-2026 | Q2-2026"), date=OCT) == []
+    assert read(rules, row, subject="acme_bank", header=header_of("USD |  | Q1-2026 | Q2-2026"), date=OCT) == []
 
 
 def test_modelled_columns():
@@ -127,7 +127,7 @@ def test_modelled_columns():
 
 
 def test_side_by_side_blocks_of_the_same_periods(rules):
-    row = "UniCredit net interest income 14.8 15.7 14.9 15.8 1% 1%"
+    row = "Northwind Bank net interest income 14.8 15.7 14.9 15.8 1% 1%"
     assert read(rules, row, header=header_of("2026E 2027E 2026E 2027E"), date=OCT) == []
 
 
@@ -145,30 +145,30 @@ def test_a_part_in_a_mixed_list_is_not_the_whole(rules):
     "The BCB lowered NII by 2%.",                                # another actor the model does not know
 ])
 def test_a_value_after_an_unknown_actor_is_not_the_subject(rules, text):
-    assert moves(rules, text, subject="jpmorgan") == []
+    assert moves(rules, text, subject="acme_bank") == []
 
 
 def test_a_known_acronym_is_no_other_actor(rules):
-    assert moves(rules, "FY26 NII up 9%.", subject="jpmorgan") == [
-        ("move", "jpmorgan.net_interest_income", 0.09, "relative")]
+    assert moves(rules, "FY26 NII up 9%.", subject="acme_bank") == [
+        ("move", "acme_bank.net_interest_income", 0.09, "relative")]
 
 
 def test_its_after_a_stranger_is_the_stranger(rules):
     text = "NTT's share price lagged. However, its share price rebounded."
-    assert moves(rules, text, subject="softbank_corp") == []
-    assert moves(rules, "Prices lagged. However, its share price rebounded.", subject="softbank_corp") == [
-        ("move", "softbank_corp.share_price", 0.5, "standardized")]
+    assert moves(rules, text, subject="acme_telecom") == []
+    assert moves(rules, "Prices lagged. However, its share price rebounded.", subject="acme_telecom") == [
+        ("move", "acme_telecom.share_price", 0.5, "standardized")]
 
 
 def test_another_basis_and_aims(rules):
     assert moves(rules, "Stripping out subsidies, Japan core CPI was 2.3% y/y.") == []
-    assert moves(rules, "Buybacks (up to ¥220bn) to improve Tokio Marine shareholder returns.") == []
+    assert moves(rules, "Buybacks (up to ¥220bn) to improve Acme Re shareholder returns.") == []
     assert _aim("committed to reducing ") and not _aim("voted to raise the ") and not _aim("the BoJ to raise ")
 
 
 # -- quarters, months, and pauses ------------------------------------------------------------------------------------------
 @pytest.mark.parametrize("text", [
-    "Relative to 2Q26, Citi net interest income is down 2%.",              # a quarter's sequential change
+    "Relative to 2Q26, Delta net interest income is down 2%.",              # a quarter's sequential change
     "US core CPI rose 0.3% in August.",                                    # a month's print
     "China credit growth rose sequentially.",
     "China credit growth rose 1% m/m.",
@@ -179,15 +179,15 @@ def test_sequential_monthly_and_paused_are_no_moves(rules, text):
 
 
 def test_a_year_on_year_change_against_a_quarter_still_counts(rules):
-    assert ("move", "citigroup.net_interest_income", 0.18, "relative") in moves(
-        rules, "Citi net interest income rose 18% y/y vs. 2Q26.")
+    assert ("move", "delta_bank.net_interest_income", 0.18, "relative") in moves(
+        rules, "Delta net interest income rose 18% y/y vs. 2Q26.")
 
 
 def test_a_flow_after_its_change_is_a_period_unless_the_year_is_named(rules):
-    text = "Tokio Marine Japan Life adjusted net income rose 16% to ¥72bn after the March 2026 deal."
-    assert moves(rules, text) == [("move", "tokio_marine.japan_life_profit", 0.16, "relative")]
-    text = "For the full year, Tokio Marine Japan Life adjusted net income rose 16% to ¥72bn."
-    assert ("observe", "tokio_marine.japan_life_profit", 72.0) in moves(rules, text)
+    text = "Acme Re Japan Life adjusted net income rose 16% to ¥72bn after the March 2026 deal."
+    assert moves(rules, text) == [("move", "acme_re.japan_life_profit", 0.16, "relative")]
+    text = "For the full year, Acme Re Japan Life adjusted net income rose 16% to ¥72bn."
+    assert ("observe", "acme_re.japan_life_profit", 72.0) in moves(rules, text)
 
 
 # -- scenarios and episodes ------------------------------------------------------------------------------------------------
@@ -211,9 +211,9 @@ def test_past_episodes_are_history(rules):
 
 def test_an_estimated_end_of_a_channel_is_no_move(rules):
     text = "We est. slightly higher NII in 4Q due to higher US short-term rates."
-    assert moves(rules, text, subject="jpmorgan") == []
+    assert moves(rules, text, subject="acme_bank") == []
 
 
 def test_an_uncalibrated_link_has_its_mechanism_sign(rules):
-    assert ("support", "tokio_marine.cross_holding_sales", "tokio_marine.cross_holding_book") in read(
-        rules, "Tokio Marine is reducing business-related equities.")
+    assert ("support", "acme_re.cross_holding_sales", "acme_re.cross_holding_book") in read(
+        rules, "Acme Re is reducing business-related equities.")

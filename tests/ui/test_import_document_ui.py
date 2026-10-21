@@ -15,8 +15,8 @@ from tests.ui.test_smoke import _free_port
 # synthetic text, written for this test
 NOTE = (b"Desk rates note, October 5, 2026.\n\n"
         b"The BoJ raised its policy rate by 25bp to 1.25%. USD/JPY fell to 152 as the yen strengthened.\n\n"
-        b"Brent crude lifts Komatsu operating profit. Higher oil prices lift Japan's core inflation.\n\n"
-        b"Toyota's operating profit rose 4% y/y.")
+        b"Brent crude lifts Acme Machinery operating profit. Higher oil prices lift Japan's core inflation.\n\n"
+        b"Acme Motors's operating profit rose 4% y/y.")
 
 
 @pytest.fixture(scope="module")
@@ -26,7 +26,7 @@ def server(tmp_path_factory):
     from axelrod_wm.api.app import create_app
 
     port = _free_port()
-    app = create_app(scenario="emily_demo", storage=MemoryBackend(), trace_dir=None, play_delay=0.0,
+    app = create_app(scenario="acme_demo", storage=MemoryBackend(), trace_dir=None, play_delay=0.0,
                      lake_dir=tmp_path_factory.mktemp("lake"))
     srv = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning"))
     th = threading.Thread(target=srv.run, daemon=True)
@@ -74,7 +74,7 @@ def test_a_document_update_is_drawn_and_changes_nothing(server, tmp_path):
         page.wait_for_timeout(300)
         assert page.locator(".layer-gupdate g.gu-chip.hot").count() == 2
         page.click("#import button.gu-quote")
-        assert page.locator("#import .gu-chunk mark").inner_text() == "Brent crude lifts Komatsu operating profit."
+        assert page.locator("#import .gu-chunk mark").inner_text() == "Brent crude lifts Acme Machinery operating profit."
         # back to the items: the canvas shows the model again, which nothing changed
         page.click("#import [data-gu-back]")
         assert page.locator(".layer-gupdate g.gu-chip").count() == 0 and page.locator("g.pill").first.is_visible()

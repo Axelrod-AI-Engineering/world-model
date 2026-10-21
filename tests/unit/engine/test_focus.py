@@ -125,8 +125,7 @@ def world(tmp_path, monkeypatch):
     _write(s / "bare" / "scenario.yaml", {"id": "bare", "initialization": {"construction_dir": str(w)}})
     _write(s / "focused" / "scenario.yaml", {"id": "focused", "title": "Focused", "context_pack": {"file_index": "037"},
                                              "focus": {"base": "base", "companies": ["a"], "overrides": OVERRIDES}})
-    monkeypatch.setattr(fo, "SCENARIOS_DIR", s)
-    monkeypatch.setattr(sc, "SCENARIOS_DIR", s)
+    monkeypatch.setenv("WORLD_MODEL_CLIENT_DIR", str(tmp_path))      # the scenarios above are a client root's
     fo._CACHE.clear()
     return SimpleNamespace(world=w, scenarios=s, spec=FocusSpec(base="base", companies=["a"], overrides=OVERRIDES))
 

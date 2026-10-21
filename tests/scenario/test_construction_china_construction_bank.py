@@ -1,5 +1,5 @@
 """China Construction Bank's business construction (Oct 18): the compositions, operating and financial paths, and their
-transitions in data/worlds/sally_demo/construction/china_construction_bank.yaml, checked in the loaded model, in the
+transitions in <client root>/worlds/sally_demo/construction/china_construction_bank.yaml, checked in the loaded model, in the
 v4.1.4 export, and through the service API (docs/construction/china_construction_bank.md has the gap register these
 tests close). The second bank after JPMorgan, with its own economics: administered benchmarks (the LPR, posted deposit
 rates), a large government bond book, a mortgage-heavy loan book, fee caps, and the state as shareholder. Sally's world
@@ -17,7 +17,10 @@ from axelrod_wm.api.app import create_app
 from axelrod_wm.context.construction import construction_view, trace
 from axelrod_wm.model.construction import model_levels, reconcile_identities, validate_construction
 from axelrod_wm.repo.snapshots import MemoryBackend
+from tests.clients import client_path, skip_without_client
 from tests.scenario import v1_reads as v1
+
+skip_without_client('sally_demo')
 
 CCB = "china_construction_bank"
 P = CCB + "."
@@ -90,7 +93,7 @@ SIZES = {"s27": 0.6, "s28": -0.4, "s29": 0.55, "s30": -0.3, "s31": 0.2, "s58": 0
 # identity, stock-flow, matrix and state steps carry a conversion tag in their note; notes stay in the construction
 # file (the graph does not hold them), so they are read from there
 NOTES = {i["id"]: i.get("note") or "" for i in yaml.safe_load(
-    open("data/worlds/sally_demo/construction/china_construction_bank.yaml"))["interactions"]}
+    open(client_path("worlds/sally_demo/construction/china_construction_bank.yaml")))["interactions"]}
 SOURCES = {"ccb.v1", "ccb.r1", "ccb.r2", "ccb.r3", "ccb.r4", "ccb.r5", "ccb.pub"}
 
 

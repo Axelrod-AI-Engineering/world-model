@@ -94,7 +94,7 @@ def test_heading_and_labelled_parens():
 
 # -- levels and moves -------------------------------------------------------------------------------------------------------
 def test_a_target_is_not_the_value(rules):
-    assert read(rules, "Komatsu share price target raised to ¥9,000.") == []
+    assert read(rules, "Acme Machinery share price target raised to ¥9,000.") == []
     assert read(rules, "The ten-year Treasury target is 4.8%.") == []
     # though a forecaster's revised target for a rate moves its view of the rate
     assert read(rules, "We revise our ten-year Treasury target from 4.35% to 4.80%.") == [
@@ -122,9 +122,9 @@ def test_policy_rates_by_the_documents_region_are_for_channels_only(rules):
 
 
 def test_sector_wide_figures_belong_to_no_one_company(rules):
-    assert read(rules, "We raised our NII forecasts for select banks.", subject="unicredit") == []
-    assert read(rules, "We raised our NII forecasts.", subject="unicredit") == [
-        ("move", "unicredit.net_interest_income", 0.5, "standardized")]
+    assert read(rules, "We raised our NII forecasts for select banks.", subject="northwind_bank") == []
+    assert read(rules, "We raised our NII forecasts.", subject="northwind_bank") == [
+        ("move", "northwind_bank.net_interest_income", 0.5, "standardized")]
 
 
 def test_a_value_named_with_its_own_word_is_not_modified(rules):
@@ -132,9 +132,9 @@ def test_a_value_named_with_its_own_word_is_not_modified(rules):
 
 
 @pytest.mark.parametrize("text,want", [
-    ("We cut our Komatsu operating profit forecast to ¥600bn from ¥650bn.",
-     ("move", "komatsu.operating_profit", -0.0769, "relative")),
-    ("Komatsu operating profit was revised from ¥650bn to ¥700bn.", ("move", "komatsu.operating_profit", 0.0769,
+    ("We cut our Acme Machinery operating profit forecast to ¥600bn from ¥650bn.",
+     ("move", "acme_machinery.operating_profit", -0.0769, "relative")),
+    ("Acme Machinery operating profit was revised from ¥650bn to ¥700bn.", ("move", "acme_machinery.operating_profit", 0.0769,
                                                                      "relative")),
     ("The UST 10Y yield target was cut to 4.2% (from 4.5%).", ("move", "us_treasuries.yield_10y", -0.3, "absolute")),
 ])
@@ -160,10 +160,10 @@ def test_revisions_that_do_not_read(rules, text):
     ("Brent crude was $95 on 3 Jan 2026.", OCT),           # a figure half a year old
     ("The ten-year Treasury forecast is 4.4%.", None),     # a market level's forecast
     ("We forecast USD/JPY at 150.", None),
-    ("UniCredit CET1 ratio of 14.5% at YE26e.", None),
-    ("The target for Komatsu operating profit is ¥700bn.", None),
-    ("JPMorgan net interest income was $26bn in 3Q.", None),            # a quarter's flow is not a year's
-    ("JPMorgan net interest income (ex markets) was $96bn.", None),     # another metric
+    ("Northwind Bank CET1 ratio of 14.5% at YE26e.", None),
+    ("The target for Acme Machinery operating profit is ¥700bn.", None),
+    ("Acme Bank net interest income was $26bn in 3Q.", None),            # a quarter's flow is not a year's
+    ("Acme Bank net interest income (ex markets) was $96bn.", None),     # another metric
     ("Euro area inflation ranged from 3.4% in one state to 5% in another.", None),
     ("Japan real GDP growth was 1.4% QoQ.", None),         # not a y/y rate
     ("Brent crude, which is volatile, is $95.", None),
@@ -182,15 +182,15 @@ def test_a_level_after_a_move_size(rules):
 
 
 def test_key_data_line(rules):
-    assert read(rules, "Price (26 Aug 2026) 240 JPY", subject="softbank_corp", date=OCT) == [
-        ("observe", "softbank_corp.share_price", 240.0)]
+    assert read(rules, "Price (26 Aug 2026) 240 JPY", subject="acme_telecom", date=OCT) == [
+        ("observe", "acme_telecom.share_price", 240.0)]
 
 
 def test_sizes(rules):
     assert read(rules, "Market volatility jumped (VIX +12%).") == [
         ("move", "us_capital_markets.market_volatility", 0.5, "standardized")]
-    assert read(rules, "We revise Komatsu operating profit by +10%.") == [
-        ("move", "komatsu.operating_profit", 0.1, "relative")]
+    assert read(rules, "We revise Acme Machinery operating profit by +10%.") == [
+        ("move", "acme_machinery.operating_profit", 0.1, "relative")]
 
 
 @pytest.mark.parametrize("text", [
@@ -217,13 +217,13 @@ FY = header_of("Fiscal Year Ending 03/26 03/27e 03/28e")
 
 
 def test_a_row_is_read_in_the_documents_fiscal_year(rules):
-    assert read(rules, "Operating profit (¥bn) 3,766.2 3,843.4 4,260.8", subject="toyota", header=FY, date=OCT) == [
-        ("observe", "toyota.operating_profit", 3.8434)]
+    assert read(rules, "Operating profit (¥bn) 3,766.2 3,843.4 4,260.8", subject="acme_motors", header=FY, date=OCT) == [
+        ("observe", "acme_motors.operating_profit", 3.8434)]
 
 
 @pytest.mark.parametrize("text,reading", [
     ("Operating profit (¥bn) Old 3,766.2 3,843.4 4,260.8", {"header": FY}),          # old figures
-    ("Komatsu share price target 9,000 9,500 9,700", {"header": FY}),
+    ("Acme Machinery share price target 9,000 9,500 9,700", {"header": FY}),
     ("Operating profit (¥bn) 3,766.2 3,843.4 4,260.8", {}),                         # no header
     ("Operating profit (¥bn) 3,766.2 3,843.4", {"header": FY}),                     # cells and columns differ
     ("Operating profit (¥bn) 3,766.2 3,843.4 4,260.8", {"header": header_of("12/25 12/26E 12/27E")}),  # a Dec year
@@ -231,7 +231,7 @@ def test_a_row_is_read_in_the_documents_fiscal_year(rules):
     ("Operating profit (¥bn) 37,662 38,434 42,608", {"header": FY}),                 # implausible as a level
 ])
 def test_rows_that_claim_nothing(rules, text, reading):
-    assert read(rules, text, subject="toyota", date=OCT, **reading) == []
+    assert read(rules, text, subject="acme_motors", date=OCT, **reading) == []
 
 
 def test_a_flipped_value_in_a_row_claims_nothing(rules):
@@ -253,9 +253,9 @@ def test_a_stale_dated_column(rules):
 
 def test_a_revision_row(rules):
     h = header_of("(¥) Previous Current")
-    assert read(rules, "Op. profit (m) 1,110,000.0 1,140,000.0", subject="softbank_corp", header=h) == [
-        ("move", "softbank_corp.operating_profit", 0.027, "relative")]
-    assert read(rules, "Op. profit (m) ¥1,110,000.0 $1,140,000.0", subject="softbank_corp", header=h) == []
+    assert read(rules, "Op. profit (m) 1,110,000.0 1,140,000.0", subject="acme_telecom", header=h) == [
+        ("move", "acme_telecom.operating_profit", 0.027, "relative")]
+    assert read(rules, "Op. profit (m) ¥1,110,000.0 $1,140,000.0", subject="acme_telecom", header=h) == []
 
 
 @pytest.mark.parametrize("label,want", [
@@ -264,21 +264,21 @@ def test_a_revision_row(rules):
 ])
 def test_cell_scales(rules, label, want):
     h = header_of("2025 2026E 2027E")
-    assert read(rules, f"{label} 14,472 14,805 15,734", subject="unicredit", header=h, date=OCT) == [
-        ("observe", "unicredit.net_interest_income", want)]
+    assert read(rules, f"{label} 14,472 14,805 15,734", subject="northwind_bank", header=h, date=OCT) == [
+        ("observe", "northwind_bank.net_interest_income", want)]
 
 
 def test_cell_scales_from_hints(rules):
     h = header_of("FY2026 FY2027 FY2028")
-    assert read(rules, "Vehicle sales (000s) 9,600 9,700 9,800", subject="toyota", header=h, date=OCT) == [
-        ("observe", "toyota.vehicle_sales", 9.7)]
-    assert read(rules, "Vehicle sales (k) 9,600 9,700 9,800", subject="toyota", header=h, date=OCT) == [
-        ("observe", "toyota.vehicle_sales", 9.7)]
+    assert read(rules, "Vehicle sales (000s) 9,600 9,700 9,800", subject="acme_motors", header=h, date=OCT) == [
+        ("observe", "acme_motors.vehicle_sales", 9.7)]
+    assert read(rules, "Vehicle sales (k) 9,600 9,700 9,800", subject="acme_motors", header=h, date=OCT) == [
+        ("observe", "acme_motors.vehicle_sales", 9.7)]
     assert read(rules, "Brent crude $90 $95", header=header_of("30 Sep 1 Oct"), date=OCT) == [
         ("observe", "oil.brent", 95.0)]
     # a level is read in the latest actual period passed, never an estimate, even for a quarter just ended
-    assert read(rules, "UniCredit CET1 ratio (%) 14.7 15.0", header=header_of("6/26 9/26E"), date=OCT) == [
-        ("observe", "unicredit.cet1_ratio", 14.7)]
+    assert read(rules, "Northwind Bank CET1 ratio (%) 14.7 15.0", header=header_of("6/26 9/26E"), date=OCT) == [
+        ("observe", "northwind_bank.cet1_ratio", 14.7)]
 
 
 # -- spreadsheet rows ------------------------------------------------------------------------------------------------------
@@ -287,10 +287,10 @@ SHEET = header_of("USD |  | Q1-2026 | Q2-2026 | FY2026")
 
 def test_sheet_row_by_position(rules):
     row = "Common Equity Tier 1 Capital Ratio, % |  | 0.1428 | 0.1419 | 0.15"
-    assert read(rules, row, subject="jpmorgan", header=SHEET, date=OCT) == [("observe", "jpmorgan.cet1_ratio", 14.19)]
+    assert read(rules, row, subject="acme_bank", header=SHEET, date=OCT) == [("observe", "acme_bank.cet1_ratio", 14.19)]
     row = "Net Interest Income, mm |  | 25000 | 26000 | 102112"
-    assert read(rules, row, subject="jpmorgan", header=SHEET, date=OCT) == [
-        ("observe", "jpmorgan.net_interest_income", 102.112)]
+    assert read(rules, row, subject="acme_bank", header=SHEET, date=OCT) == [
+        ("observe", "acme_bank.net_interest_income", 102.112)]
 
 
 @pytest.mark.parametrize("row,reading", [
@@ -301,20 +301,20 @@ def test_sheet_row_by_position(rules):
     ("Net Interest Income consensus, mm |  | 25000 | 26000 | 102112", {"header": SHEET}),
 ])
 def test_sheet_rows_that_claim_nothing(rules, row, reading):
-    assert read(rules, row, subject="jpmorgan", date=OCT, **reading) == []
+    assert read(rules, row, subject="acme_bank", date=OCT, **reading) == []
 
 
 def test_sheet_row_with_its_own_period(rules):
     row = "732 | Forward |  | EBIT | id | FY2027 |  |  | 3400000 | 3400000"
-    assert read(rules, row, subject="toyota", date=OCT) == [("observe", "toyota.operating_profit", 3.4)]
-    assert read(rules, "Forward |  | EBIT | FY2027", subject="toyota", date=OCT) == []
-    assert read(rules, "Forward |  | EBIT | FY2027 | FY2028 | 3400000", subject="toyota", date=OCT) == []
+    assert read(rules, row, subject="acme_motors", date=OCT) == [("observe", "acme_motors.operating_profit", 3.4)]
+    assert read(rules, "Forward |  | EBIT | FY2027", subject="acme_motors", date=OCT) == []
+    assert read(rules, "Forward |  | EBIT | FY2027 | FY2028 | 3400000", subject="acme_motors", date=OCT) == []
 
 
 # -- channels -------------------------------------------------------------------------------------------------------------
 @pytest.mark.parametrize("text,want", [
-    ("UniCredit net interest income rose 5%, thanks to a higher ECB deposit rate.",
-     ("support", "ecb.policy_rate", "unicredit.net_interest_income")),
+    ("Northwind Bank net interest income rose 5%, thanks to a higher ECB deposit rate.",
+     ("support", "ecb.policy_rate", "northwind_bank.net_interest_income")),
     ("BoJ hikes are unlikely to strengthen the JPY.", ("contradict", "boj.policy_rate", "dollar_yen.usd_jpy")),
 ])
 def test_channels(rules, text, want):
@@ -322,12 +322,12 @@ def test_channels(rules, text, want):
 
 
 @pytest.mark.parametrize("text", [
-    "UniCredit net interest income, thanks to the ECB deposit rate.",            # the effect has no direction
-    "UniCredit net interest income rose but fell as the ECB deposit rate rose.",
-    "Brent crude and other inputs helped Komatsu operating profit.",             # the verb is not the first's
-    "Brent crude in the second half of this year sharply lifts Komatsu operating profit.",   # too far for a link
-    "Brent crude does not lift Komatsu operating profit.",                       # a denied channel proposes nothing
-    "Brent crude | lifts | Komatsu operating profit",                            # across cells of a table
+    "Northwind Bank net interest income, thanks to the ECB deposit rate.",            # the effect has no direction
+    "Northwind Bank net interest income rose but fell as the ECB deposit rate rose.",
+    "Brent crude and other inputs helped Acme Machinery operating profit.",             # the verb is not the first's
+    "Brent crude in the second half of this year sharply lifts Acme Machinery operating profit.",   # too far for a link
+    "Brent crude does not lift Acme Machinery operating profit.",                       # a denied channel proposes nothing
+    "Brent crude | lifts | Acme Machinery operating profit",                            # across cells of a table
     "Euro area unemployment raises the ECB deposit rate.",                       # a name modifying another noun
 ])
 def test_no_channel(rules, text):
@@ -335,7 +335,7 @@ def test_no_channel(rules, text):
 
 
 def test_a_new_link_needs_both_values_named(rules):
-    assert read(rules, "Brent crude lifts operating profit.", subject="komatsu") == []
+    assert read(rules, "Brent crude lifts operating profit.", subject="acme_machinery") == []
 
 
 # -- chunks -------------------------------------------------------------------------------------------------------------------
@@ -373,11 +373,11 @@ def test_a_disclaimer_claims_nothing(rules):
 
 
 def test_a_level_beside_its_figure_in_a_sheet(rules):
-    assert read(rules, "Komatsu Ltd. | 6301 JP | USD/JPY | 158.054 | FY2025 | 7397", date=OCT) == [
+    assert read(rules, "Acme Machinery Ltd. | 6301 AX | USD/JPY | 158.054 | FY2025 | 7397", date=OCT) == [
         ("observe", "dollar_yen.usd_jpy", 158.054)]
-    assert read(rules, "Last Price | 6940", subject="tokio_marine", date=OCT) == [
-        ("observe", "tokio_marine.share_price", 6940.0)]
-    assert read(rules, "Last Price | 69400000", subject="tokio_marine", date=OCT) == []
+    assert read(rules, "Last Price | 6940", subject="acme_re", date=OCT) == [
+        ("observe", "acme_re.share_price", 6940.0)]
+    assert read(rules, "Last Price | 69400000", subject="acme_re", date=OCT) == []
     # a projection, or a past episode's row, is no level
     assert read(rules, "Year-end USD/JPY | 157.6", date=OCT) == []
     assert read(rules, "2007-09 oil spike | Brent | 132.72", date=OCT) == []
@@ -396,7 +396,7 @@ def test_a_growth_rate_is_read_as_its_level(rules):
 
 
 def test_a_figure_against_consensus_is_no_move(rules):
-    assert read(rules, "JPMorgan net interest income is 2% higher than consensus.") == []
+    assert read(rules, "Acme Bank net interest income is 2% higher than consensus.") == []
 
 
 @pytest.mark.parametrize("text", [
@@ -415,14 +415,14 @@ def test_no_channel_round_two(rules, text):
     "FX shocks: +5 = weaker yen.",                        # a definition
     "Absent a significant decline in Brent crude, rates stay high.",
     "Positive catalysts are a strong recovery in home sales.",
-    "JPMorgan net interest income rises 1.7% for a 100bp move up in rates.",
+    "Acme Bank net interest income rises 1.7% for a 100bp move up in rates.",
 ])
 def test_no_claim_round_two(rules, text):
     assert read(rules, text, region="CN") == []
 
 
 def test_sector_wide_in_aggregate(rules):
-    assert read(rules, "NII estimates rose on a median basis.", subject="unicredit") == []
+    assert read(rules, "NII estimates rose on a median basis.", subject="northwind_bank") == []
 
 
 FY4 = header_of("FY3/24 FY3/25 FY3/26 FY3/27")
@@ -430,32 +430,32 @@ FY4 = header_of("FY3/24 FY3/25 FY3/26 FY3/27")
 
 def test_rows_with_footnotes_and_empty_cells(rules):
     row = "Adjusted net income *1 - 812.0 881.5 979.3"                   # a footnote mark, an empty first cell
-    assert read(rules, row, subject="tokio_marine", header=FY4, date=OCT) == [
-        ("observe", "tokio_marine.operating_profit", 979.3)]
-    assert read(rules, "Adjusted net income 750.0 - 881.5 979.3", subject="tokio_marine", header=FY4, date=OCT) == [
-        ("observe", "tokio_marine.operating_profit", 979.3)]
+    assert read(rules, row, subject="acme_re", header=FY4, date=OCT) == [
+        ("observe", "acme_re.operating_profit", 979.3)]
+    assert read(rules, "Adjusted net income 750.0 - 881.5 979.3", subject="acme_re", header=FY4, date=OCT) == [
+        ("observe", "acme_re.operating_profit", 979.3)]
     # the document's column is empty; a lone figure is no row; words between cells end the row
-    assert read(rules, "Adjusted net income 750.0 812.0 881.5 -", subject="tokio_marine", header=FY4, date=OCT) == []
-    assert read(rules, "Adjusted net income 750.0 812.0 881.5 - x", subject="tokio_marine", header=FY4, date=OCT) == []
-    assert read(rules, "Adjusted net income - - - 979.3", subject="tokio_marine", header=FY4, date=OCT) == []
-    assert read(rules, "Adjusted net income 750.0 812.0 or 881.5 979.3", subject="tokio_marine", header=FY4,
+    assert read(rules, "Adjusted net income 750.0 812.0 881.5 -", subject="acme_re", header=FY4, date=OCT) == []
+    assert read(rules, "Adjusted net income 750.0 812.0 881.5 - x", subject="acme_re", header=FY4, date=OCT) == []
+    assert read(rules, "Adjusted net income - - - 979.3", subject="acme_re", header=FY4, date=OCT) == []
+    assert read(rules, "Adjusted net income 750.0 812.0 or 881.5 979.3", subject="acme_re", header=FY4,
                 date=OCT) == []
 
 
 def test_new_and_old_estimates(rules):
-    r = Reading(subject="tokio_marine", date=OCT)
+    r = Reading(subject="acme_re", date=OCT)
     text = "FY3/27 FY3/28 FY3/27 FY3/28\nJPMe (New) JPMe (New) JPMe (Old) JPMe (Old)\nJapan P&C 219.6 239.8 225.2 244.2"
     claims, r = claims_of_chunk(rules, 0, text, r)
     assert [(f.type, round(f.value or f.delta, 4)) for f in claims.found] == [("observe", 219.6), ("move", -0.0249)]
     # marks with no old column for the period, or that cannot be compared
     text = "FY3/27 FY3/28 FY3/29\nNew New Old\nJapan P&C 219.6 239.8 225.2"
-    claims, _ = claims_of_chunk(rules, 0, text, Reading(subject="tokio_marine", date=OCT))
+    claims, _ = claims_of_chunk(rules, 0, text, Reading(subject="acme_re", date=OCT))
     assert [f.type for f in claims.found] == ["observe"]
     text = "FY3/27 FY3/27\nNew Old\nJapan P&C ¥219.6 $225.2"
-    claims, _ = claims_of_chunk(rules, 0, text, Reading(subject="tokio_marine", date=OCT))
+    claims, _ = claims_of_chunk(rules, 0, text, Reading(subject="acme_re", date=OCT))
     assert [f.type for f in claims.found] == ["observe"]
     text = "FY3/25 FY3/26\nNew Old\nJapan P&C 219.6 225.2"                 # no column for now
-    claims, _ = claims_of_chunk(rules, 0, text, Reading(subject="tokio_marine", date=OCT))
+    claims, _ = claims_of_chunk(rules, 0, text, Reading(subject="acme_re", date=OCT))
     assert claims.found == []
 
 
@@ -506,9 +506,9 @@ def test_an_average_is_no_level_and_a_past_cycle_no_move(rules):
 
 
 def test_a_key_figure_with_its_label_after_it(rules):
-    assert read(rules, "Komatsu Ltd. (6301 JP)\n¥6,900 (Stock Price as of 10/01/2026)", subject="komatsu",
-                date=OCT) == [("observe", "komatsu.share_price", 6900.0)]
-    assert read(rules, "Komatsu Ltd. (6301 JP)\n¥6,900 (Stock Price target)", subject="komatsu", date=OCT) == []
+    assert read(rules, "Acme Machinery Ltd. (6301 AX)\n¥6,900 (Stock Price as of 10/01/2026)", subject="acme_machinery",
+                date=OCT) == [("observe", "acme_machinery.share_price", 6900.0)]
+    assert read(rules, "Acme Machinery Ltd. (6301 AX)\n¥6,900 (Stock Price target)", subject="acme_machinery", date=OCT) == []
 
 
 DASHBOARD = "\n".join([
@@ -517,9 +517,9 @@ DASHBOARD = "\n".join([
     "Static Price (1 Oct) (USD) | FY-1 | FY | CET1 Ratio, % | 2024-12-31 | Current | Forward EPS (Consensus) | Avg.",
     "Loans",
     "Deposits, mm | Net Interest Income, mm",
-    "JPMorgan Chase & Co. | JPM US | 310.5 | 305 | 250 | 310.5 | 0.15 | 0.149 | 0.152 | 240 | 311 | 20.5 | 9 | 90000",
+    "Acme Bank Chase & Co. | ACME US | 310.5 | 305 | 250 | 310.5 | 0.15 | 0.149 | 0.152 | 240 | 311 | 20.5 | 9 | 90000",
     "Other Bank plc | OB LN | 5.1 | 5 | 4 | 6.4 | 0.13 | 0.13 | 0.14 | 4 | 5 | 1 | 2 | 3",
-    "Citigroup Inc. | C US | 120.5 | 118 | 90 | 120.5 | 0.14 | 0.139 | 0.141 | 70 | 121 | 9.5 | 5 | 60000",
+    "Delta Bank Inc. | C US | 120.5 | 118 | 90 | 120.5 | 0.14 | 0.139 | 0.141 | 70 | 121 | 9.5 | 5 | 60000",
 ])
 
 
@@ -528,28 +528,28 @@ def test_an_entity_row_table(rules):
     the measure, or "Current" under a group header), never a past or forward period, consensus, a converted copy, or a
     flow; a header cell written on several lines is joined back into its row."""
     assert found_of(rules, DASHBOARD, date=OCT) == [
-        ("observe", "jpmorgan.share_price", 310.5), ("observe", "jpmorgan.cet1_ratio", 15.2),
-        ("observe", "citigroup.share_price", 120.5), ("observe", "citigroup.cet1_ratio", 14.1)]   # Citi's since its construction
+        ("observe", "acme_bank.share_price", 310.5), ("observe", "acme_bank.cet1_ratio", 15.2),
+        ("observe", "delta_bank.share_price", 120.5), ("observe", "delta_bank.cet1_ratio", 14.1)]   # Delta's since its construction
 
 
 def test_an_entity_row_needs_its_header_rows(rules):
-    row = "JPMorgan Chase & Co. | JPM US | 310.5 | 305 | 250"
+    row = "Acme Bank Chase & Co. | ACME US | 310.5 | 305 | 250"
     assert found_of(rules, row, date=OCT) == []
     assert found_of(rules, "Name | Ticker | Static Price (1 Oct) | x | y\n3M Co | MMM | 310.5 | 305 | 250",
                     date=OCT) == []
-    assert found_of(rules, "Name | Ticker | Static Price (1 Oct) | x | y\nJPMorgan | JPM US | 99999 | 305 | 250",
+    assert found_of(rules, "Name | Ticker | Static Price (1 Oct) | x | y\nAcme Bank | ACME US | 99999 | 305 | 250",
                     date=OCT) == []                                                     # an implausible price
     # "Current" first in its row: no group header to its left names a measure
-    assert found_of(rules, "Current | Ticker | Name\n1 | 2 | 3 | JPMorgan", date=OCT) == []
+    assert found_of(rules, "Current | Ticker | Name\n1 | 2 | 3 | Acme Bank", date=OCT) == []
 
 
 def test_a_revised_plan_row_for_the_current_year(rules):
     text = "Plan item | Unit | Initial (1-May-26) | Revised (1-Sep-26) | Source\nUnit sales FY3/27 | k units | 9500 | 9650"
-    assert found_of(rules, text, subject="toyota", date=OCT) == [
-        ("observe", "toyota.vehicle_sales", 9.65), ("move", "toyota.vehicle_sales", 0.0158)]
+    assert found_of(rules, text, subject="acme_motors", date=OCT) == [
+        ("observe", "acme_motors.vehicle_sales", 9.65), ("move", "acme_motors.vehicle_sales", 0.0158)]
     # another year's row: only the revision
     text = "Plan item | Unit | Initial (1-May-26) | Revised (1-Sep-26) | Source\nUnit sales FY3/29 | k units | 9500 | 9650"
-    assert found_of(rules, text, subject="toyota", date=OCT) == [("move", "toyota.vehicle_sales", 0.0158)]
+    assert found_of(rules, text, subject="acme_motors", date=OCT) == [("move", "acme_motors.vehicle_sales", 0.0158)]
 
 
 # -- causal claims in prose -------------------------------------------------------------------------------------------------
@@ -559,32 +559,32 @@ def channels(rules: Rules, text: str, **reading) -> set[tuple]:
 
 @pytest.mark.parametrize("text,want", [
     # an entity named for its values stands for the one value whose link has the sign the sentence states
-    ("Higher JGB yields lift Tokio Marine.", {("support", "jgbs.yield_30y", "tokio_marine.japan_pc_profit")}),
-    ("A weaker yen lifts Tokio Marine.", {("support", "dollar_yen.usd_jpy", "tokio_marine.international_profit")}),
+    ("Higher JGB yields lift Acme Re.", {("support", "jgbs.yield_30y", "acme_re.japan_pc_profit")}),
+    ("A weaker yen lifts Acme Re.", {("support", "dollar_yen.usd_jpy", "acme_re.international_profit")}),
     # a sector with its region: each of the model's companies in it, by the value after a possessive if any
     ("Higher super-long JGB yields lift Japanese insurers.",
-     {("support", "jgbs.yield_30y", "tokio_marine.japan_pc_profit"), ("support", "jgbs.yield_30y", "msad.domestic_profit")}),
+     {("support", "jgbs.yield_30y", "acme_re.japan_pc_profit"), ("support", "jgbs.yield_30y", "acme_mutual.domestic_profit")}),
     ("A weaker yen lifts Japanese insurers' overseas profit.",
-     {("support", "dollar_yen.usd_jpy", "tokio_marine.international_profit"),
-      ("support", "dollar_yen.usd_jpy", "msad.international_profit")}),
-    ("A stronger yen hurts Japanese automakers.", {("support", "dollar_yen.usd_jpy", "toyota.operating_profit")}),
+     {("support", "dollar_yen.usd_jpy", "acme_re.international_profit"),
+      ("support", "dollar_yen.usd_jpy", "acme_mutual.international_profit")}),
+    ("A stronger yen hurts Japanese automakers.", {("support", "dollar_yen.usd_jpy", "acme_motors.operating_profit")}),
     # bare "yields": the bond market of the region in view
     ("Higher yields lift Japanese insurers' investment income.",
-     {("support", "jgbs.yield_30y", "tokio_marine.japan_pc_profit"), ("support", "jgbs.yield_30y", "msad.domestic_profit")}),
-    ("Higher yields lift UniCredit's net interest income.", {("support", "bunds.yield_10y", "unicredit.net_interest_income")}),
+     {("support", "jgbs.yield_30y", "acme_re.japan_pc_profit"), ("support", "jgbs.yield_30y", "acme_mutual.domestic_profit")}),
+    ("Higher yields lift Northwind Bank's net interest income.", {("support", "bunds.yield_10y", "northwind_bank.net_interest_income")}),
     # connectors that name the cause after the effect, with their own sign
-    ("Toyota's operating profit was hurt by the stronger yen.",
-     {("support", "dollar_yen.usd_jpy", "toyota.operating_profit")}),
-    ("Tokio Marine's international business benefits from a weaker yen.",
-     {("support", "dollar_yen.usd_jpy", "tokio_marine.international_profit")}),
+    ("Acme Motors's operating profit was hurt by the stronger yen.",
+     {("support", "dollar_yen.usd_jpy", "acme_motors.operating_profit")}),
+    ("Acme Re's international business benefits from a weaker yen.",
+     {("support", "dollar_yen.usd_jpy", "acme_re.international_profit")}),
     ("USD/JPY fell amid talk of BoJ tightening.", {("support", "boj.policy_rate", "dollar_yen.usd_jpy")}),
     # predicates, and verbs with no sign of their own
-    ("A weaker yen is a tailwind for Toyota's operating profit.",
-     {("support", "dollar_yen.usd_jpy", "toyota.operating_profit")}),
-    ("Lower ECB deposit rates may lead to UniCredit net interest income pressure.",
-     {("support", "ecb.policy_rate", "unicredit.net_interest_income")}),
-    ("Higher JGB yields, which lift Tokio Marine's Japan P&C profit, are a theme.",
-     {("support", "jgbs.yield_30y", "tokio_marine.japan_pc_profit")}),
+    ("A weaker yen is a tailwind for Acme Motors's operating profit.",
+     {("support", "dollar_yen.usd_jpy", "acme_motors.operating_profit")}),
+    ("Lower ECB deposit rates may lead to Northwind Bank net interest income pressure.",
+     {("support", "ecb.policy_rate", "northwind_bank.net_interest_income")}),
+    ("Higher JGB yields, which lift Acme Re's Japan P&C profit, are a theme.",
+     {("support", "jgbs.yield_30y", "acme_re.japan_pc_profit")}),
     ("Following the BoJ's rate hike, the yen rose 3%.", {("support", "boj.policy_rate", "dollar_yen.usd_jpy")}),
     ("USD/JPY fell 2% after the BoJ's rate hike.", {("support", "boj.policy_rate", "dollar_yen.usd_jpy")}),
     ("As the yen strengthened, Japan equities fell 3%.",
@@ -613,16 +613,16 @@ def test_help_takes_the_sign_of_the_verb_it_helps(rules):
 
 
 @pytest.mark.parametrize("text", [
-    "We push back on the notion that a stronger yen lifts Toyota's operating profit.",   # a view doubted
-    "Measures to support the yen lifted Toyota's operating profit.",                     # the yen is an aim's object
+    "We push back on the notion that a stronger yen lifts Acme Motors's operating profit.",   # a view doubted
+    "Measures to support the yen lifted Acme Motors's operating profit.",                     # the yen is an aim's object
     "Fed rate hikes follow a 25bp increase in 2-year Treasury yields.",                  # a causal word as a noun
     "US 10-year yields are 5bp lower than 2-year Treasury yields.",                      # "lower" as a predicate
-    "Higher 30-year yields lift Tokio Marine.",                                          # yields of a tenor not modelled
-    "Higher yields lift Komatsu.",                                                       # no link from any yield
+    "Higher 30-year yields lift Acme Re.",                                          # yields of a tenor not modelled
+    "Higher yields lift Acme Machinery.",                                                       # no link from any yield
     "Japanese insurers lift JGB yields.",                                                # a sector is moved, not mover
     "Higher JGB yields lift Korean insurers.",                                           # no such region's sector
     "Higher JGB yields lift Chinese insurers.",                                          # no such company in the model
-    "Lower ECB deposit rates may lead to UniCredit net interest income.",                # led where?
+    "Lower ECB deposit rates may lead to Northwind Bank net interest income.",                # led where?
     "Following the BoJ meeting, the yen rose 3%.",                                       # no direction for the event
     "Following the BoJ's rate hike, the yen could rise.",                                # a supposition
     "Following the BoJ's rate hike the yen rose.",                                       # no clause to read
@@ -637,17 +637,17 @@ def test_no_causal_claim(rules, text):
 
 @pytest.mark.parametrize("text,want", [
     # a report of what happened claims the directions on both sides; a mechanism claims neither
-    ("A weaker yen lifted Toyota's operating profit.",
-     [("move", "dollar_yen.usd_jpy", 0.5, "standardized"), ("move", "toyota.operating_profit", 0.5, "standardized")]),
-    ("A weaker yen lifts Toyota's operating profit.", []),
-    ("Toyota's operating profit rose, thanks to a weaker yen.",
-     [("move", "toyota.operating_profit", 0.5, "standardized"), ("move", "dollar_yen.usd_jpy", 0.5, "standardized")]),
-    ("Toyota's operating profit rose, given a weaker yen.", [("move", "toyota.operating_profit", 0.5, "standardized")]),
-    ("Toyota's operating profit rose 5%, thanks to a weaker yen.",
-     [("move", "toyota.operating_profit", 0.05, "relative"), ("move", "dollar_yen.usd_jpy", 0.5, "standardized")]),
+    ("A weaker yen lifted Acme Motors's operating profit.",
+     [("move", "dollar_yen.usd_jpy", 0.5, "standardized"), ("move", "acme_motors.operating_profit", 0.5, "standardized")]),
+    ("A weaker yen lifts Acme Motors's operating profit.", []),
+    ("Acme Motors's operating profit rose, thanks to a weaker yen.",
+     [("move", "acme_motors.operating_profit", 0.5, "standardized"), ("move", "dollar_yen.usd_jpy", 0.5, "standardized")]),
+    ("Acme Motors's operating profit rose, given a weaker yen.", [("move", "acme_motors.operating_profit", 0.5, "standardized")]),
+    ("Acme Motors's operating profit rose 5%, thanks to a weaker yen.",
+     [("move", "acme_motors.operating_profit", 0.05, "relative"), ("move", "dollar_yen.usd_jpy", 0.5, "standardized")]),
     # the cause's word is not the effect's ("flat due to weaker demand")
-    ("Komatsu's profit was flat due to weaker construction demand.",
-     [("move", "komatsu.construction_demand", -0.5, "standardized")]),
+    ("Acme Machinery's profit was flat due to weaker construction demand.",
+     [("move", "acme_machinery.construction_demand", -0.5, "standardized")]),
     ("The yen appreciated 4%.", [("move", "dollar_yen.usd_jpy", -0.04, "relative")]),
     ("USD/JPY fell amid talk of BoJ tightening.", [("move", "dollar_yen.usd_jpy", -0.5, "standardized")]),
     # a figure before a connector is not the cause's size

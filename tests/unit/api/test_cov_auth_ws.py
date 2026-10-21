@@ -24,7 +24,7 @@ def _clear_auth_env(monkeypatch):
 
 def test_extra_logins_need_the_main_login(monkeypatch):
     _clear_auth_env(monkeypatch)
-    monkeypatch.setenv("WORLD_MODEL_LOGINS", "emily:pw:emily_demo")
+    monkeypatch.setenv("WORLD_MODEL_LOGINS", "eve:pw:acme_demo")
     with pytest.raises(RuntimeError, match="needs the main Basic Auth login"):
         BasicAuthMiddleware(None)
 

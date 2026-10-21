@@ -22,7 +22,7 @@ from axelrod_wm.ingest.llm import (
     validate,
 )
 
-TEXT = "Tokio Marine said overseas profit should benefit. JPMorgan was quiet."
+TEXT = "Acme Re said overseas profit should benefit. Acme Bank was quiet."
 
 
 # -- configuration ------------------------------------------------------------------------------------------------------
@@ -95,20 +95,20 @@ def test_http_errors_raise(monkeypatch, provider):
 
 # -- the prompt -----------------------------------------------------------------------------------------------------------
 def test_prompt_lists_the_named_entities_values_and_their_links(graph):
-    p = _prompt(TEXT, graph, ["tokio_marine", "boj"])
+    p = _prompt(TEXT, graph, ["acme_re", "boj"])
     lines = p.split("\n")
     assert lines[0] == "Values you may name (id: name, unit):"
-    assert lines[1] == "- boj.policy_rate: BoJ policy rate, pct"
-    assert "- tokio_marine.international_profit: Tokio Marine international business profit, ¥bn/yr" in lines
+    assert "- boj.policy_rate: BoJ policy rate, pct" in lines
+    assert "- acme_re.international_profit: Acme Re international business profit, ¥bn/yr" in lines
     k = lines.index("Links the model already holds (source -> target, label):")
     links = lines[k + 1:lines.index("")]
     # every link touching a named entity, in link-id order (m13 before m19 before s41)
     assert links.index("- boj.policy_rate -> jgbs.yield_10y: lifts") < links.index(
-        "- dollar_yen.usd_jpy -> tokio_marine.international_profit: translates overseas profit") < links.index(
-        "- bunds.yield_10y -> tokio_marine.international_profit: lifts European reinvestment income")
-    assert not any("federal_reserve.policy_rate -> jpmorgan" in ln for ln in links)
+        "- dollar_yen.usd_jpy -> acme_re.international_profit: translates overseas profit") < links.index(
+        "- bunds.yield_10y -> acme_re.international_profit: lifts European reinvestment income")
+    assert not any("federal_reserve.policy_rate -> acme_bank" in ln for ln in links)
     assert lines[-2:] == ["Passage:", TEXT]
-    assert _prompt(TEXT, graph, ["boj", "tokio_marine"]) == p
+    assert _prompt(TEXT, graph, ["boj", "acme_re"]) == p
 
 
 def test_prompt_without_links_or_with_missing_values():
@@ -134,14 +134,14 @@ def test_parse(raw, want):
 
 
 def test_validate_keeps_only_well_formed_known_quoted_signals(graph):
-    q = "Tokio Marine said overseas profit should benefit."
-    good_link = {"type": "link", "source": "us_treasuries.yield_10y", "target": "tokio_marine.operating_profit",
+    q = "Acme Re said overseas profit should benefit."
+    good_link = {"type": "link", "source": "us_treasuries.yield_10y", "target": "acme_re.operating_profit",
                  "label": "lifts", "effect": 0.2, "quote": q}
-    good_support = {"type": "support", "source": "dollar_yen.usd_jpy", "target": "tokio_marine.international_profit",
+    good_support = {"type": "support", "source": "dollar_yen.usd_jpy", "target": "acme_re.international_profit",
                     "quote": q}
-    good_move = {"type": "move", "value_of": "tokio_marine.international_profit", "delta": 0.05, "mode": "relative",
+    good_move = {"type": "move", "value_of": "acme_re.international_profit", "delta": 0.05, "mode": "relative",
                  "quote": q, "note": "translation"}
-    good_observe = {"type": "observe", "value_of": "boj.policy_rate", "value": 1.0, "quote": "JPMorgan was quiet."}
+    good_observe = {"type": "observe", "value_of": "boj.policy_rate", "value": 1.0, "quote": "Acme Bank was quiet."}
     bad = [
         {"type": "move", "value_of": "no.such", "delta": 0.1, "quote": q},                      # unknown id
         {"type": "link", "source": "boj.policy_rate", "target": "nope", "label": "x", "effect": 0.1, "quote": q},
@@ -150,7 +150,7 @@ def test_validate_keeps_only_well_formed_known_quoted_signals(graph):
         {"type": "move", "value_of": "boj.policy_rate", "delta": "big", "quote": q},              # malformed
         {"type": "guess", "quote": q},                                                            # unknown type
         {"type": "move", "value_of": "boj.policy_rate", "delta": 0.1, "quote": q, "extra": 1},    # extra field
-        {"type": "contradict", "source": "boj.policy_rate", "target": "tokio_marine.international_profit",
+        {"type": "contradict", "source": "boj.policy_rate", "target": "acme_re.international_profit",
          "quote": q},                                                                             # no such link
     ]
     got = validate([bad[0], good_link, *bad[1:], good_support, good_move, good_observe], TEXT, graph)
@@ -171,47 +171,47 @@ class FakeProvider:
 
 
 ANSWER = json.dumps({"signals": [
-    {"type": "support", "source": "dollar_yen.usd_jpy", "target": "tokio_marine.international_profit",
-     "quote": "Tokio Marine said overseas profit should benefit.", "note": "translation"},
-    {"type": "move", "value_of": "tokio_marine.international_profit", "delta": 0.05, "mode": "relative",
-     "quote": "Tokio Marine said overseas profit should benefit."},
-    {"type": "move", "value_of": "made.up", "delta": 0.05, "quote": "JPMorgan was quiet."}]})
+    {"type": "support", "source": "dollar_yen.usd_jpy", "target": "acme_re.international_profit",
+     "quote": "Acme Re said overseas profit should benefit.", "note": "translation"},
+    {"type": "move", "value_of": "acme_re.international_profit", "delta": 0.05, "mode": "relative",
+     "quote": "Acme Re said overseas profit should benefit."},
+    {"type": "move", "value_of": "made.up", "delta": 0.05, "quote": "Acme Bank was quiet."}]})
 
 
 def test_propose_is_off_without_a_provider(graph, lake):
-    assert propose(TEXT, graph, ["tokio_marine"], provider=None, store=lake, gazetteer_digest="g") == []
+    assert propose(TEXT, graph, ["acme_re"], provider=None, store=lake, gazetteer_digest="g") == []
 
 
 def test_propose_calls_once_then_replays_from_the_cache(graph, lake):
     p = FakeProvider(ANSWER)
-    first = propose(TEXT, graph, ["tokio_marine"], provider=p, store=lake, gazetteer_digest="g")
-    assert len(p.calls) == 1 and p.calls[0] == (SYSTEM, _prompt(TEXT, graph, ["tokio_marine"]))
+    first = propose(TEXT, graph, ["acme_re"], provider=p, store=lake, gazetteer_digest="g")
+    assert len(p.calls) == 1 and p.calls[0] == (SYSTEM, _prompt(TEXT, graph, ["acme_re"]))
     assert [s["note"] for s in first] == ["llm:fake-1; translation", "llm:fake-1"]
     p.answer = '{"signals": []}'                            # a different answer now would not be asked for
-    again = propose(TEXT, graph, ["tokio_marine"], provider=p, store=lake, gazetteer_digest="g")
+    again = propose(TEXT, graph, ["acme_re"], provider=p, store=lake, gazetteer_digest="g")
     assert len(p.calls) == 1
     assert json.dumps(again, sort_keys=True) == json.dumps(first, sort_keys=True)
 
 
 def test_cache_key_covers_provider_model_text_and_gazetteer(graph, lake):
     p = FakeProvider(ANSWER)
-    propose(TEXT, graph, ["tokio_marine"], provider=p, store=lake, gazetteer_digest="g")
-    propose(TEXT, graph, ["tokio_marine"], provider=p, store=lake, gazetteer_digest="g2")
-    propose(TEXT + " More.", graph, ["tokio_marine"], provider=p, store=lake, gazetteer_digest="g")
-    propose(TEXT, graph, ["tokio_marine", "jpmorgan"], provider=p, store=lake, gazetteer_digest="g")
+    propose(TEXT, graph, ["acme_re"], provider=p, store=lake, gazetteer_digest="g")
+    propose(TEXT, graph, ["acme_re"], provider=p, store=lake, gazetteer_digest="g2")
+    propose(TEXT + " More.", graph, ["acme_re"], provider=p, store=lake, gazetteer_digest="g")
+    propose(TEXT, graph, ["acme_re", "acme_bank"], provider=p, store=lake, gazetteer_digest="g")
     assert len(p.calls) == 4
     other = FakeProvider(ANSWER, model="fake-2")
-    got = propose(TEXT, graph, ["tokio_marine"], provider=other, store=lake, gazetteer_digest="g")
+    got = propose(TEXT, graph, ["acme_re"], provider=other, store=lake, gazetteer_digest="g")
     assert len(other.calls) == 1 and got[1]["note"] == "llm:fake-2"
     from axelrod_wm.lake.store import digest
 
     key = digest({"v": PROMPT_VERSION, "provider": "fake", "model": "fake-1",
-                  "user": _prompt(TEXT, graph, ["tokio_marine"]), "gz": "g"})
+                  "user": _prompt(TEXT, graph, ["acme_re"]), "gz": "g"})
     assert lake.cache_get(key) == {"raw": ANSWER}
 
 
 def test_cached_answers_are_revalidated(graph, lake):
     # the cache holds the raw answer: signals naming values the model no longer has are dropped on replay
     p = FakeProvider(ANSWER)
-    got = propose(TEXT, graph, ["tokio_marine"], provider=p, store=lake, gazetteer_digest="g")
+    got = propose(TEXT, graph, ["acme_re"], provider=p, store=lake, gazetteer_digest="g")
     assert all(s.get("value_of") != "made.up" for s in got) and len(got) == 2

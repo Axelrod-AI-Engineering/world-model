@@ -1,6 +1,6 @@
 """The reading set (context/reading.py): a v4.1.4 export an answering agent can open. The domain pack stays whole as the
 machine-import file; `reading/` holds the same objects in files of at most 100 KB, with a START_HERE guide. Tests use
-the tracked sally_demo export and small synthetic packs; the client's data is never read."""
+the tracked acme_demo export and small synthetic packs; the client's data is never read."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ from axelrod_wm.repo.snapshots import MemoryBackend
 
 @pytest.fixture(scope="module")
 def ctx():
-    app = create_app(scenario="sally_demo", storage=MemoryBackend(), trace_dir=None, play_delay=0.0)
+    app = create_app(scenario="acme_demo", storage=MemoryBackend(), trace_dir=None, play_delay=0.0)
     with TestClient(app) as c:
         return c.get("/api/context/v4").json()
 

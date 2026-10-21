@@ -26,9 +26,9 @@ SCOPES = "world_model:read+documents:create+changes:create+simulations:create+ad
 A = {"Authorization": f"Bearer {KA}"}
 BB = {"Authorization": f"Bearer {KB}"}
 ENV = {"WORLD_MODEL_BASIC_AUTH_USERNAME": "admin", "WORLD_MODEL_BASIC_AUTH_PASSWORD": "pw-admin",
-       "WORLD_MODEL_LOGINS": "bravo:pw-bravo:sally_demo",
+       "WORLD_MODEL_LOGINS": "bravo:pw-bravo:acme_demo",
        "WORLD_MODEL_API_KEYS": f"alpha:{KA}:admin:{SCOPES},beta:{KB}:bravo:{SCOPES}"}
-WA, WB = "/v1/world-models/sally_demo", "/v1/world-models/bravo-sally_demo"
+WA, WB = "/v1/world-models/acme_demo", "/v1/world-models/bravo-acme_demo"
 
 
 def flow(c, wm: str, h: dict, org: str, note: bytes, name: str) -> dict:
@@ -45,8 +45,8 @@ def flow(c, wm: str, h: dict, org: str, note: bytes, name: str) -> dict:
 
 def test_two_organizations_never_see_each_other_through_the_whole_flow():
     with service(SIGNER, headers={"Authorization": ""}, **ENV) as c:
-        assert [m["id"] for m in data(c.get("/v1/world-models", headers=A))] == ["sally_demo"]
-        assert [m["id"] for m in data(c.get("/v1/world-models", headers=BB))] == ["bravo-sally_demo"]
+        assert [m["id"] for m in data(c.get("/v1/world-models", headers=A))] == ["acme_demo"]
+        assert [m["id"] for m in data(c.get("/v1/world-models", headers=BB))] == ["bravo-acme_demo"]
         a = flow(c, WA, A, "admin", RATES_NOTE, "alpha_rates.txt")
         b_start = version(c, WB, BB)
         assert (b_start["number"], b_start["state_hash"]) == (a["before"]["number"], a["before"]["state_hash"])

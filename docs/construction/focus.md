@@ -118,10 +118,10 @@ process-independence of the files.
 
 ## Regenerate after a new pack
 
-1. Merge the company's construction round (its `data/worlds/sally_demo/construction/<company>.yaml`) and put its local
+1. Merge the company's construction round (its `<client root>/worlds/sally_demo/construction/<company>.yaml`) and put its local
    sources, citations, and baselines under `data/sally_data/construction/<company>/`.
 2. Run the checks above. A new link into another company's values goes automatically; a new group or thesis whose text
-   names a removed company needs an override in `data/scenarios/sally_focus/scenario.yaml`, and the report's
+   names a removed company needs an override in `<client root>/scenarios/sally_focus/scenario.yaml`, and the report's
    `groups_dropped`, `theses_dropped`, and `mentions` say which.
 3. Run the export with a new date in the folder name, and zip it.
 

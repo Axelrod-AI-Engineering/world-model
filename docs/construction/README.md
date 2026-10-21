@@ -20,18 +20,18 @@
 <!-- /toc -->
 
 This page holds the method; the rules it serves are in [design/specificity.md](../design/specificity.md). Each
-company's page holds its gap register and completion report: [AIB Group](aib_group.md),
-[China Construction Bank](china_construction_bank.md), [Citigroup](citigroup.md), [JPMorgan](jpmorgan.md),
-[Komatsu](komatsu.md), [Morgan Stanley](morgan_stanley.md), [MS&AD](msad.md), [SoftBank Corp](softbank_corp.md),
-[Tokio Marine](tokio_marine.md), [Toyota](toyota.md) (and [before and after the review](toyota_before_after.md)),
-[UniCredit](unicredit.md). A narrowed world of some covered companies and the players they connect to is in
-[focus.md](focus.md) (Oct 18).
+company's page holds its gap register and completion report (AIB Group, China Construction Bank, Citigroup, JPMorgan,
+Komatsu, Morgan Stanley, MS&AD, SoftBank Corp, Tokio Marine, Toyota with its before-and-after of the review, and
+UniCredit). Those pages are client content: they are local, not tracked, and live in the client root as
+`docs/construction/<company>.md` (`WORLD_MODEL_CLIENT_DIR`, default `data/clients`; see
+[the deployment guide](../guides/deployment.md#client-content)). A narrowed world of some covered companies and the
+players they connect to is in [focus.md](focus.md) (Oct 18).
 
-The company registers ([Toyota](toyota.md), [Tokio Marine](tokio_marine.md)) list gaps blocked by a named input. The
+The company registers (Toyota's and Tokio Marine's, local) list gaps blocked by a named input. The
 first three methods are what turns such an input into model structure when it arrives. They do not close a gap on their
 own: each still needs its input. The next four (Oct 18) check a build: that its evidence resolves to documents, that
 its missing inputs were searched for, that its numbers add up, and what a forecast's numbers are made of. The last six
-(Oct 18, from the [JPMorgan](jpmorgan.md#what-the-method-could-not-express-for-a-bank) build) let the method say more
+(Oct 18, from the JPMorgan build, "what the method could not express for a bank") let the method say more
 than "a part adds to its total".
 
 ## Calibrate a link from a disclosed sensitivity

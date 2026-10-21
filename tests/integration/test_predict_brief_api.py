@@ -12,14 +12,14 @@ from axelrod_wm.repo.snapshots import MemoryBackend
 
 @pytest.fixture(scope="module")
 def client():
-    app = create_app(scenario="emily_demo", storage=MemoryBackend(), trace_dir=None, play_delay=0.0)
+    app = create_app(scenario="acme_demo", storage=MemoryBackend(), trace_dir=None, play_delay=0.0)
     with TestClient(app) as c:
         yield c
 
 
 @pytest.fixture(scope="module")
 def posed(client):
-    r = client.post("/api/theses/E-T1/pose")
+    r = client.post("/api/theses/S-T1/pose")
     assert r.status_code == 200, r.text
     return r.json()
 

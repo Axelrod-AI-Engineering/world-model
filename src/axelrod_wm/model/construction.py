@@ -25,7 +25,7 @@ Two properties of an interaction say how it computes:
 - `edge_type` "accounting": an accounting relationship (a part adds to its total), with a fixed weight that learning
   never refits, so statistics cannot flip the sign of an identity.
 
-Oct 18, identities that are not sums (the bank build's limits, docs/construction/jpmorgan.md):
+Oct 18, identities that are not sums (the bank build's limits, in the client's local JPMorgan page):
 
 - **Identity**: a product (NII = balance x rate), a ratio (CET1 ratio = CET1 / RWA), or a difference (NII ex Markets =
   NII - Markets NII). Its links (`edge_type` "identity") carry weights derived from the values' levels and scales

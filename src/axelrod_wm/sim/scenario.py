@@ -9,12 +9,13 @@ from typing import Any, Literal
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from axelrod_wm.clients import find_scenario, load_scenario_yaml, scenario_dirs
 from axelrod_wm.engine.focus import FocusSpec, focus_result
 from axelrod_wm.engine.initialize import REPO_ROOT
 from axelrod_wm.events.thesis import Thesis
 from axelrod_wm.model.hypothesis import Hypothesis
 
-SCENARIOS_DIR = REPO_ROOT / "data" / "scenarios"
+SCENARIOS_DIR = REPO_ROOT / "data" / "scenarios"      # the repository's own; client scenarios: axelrod_wm/clients.py
 
 
 class _M(BaseModel):
@@ -151,23 +152,24 @@ class ScenarioScript(_M):
 
     @property
     def directory(self) -> Path:
-        return SCENARIOS_DIR / self.id
+        return find_scenario(self.id) or SCENARIOS_DIR / self.id
 
 
 def _scenario_path(scenario: str | Path) -> Path:
     p = Path(scenario)
     if not p.exists():
-        return SCENARIOS_DIR / str(scenario) / "scenario.yaml"
+        return (find_scenario(str(scenario)) or SCENARIOS_DIR / str(scenario)) / "scenario.yaml"
     return p / "scenario.yaml" if p.is_dir() else p
 
 
 def scenario_raw(scenario: str | Path) -> dict:
-    """scenario.yaml as data; a focused scenario's is its base's, overlaid with its own fields."""
-    raw = yaml.safe_load(_scenario_path(scenario).read_text()) or {}
+    """scenario.yaml as data, its paths anchored to the root that holds it (axelrod_wm/clients.py); a focused
+    scenario's is its base's, overlaid with its own fields."""
+    raw = load_scenario_yaml(_scenario_path(scenario))
     if not raw.get("focus"):
         return raw
     focus = FocusSpec.model_validate(raw["focus"])
-    base = yaml.safe_load(_scenario_path(focus.base).read_text()) or {}
+    base = load_scenario_yaml(_scenario_path(focus.base))
     out = {**base, **raw, "context_pack": {**(base.get("context_pack") or {}), **(raw.get("context_pack") or {})}}
     out["initialization"] = {**(base.get("initialization") or {}), **(raw.get("initialization") or {}),
                              "focus": focus.model_dump()}
@@ -256,13 +258,16 @@ def load_decisions(scenario_dir: Path) -> dict[str, DecisionSpec]:
 
 
 def list_scenarios() -> list[dict[str, str]]:
-    out = []
-    for d in sorted(SCENARIOS_DIR.iterdir()) if SCENARIOS_DIR.exists() else []:
-        p = d / "scenario.yaml"
-        if p.exists():
-            raw = scenario_raw(p)
-            out.append({"id": raw.get("id", d.name), "title": raw.get("title", d.name),
-                        "canvas": raw.get("canvas", "scripted"), "examples": raw.get("examples"),
-                        "imports": bool(raw.get("imports"))})
-    return out
+    """Every scenario, the repository's then each client root's (the first of an id wins)."""
+    out: dict[str, dict[str, str]] = {}
+    for root in scenario_dirs():
+        for d in sorted(root.iterdir()) if root.exists() else []:
+            p = d / "scenario.yaml"
+            if p.exists():
+                raw = scenario_raw(p)
+                out.setdefault(raw.get("id", d.name), {
+                    "id": raw.get("id", d.name), "title": raw.get("title", d.name),
+                    "canvas": raw.get("canvas", "scripted"), "examples": raw.get("examples"),
+                    "imports": bool(raw.get("imports"))})
+    return list(out.values())
 

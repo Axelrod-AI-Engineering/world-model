@@ -13,7 +13,7 @@ from tests.lake.conftest import make_doc
 
 
 def test_content_id_is_the_sha256_prefix_and_stable():
-    data = b"Toyota raised its forecast."
+    data = b"Acme Motors raised its forecast."
     assert content_id(data) == content_id(data) == hashlib.sha256(data).hexdigest()[:24]
     assert len(content_id(data)) == 24
     assert content_id(data) != content_id(data + b" ")
@@ -46,6 +46,6 @@ def test_records_are_frozen_and_forbid_extra_fields():
 def test_record_defaults():
     doc = make_doc(b"x")
     assert (doc.status, doc.source_type, doc.meta, doc.published_at) == ("stored", "other", {}, None)
-    hit = Hit(kind="entity", score=1.0, text="Toyota")
+    hit = Hit(kind="entity", score=1.0, text="Acme Motors")
     assert (hit.doc_id, hit.why, hit.event_time) == (None, [], None)
     assert DEFAULT_TENANT == "default"

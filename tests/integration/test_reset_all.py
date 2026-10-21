@@ -12,7 +12,7 @@ from axelrod_wm.repo.snapshots import MemoryBackend
 
 @pytest.fixture()
 def client():
-    app = create_app(scenario="sally_demo", storage=MemoryBackend(), trace_dir=None, play_delay=0.0)
+    app = create_app(scenario="acme_demo", storage=MemoryBackend(), trace_dir=None, play_delay=0.0)
     with TestClient(app) as c:
         yield c
 
@@ -24,6 +24,6 @@ def test_reset_clears_forecasts_and_returns_to_the_initial_version(client):
     r = client.post("/api/sim/reset-all")
     assert r.status_code == 200, r.text
     after = r.json()
-    assert after["scenario_id"] == "sally_demo" and after["version"] == start["version"]
+    assert after["scenario_id"] == "acme_demo" and after["version"] == start["version"]
     assert client.get("/api/forecasts").json() == []
     assert client.get("/api/demos").json()["switching"] is None

@@ -1,5 +1,5 @@
 """AIB Group's business construction (Oct 18): the compositions, operating and financial paths, and their transitions in
-data/worlds/sally_demo/construction/aib_group.yaml, checked in the loaded model, in the v4.1.4 export, and through the
+<client root>/worlds/sally_demo/construction/aib_group.yaml, checked in the loaded model, in the v4.1.4 export, and through the
 service API (docs/construction/aib_group.md has the gap register these tests close). The second bank after JPMorgan,
 in its own reporting: an Irish retail and commercial bank (IFRS, EUR) whose NII follows the ECB through central bank
 cash, floating loans and low deposit betas, offset by a structural hedge. Sally's world loads once for the module; no
@@ -21,7 +21,10 @@ from axelrod_wm.model.construction import (
     validate_construction,
 )
 from axelrod_wm.repo.snapshots import MemoryBackend
+from tests.clients import skip_without_client
 from tests.scenario import v1_reads as v1
+
+skip_without_client('sally_demo')
 
 AIB = "aib_group"
 NII, TOI = "aib_group.net_interest_income", "aib_group.total_operating_income"

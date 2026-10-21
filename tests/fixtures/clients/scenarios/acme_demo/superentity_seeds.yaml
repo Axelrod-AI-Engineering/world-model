@@ -1,0 +1,312 @@
+# Acme's superentities: a synthetic test fixture (invented companies; derived by renaming, nothing here describes a real company or client).
+patterns:
+- id: S1
+  name: Policy divergence
+  description: 'The Fed, the BoJ, the ECB, and the PBoC answer the same world differently: the Fed holds on US inflation, the BoJ hikes on wages, the ECB cuts, the PBoC eases against property.'
+  palette: h8
+  members:
+  - us_economy
+  - japan_economy
+  - euro_economy
+  - china_economy
+  - federal_reserve
+  - boj
+  - ecb
+  - pboc
+  - us_treasuries
+  - jgbs
+  - bunds
+  - cgbs
+  interactions:
+  - m06
+  - m07
+  - m08
+  - m09
+  - m10
+  - m11
+  - m12
+  - m13
+  - m14
+  - s01
+  - s05
+  - s06
+  - s07
+  - s56
+  support: 5
+- id: S3
+  name: Oil and inflation
+  description: Expensive oil lifts inflation everywhere within a quarter and weighs on US growth after two.
+  palette: h2
+  members:
+  - oil
+  - us_economy
+  - japan_economy
+  - euro_economy
+  interactions:
+  - m01
+  - m02
+  - m03
+  - m04
+  - m05
+  support: 4
+- id: S2
+  name: Rate gap and the yen
+  description: The US-Japan two-year gap moves USD/JPY; a narrowing gap strengthens the yen and can unwind the carry trade.
+  palette: h19
+  members:
+  - boj
+  - us_treasuries
+  - dollar_yen
+  - jpy_usd
+  interactions:
+  - m15
+  - m16
+  - m17
+  - m18
+  - s50
+  support: 5
+- id: S4
+  name: US capital-markets banks
+  description: 'Acme Bank, Keystone Capital, and Delta: interest income follows the Fed; fees follow dealmaking; trading follows rate and FX volatility.'
+  palette: h1
+  members:
+  - federal_reserve
+  - us_treasuries
+  - us_capital_markets
+  - acme_bank
+  - keystone_capital
+  - delta_bank
+  interactions:
+  - m25
+  - m26
+  - s08
+  - s11
+  - s12
+  - s13
+  - s14
+  - s15
+  - s16
+  - s17
+  - s18
+  - s19
+  support: 4
+- id: S5
+  name: Euro and Irish banks
+  description: 'Northwind Bank and Emerald: deposit-rich banks whose net interest income follows the ECB, Emerald''s most directly; their shares trade with European equities, and the Fed-ECB gap sets USD/EUR.'
+  palette: h5
+  members:
+  - ecb
+  - bunds
+  - northwind_bank
+  - emerald_bank
+  - usd_eur
+  - europe_capital_markets
+  interactions:
+  - m28
+  - s32
+  - s33
+  - s51
+  - s52
+  - s66
+  - s67
+  support: 4
+- id: S6
+  name: China banks and property
+  description: 'Harbor Bank: loan prime rate cuts compress its margin while the property market decides its bad loans; the CGB curve sets its asset yields, and Chinese equities carry its shares.'
+  palette: h6
+  members:
+  - pboc
+  - china_economy
+  - harbor_bank
+  - cgbs
+  - china_capital_markets
+  interactions:
+  - s03
+  - s04
+  - s27
+  - s28
+  - s31
+  - s56
+  - s58
+  - s59
+  - s60
+  support: 4
+- id: S7
+  name: Japanese insurers' reinvestment
+  description: Acme Re and Acme Mutual reinvest at Japanese, US, and euro yields, translate overseas profit at USD/JPY and JPY/EUR, and trade with Japanese equities.
+  palette: h3
+  members:
+  - us_treasuries
+  - jgbs
+  - bunds
+  - dollar_yen
+  - acme_re
+  - acme_mutual
+  - jpy_usd
+  - usd_eur
+  - jpy_eur
+  - japan_capital_markets
+  interactions:
+  - m19
+  - m20
+  - m21
+  - s35
+  - s36
+  - s37
+  - s38
+  - s41
+  - s53
+  - s54
+  - s55
+  support: 4
+- id: S8
+  name: Yen exporters
+  description: 'Acme Motors and Acme Machinery: each yen of USD/JPY moves their profit; global demand sets their volumes.'
+  palette: h4
+  members:
+  - dollar_yen
+  - acme_motors
+  - acme_machinery
+  - japan_capital_markets
+  interactions:
+  - m29
+  - m30
+  - s62
+  support: 4
+- id: S9
+  name: Japan rates and domestic growth
+  description: Higher JGB yields fund the BoJ's normalization and raise the cost of Acme Telecom's AI build; Japanese growth carries domestic demand.
+  palette: h9
+  members:
+  - boj
+  - jgbs
+  - japan_economy
+  - acme_telecom
+  - japan_capital_markets
+  interactions:
+  - m33
+  - s47
+  - s49
+  - s63
+  - s64
+  support: 4
+- id: G1
+  name: Banks and capital markets
+  description: 'US, European, and Chinese banks: rates set their interest income, markets their fees and trading, property and bond marks their capital.'
+  palette: h11
+  sub_patterns:
+  - S4
+  - S5
+  - S6
+  members:
+  - federal_reserve
+  - us_treasuries
+  - us_capital_markets
+  - acme_bank
+  - keystone_capital
+  - delta_bank
+  - ecb
+  - bunds
+  - northwind_bank
+  - emerald_bank
+  - usd_eur
+  - europe_capital_markets
+  - pboc
+  - china_economy
+  - harbor_bank
+  - cgbs
+  - china_capital_markets
+  interactions:
+  - m25
+  - m26
+  - s08
+  - s11
+  - s12
+  - s13
+  - s14
+  - s15
+  - s16
+  - s17
+  - s18
+  - s19
+  - m28
+  - s32
+  - s33
+  - s51
+  - s52
+  - s66
+  - s67
+  - s03
+  - s04
+  - s27
+  - s28
+  - s31
+  - s56
+  - s58
+  - s59
+  - s60
+  support: 5
+- id: G2
+  name: Insurers on Japanese and global yields
+  description: Japanese P&C insurers whose investment income rides Japanese and global yields, and whose overseas profit rides the yen.
+  palette: h13
+  sub_patterns:
+  - S7
+  members:
+  - us_treasuries
+  - jgbs
+  - bunds
+  - dollar_yen
+  - acme_re
+  - acme_mutual
+  - jpy_usd
+  - usd_eur
+  - jpy_eur
+  - japan_capital_markets
+  interactions:
+  - m19
+  - m20
+  - m21
+  - s35
+  - s36
+  - s37
+  - s38
+  - s41
+  - s53
+  - s54
+  - s55
+  support: 5
+- id: G3
+  name: Japan rates, growth, the yen, and overseas earnings
+  description: The BoJ's normalization, the rate gap and the carry trade, and the Japanese companies whose earnings follow the yen and growth.
+  palette: h14
+  sub_patterns:
+  - S2
+  - S8
+  - S9
+  members:
+  - boj
+  - us_treasuries
+  - dollar_yen
+  - jpy_usd
+  - acme_motors
+  - acme_machinery
+  - japan_capital_markets
+  - jgbs
+  - japan_economy
+  - acme_telecom
+  interactions:
+  - m15
+  - m16
+  - m17
+  - m18
+  - s50
+  - m29
+  - m30
+  - s62
+  - m33
+  - s47
+  - s49
+  - s63
+  - s64
+  support: 5

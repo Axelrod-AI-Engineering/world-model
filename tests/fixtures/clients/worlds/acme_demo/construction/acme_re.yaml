@@ -1,0 +1,338 @@
+# Acme Re: business construction
+# A synthetic test fixture: invented companies and round numbers. Nothing here describes a real company or client.
+subentities:
+- entity: acme_re
+  id: acme_re.japan_life_profit
+  name: Acme Re Japan Life adjusted net income
+  attribute_kind: revenue_flow
+  unit: ¥bn/yr
+  family: lognormal
+  mean: 60.0
+  scale: 0.1
+  aliases:
+  - Japan Life
+  - domestic life
+  features:
+    view: reporting_segments
+    basis: 'segment: Japan life adjusted net income'
+    prior: synthetic
+- entity: acme_re
+  id: acme_re.solution_profit
+  name: Acme Re solutions profit
+  attribute_kind: revenue_flow
+  unit: ¥bn/yr
+  family: gaussian
+  prior:
+    family: gaussian
+    mu: 35.0
+    sigma: 10.0
+  scale: 10.0
+  features:
+    view: reporting_segments
+    basis: 'segment residual: solutions and other'
+    prior: synthetic
+- entity: acme_re
+  id: acme_re.cross_holding_book
+  name: Acme Re cross-holding book value
+  attribute_kind: balance
+  unit: ¥bn
+  family: lognormal
+  mean: 1500.0
+  scale: 0.12
+  aliases:
+  - business-related equities
+  - cross-holdings
+  features:
+    view: investments
+    basis: book value of business-related equities
+    prior: synthetic
+- entity: acme_re
+  id: acme_re.cross_holding_sales
+  name: Acme Re cross-holding sales
+  attribute_kind: revenue_flow
+  unit: ¥bn/yr
+  family: lognormal
+  mean: 90.0
+  scale: 0.2
+  aliases:
+  - equity sales
+  features:
+    view: investments
+    basis: sales of business-related equities, a share of the book
+    prior: synthetic
+- entity: acme_re
+  id: acme_re.sale_rate
+  name: Acme Re cross-holding sale rate
+  attribute_kind: rate
+  unit: pct
+  family: gaussian
+  prior:
+    family: gaussian
+    mu: 6.0
+    sigma: 1.0
+  scale: 1.0
+  features:
+    view: investments
+    basis: sales over the opening book
+    prior: synthetic
+- entity: acme_re
+  id: acme_re.new_money_coupon
+  name: Acme Re new-money coupon
+  attribute_kind: bond_yield
+  unit: pct
+  family: gaussian
+  prior:
+    family: gaussian
+    mu: 3.0
+    sigma: 0.3
+  scale: 0.3
+  features:
+    view: investments
+    basis: yield on new fixed-income purchases
+    prior: synthetic
+- entity: acme_re
+  id: acme_re.book_coupon
+  name: Acme Re book coupon
+  attribute_kind: bond_yield
+  unit: pct
+  family: gaussian
+  prior:
+    family: gaussian
+    mu: 2.6
+    sigma: 0.2
+  scale: 0.2
+  features:
+    view: investments
+    basis: average yield on the fixed-income book
+    prior: synthetic
+- entity: acme_re
+  id: acme_re.new_minus_book_coupon
+  name: Acme Re new-money coupon over book
+  attribute_kind: bond_yield
+  unit: pct
+  family: gaussian
+  prior:
+    family: gaussian
+    mu: 0.4
+    sigma: 0.3
+  scale: 0.3
+  features:
+    view: investments
+    basis: new-money yield less book yield
+    prior: synthetic
+- entity: acme_re
+  id: acme_re.reserve_adequacy
+  name: Acme Re reserve adequacy
+  attribute_kind: structural_level
+  unit: pct
+  family: gaussian
+  prior:
+    family: gaussian
+    mu: 105.0
+    sigma: 4.0
+  scale: 4.0
+  features:
+    view: operating_state
+    basis: reserves over best estimate
+    prior: synthetic
+- entity: acme_re
+  id: acme_re.hedge_cost
+  name: Acme Re FX hedge cost
+  attribute_kind: revenue_flow
+  unit: ¥bn/yr
+  family: gaussian
+  prior:
+    family: gaussian
+    mu: -30.0
+    sigma: 10.0
+  scale: 10.0
+  features:
+    view: operating_state
+    basis: cost of hedging overseas capital (negative)
+    prior: synthetic
+- entity: acme_re
+  id: acme_re.overseas_capital
+  name: Acme Re overseas capital
+  attribute_kind: balance
+  unit: ¥bn
+  family: lognormal
+  mean: 4000.0
+  scale: 0.05
+  features:
+    view: operating_state
+    basis: capital held abroad
+    prior: synthetic
+- entity: acme_re
+  id: acme_re.overseas_share
+  name: Acme Re overseas profit share
+  attribute_kind: share
+  unit: pct
+  family: lognormal
+  mean: 0.6
+  scale: 0.1
+  features:
+    view: regions
+    basis: international over group profit
+    prior: synthetic
+interactions:
+- id: ar-a-life
+  source: acme_re.japan_life_profit
+  target: acme_re.operating_profit
+  label: adds to adjusted net income
+  edge_type: accounting
+  effect:
+    mu: 0.125
+    sigma: 0.001
+  kernel:
+    delay_days: 0
+    lag_days: 1
+    duration_days: null
+  transition:
+    mechanism: Acme Re Japan Life adjusted net income is one part of Acme Re adjusted net income; the weight is its scale over the total's
+    timing:
+      onset: same reporting period
+      build: none
+      persistence: identity
+      recognition: quarterly results
+    evidence:
+      existence: documented
+      direction: documented
+      magnitude: model
+      timing: documented
+      sources:
+      - acme.pub
+- id: ar-a-sol
+  source: acme_re.solution_profit
+  target: acme_re.operating_profit
+  label: adds to adjusted net income
+  edge_type: accounting
+  effect:
+    mu: 0.208
+    sigma: 0.001
+  kernel:
+    delay_days: 0
+    lag_days: 1
+    duration_days: null
+  transition:
+    mechanism: Acme Re solutions profit is one part of Acme Re adjusted net income; the weight is its scale over the total's
+    timing:
+      onset: same reporting period
+      build: none
+      persistence: identity
+      recognition: quarterly results
+    evidence:
+      existence: documented
+      direction: documented
+      magnitude: model
+      timing: documented
+      sources:
+      - acme.pub
+- id: ar-c-reinvest
+  source: acme_re.new_minus_book_coupon
+  target: acme_re.japan_pc_profit
+  label: adds to income while new money beats the book
+  effect:
+    mu: 0.2
+    sigma: 0.08
+  state:
+    sign_flip:
+      value: acme_re.new_minus_book_coupon
+      at: 0.0
+      positive: above
+  kernel:
+    delay_days: 60
+    lag_days: 180
+    duration_days: null
+  transition:
+    mechanism: Reinvesting at a yield above the book adds income; below it subtracts
+    sign: +
+    evidence:
+      existence: documented
+      direction: inferred
+      magnitude: assumption
+      timing: assumption
+      sources:
+      - acme.pub
+    unresolved:
+    - input: reinvested share per year
+      status: found_proxy
+      found_in:
+      - acme.pub
+      note: a sector figure stands in
+- id: ar-c-yen-hedge
+  source: dollar_yen.usd_jpy
+  target: acme_re.hedge_cost
+  label: raises hedging cost
+  calibration: uncalibrated
+  transition:
+    mechanism: A weaker yen raises the cost of hedging overseas capital
+    sign: '-'
+- id: ar-c-jgb-life
+  source: jgbs.yield_10y
+  target: acme_re.japan_life_profit
+  label: marks down bond holdings
+  effect:
+    mu: -0.1
+    sigma: 0.08
+  kernel:
+    delay_days: 30
+    lag_days: 120
+    duration_days: null
+- id: ar-c-sales-book
+  source: acme_re.cross_holding_sales
+  target: acme_re.cross_holding_book
+  label: reduces the book
+  calibration: uncalibrated
+  transition:
+    mechanism: Selling business-related equities reduces the book held
+    sign: '-'
+- id: ar-c-boj-sales
+  source: boj.policy_rate
+  target: acme_re.sale_rate
+  label: speeds cross-holding sales
+  effect:
+    mu: 0.2
+    sigma: 0.08
+  kernel:
+    delay_days: 30
+    lag_days: 120
+    duration_days: null
+paths:
+- id: ar.path.reinvest
+  name: JGB yields to Japan P&C profit
+  entity_id: acme_re
+  trigger: super-long JGB yields rise
+  endpoint: acme_re.operating_profit
+  steps:
+  - interaction_id: m21
+  - interaction_id: m23
+compositions:
+- id: ar.comp.segments
+  entity_id: acme_re
+  view: reporting_segments
+  basis: adjusted net income by business
+  unit: ¥bn/yr
+  period: fiscal year ending March
+  total: acme_re.operating_profit
+  members:
+  - acme_re.international_profit
+  - acme_re.japan_pc_profit
+  - acme_re.japan_life_profit
+  residual: acme_re.solution_profit
+identities:
+- id: ar.id.sales
+  entity_id: acme_re
+  form: product
+  target: acme_re.cross_holding_sales
+  factors:
+  - acme_re.cross_holding_book
+  - acme_re.sale_rate
+  coefficient: 0.01
+  unit_check: ¥bn = ¥bn x % x 0.01
+- id: ar.id.spread
+  entity_id: acme_re
+  form: difference
+  target: acme_re.new_minus_book_coupon
+  of: acme_re.new_money_coupon
+  minus:
+  - acme_re.book_coupon

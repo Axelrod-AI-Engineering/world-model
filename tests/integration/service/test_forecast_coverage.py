@@ -22,7 +22,7 @@ def test_a_simulation_names_its_unquantified_relationships_everywhere_it_is_read
         sim = data(c.get(f"{WM}/simulations/{sid}"))
         cov = data(c.get(f"{WM}/simulations/{sid}/coverage"))
         unq = sim["unquantified_relationships"]
-        assert unq, "the BoJ shock reaches uncalibrated relationships in sally_demo"
+        assert unq, "the BoJ shock reaches uncalibrated relationships in acme_demo"
         excluded = {e["interaction_id"]: e for e in cov["excluded"]}
         for u in unq:
             e = excluded[u["interaction_id"]]

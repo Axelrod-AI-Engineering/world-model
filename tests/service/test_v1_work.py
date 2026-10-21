@@ -25,9 +25,9 @@ from tests.service.helpers import (
 
 SIGNER = Signer()
 SUPPORT = {"format": "axelrod.import/v1", "title": "Agent research", "items": [
-    {"id": "AG-1", "published_at": "2026-08-10T00:00:00Z", "source": "agent", "headline": "A weaker yen lifts Toyota",
-     "signals": [{"type": "support", "source": "dollar_yen.usd_jpy", "target": "toyota.operating_profit",
-                  "strength": 0.6, "quote": "A weaker yen lifts Toyota"}]}]}
+    {"id": "AG-1", "published_at": "2026-08-10T00:00:00Z", "source": "agent", "headline": "A weaker yen lifts Acme Motors",
+     "signals": [{"type": "support", "source": "dollar_yen.usd_jpy", "target": "acme_motors.operating_profit",
+                  "strength": 0.6, "quote": "A weaker yen lifts Acme Motors"}]}]}
 
 
 @pytest.fixture(scope="module")
@@ -175,9 +175,9 @@ def test_every_search_mode(c, note, mode):
 
 
 def test_search_names_attributes_with_their_entity(c):
-    hits = data(c.get(f"{WM}/search", params={"q": "Toyota op", "mode": "prefix"}))
-    att = next(h for h in hits if h["ref"] == "toyota.operating_profit")
-    assert att["kind"] == "attribute" and att["entity_id"] == "toyota"
+    hits = data(c.get(f"{WM}/search", params={"q": "Acme Motors op", "mode": "prefix"}))
+    att = next(h for h in hits if h["ref"] == "acme_motors.operating_profit")
+    assert att["kind"] == "attribute" and att["entity_id"] == "acme_motors"
     problem(c.get(f"{WM}/search", params={"q": ""}), 422, "invalid_request")
     problem(c.get(f"{WM}/search", params={"q": "x", "mode": "psychic"}), 422, "invalid_request")
 
@@ -237,11 +237,11 @@ def test_a_second_proposal_while_one_waits_is_a_conflict(c):
     problem(c.post(f"{WM}/changes", json={"bundle_id": b["bundle_id"], "review": "auto"}), 422, "invalid_request")
     decide_all(c, SIGNER)
     # another proposal starting at the same moment (tests/integration/service/test_concurrency.py runs the race)
-    c.app.state.proposing.add("sally_demo")
+    c.app.state.proposing.add("acme_demo")
     try:
         problem(c.post(f"{WM}/changes", json={"bundle_id": b["bundle_id"]}), 409, "update_in_progress")
     finally:
-        c.app.state.proposing.discard("sally_demo")
+        c.app.state.proposing.discard("acme_demo")
     assert propose(c, b["bundle_id"])["result"]["ids"] and not c.app.state.proposing
     decide_all(c, SIGNER)
 
@@ -315,7 +315,7 @@ def test_a_decision_no_update_waits_on_and_an_import_that_fails(c, monkeypatch):
     ok = data(c.post(f"{WM}/changes/{first}/approvals", json={}, headers={**reviewer(), "If-Match": etag_now(c)}), 201)
     assert ok["status"] == "approved"
     monkeypatch.undo()
-    st = c.app.state.world_models["sally_demo"].st
+    st = c.app.state.world_models["acme_demo"].st
     c.portal.call(st.drive, demo._resume_if_awaited(st, first))                # let this test's update finish
     decide_all(c, SIGNER)
     other = upload(c, b"Oct 24, 2026. The ECB held its deposit rate.", "ecb2.txt")
@@ -373,7 +373,7 @@ def test_thesis_errors(c, monkeypatch):
     problem(c.post(f"{WM}/theses", json={"question": "x", "horizon_days": 6}), 422, "invalid_request")
     problem(c.get(f"{WM}/theses/T-nope"), 404, "thesis_not_found")
     problem(c.post(f"{WM}/theses/T-nope/simulations"), 404, "thesis_not_found")
-    st = c.app.state.world_models["sally_demo"].st
+    st = c.app.state.world_models["acme_demo"].st
     monkeypatch.setattr(st.controller, "scenario_dir", None)
     assert data(c.get(f"{WM}/thesis-templates")) == []
 
@@ -382,7 +382,7 @@ def test_an_unbound_thesis_is_a_failed_job(c, monkeypatch):
     from axelrod_wm.inference.task import UnboundThesis
 
     t = data(c.post(f"{WM}/theses", json={"template_id": "S-T1"}), 201)
-    st = c.app.state.world_models["sally_demo"].st
+    st = c.app.state.world_models["acme_demo"].st
 
     def unbound(thesis):
         raise UnboundThesis([{"op_index": 0, "end": "target", "candidates": []}])
@@ -412,7 +412,7 @@ def test_a_retry_with_the_same_key_gets_the_first_answer(c, monkeypatch):
     problem(c.post(f"{WM}/theses", json={"template_id": "S-nope"}, headers=bad), 404, "thesis_not_found")
     problem(c.post(f"{WM}/theses", json={"template_id": "S-nope"}, headers=bad), 404, "thesis_not_found")
     # keys never expire: they are rows in the lakehouse catalog, with no time on them
-    kept = c.app.state.lake.get_idempotency("default", "sally_demo", "/v1/world-models/{world_model_id}/documents",
+    kept = c.app.state.lake.get_idempotency("default", "acme_demo", "/v1/world-models/{world_model_id}/documents",
                                             "upload-1")
     assert kept.status == 202 and kept.headers["location"] == first.headers["location"]
     assert c.post(f"{WM}/documents", files=files, headers=h).json() == first.json()

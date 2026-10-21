@@ -1,5 +1,5 @@
 """Citigroup's business construction (Oct 18): the compositions, operating and financial paths, and their transitions in
-data/worlds/sally_demo/construction/citigroup.yaml, checked in the loaded model, in the v4.1.4 export, and through the
+<client root>/worlds/sally_demo/construction/citigroup.yaml, checked in the loaded model, in the v4.1.4 export, and through the
 service API (docs/construction/citigroup.md has the gap register these tests close). The second bank after JPMorgan:
 the same bank skeleton on Citi's own reporting (five businesses plus All Other, NII and non-interest revenue per
 segment, a mostly non-USD rate sensitivity, an international footprint, card credit, the expense program, capital and
@@ -8,7 +8,6 @@ the Banamex exit). Sally's world loads once for the module; no client data is re
 from __future__ import annotations
 
 import math
-from pathlib import Path
 
 import pytest
 import yaml
@@ -25,7 +24,10 @@ from axelrod_wm.model.construction import (
     validate_construction,
 )
 from axelrod_wm.repo.snapshots import MemoryBackend
+from tests.clients import client_path, skip_without_client
 from tests.scenario import v1_reads as v1
+
+skip_without_client('sally_demo')
 
 CIT = "citigroup"
 C = "citigroup."
@@ -83,7 +85,7 @@ PATHS = {  # Citi's economics -> the named path(s) that carry them
     "Banamex separation and legacy exits": ["cit.path.legacy_exits"],
     "capital, buybacks and dividends": ["cit.path.capital_payout", "cit.path.capital_requirement"],
 }
-YAML = Path(__file__).resolve().parents[2] / "data/worlds/sally_demo/construction/citigroup.yaml"
+YAML = client_path("worlds/sally_demo/construction/citigroup.yaml")
 SOURCES = {"cit.v1", "cit.wb", "cit.co", "cit.r1", "cit.r2", "cit.r3", "cit.r4", "cit.r5", "cit.r6", "cit.x1", "cit.x2",
            "cit.x3", "cit.peer", "cit.pub"}
 

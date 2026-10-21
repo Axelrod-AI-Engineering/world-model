@@ -1,5 +1,5 @@
 """MS&AD's business construction (Oct 18): the compositions, operating and financial paths, and their transitions in
-data/worlds/sally_demo/construction/msad.yaml, checked in the loaded model, in the v4.1.4 export, and through the
+<client root>/worlds/sally_demo/construction/msad.yaml, checked in the loaded model, in the v4.1.4 export, and through the
 service API (docs/construction/msad.md has the gap register these tests close). The insurer method of the Tokio Marine
 build, carried to the peer with its own reporting: domestic non-life by company, international by business, domestic
 life, adjusted profit and its bridge to net income, and strategic-equity sale gains as their own part. Sally's world
@@ -8,7 +8,6 @@ loads once for the module; no client data is read."""
 from __future__ import annotations
 
 import math
-from pathlib import Path
 
 import pytest
 import yaml
@@ -24,7 +23,10 @@ from axelrod_wm.model.construction import (
     validate_construction,
 )
 from axelrod_wm.repo.snapshots import MemoryBackend
+from tests.clients import client_path, skip_without_client
 from tests.scenario import v1_reads as v1
+
+skip_without_client('sally_demo')
 
 MSAD = "msad"
 GAP, NI, DOM, INTL = "msad.operating_profit", "msad.net_income", "msad.domestic_profit", "msad.international_profit"
@@ -65,7 +67,7 @@ SOURCES = {"msad.r1", "msad.r2", "msad.macro", "msad.x1", "msad.peer", "msad.pub
 # conversion tags (identity / stock-flow / matrix / state) live in the construction file's `note`, which the graph
 # does not carry: read them from the file
 NOTES = {i["id"]: i.get("note") or "" for i in yaml.safe_load(
-    (Path(__file__).resolve().parents[2] / "data/worlds/sally_demo/construction/msad.yaml").read_text())["interactions"]}
+    client_path("worlds/sally_demo/construction/msad.yaml").read_text())["interactions"]}
 
 
 @pytest.fixture(scope="module")

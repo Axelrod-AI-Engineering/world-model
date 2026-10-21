@@ -19,9 +19,9 @@ KEY_S = "s" * 32
 
 
 def test_keys_parse_from_the_environment_format():
-    keys = api_keys(f" zsolt:{KEY_A}:acme , kedar:{KEY_S}:sally:world_model:read+admin ,")
+    keys = api_keys(f" zsolt:{KEY_A}:acme , kedar:{KEY_S}:ada:world_model:read+admin ,")
     assert keys == [ApiKey("zsolt", KEY_A, "acme", frozenset({READ})),
-                    ApiKey("kedar", KEY_S, "sally", frozenset({"world_model:read", "admin"}))]
+                    ApiKey("kedar", KEY_S, "ada", frozenset({"world_model:read", "admin"}))]
     assert api_keys("") == []
     two = api_keys(f"z:{KEY_A}:acme,z:{KEY_S}:acme")
     assert [k.key for k in two] == [KEY_A, KEY_S]
@@ -86,10 +86,10 @@ def test_owners_and_the_organization_of_a_login(monkeypatch):
     assert owners() == {} and org_of(None) == "default"
     assert login_of("default") is None and login_of("acme") is None
     monkeypatch.setenv("WORLD_MODEL_BASIC_AUTH_USERNAME", "admin")
-    monkeypatch.setenv("WORLD_MODEL_LOGINS", "sally:pw:sally_demo")
-    monkeypatch.setenv("WORLD_MODEL_OWNERS", "sally=tokio")
-    assert org_of(None) == "admin" and org_of("sally") == "tokio" and org_of("other") == "other"
-    assert login_of("admin") == "admin" and login_of("tokio") == "sally" and login_of("sally") is None
+    monkeypatch.setenv("WORLD_MODEL_LOGINS", "ada:pw:acme_demo")
+    monkeypatch.setenv("WORLD_MODEL_OWNERS", "ada=orgb")
+    assert org_of(None) == "admin" and org_of("ada") == "orgb" and org_of("other") == "other"
+    assert login_of("admin") == "admin" and login_of("orgb") == "ada" and login_of("ada") is None
 
 
 # -- the front door -------------------------------------------------------------------------------------------------------
@@ -98,20 +98,20 @@ SIGNER = Signer()
 
 @pytest.fixture(scope="module")
 def hosted():
-    """A hosted-style app: a main login, Sally's login, a key for Sally's organization and one for an organization with
+    """A hosted-style app: a main login, Acme's login, a key for Acme's organization and one for an organization with
     no world model, and a trusted issuer."""
     with service(SIGNER, headers={"Authorization": ""}, WORLD_MODEL_BASIC_AUTH_USERNAME="admin",
-                 WORLD_MODEL_BASIC_AUTH_PASSWORD="pw-admin", WORLD_MODEL_LOGINS="sally:pw-sally:sally_demo",
-                 WORLD_MODEL_API_KEYS=f"zsolt:{KEY_A}:sally,ghost:{KEY_S}:nobody", scenario="small_demo") as c:
+                 WORLD_MODEL_BASIC_AUTH_PASSWORD="pw-admin", WORLD_MODEL_LOGINS="ada:pw-ada:acme_demo",
+                 WORLD_MODEL_API_KEYS=f"zsolt:{KEY_A}:ada,ghost:{KEY_S}:nobody", scenario="small_demo") as c:
         yield c
 
 
 def test_a_key_acts_in_its_organization(hosted):
     r = hosted.get("/v1/world-models", headers={"Authorization": f"Bearer {KEY_A}"})
     assert r.status_code == 200 and r.headers["x-axelrod-api-version"] == "1"
-    assert [m["id"] for m in r.json()["data"]] == ["sally_demo"]
+    assert [m["id"] for m in r.json()["data"]] == ["acme_demo"]
     me = hosted.get("/v1/me", headers={"Authorization": f"Bearer {KEY_A}"}).json()["data"]
-    assert me["actor"]["sub"] == "zsolt" and me["actor"]["org"] == "sally"
+    assert me["actor"]["sub"] == "zsolt" and me["actor"]["org"] == "ada"
 
 
 def test_a_key_for_an_organization_without_models_sees_none(hosted):
@@ -128,19 +128,19 @@ def test_no_credential_or_a_wrong_one_is_refused(hosted):
 
 
 def test_a_service_token_acts_as_its_person(hosted):
-    me = hosted.get("/v1/me", headers=SIGNER.bearer(org="sally")).json()["data"]
+    me = hosted.get("/v1/me", headers=SIGNER.bearer(org="ada")).json()["data"]
     assert me["actor"]["kind"] == "token" and me["actor"]["sub"] == "org_user_9" and me["actor"]["jti"]
 
 
 def test_an_unknown_signing_key_is_401_and_an_issuer_down_is_503(hosted, monkeypatch):
     other = Signer(kid="rotated")
-    problem(hosted.get("/v1/me", headers=other.bearer(org="sally")), 401, "invalid_token")
+    problem(hosted.get("/v1/me", headers=other.bearer(org="ada")), 401, "invalid_token")
 
     def down(self, token):
         raise tokens.TokenError("issuer_unavailable", "the JWKS cannot be reached")
 
     monkeypatch.setattr(tokens.Verifier, "verify", down)
-    problem(hosted.get("/v1/me", headers=SIGNER.bearer(org="sally")), 503, "issuer_unavailable")
+    problem(hosted.get("/v1/me", headers=SIGNER.bearer(org="ada")), 503, "issuer_unavailable")
 
 
 def test_a_key_does_not_open_the_ui_or_its_api(hosted):
@@ -148,10 +148,10 @@ def test_a_key_does_not_open_the_ui_or_its_api(hosted):
 
 
 def test_a_signed_in_browser_may_call_the_service_as_its_login(hosted):
-    hosted.post("/login", data={"username": "sally", "password": "pw-sally"}, follow_redirects=False)
+    hosted.post("/login", data={"username": "ada", "password": "pw-ada"}, follow_redirects=False)
     try:
         me = hosted.get("/v1/me").json()["data"]
-        assert me["actor"] == {"kind": "session", "org": "sally", "sub": "sally", "name": None, "azp": None,
+        assert me["actor"] == {"kind": "session", "org": "ada", "sub": "ada", "name": None, "azp": None,
                                "act": None, "jti": None}
         assert "changes:approve" in me["scopes"]
     finally:

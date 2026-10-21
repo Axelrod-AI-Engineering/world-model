@@ -35,9 +35,10 @@ from typing import Any
 import yaml
 from pydantic import BaseModel, ConfigDict
 
+from axelrod_wm.clients import find_scenario, load_scenario_yaml
 from axelrod_wm.engine.initialize import REPO_ROOT, ConstructionError, read_construction, resolve_path
 
-SCENARIOS_DIR = REPO_ROOT / "data" / "scenarios"
+SCENARIOS_DIR = REPO_ROOT / "data" / "scenarios"      # the repository's own; client scenarios: axelrod_wm/clients.py
 TEXT_FIELDS = ("name", "short", "description", "question", "note", "label", "caption")
 SECTIONS = ("interactions", "paths", "compositions", "identities", "stock_flows", "matrices")
 
@@ -90,8 +91,8 @@ class FocusResult:
 
     def __init__(self, spec: FocusSpec) -> None:
         self.spec = spec
-        base_dir = SCENARIOS_DIR / spec.base
-        raw = yaml.safe_load((base_dir / "scenario.yaml").read_text()) or {}
+        base_dir = find_scenario(spec.base) or SCENARIOS_DIR / spec.base
+        raw = load_scenario_yaml(base_dir / "scenario.yaml")
         if raw.get("focus"):
             raise ConstructionError(f"focus base {spec.base!r} is itself a focused scenario")
         ini = raw.get("initialization") or {}
@@ -386,8 +387,8 @@ _CACHE: dict[str, tuple[tuple, FocusResult]] = {}
 
 
 def _versions(spec: FocusSpec) -> tuple:
-    d = SCENARIOS_DIR / spec.base
-    raw = yaml.safe_load((d / "scenario.yaml").read_text()) or {}
+    d = find_scenario(spec.base) or SCENARIOS_DIR / spec.base
+    raw = load_scenario_yaml(d / "scenario.yaml")
     ini = raw.get("initialization") or {}
     world = resolve_path(ini.get("construction_dir", ""))
     files = [d / "scenario.yaml", *sorted(d.glob("*.yaml")), *sorted(world.glob("*.yaml")),

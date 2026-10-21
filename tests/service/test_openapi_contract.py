@@ -119,17 +119,17 @@ def ids(c):
     decide_all(c, SIGNER)
     thesis = data(c.post(f"{WM}/theses", json={"template_id": "S-T3"}), 201)["id"]
     job = data(c.post(f"{WM}/theses/{thesis}/simulations"), 202)
-    comp = data(c.get(f"{WM}/entities/toyota/compositions"))[0]["id"]
-    path = data(c.get(f"{WM}/entities/toyota/paths"))[0]["id"]
+    comp = data(c.get(f"{WM}/entities/acme_motors/compositions"))[0]["id"]
+    path = data(c.get(f"{WM}/entities/acme_motors/paths"))[0]["id"]
     evidence = data(c.get(f"{WM}/relationships/m29/evidence"))
     return {
-        "world_model_id": "sally_demo", "version_ref": "1", "entity_id": "toyota", "attribute_key": "operating_profit",
+        "world_model_id": "acme_demo", "version_ref": "1", "entity_id": "acme_motors", "attribute_key": "operating_profit",
         "composition_id": comp, "path_id": path, "relationship_id": "m29",
         "evidence_id": evidence[0]["id"] if evidence else "EV-none",
         "concept_id": data(c.get(f"{WM}/concepts"))[0]["id"], "group_id": data(c.get(f"{WM}/groups"))[0]["id"],
         "event_id": data(c.get(f"{WM}/events"))[0]["id"], "document_id": res["document_id"], "ordinal": "0",
         "bundle_id": res["bundle_id"], "change_id": data(c.get(f"{WM}/changes", params={"status": "all"}))[0]["id"],
-        "thesis_id": thesis, "compartment_id": "sally_focus", "simulation_id": job["result"]["ids"][0], "job_id": job["id"],
+        "thesis_id": thesis, "compartment_id": "acme_focus", "simulation_id": job["result"]["ids"][0], "job_id": job["id"],
     }
 
 
@@ -148,7 +148,7 @@ def test_every_read_answers_as_declared(c, ids, path):
     check(op, c.get(url, params=QUERY.get(path, {})))
     # and a world model that is not there is a declared 404 problem
     if "{world_model_id}" in path:
-        check(op, c.get(url.replace("/sally_demo", "/nope", 1), params=QUERY.get(path, {})))
+        check(op, c.get(url.replace("/acme_demo", "/nope", 1), params=QUERY.get(path, {})))
 
 
 @pytest.mark.parametrize("path", [p for p in get_operations() if re.search(r"\{(?!world_model_id|version_ref)", p)])
@@ -198,9 +198,9 @@ def test_the_writes_answer_as_declared(c, ids):
 def test_every_companys_construction_answers_as_declared(c):
     """Every company built in the world (its compositions, paths, identities, stock-flows), not just one: each view
     projects onto the contract."""
-    g = c.app.state.world_models["sally_demo"].st.controller.engine.wm.graph
+    g = c.app.state.world_models["acme_demo"].st.controller.engine.wm.graph
     companies = sorted({x.entity_id for x in g.compositions.values()} | {p.entity_id for p in g.paths.values()})
-    assert len(companies) >= 10
+    assert len(companies) >= 3
     p = "/world-models/{world_model_id}/entities/{entity_id}"
     for eid in companies:
         for suffix in ("/construction", "/compositions", "/paths"):

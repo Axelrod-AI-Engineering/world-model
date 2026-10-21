@@ -1,6 +1,6 @@
 """UniCredit's business construction (Oct 18, converted to the method's new forms): the compositions (one driving view
 per total, a division x line matrix), identities, a stock-flow, operating and financial paths and their transitions in
-data/worlds/sally_demo/construction/unicredit.yaml, checked in the loaded model, in the v4.1.4 export, and through the
+<client root>/worlds/sally_demo/construction/unicredit.yaml, checked in the loaded model, in the v4.1.4 export, and through the
 service API (docs/construction/unicredit.md has the gap register these tests close). The second bank after JPMorgan:
 a European bank on IFRS, by geographic division, with a structural hedge, an Italian sovereign book, stakes and a
 Russia wind-down. Sally's world loads once for the module; no client data is read."""
@@ -24,7 +24,10 @@ from axelrod_wm.model.construction import (
     validate_construction,
 )
 from axelrod_wm.repo.snapshots import MemoryBackend
+from tests.clients import skip_without_client
 from tests.scenario import v1_reads as v1
+
+skip_without_client('sally_demo')
 
 UCG = "unicredit"
 NII, REV, NP = "unicredit.net_interest_income", "unicredit.revenue", "unicredit.net_profit"

@@ -6,7 +6,7 @@ read and categorized. Importing folds each selected item in on its own date, thr
 each item's review; nothing changes the model until a person approves it. Predict then forecasts on what was
 approved.
 
-Any scenario with `imports: true` uses this runner (data/scenarios/emily_demo). Bundles come from the person's own
+Any scenario with `imports: true` uses this runner (a client's, in the client root). Bundles come from the person's own
 file (the Import dialog's file picker) or, when the scenario names an `imports_dir` that exists on the server, from
 that folder; the folder is never committed.
 """

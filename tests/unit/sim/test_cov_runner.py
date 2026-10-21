@@ -446,4 +446,4 @@ def test_build_runner_chooses_the_runner_and_reads_a_config_file(tmp_path):
     prod = build_runner("prod_demo")
     assert type(prod) is ProdDemoRunner and prod.script.id == "oil_shock_demo" and prod.recorder is None
     assert type(build_runner("small_demo")) is SmallDemoRunner
-    assert type(build_runner("emily_demo")) is ImportRunner
+    assert type(build_runner("acme_demo")) is ImportRunner

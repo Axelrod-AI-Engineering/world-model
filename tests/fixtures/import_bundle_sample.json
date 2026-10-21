@@ -47,12 +47,12 @@
       "source_type": "expert_call",
       "kind": "analyst",
       "headline": "Expert: a stronger yen would cut exporters' margins",
-      "summary": "A former treasurer expects a stronger yen to weigh on SoftBank Corp's handset costs too.",
-      "entities": ["softbank_corp", "dollar_yen"],
+      "summary": "A former treasurer expects a stronger yen to weigh on Acme Telecom's handset costs too.",
+      "entities": ["acme_telecom", "dollar_yen"],
       "category": "fx",
       "signals": [
-        {"type": "link", "source": "dollar_yen.usd_jpy", "target": "softbank_corp.operating_profit", "label": "a weaker yen raises handset costs",
-         "effect": -0.15, "delay_days": 30, "lag_days": 90, "quote": "a stronger yen to weigh on SoftBank Corp's handset costs"}
+        {"type": "link", "source": "dollar_yen.usd_jpy", "target": "acme_telecom.operating_profit", "label": "a weaker yen raises handset costs",
+         "effect": -0.15, "delay_days": 30, "lag_days": 90, "quote": "a stronger yen to weigh on Acme Telecom's handset costs"}
       ]
     }
   ]

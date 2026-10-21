@@ -97,6 +97,23 @@ To switch logins, **Sign out** (☰ menu, or `/logout`) and sign in again, or us
 
 Emily's and Sally's research (`data/emily_data/`, `data/sally_data/`) is never uploaded (`.gitignore`, `.dockerignore`). On the hosted demo, import it with the file picker; Sally's daily files can be chosen several at a time.
 
+### Client content
+
+Client scenarios, worlds, configs, and construction pages are not in the repository or the image (Oct 21). They live in a client root that mirrors the repository's layout:
+
+```
+<client root>/scenarios/<id>/scenario.yaml     (and theses.yaml, watchlist.yaml, superentity_seeds.yaml, ...)
+<client root>/worlds/<name>/                   (entities.yaml, interactions.yaml, templates.yaml, taxonomy/, construction/)
+<client root>/configs/<name>.yaml              (a scenario's config_overrides)
+<client root>/docs/construction/<company>.md   (gap registers and completion reports)
+```
+
+The root is `WORLD_MODEL_CLIENT_DIR`. It defaults to `data/clients` (gitignored) in a checkout; on dev, `.railway/railway.ts` sets it to `/app/var/clients`, on the volume. The service finds scenarios in `data/scenarios` first, then in the client root's `scenarios/`, so the demo menu lists a client demo only when its folder is there. The variable may name several roots separated by `:`, searched in order.
+
+A path in a client `scenario.yaml` (`construction_dir`, `taxonomy_dir`, `seeds`, `layout`, `config_overrides`, `imports_dir`) is read against the root that holds the scenario, then against the repository, so a client scenario writes `worlds/<name>` for its own world and `data/taxonomy` for the shared one (`src/axelrod_wm/clients.py`).
+
+To load client content on dev, copy the folder onto the volume (for example `railway ssh`, then `tar` into `/app/var/clients`) and restart; this is done by hand, outside the infrastructure code. The non-secret ids that name client scenarios stay in `configs/world_model.dev.toml` (`[compartments]`, `[auth.owners]`): a compartment whose scenario is absent is simply not served.
+
 ## The API and its keys
 
 The outward API (`/v1/*`) and its MCP server (`/mcp`) take core-minted service tokens or scoped static keys rather
