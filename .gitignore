@@ -12,6 +12,9 @@ node_modules/
 # Emily demo source material (broker research, expert calls, client models): never committed or uploaded
 data/emily_data/
 data/sally_data/
+# client content (scenarios, worlds, configs, construction pages): never committed; the client root, WORLD_MODEL_CLIENT_DIR
+# (src/axelrod_wm/clients.py). The hosted service loads it from a volume.
+/data/clients/
 # videos and voiceovers: large, and the trailer carries client material; shared outside the repository
 docs/media/
 *.mp4
