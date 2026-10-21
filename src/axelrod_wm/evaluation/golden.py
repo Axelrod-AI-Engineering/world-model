@@ -367,7 +367,11 @@ class Responder:
                     dist[t] = dist[v] + 1
                     frontier.append(t)
         cut: set[str] = set()
-        for _ in range(2 * len(live) + 2):
+        passes = 0
+        while True:
+            # each pass resolves a value, or cuts the stuck value's in-edges so it resolves on the next pass
+            passes += 1
+            assert passes <= 2 * len(live) + 2, "propagation did not converge"
             progressed = False
             for v in sorted(live - done, key=lambda z: (dist.get(z, 10**6), z)):
                 ins = [x for x in m.incoming.get(v, []) if m.edge_kind(x) not in ("stock_flow", "view")

@@ -19,21 +19,14 @@ data/sally_data/
 docs/media/
 *.mp4
 *.m4a
-# meeting notes (client and team context): local only
-*Notes by Gemini*.pdf
-# client feedback on the world model (construction skill reviews): local only
-*world model construction skill*.pdf
+# client feedback, meeting notes and instruction PDFs: kept local in feedback/, never committed
+/feedback/
+/*.pdf
 
 # coverage reports (scripts/coverage_gate.py)
 .coverage
 coverage.json
 junit.xml
-/Data Model and API Design Best Practices*.pdf
-/Toyota and Tokio Marine world model enhancement instructions*.pdf
-/Toyota Batch 2*.pdf
-/Toyota world model export and retrieval repair instructions*.pdf
-/Toyota world model repair instructions*.pdf
-/Toyota Equities and Disruption Repairs*.pdf
 
 # credentials, one gitignored dotenv file per stage (src/axelrod_wm/settings.py)
 .creds.*
