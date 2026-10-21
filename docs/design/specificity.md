@@ -401,8 +401,10 @@ posterior.
   - Both wait for review.
 - **Concepts give priors** (`learning/generalize.py`). A new value or link starts from the statistics of the concept
   it classifies into.
-- **Exact structure never learns (R4, R12).** Accounting, identity and stock-flow links are excluded from the fold
-  and from process noise. Their weights stay derived.
+- **Exact structure never learns (R4, R12).** Accounting, identity and stock-flow links stay in the fold's joint
+  state with a near-zero prior spread, so they carry the exact relation while the other links are updated around
+  them. Their weight and existence are never written back (`learning/fold.py`, `inter.fixed`). Their weights stay
+  derived, and they still record time states and feed the concept statistics and co-activation.
 
 ### Prediction
 
