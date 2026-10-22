@@ -109,6 +109,6 @@ def pattern_open(ltm: LongTermMemory, cfg: Any) -> dict[str, float]:
     a = float(cfg.open_world.concentration)
     out: dict[str, float] = {}
     for pid, p in pats.items():
-        rivals = sum(float(pats[r].support) for r in p.rival_ids if r in pats)
+        rivals = sum(float(pats[r].support) for r in sorted(p.rival_ids) if r in pats)
         out[pid] = round(a / (max(0.0, float(p.support)) + rivals + a), 4)
     return out
