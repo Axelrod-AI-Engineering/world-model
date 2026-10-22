@@ -129,7 +129,7 @@ NUMBER = re.compile(r"\(?[-−]?\d[\d,]*(?:\.\d+)?\)?")
 
 
 def parse_number(token: str) -> Decimal:
-    """'1,063,473' -> 1063473; '(285,617)' -> -285617; a unicode minus is a minus."""
+    """'1,234,567' -> 1234567; '(12,345)' -> -12345; a unicode minus is a minus."""
     neg = token.startswith("(") or token.lstrip("(").startswith(("-", "−"))
     digits = re.sub(r"[^\d.]", "", token)
     return -Decimal(digits) if neg else Decimal(digits)

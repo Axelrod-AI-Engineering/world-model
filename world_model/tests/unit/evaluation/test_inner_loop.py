@@ -52,8 +52,8 @@ def test_the_modules_on_the_runner_side_never_name_the_answer_key() -> None:
 
 
 def test_numbers_dates_and_values_are_read_as_the_page_prints_them() -> None:
-    assert il.parse_number("1,063,473") == Decimal(1063473)
-    assert il.parse_number("(285,617)") == Decimal(-285617)
+    assert il.parse_number("1,234,567") == Decimal(1234567)
+    assert il.parse_number("(12,345)") == Decimal(-12345)
     assert il.parse_number("−40.5") == Decimal("-40.5")
     assert il.parse_date("April 1, 2026") == date(2026, 4, 1) and il.parse_date("2026-04-01") == date(2026, 4, 1)
     with pytest.raises(il.Blocked, match="not a date"):

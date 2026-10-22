@@ -53,13 +53,13 @@ def test_a_number_matches_by_value_in_any_field_in_the_keys_unit() -> None:
     same = res("K", {"x": 200}, unit="JPY million")
     same["quantities"] = [{"label": "in yen", "value": 200000000, "unit": "JPY"}, {"label": "in million", "value": 200, "unit": "JPY", "scale": "million"}]
     assert {n["label"]: n["status"] for n in g.numeric_layer(case(oracle=oracle({"r": 200000000})), same)} == {"r": "matched"}
-    mixed = res("K", {"b": 13525.4, "t": 13.5254}, unit="billion yen")
-    assert {n["status"] for n in g.numeric_layer(case(oracle=oracle({"billion": 13525.4, "trillion": 13.5254}, "billion/trillion JPY")), mixed)} == {"matched"}
+    mixed = res("K", {"b": 1234.5, "t": 1.2345}, unit="billion yen")
+    assert {n["status"] for n in g.numeric_layer(case(oracle=oracle({"billion": 1234.5, "trillion": 1.2345}, "billion/trillion JPY")), mixed)} == {"matched"}
     bare = g.numeric_layer(case(oracle={"expected_values": {"v": 3}}), res("K", {"x": [3, True, "3", None]}))
     assert bare[0]["status"] == "matched" and bare[0]["unit"] is None
     assert g.answer_numbers({**res("K", {"d": "2026-01-01"}), "quantities": [{"label": "a date", "value": "n/a"}]}) == [] and g.match_number(Decimal(5), Decimal(7), Decimal(2), Decimal(1)) == 7
     assert g.match_number(Decimal("5.99"), Decimal("5.994"), Decimal(0), Decimal(1)) == Decimal("5.994")
-    assert g.match_number(Decimal("13525400000000"), Decimal("13525400"), Decimal(0), Decimal(10) ** 6) == Decimal("1.35254E+13")
+    assert g.match_number(Decimal("1234500000000"), Decimal("1234500"), Decimal(0), Decimal(10) ** 6) == Decimal("1.2345E+12")
 
 
 def test_a_tolerance_still_applies_only_where_named() -> None:

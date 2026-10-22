@@ -192,7 +192,7 @@ def test_the_grader_reports_the_graded_answers_and_what_the_transcripts_mention(
 
 def test_quantities_are_part_of_the_schema_the_task_and_the_results(tmp_path: Path) -> None:
     out, suite, _ = prepared(tmp_path)
-    q = [{"label": "operating income for the quarter", "value": 1063473, "unit": "JPY", "scale": "million",
+    q = [{"label": "operating income for the quarter", "value": 1234567, "unit": "JPY", "scale": "million",
           "period": "FY2027 Q1", "scope": "consolidated", "object_id": "co.operating_profit"}]
     assert pk.validate(answer("X", quantities=q), pk.answer_schema()) == []
     assert "$.quantities[0]: missing label" in pk.validate(answer("X", quantities=[{"value": 1}]), pk.answer_schema())
@@ -202,4 +202,4 @@ def test_quantities_are_part_of_the_schema_the_task_and_the_results(tmp_path: Pa
     write(out, "TST-01-01", answer("TST-01-01", quantities=q))
     r = {x["test_id"]: x for x in pk.collect(suite, out)["results"]}
     assert r["TST-01-01"]["quantities"] == q and r["TST-01-02"]["quantities"] == []
-    assert g.answer_numbers(r["TST-01-01"])[-1] == {"value": 1063473, "unit": "JPY million", "label": q[0]["label"]}
+    assert g.answer_numbers(r["TST-01-01"])[-1] == {"value": 1234567, "unit": "JPY million", "label": q[0]["label"]}

@@ -3,7 +3,7 @@
     prepare   task packets (one folder per case) and the shared export, from a questions-only suite
     collect   the answers the agents wrote, checked against the schema, as results for the grader
 
-    python world_model/scripts/evaluation/inner_loop.py prepare --suite <suite> --world sally_demo --run <run> --out <packets>
+    python world_model/scripts/evaluation/inner_loop.py prepare --suite <suite> --world <scenario> --run <run> --out <packets>
     python world_model/scripts/evaluation/inner_loop.py collect --suite <suite> --packets <packets> --out <results.json>
 
 The runner reads only the suite folder (and, to collect, the packets): a guard refuses anything else and logs every file

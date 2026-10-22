@@ -126,7 +126,7 @@ answers, and do not try to find one.
 {tools} export-list --export {paths['export']} [--prefix reading/]
 {tools} export-search --export {paths['export']} "operating income" [--limit 20]
 {tools} export-read --export {paths['export']} reading/00_START_HERE.md [--start 0 --length 20000]
-{tools} model-get --memo {paths['memo']} /search --param q=toyota --param mode=graph
+{tools} model-get --memo {paths['memo']} /search --param q=<name> --param mode=graph
 {tools} model-get --memo {paths['memo']} /entities/<entity>/attributes/<key>/observations --param as_of=<ISO time>
 {tools} model-get --memo {paths['memo']} /evidence/<id>
 {tools} model-construction --memo {paths['memo']} <entity> <compositions|identities|attributes|paths|stock_flows|links> [--match <word>]

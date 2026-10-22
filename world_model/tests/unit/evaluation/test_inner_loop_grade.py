@@ -188,7 +188,7 @@ def test_matching_our_fields_to_the_keys_labels() -> None:
 
 
 def test_values_compare_numbers_words_flags_lists_and_nulls() -> None:
-    assert g.values_match(13.5254, 13.52541) and not g.values_match(13.5254, 13.5255)
+    assert g.values_match(1.2345, 1.23451) and not g.values_match(1.2345, 1.2346)
     assert g.values_match(5, 5.4) is True and g.values_match(5, "5.4%")
     assert g.values_match(200000000, 200, factor=Decimal(10) ** 6)
     assert g.values_match(1, 2, tol=Decimal(1)) and not g.values_match(1, 3, tol=Decimal(1))
@@ -257,8 +257,8 @@ def test_only_leaves_the_other_cases_out_rather_than_counting_them() -> None:
 def test_a_key_unit_that_mixes_scales_is_compared_in_each_fields_own_scale() -> None:
     assert g.mixed_scales("billion/trillion JPY") and not g.mixed_scales("JPY million") and not g.mixed_scales(None)
     case = {"test_id": "X-01-05", "numeric_oracle": {"unit": "billion/trillion JPY", "absolute_tolerance": 0,
-                                                     "expected_values": {"billion": 13525.4, "trillion": 13.5254}}}
-    r = res("X", {"value_billion_yen": 13525.4, "value_trillion_yen": 13.5254}, units={"value_billion_yen": "billion yen",
+                                                     "expected_values": {"billion": 1234.5, "trillion": 1.2345}}}
+    r = res("X", {"value_billion_yen": 1234.5, "value_trillion_yen": 1.2345}, units={"value_billion_yen": "billion yen",
                                                                                      "value_trillion_yen": "trillion yen"})
     ok, facets, _ = g.check_case({**case, "acceptance_check": ""}, r)
     assert ok and facets["values"] == {"checked": 2, "failed": 0}
