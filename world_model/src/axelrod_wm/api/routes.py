@@ -1416,6 +1416,7 @@ async def _document_view(request: Request, st: AppState, read: Any) -> dict:
     """Run `read(ingestor, tenant, graph)` (the service's ingestion path) and draw the update its bundle would make."""
     from axelrod_wm.api.ingest_view import document_view
     from axelrod_wm.api.v1.routes_work import inverted_surfaces
+    from axelrod_wm.intake.world_view import world_view_of
 
     tenant = _tenant(request)
 
@@ -1424,7 +1425,7 @@ async def _document_view(request: Request, st: AppState, read: Any) -> dict:
         graph = st.controller.engine.wm.graph
         ing = request.app.state.ingestor
         ing.inverted = frozenset(inverted_surfaces(st))
-        res = read(ing, tenant, graph)
+        res = read(ing, tenant, world_view_of(graph))
         return document_view(res, graph, runner, request.app.state.lake.get_chunks(tenant, res.document.id))
 
     return await st.call(run)

@@ -14,12 +14,13 @@ from __future__ import annotations
 import json
 import os
 from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import Protocol
 
 import httpx
 from pydantic import TypeAdapter, ValidationError
 
 from axelrod_ingest.contract.bundle import Signal
+from axelrod_ingest.contract.world_view import WorldView
 from axelrod_ingest.lake.store import LakeStore, digest
 
 PROMPT_VERSION = "llm-signals-1"
@@ -87,15 +88,15 @@ def provider_from_env(env: dict[str, str] | None = None) -> Provider | None:
     return None
 
 
-def _prompt(text: str, graph: Any, entity_ids: list[str]) -> str:
+def _prompt(text: str, graph: WorldView, entity_ids: list[str]) -> str:
     lines = ["Values you may name (id: name, unit):"]
     for eid in sorted(entity_ids):
         for sid in graph.entities[eid].subentity_ids:
-            s = graph.subentities.get(sid)
+            s = graph.values.get(sid)
             if s is not None:
                 lines.append(f"- {sid}: {s.name}, {s.unit}")
-    links = [i for i in graph.active_interactions()
-             if graph.subentities[i.source_id].entity_id in entity_ids or graph.subentities[i.target_id].entity_id in entity_ids]
+    links = [i for i in graph.links
+             if graph.values[i.source_id].entity_id in entity_ids or graph.values[i.target_id].entity_id in entity_ids]
     if links:
         lines.append("Links the model already holds (source -> target, label):")
         lines += [f"- {i.source_id} -> {i.target_id}: {i.label}" for i in sorted(links, key=lambda x: x.id)]
@@ -116,7 +117,7 @@ def _parse(raw: str) -> list[dict]:
     return [s for s in sigs if isinstance(s, dict)] if isinstance(sigs, list) else []
 
 
-def validate(signals: list[dict], text: str, graph: Any) -> list[dict]:
+def validate(signals: list[dict], text: str, graph: WorldView) -> list[dict]:
     """The signals that are well formed, name the model's values, and quote the passage exactly."""
     out = []
     for s in signals:
@@ -125,16 +126,16 @@ def validate(signals: list[dict], text: str, graph: Any) -> list[dict]:
         except ValidationError:
             continue
         ids = [getattr(sig, k) for k in ("value_of", "source", "target") if hasattr(sig, k)]
-        if any(i not in graph.subentities for i in ids) or not sig.quote or sig.quote not in text:
+        if any(i not in graph.values for i in ids) or not sig.quote or sig.quote not in text:
             continue
         if sig.type in ("support", "contradict") and not any(
-                i.source_id == sig.source and i.target_id == sig.target for i in graph.active_interactions()):
+                i.source_id == sig.source and i.target_id == sig.target for i in graph.links):
             continue
         out.append(sig.model_dump(mode="json", exclude_defaults=False))
     return out
 
 
-def propose(text: str, graph: Any, entity_ids: list[str], *, provider: Provider | None, store: LakeStore,
+def propose(text: str, graph: WorldView, entity_ids: list[str], *, provider: Provider | None, store: LakeStore,
             gazetteer_digest: str) -> list[dict]:
     """Signals for one passage: from the cache when this exact question was asked of this provider and model
     before, else from the provider, cached. With no provider configured, the step is off: nothing."""

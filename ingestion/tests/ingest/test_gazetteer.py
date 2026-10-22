@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-from types import SimpleNamespace as NS
-
 import pytest
 
+from axelrod_ingest.contract.world_view import EntityView, ValueView, WorldView
 from axelrod_ingest.gazetteer import Gazetteer, _case_sensitive, norm, tokens
 
 
@@ -13,14 +12,15 @@ def found(gz: Gazetteer, text: str, context: str | None = None) -> list[tuple]:
     return [(m.kind, m.entity_id, m.subentity_id, m.surface) for m in gz.find(text, context)]
 
 
-def fake_graph(entities: dict, values: dict):
-    """A graph with only what the gazetteer reads: entities (name, short, aliases, then optionally features and kind) and
-    values (name, aliases, then optionally the attribute kind)."""
-    ents = {eid: NS(name=e[0], short=e[1], aliases=list(e[2]), features=e[3] if len(e) > 3 else {},
-                    kind=e[4] if len(e) > 4 else "") for eid, e in entities.items()}
-    subs = {sid: NS(name=v[0], aliases=list(v[1]), entity_id=sid.split(".")[0], attribute_kind=v[2] if len(v) > 2 else None)
+def fake_graph(entities: dict, values: dict) -> WorldView:
+    """A world view with only what the gazetteer reads: entities (name, a short name that becomes the first alias, aliases,
+    then optionally features and kind) and values (name, aliases, then optionally the attribute kind)."""
+    ents = {eid: EntityView(eid, e[0], e[4] if len(e) > 4 else "", aliases=tuple(([e[1]] if e[1] else []) + list(e[2])),
+                            region=(e[3] if len(e) > 3 else {}).get("region"))
+            for eid, e in entities.items()}
+    vals = {sid: ValueView(sid, sid.split(".")[0], v[0], v[2] if len(v) > 2 else "", aliases=tuple(v[1]))
             for sid, v in values.items()}
-    return NS(entities=ents, subentities=subs)
+    return WorldView(entities=ents, values=vals)
 
 
 def regional():

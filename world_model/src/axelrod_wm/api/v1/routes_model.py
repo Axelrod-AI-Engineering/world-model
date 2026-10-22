@@ -26,6 +26,7 @@ from axelrod_wm.api.v1.context import (
 )
 from axelrod_wm.api.v1.context import version_ref as vref
 from axelrod_wm.api.v1.problems import API_VERSION, ApiError, V1Route
+from axelrod_wm.intake.world_view import world_view_of
 
 router = APIRouter(prefix="/v1", route_class=V1Route, tags=["v1"])
 W = "/world-models/{world_model_id}"
@@ -463,7 +464,7 @@ async def get_graph(request: Request, world_model_id: str, entities: str = "", a
     if q.strip():
         from axelrod_ingest.gazetteer import Gazetteer
 
-        for hit in Gazetteer(g).find(q):
+        for hit in Gazetteer(world_view_of(g)).find(q):
             seeds |= {hit.subentity_id} if hit.subentity_id else set(pj.own_attributes(wm, hit.entity_id))
     if not entities.strip() and not attributes.strip() and not q.strip():
         seeds = set(g.subentities)

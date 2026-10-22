@@ -9,12 +9,12 @@ from types import SimpleNamespace
 
 import pytest
 
+from axelrod_ingest.contract.world_view import WorldView
 from axelrod_ingest.lake.embed import HashingEmbedder
 from axelrod_ingest.lake.search import MODES, RRF_K, Searcher
 from axelrod_ingest.lake.sqlite import SQLiteLake
 from axelrod_ingest.lake.store import Mention
-from axelrod_wm.repo.snapshots import MemoryBackend
-from axelrod_wm.sim.runner import build_runner
+from tests.conftest import acme_graph
 from tests.lake.conftest import T0, add_doc
 
 EMB = HashingEmbedder()
@@ -44,9 +44,7 @@ DOCS = [
 
 @pytest.fixture(scope="module")
 def graph():
-    r = build_runner("acme_demo", interactive=True, storage=MemoryBackend(), record_checklist=False)
-    r.load()
-    return r.controller.engine.wm.graph
+    return acme_graph()
 
 
 def populate(lake: SQLiteLake) -> dict[str, str]:
@@ -95,7 +93,7 @@ def test_names_match_entity_and_attribute_name_prefixes(s):
 
 
 def test_names_include_attributes_after_entities(s, graph):
-    sid, sub = next((k, v) for k, v in sorted(graph.subentities.items()))
+    sid, sub = next((k, v) for k, v in sorted(graph.values.items()))
     hits = s.names(sub.name[:6])
     vals = [h for h in hits if h.kind == "attribute"]
     assert sid in [h.ref for h in vals] and all(h.score == 0.9 for h in vals)
@@ -282,7 +280,7 @@ def test_search_defaults_to_hybrid_and_rejects_unknown_modes(s):
 def test_gazetteer_is_cached_and_rebuilt_when_the_graph_changes(s, graph):
     gz = s.gazetteer()
     assert gz is s.gazetteer()
-    other = SimpleNamespace(entities={}, subentities={})
+    other = WorldView()
     s.graph = other
     assert s.gazetteer() is not gz and s.gazetteer() is s.gazetteer()
     s.graph = graph

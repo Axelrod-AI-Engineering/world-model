@@ -13,8 +13,7 @@ same results in the same order.
 
 from __future__ import annotations
 
-from typing import Any
-
+from axelrod_ingest.contract.world_view import WorldView
 from axelrod_ingest.gazetteer import Gazetteer, norm, tokens
 from axelrod_ingest.lake.embed import Embedder, cosine
 from axelrod_ingest.lake.store import Hit, LakeStore
@@ -24,7 +23,7 @@ RRF_K = 60
 
 
 class Searcher:
-    def __init__(self, store: LakeStore, embedder: Embedder, graph: Any | None = None) -> None:
+    def __init__(self, store: LakeStore, embedder: Embedder, graph: WorldView | None = None) -> None:
         self.store = store
         self.embedder = embedder
         self.graph = graph
@@ -56,7 +55,7 @@ class Searcher:
             names = [e.name, *e.aliases]
             if any(n.lower().startswith(p) for n in names):
                 out.append(Hit(kind="entity", ref=eid, entity_id=eid, score=1.0, text=e.name, why=["name prefix"]))
-        for sid, s in sorted(self.graph.subentities.items()):
+        for sid, s in sorted(self.graph.values.items()):
             if any(n.lower().startswith(p) for n in (s.name, *s.aliases)):
                 out.append(Hit(kind="attribute", ref=sid, entity_id=s.entity_id, score=0.9, text=s.name,
                                why=["name prefix"]))
@@ -86,18 +85,18 @@ class Searcher:
         for eid in ents:
             out.append(Hit(kind="entity", ref=eid, entity_id=eid, score=1.0, text=self.graph.entities[eid].name,
                            why=["named"]))
-        subs = self.graph.subentities
+        subs = self.graph.values
         for sid in vals:
             out.append(Hit(kind="attribute", ref=sid, entity_id=subs[sid].entity_id, score=1.0, text=subs[sid].name,
                            why=["named"]))
         # neighbours: attributes one interaction away from what was named
         seeds = set(vals) or {s for e in ents for s in self.graph.entities[e].subentity_ids}
         near: dict[str, str] = {}
-        for i in sorted(self.graph.active_interactions(), key=lambda x: x.id):
+        for i in sorted(self.graph.links, key=lambda x: x.id):
             if i.source_id in seeds and i.target_id not in seeds:
-                near.setdefault(i.target_id, f"{self.graph.subentities[i.source_id].name} {i.label}")
+                near.setdefault(i.target_id, f"{self.graph.values[i.source_id].name} {i.label}")
             if i.target_id in seeds and i.source_id not in seeds:
-                near.setdefault(i.source_id, f"drives {self.graph.subentities[i.target_id].name}")
+                near.setdefault(i.source_id, f"drives {self.graph.values[i.target_id].name}")
         for sid, why in sorted(near.items()):
             out.append(Hit(kind="attribute", ref=sid, entity_id=subs[sid].entity_id, score=0.5, text=subs[sid].name,
                            why=["neighbour", why]))

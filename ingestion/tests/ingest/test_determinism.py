@@ -16,8 +16,9 @@ from axelrod_ingest.lake.embed import HashingEmbedder
 from axelrod_ingest.lake.sqlite import SQLiteLake
 from axelrod_ingest.lake.store import canonical_json, digest
 from axelrod_ingest.pipeline import Ingestor, bundle_id
+from tests.conftest import acme_graph, acme_inverted
 from tests.ingest.builders import docx, para, pdf, pptx, xlsx
-from tests.ingest.conftest import NOW, acme_graph, acme_inverted
+from tests.ingest.conftest import NOW
 from tests.where import TESTS
 
 T = "desk"

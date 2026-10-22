@@ -1,6 +1,6 @@
 """Recognition (Oct 17): the world model's own names, found in text, deterministically.
 
-The gazetteer is built from the graph: every entity's name, short name, and aliases, and every value's name and
+The gazetteer is built from the world view (contract/world_view.py): every entity's name and aliases, and every value's name and
 aliases, plus each value's own phrase without its entity ("net interest income" for "JPMorgan net interest income").
 Matching runs over word tokens, longest match first, left to right, never overlapping; a surface written in capitals
 (BoJ, ECB, MS) matches only in that case, others match in any case; one-letter surfaces never match.
@@ -36,7 +36,8 @@ import hashlib
 import re
 from collections import Counter
 from dataclasses import dataclass
-from typing import Any
+
+from axelrod_ingest.contract.world_view import WorldView
 
 TOKEN = re.compile(r"[A-Za-z0-9]+(?:[&./-][A-Za-z0-9]+)*|[&$¥€£%]")
 POSSESSIVE = re.compile(r"^(?:s|S)$")
@@ -125,17 +126,17 @@ def _case_sensitive(s: str) -> bool:
 
 
 class Gazetteer:
-    def __init__(self, graph: Any) -> None:
-        self.entities = {eid: e for eid, e in graph.entities.items()}
-        self.values = {sid: s for sid, s in graph.subentities.items()}
-        self.region = {eid: (getattr(e, "features", None) or {}).get("region") for eid, e in self.entities.items()}
-        self.companies = {eid for eid, e in self.entities.items() if str(getattr(e, "kind", "")) == "company"}
+    def __init__(self, view: WorldView) -> None:
+        self.entities = dict(view.entities)
+        self.values = dict(view.values)
+        self.region = {eid: e.region for eid, e in self.entities.items()}
+        self.companies = {eid for eid, e in self.entities.items() if e.kind == "company"}
         # markets and agencies: what a region's yields and policy rates belong to
-        self.markets = {eid for eid, e in self.entities.items() if str(getattr(e, "kind", "")) in ("market", "agency")}
+        self.markets = {eid for eid, e in self.entities.items() if e.kind in ("market", "agency")}
         # an agency's one policy rate, which its name stands for before "hike" or "cut" ("the ECB hike", "BoJ hikes")
         self.policy = {}
         for sid, s in sorted(self.values.items()):
-            if getattr(s, "attribute_kind", None) == "policy_rate":
+            if s.attribute_kind == "policy_rate":
                 self.policy[s.entity_id] = None if s.entity_id in self.policy else sid
         self.slots: dict[str, dict[str, str]] = {}          # slot phrase -> {entity id: value id}
         heads: dict[str, dict[str, set[str]]] = {}          # head word -> {entity id: its values with that head}
@@ -154,16 +155,15 @@ class Gazetteer:
             self.slots.setdefault(key, {}).setdefault(eid, sid)
             surfaces.append(Surface(w, "slot", key, exact, head=len(w) == 1 and exact is None))
 
-        ent_words = {eid: {w for n in (e.name, getattr(e, "short", None) or "", *e.aliases) for w in _words(n)}
+        ent_words = {eid: {w for n in (e.name, *e.aliases) for w in _words(n)}
                      for eid, e in self.entities.items()}
         sharers: dict[tuple[str, ...], set[str]] = {}       # an alias's words -> the entities whose values use it
         for s in self.values.values():
             for a in s.aliases:
                 sharers.setdefault(_words(a), set()).add(s.entity_id)
         for eid, e in sorted(self.entities.items()):
-            for s in (e.name, getattr(e, "short", None), *e.aliases):
-                if s:
-                    add(s, "entity", eid)
+            for s in (e.name, *e.aliases):
+                add(s, "entity", eid)                # an empty name has no words, and add() skips it
         for sid, s in sorted(self.values.items()):
             ent = self.entities.get(s.entity_id)
             mine = ent_words.get(s.entity_id, set())

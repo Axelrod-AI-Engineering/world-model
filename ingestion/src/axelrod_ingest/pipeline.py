@@ -26,6 +26,7 @@ from pydantic import ValidationError
 from axelrod_ingest import EXTRACTOR_VERSION
 from axelrod_ingest.chunk import chunk
 from axelrod_ingest.contract.bundle import FORMAT, ImportBundle
+from axelrod_ingest.contract.world_view import WorldView
 from axelrod_ingest.extract import Reading, Rules, claims_of_chunk, find_date, item_of, keep_best
 from axelrod_ingest.gazetteer import Gazetteer
 from axelrod_ingest.lake.embed import Embedder
@@ -103,7 +104,7 @@ class Ingestor:
         return self.store.put_document(doc, data)
 
     # -- processing ---------------------------------------------------------------------------------------------
-    def process(self, tenant: str, doc_id: str, graph: Any) -> IngestResult:
+    def process(self, tenant: str, doc_id: str, graph: WorldView) -> IngestResult:
         """Parse, index, and extract a stored document against `graph`."""
         doc = self.store.get_document(tenant, doc_id)
         if doc is None:
@@ -136,7 +137,7 @@ class Ingestor:
         res.timings = sw.laps
         return res
 
-    def _passthrough(self, doc: Document, parsed: Parsed, graph: Any, n_chunks: int) -> IngestResult:
+    def _passthrough(self, doc: Document, parsed: Parsed, graph: WorldView, n_chunks: int) -> IngestResult:
         """An import bundle uploaded as a file: validated and stored as it is (its signals were written for the model)."""
         try:
             bundle = ImportBundle.model_validate(parsed.meta["bundle"]).model_dump(mode="json")
@@ -149,7 +150,7 @@ class Ingestor:
         doc = self.store.update_document(doc.tenant, doc.id, status="extracted")
         return IngestResult(doc, False, rec, chunks=n_chunks, signals=rec.signals)
 
-    def _extract(self, doc: Document, chunks: list, graph: Any, sw: Stopwatch) -> IngestResult:
+    def _extract(self, doc: Document, chunks: list, graph: WorldView, sw: Stopwatch) -> IngestResult:
         gz = Gazetteer(graph)
         rules = Rules(graph, gz, self.inverted)
         items, mentions, warnings = [], [], []
@@ -201,7 +202,7 @@ class Ingestor:
         return self.store.put_bundle(rec)
 
     # -- the whole path -----------------------------------------------------------------------------------------
-    def ingest_file(self, tenant: str, data: bytes, filename: str, graph: Any, **meta: Any) -> IngestResult:
+    def ingest_file(self, tenant: str, data: bytes, filename: str, graph: WorldView, **meta: Any) -> IngestResult:
         t0 = self.timer()
         doc, new = self.store_file(tenant, data, filename, **meta)
         stored = self.timer() - t0
@@ -210,7 +211,7 @@ class Ingestor:
         res.timings = {"store": stored, **res.timings}
         return res
 
-    def ingest_many(self, tenant: str, files: list[tuple[bytes, str]], graph: Any, **meta: Any) -> list[IngestResult]:
+    def ingest_many(self, tenant: str, files: list[tuple[bytes, str]], graph: WorldView, **meta: Any) -> list[IngestResult]:
         """Several files, each stored and processed; the results in event-time order (then by document id)."""
         out = [self.ingest_file(tenant, data, name, graph, **meta) for data, name in files]
         return sorted(out, key=lambda r: (r.document.event_time, r.document.id))

@@ -1,10 +1,10 @@
 """Benchmark ingestion on a corpus: speed per stage, and extraction against a gold set (axelrod_ingest.bench).
 
-Each file is ingested the way an upload is: its bytes and its file name, nothing else, against the scenario's model.
+Each file is ingested the way an upload is: its bytes and its file name, nothing else, against a world view of the client's model.
 The report, the scores, and every prediction (for labelling) are written to --out, which for a client's corpus must
 stay inside that client's gitignored folder.
 
-    uv run python scripts/bench/ingest_bench.py --corpus data/sources/sally --scenario sally_demo \
+    uv run python ingestion/scripts/ingest_bench.py --corpus data/sources/sally --world-view data/work/sally/world_view.json \
         --items data/work/sally/_bundle_parts --gold data/work/sally/bench/gold.json \
         --labels data/work/sally/bench/labels.json --out data/work/sally/bench
 
@@ -39,27 +39,19 @@ def corpus_files(root: Path, dirs: list[str] | None = None) -> list[Path]:
     return out
 
 
-def load_world(scenario: str):
-    import yaml
+def load_world(path: Path):
+    """The world view and inverted patterns a file holds (world_model/scripts/export_world_view.py writes it)."""
+    from axelrod_ingest.contract.world_view import WorldView
 
-    from axelrod_wm.repo.snapshots import MemoryBackend
-    from axelrod_wm.sim.runner import build_runner
-
-    r = build_runner(scenario, interactive=True, storage=MemoryBackend(), record_checklist=False)
-    r.load()
-    wd = r.controller.world_dir()
-    templates = Path(wd) / "templates.yaml" if wd is not None else None
-    inverted: frozenset[str] = frozenset()
-    if templates is not None and templates.exists():
-        subjects = (yaml.safe_load(templates.read_text()) or {}).get("subjects", [])
-        inverted = frozenset(s["pattern"] for s in subjects if s.get("invert"))
-    return r.controller.engine.wm.graph, inverted
+    data = json.loads(path.read_text())
+    return WorldView.from_json(json.dumps(data["world_view"])), frozenset(data["inverted"])
 
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--corpus", type=Path, required=True)
-    ap.add_argument("--scenario", default="sally_demo")
+    ap.add_argument("--world-view", type=Path, required=True,
+                    help="the model as a file: uv run python world_model/scripts/export_world_view.py <scenario> <out>")
     ap.add_argument("--items", type=Path, help="folder of bundle-part JSON files ({items: [...]}) holding the gold items")
     ap.add_argument("--gold", type=Path, help="gold annotations (item_id, files, per-signal verdicts)")
     ap.add_argument("--labels", type=Path, help="labels for predictions: {label_key: correct|incorrect}")
@@ -75,7 +67,7 @@ def main(argv: list[str] | None = None) -> int:
     from axelrod_ingest.lake.sqlite import SQLiteLake
     from axelrod_ingest.pipeline import Ingestor
 
-    graph, inverted = load_world(a.scenario)
+    graph, inverted = load_world(a.world_view)
     files = [a.corpus / f.relative_to(a.corpus) if f.is_absolute() else f for f in a.files] if a.files \
         else corpus_files(a.corpus, a.dirs)
     lake = SQLiteLake(Path(tempfile.mkdtemp(prefix="ingest-bench-")))
@@ -109,7 +101,7 @@ def main(argv: list[str] | None = None) -> int:
     tm = timing(rows)
     tm["wall_seconds"] = round(wall, 2)
     a.out.mkdir(parents=True, exist_ok=True)
-    text = report(sc, tm, title=f"Ingestion benchmark: {a.corpus.name} on {a.scenario}, {a.split} split",
+    text = report(sc, tm, title=f"Ingestion benchmark: {a.corpus.name} on {a.world_view.name}, {a.split} split",
                   controls=controls)
     if failures:
         text += "\n## Failed documents\n\n" + "\n".join(f"- {f['file']}: {f['error']}" for f in failures) + "\n"

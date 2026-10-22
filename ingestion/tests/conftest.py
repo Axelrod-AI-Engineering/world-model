@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-import os
+import json
 
 import pytest
 
-from tests.where import WM_FIXTURE_CLIENTS
-
-os.environ["WORLD_MODEL_CLIENT_DIR"] = str(WM_FIXTURE_CLIENTS)      # TEMPORARY: the acme graph is built by the world model
+from axelrod_ingest.contract.world_view import WorldView
+from tests.where import ACME_WORLD_VIEW
 
 
 @pytest.fixture(autouse=True, scope="session")
@@ -26,3 +25,23 @@ def _isolated_lake(tmp_path, monkeypatch):
     monkeypatch.setenv("WORLD_MODEL_LAKE_DIR", str(tmp_path / "lake"))
     monkeypatch.setenv("WORLD_MODEL_EMBEDDER", "hashing")
     monkeypatch.delenv("WORLD_MODEL_LLM_PROVIDER", raising=False)
+
+
+def _acme() -> dict:
+    return json.loads(ACME_WORLD_VIEW.read_text())
+
+
+def acme_graph() -> WorldView:
+    """Acme's world as the view ingestion reads (world_model/scripts/export_world_view.py wrote the file; a drift test in
+    the world model keeps it equal to the world)."""
+    return WorldView.from_json(json.dumps(_acme()["world_view"]))
+
+
+def acme_inverted() -> frozenset[str]:
+    """The world's subject patterns marked invert: true ("the euro" names the dollar index's reciprocal)."""
+    return frozenset(_acme()["inverted"])
+
+
+@pytest.fixture(scope="module")
+def graph():
+    return acme_graph()

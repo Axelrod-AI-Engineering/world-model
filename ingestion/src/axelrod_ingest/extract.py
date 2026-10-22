@@ -56,6 +56,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from axelrod_ingest.chunk import CELL, sentences, tabular
+from axelrod_ingest.contract.world_view import WorldView
 from axelrod_ingest.gazetteer import METRICS, Gazetteer, Match, norm
 from axelrod_ingest.tables import (
     FIGURE,
@@ -535,39 +536,39 @@ CUMULATIVE = re.compile(r"\b(?:cumulative|YTD|year[- ]to[- ]date)\b", re.I)
 
 
 class Rules:
-    def __init__(self, graph: Any, gazetteer: Gazetteer, inverted: frozenset[str] | set[str] = frozenset()) -> None:
+    def __init__(self, graph: WorldView, gazetteer: Gazetteer, inverted: frozenset[str] | set[str] = frozenset()) -> None:
         self.graph = graph
         self.gz = gazetteer
         # patterns for surfaces that name a value's reciprocal ("the yen" for USD/JPY), from the world's templates
         self.inverted = [re.compile(p, re.I) for p in sorted(inverted)]
-        self.links = {(i.source_id, i.target_id): i for i in graph.active_interactions()}
+        self.links = {(i.source_id, i.target_id): i for i in graph.links}
         # what each value adds into through accounting, identity and stock-flow links (its totals)
         self._into: dict[str, set[str]] = {}
-        for i in graph.active_interactions():
+        for i in graph.links:
             if i.fixed:
                 self._into.setdefault(i.source_id, set()).add(i.target_id)
         self._members: dict[str, list[Match]] = {}      # the companies a sector named in the sentence stands for
         # the markets whose values are bond yields, one per region ("yields" in a note on Japan are the JGBs')
-        self.bond_markets = sorted({s.entity_id for s in graph.subentities.values()
-                                    if getattr(s, "attribute_kind", None) == "bond_yield"
+        self.bond_markets = sorted({s.entity_id for s in graph.values.values()
+                                    if s.attribute_kind == "bond_yield"
                                     and s.entity_id in gazetteer.markets})
         # the head words of each entity's values ("yield" for the JGBs, "profit" for a company)
         self.heads = {e: {norm(n.split()[-1]) for sid in ent.subentity_ids for n in (
-            graph.subentities[sid].name, *graph.subentities[sid].aliases) if n.split()}
+            graph.values[sid].name, *graph.values[sid].aliases) if n.split()}
             for e, ent in graph.entities.items()}
 
     # -- one value, one number --------------------------------------------------------------------------------
     def _posterior(self, sid: str) -> tuple[float, float]:
-        s = self.graph.subentities[sid]
-        return float(s.posterior.mean()), max(float(s.posterior.sd()), 1e-9)
+        s = self.graph.values[sid]
+        return s.mean, max(s.sd, 1e-9)
 
     def _family(self, sid: str) -> str:
-        return str(getattr(self.graph.subentities[sid].posterior, "family", "gaussian"))
+        return self.graph.values[sid].family
 
     def plausible_level(self, sid: str, v: float) -> bool:
         mean, sd = self._posterior(sid)
-        scale = float(getattr(self.graph.subentities[sid], "scale", 1.0) or 1.0)
-        if self.graph.subentities[sid].unit == "index" and self.graph.subentities[sid].attribute_kind == "asset_price":
+        scale = float(self.graph.values[sid].scale or 1.0)
+        if self.graph.values[sid].unit == "index" and self.graph.values[sid].attribute_kind == "asset_price":
             return v > 0                 # a market index rebased in the model: a quoted level is in its own points
         if self._family(sid) in ("lognormal", "gamma"):
             # within six of the value's own standard units (a log scale), so ¥197 is no USD/JPY but ¥6,994 a share
@@ -576,7 +577,7 @@ class Rules:
 
     def _raw_level(self, sid: str, n: Num) -> float | None:
         """The number in the value's unit, or None when the units don't fit (no plausibility check)."""
-        unit = self.graph.subentities[sid].unit
+        unit = self.graph.values[sid].unit
         if _unit_kind(unit) == "rate":
             if n.unit == "%":
                 v = n.value
@@ -603,7 +604,7 @@ class Rules:
 
     def _delta(self, sid: str, n: Num, direction: int) -> tuple[float, str] | None:
         """The number as a change of the value: (delta, mode), signed by the direction."""
-        unit = self.graph.subentities[sid].unit
+        unit = self.graph.values[sid].unit
         rate = _unit_kind(unit) == "rate"
         if n.unit == "bp":
             d, mode = n.value / 100.0, "absolute"
@@ -626,7 +627,7 @@ class Rules:
 
     def _change(self, sid: str, old: Num, new: Num) -> tuple[float, str] | None:
         """A revision from `old` to `new`: points for a rate, else the relative change (both in the same units)."""
-        if _unit_kind(self.graph.subentities[sid].unit) == "rate":
+        if _unit_kind(self.graph.values[sid].unit) == "rate":
             a, b = self._raw_level(sid, old), self._raw_level(sid, new)
             if a is None or b is None or a == b or abs(b - a) > MAX_POINTS:
                 return None
@@ -681,7 +682,7 @@ class Rules:
         nxt = re.match(r"\s+([a-z][a-z-]+)", sent[m.end:])
         if not nxt or not (norm(nxt.group(1)) in MODIFIED_BY or nxt.group(1).startswith("ex-")):
             return False
-        s = self.graph.subentities[m.subentity_id]
+        s = self.graph.values[m.subentity_id]
         return norm(nxt.group(1)) not in {norm(w) for name in (s.name, *s.aliases) for w in name.split()}
 
     def _premodified(self, sent: str, m: Match) -> bool:
@@ -698,7 +699,7 @@ class Rules:
         """Whether a value named by an alias (not its own name) sits in a list of labelled parts that moved both ways
         ("converts (-23%) and IPOs (-66%) declined, while follow-on issuance rose", "rates (MOVE -5%) were lower, while
         volatility in commodities (OVX +56%) jumped"): one part, or another's, is not the whole the value stands for."""
-        named = norm(m.surface) == norm(self.graph.subentities[m.subentity_id].name)
+        named = norm(m.surface) == norm(self.graph.values[m.subentity_id].name)
         return not named and len(LABELLED.findall(sent)) >= 2 and bool(UP.search(sent)) and bool(DOWN.search(sent))
 
     def _foreign(self, sent: str, m: Match) -> bool:
@@ -713,7 +714,7 @@ class Rules:
 
     def _own_words(self, m: Match) -> set[str]:
         e = self.graph.entities.get(m.entity_id)
-        return {norm(w) for name in ((e.name, getattr(e, "short", None) or "", *e.aliases) if e else ())
+        return {norm(w) for name in ((e.name, "", *e.aliases) if e else ())
                 for w in re.findall(r"[A-Za-z0-9&/-]+", name)}
 
     def _flip(self, m: Match) -> int:
@@ -733,7 +734,7 @@ class Rules:
         clause = sent[prev_end:next_start]
         # the years the clause is about ("for the first time since 2007" dates nothing)
         years = {int(y) for y in YEAR.findall(re.sub(r"\bsince\s+\S+", " ", clause))}
-        rate = _unit_kind(self.graph.subentities[sid].unit) == "rate"
+        rate = _unit_kind(self.graph.values[sid].unit) == "rate"
         # a target is not the value, though a market forecaster's revised target for a rate is a move in its view
         aimed = TARGET.match(sent[m.end:]) or TARGET_BEFORE.search(sent[max(0, m.start - 12):m.start])
         if (aimed and not rate) or NEGATED.search(clause) or SUPPOSED.search(sent) or HISTORY.search(sent) or sent.rstrip().endswith("?") \
@@ -766,14 +767,14 @@ class Rules:
         # the words around the value, else its own ("two more rate hikes")
         direction = flip * (self.local_direction(sent, m.start, m.end, prev_end, next_start) or self._direction(m.surface))
         # 2. a growth rate's own level: "core CPI rose 1.7% y-o-y", "TSF growth (+7.2% YoY)"
-        if "y/y" in self.graph.subentities[sid].unit and flip == 1:
+        if "y/y" in self.graph.values[sid].unit and flip == 1:
             for n in after:
                 if n.unit == "%" and n.start - m.end <= 40 and YOY.match(sent[n.end:]) and not FROM_TO.search(
                         sent[m.end:n.start]) and (lvl := self._level(sid, n)) is not None:
                     return [Found("observe", value_of=sid, value=lvl, quote=sent, rule="growth rate", confidence=0.75,
                                   direction=direction)]
         # 3. a level: "at 3.875%", "to 1.25%", "fell to 152", "Price (31 Jul 2026) ¥6,994"
-        flow = self.graph.subentities[sid].unit.endswith("/yr")
+        flow = self.graph.values[sid].unit.endswith("/yr")
         far = date is not None and any(y >= date.year + 2 for y in years)
         stale = date is not None and any((date - d).days > STALE_DAYS for d in _dates_in(sent))
         lead = sent[prev_end:m.start]
@@ -790,7 +791,7 @@ class Rules:
             if len(gap) > 60 or (between and not moved) or flip != 1 or (flow and QUARTER.search(clause)) \
                     or (flow and between and not FULL_YEAR.search(MONTH_YEAR.sub(" ", clause))) \
                     or far or stale or forecast or EXCLUDING.search(gap) or re.search(r"\bfrom\b", gap) \
-                    or (_unit_kind(self.graph.subentities[sid].unit) == "rate" and OTHER_BASIS.match(sent[n.end:])):
+                    or (_unit_kind(self.graph.values[sid].unit) == "rate" and OTHER_BASIS.match(sent[n.end:])):
                 break
             keyed = len(sent) <= KEY_VALUE_CHARS and KEY_VALUE.match(PARENS.sub("", gap))
             if keyed or (LEVEL.search(gap) and not re.search(r"[,;]\s", PARENS.sub("", gap))
@@ -815,7 +816,7 @@ class Rules:
         # sequentially"); and a pause is no move ("a pause on rate cuts, unchanged since May")
         sized = [n for n in after if n.unit == "%" and n.start - m.end <= 40]
         part = _part(sent, m.start, m.end)
-        growth = "y/y" in self.graph.subentities[sid].unit
+        growth = "y/y" in self.graph.values[sid].unit
         will = WILL_MOVE.match(sent[m.end:next_start])   # "EPS will grow by 13%": a prediction, no move
         if (flow and SEQUENTIAL.search(sent) and not ANNUAL.search(sent) and sized) or PAUSED.search(part) \
                 or (will and self._direction(will.group(1))) or (
@@ -889,7 +890,7 @@ class Rules:
         header = reading.header
         if header is None or self._flip(m) != 1:
             return []
-        cells = align(list(header.periods), run, rate=_unit_kind(self.graph.subentities[sid].unit) == "rate")
+        cells = align(list(header.periods), run, rate=_unit_kind(self.graph.values[sid].unit) == "rate")
         if cells is None or (len({p.text for p in header.periods}) < len(header.periods) < len(run)
                              and len(cells[0]) < len(run)):
             return []                    # side-by-side blocks of the same periods (before and after a revision, or
@@ -905,7 +906,7 @@ class Rules:
     def _old_label(self, sid: str, label: str) -> bool:
         """Whether a row's label (without the value's own name: "Fed funds target range") marks old figures,
         consensus, or changes rather than the value's level."""
-        growth = "y/y" in self.graph.subentities[sid].unit
+        growth = "y/y" in self.graph.values[sid].unit
         return any(not (growth and GROWTH_LABEL.match(x.group(0))) for x in OLD_LABEL.finditer(label))
 
     def _sheet_row(self, sent: str, m: Match, reading: Reading) -> list[Found] | None:
@@ -933,7 +934,7 @@ class Rules:
         hint = ", ".join([label, *units])
         nxt = cells[k + 1] if k + 1 < len(cells) else ""
         years = [int(y) for y in YEAR.findall(sent)]
-        if nxt and figure(k + 1) and not self.graph.subentities[m.subentity_id].unit.endswith("/yr"):
+        if nxt and figure(k + 1) and not self.graph.values[m.subentity_id].unit.endswith("/yr"):
             if PROSPECT.search(label) or (reading.date and years and max(years) < reading.date.year):
                 return []                # a projection ("Year-end USD/JPY") or a past episode's row
             # a level and its figure side by side: "USD/JPY | 158.054", "Last Price | 349.31"
@@ -957,7 +958,7 @@ class Rules:
         figures = [n for j in range(k + 1, len(cells)) if (n := figure(j))]
         if CHECK_ROW.search(label) or not any(n.value for n in figures):
             return []                    # a model's check ("NI on IS = NI on CF"), or a row of zeros: no figure
-        flow = self.graph.subentities[m.subentity_id].unit.endswith("/yr")
+        flow = self.graph.values[m.subentity_id].unit.endswith("/yr")
         modelled = _modelled(cells, k)
         periods, row, partly = [], [], set()
         quarters = 0                     # the year's quarters reported so far (before the model's columns)
@@ -987,7 +988,7 @@ class Rules:
         priced in"): the agency's rate named in the sentence, by the size priced."""
         got = PRICED.search(sent)
         sid = next((x.subentity_id if x.subentity_id else self.gz.policy.get(x.entity_id) for x in ms
-                    if (x.subentity_id and x.via in ("name", "sentence") and self.graph.subentities[
+                    if (x.subentity_id and x.via in ("name", "sentence") and self.graph.values[
                         x.subentity_id].attribute_kind == "policy_rate") or (not x.subentity_id
                                                                               and self.gz.policy.get(x.entity_id))), None)
         if not got or sid is None or NEGATED.search(sent[max(0, got.start() - 30):got.end()]):
@@ -1056,7 +1057,7 @@ class Rules:
             ms = self.gz.find(label, [company], subject=company)
             m = next((x for x in ms if x.subentity_id and x.entity_id == company), None)
             if m is None or any(f.value_of == m.subentity_id for f in out) \
-                    or self.graph.subentities[m.subentity_id].unit.endswith("/yr"):
+                    or self.graph.values[m.subentity_id].unit.endswith("/yr"):
                 continue                 # a flow's latest column is a quarter, its FY columns the past
             v = self._cell_level(m.subentity_id, label, ns[0])
             if v is not None:
@@ -1077,7 +1078,7 @@ class Rules:
                          confidence=0.8, direction=1 if got[0] > 0 else -1)]
             # a flow's row that names the document's fiscal year ("unit sales FY3/27 | 9,500 | 9,650"): its new level
             year = [p for pm in PERIOD.finditer(label) if (p := period_of(pm)) and p.kind == "year"]
-            if year and self.graph.subentities[sid].unit.endswith("/yr") and pick(
+            if year and self.graph.values[sid].unit.endswith("/yr") and pick(
                     year[:1], flow=True, date=reading.date, fy_month=self._fy_month(sid)) == 0 \
                     and (v := self._cell_level(sid, label, new)) is not None:
                 out.insert(0, Found("observe", value_of=sid, value=v, quote=sent, rule=f"table row ({year[0].text})",
@@ -1085,7 +1086,7 @@ class Rules:
             return out
         if any(p.revision for p in periods):
             return self._revised(sid, sent, label, periods, row, reading)
-        unit = self.graph.subentities[sid].unit
+        unit = self.graph.values[sid].unit
         fy_month = self._fy_month(sid)
         flow = unit.endswith("/yr")
         if flow and any(p.kind == "year" and not p.fiscal and p.end and p.end[1] != fy_month for p in periods):
@@ -1095,7 +1096,7 @@ class Rules:
         if p is None or (not flow and reading.date and p.end and p.end[0] and (reading.date - datetime(
                 *end_of(p, fy_month, reading.date.year), tzinfo=UTC)).days > STALE_DAYS) \
                 or (not flow and p.kind not in ("date", "cur")
-                    and self.graph.subentities[sid].attribute_kind in MARKET_KINDS):
+                    and self.graph.values[sid].attribute_kind in MARKET_KINDS):
             return []                    # no column for now, a level half a year old (a year-end before a later
             # quarter), or a market price at a period's end or on its average ("FY2025", "Q2-2026"): not today's
         v = self._cell_level(sid, label, row[k])
@@ -1106,7 +1107,7 @@ class Rules:
 
     def _fy_month(self, sid: str) -> int:
         """The month a value's fiscal year ends in: March for a Japanese company, else December."""
-        ent = self.graph.subentities[sid].entity_id
+        ent = self.graph.values[sid].entity_id
         return 3 if self.gz.region.get(ent) == "JP" and ent in self.gz.companies else 12
 
     def _revised(self, sid: str, sent: str, label: str, periods: list[Period], row: list[Num],
@@ -1128,7 +1129,7 @@ class Rules:
     def _cell_level(self, sid: str, label: str, n: Num) -> float | None:
         """A cell's number as a level: scaled by the row label's unit ("(¥ bn)", "mm", "000s", "(%)", a ratio as a
         fraction), else by the one scale that makes it plausible ("14,805" in € mn is 14.8 €bn)."""
-        rate = _unit_kind(self.graph.subentities[sid].unit) == "rate"
+        rate = _unit_kind(self.graph.values[sid].unit) == "rate"
         if n.blank:
             return None
         if rate:
@@ -1145,7 +1146,7 @@ class Rules:
             word = hint.group("s").lower().rstrip("s")
             scale = 1e3 if word in ("000", "'000", "k") else SCALE.get(word, SCALE.get(word[:2], 1e6))
             return self._level(sid, Num(n.value, n.unit, n.currency, scale, n.start, n.end, n.negative))
-        if n.scale != 1.0 or n.currency or not self.graph.subentities[sid].unit.endswith("/yr"):
+        if n.scale != 1.0 or n.currency or not self.graph.values[sid].unit.endswith("/yr"):
             return self._level(sid, n)                   # a price or a rate is never rescaled to fit
         fits = {v for k in (1.0, 1e3, 1e6, 1e9, 1e12) if (v := self._level(sid, Num(
             n.value, n.unit, n.currency, k, n.start, n.end, n.negative))) is not None}
@@ -1302,7 +1303,7 @@ class Rules:
         for src, dst in self._resolve(cause, effect, sign if stated and not denied else 0):
             link = self.links.get((src, dst))
             if link is not None:
-                polarity = link.polarity()       # an uncalibrated link: the sign its mechanism states
+                polarity = link.polarity        # an uncalibrated link: the sign its mechanism states
                 agrees = (polarity == sign) != denied
                 out.append(Found("support" if agrees else "contradict", source=src, target=dst,
                                  quote=sent, rule=f"causal '{verb}' on a known link", confidence=0.6))
@@ -1322,7 +1323,7 @@ class Rules:
         for e in effects:
             pairs = self._pairs(cause, e)
             if len(pairs) > 1 and sign:
-                pairs = [p for p in pairs if (m := float(self.links[p].forward.effect.mean())) and (m > 0) == (sign > 0)]
+                pairs = [p for p in pairs if (m := self.links[p].effect_mean) and (m > 0) == (sign > 0)]
             if len(pairs) > 1 and e.kind != "value":
                 # a claim about the company as a whole is on its total, not on a part that adds into it (R11)
                 pairs = [p for p in pairs if not any(q[1] in self._totals_of(p[1]) for q in pairs if q != p)]
@@ -1366,7 +1367,7 @@ class Rules:
             region = next(r for r, p in GROUP_REGIONS.items() if p.fullmatch(g.group("region")))
             sector = next(x for x, p in GROUP_SECTORS.items() if p.fullmatch(g.group("sector")))
             members = sorted(e for e in self.gz.companies if self.gz.region.get(e) == region
-                             and (getattr(self.graph.entities[e], "features", None) or {}).get("sector") == sector)
+                             and self.graph.entities[e].sector == sector)
             if not members:
                 continue
             gid = f"group:{sector}:{region}:{g.start()}"
@@ -1592,11 +1593,11 @@ def keep_best(chunk_claims: list[ChunkClaims]) -> None:
         cl.found = [f for fi, f in enumerate(cl.found) if (ci, fi) in keep]
 
 
-def category_of(graph: Any, found: list[Found]) -> str:
+def category_of(graph: WorldView, found: list[Found]) -> str:
     for f in found:
         sid = f.value_of or f.target
-        if sid in graph.subentities:
-            return CATEGORY.get(graph.subentities[sid].attribute_kind, "other")
+        if sid in graph.values:
+            return CATEGORY.get(graph.values[sid].attribute_kind, "other")
     return "other"
 
 
@@ -1609,7 +1610,7 @@ def stance_of(found: list[Found]) -> str:
 TICKER = re.compile(r"^(?:\d{3,6} [A-Z]{2}|[A-Z]{1,5})$")
 
 
-def item_of(graph: Any, claims: ChunkClaims, *, doc_prefix: str, published_at: datetime, source: str,
+def item_of(graph: WorldView, claims: ChunkClaims, *, doc_prefix: str, published_at: datetime, source: str,
             source_type: str, kind: str, title: str, extra: list[dict] | None = None) -> dict[str, Any] | None:
     """One import item for a chunk: its rule signals, then any the LLM step added (`extra`); None when it has none."""
     extra = list(extra or [])
@@ -1617,12 +1618,12 @@ def item_of(graph: Any, claims: ChunkClaims, *, doc_prefix: str, published_at: d
         return None
     first = claims.text[claims.sentence_spans[0][0]:claims.sentence_spans[0][1]] if claims.sentence_spans else claims.text
     headline = first if len(first) <= 200 else first[:197].rstrip() + "…"
-    tickers = sorted({a for e in claims.entities if str(graph.entities[e].kind) == "company"
+    tickers = sorted({a for e in claims.entities if graph.entities[e].kind == "company"
                       for a in graph.entities[e].aliases if TICKER.match(a) and len(a) > 1})
     conf = sum(f.confidence for f in claims.found) / len(claims.found) if claims.found else LLM_CONFIDENCE
     first_id = next((x for x in (extra[0].get("value_of"), extra[0].get("target")) if x), None) if extra else None
     category = category_of(graph, claims.found) if claims.found else CATEGORY.get(
-        graph.subentities[first_id].attribute_kind, "other") if first_id in graph.subentities else "other"
+        graph.values[first_id].attribute_kind, "other") if first_id in graph.values else "other"
     return {
         "id": f"{doc_prefix}-{claims.ord:04d}", "published_at": published_at.isoformat(), "source": source or title,
         "source_type": source_type, "kind": kind, "headline": headline, "summary": claims.text,

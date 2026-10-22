@@ -4,12 +4,12 @@ from the cache so a re-run is byte-identical without a second call."""
 from __future__ import annotations
 
 import json
-from types import SimpleNamespace as NS
 
 import httpx
 import pytest
 
 from axelrod_ingest import llm
+from axelrod_ingest.contract.world_view import EntityView, ValueView, WorldView
 from axelrod_ingest.llm import (
     PROMPT_VERSION,
     SYSTEM,
@@ -114,8 +114,8 @@ def test_prompt_lists_the_named_entities_values_and_their_links(graph):
 
 
 def test_prompt_without_links_or_with_missing_values():
-    g = NS(entities={"e": NS(subentity_ids=["e.a", "e.gone"])}, subentities={"e.a": NS(name="A", unit="pct")},
-           active_interactions=lambda: [])
+    g = WorldView(entities={"e": EntityView("e", "E", "company", subentity_ids=("e.a", "e.gone"))},
+                  values={"e.a": ValueView("e.a", "e", "A", "level", unit="pct")})
     assert _prompt("t", g, ["e"]) == "Values you may name (id: name, unit):\n- e.a: A, pct\n\nPassage:\nt"
 
 

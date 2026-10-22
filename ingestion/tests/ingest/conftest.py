@@ -5,37 +5,15 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 import pytest
-import yaml
 
 from axelrod_ingest.extract import Rules
 from axelrod_ingest.gazetteer import Gazetteer
 from axelrod_ingest.lake.embed import HashingEmbedder
 from axelrod_ingest.lake.sqlite import SQLiteLake
 from axelrod_ingest.pipeline import Ingestor
-from tests.where import ACME_WORLD
+from tests.conftest import acme_inverted
 
 NOW = datetime(2026, 10, 17, 9, 30, tzinfo=UTC)
-
-
-def acme_graph():
-    from axelrod_wm.repo.snapshots import MemoryBackend
-    from axelrod_wm.sim.runner import build_runner
-
-    r = build_runner("acme_demo", interactive=True, storage=MemoryBackend(), record_checklist=False)
-    r.load()
-    return r.controller.engine.wm.graph
-
-
-def acme_inverted() -> frozenset[str]:
-    """The world's subject patterns marked invert: true ("the euro" names the dollar index's reciprocal)."""
-    with open(ACME_WORLD / "templates.yaml") as f:
-        subjects = yaml.safe_load(f)["subjects"]
-    return frozenset(s["pattern"] for s in subjects if s.get("invert"))
-
-
-@pytest.fixture(scope="module")
-def graph():
-    return acme_graph()
 
 
 @pytest.fixture(scope="module")

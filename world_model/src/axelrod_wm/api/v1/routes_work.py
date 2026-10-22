@@ -15,6 +15,7 @@ from fastapi import APIRouter, File, Form, Query, Request, UploadFile
 from fastapi import Path as FPath
 from fastapi.responses import Response
 
+from axelrod_ingest.contract.world_view import WorldView
 from axelrod_ingest.pipeline import Ingestor, IngestResult
 from axelrod_wm.api.tokens import ADMIN, APPROVE, CHANGES, DOCUMENTS, READ, SIMULATIONS
 from axelrod_wm.api.v1 import project as pj
@@ -41,6 +42,7 @@ from axelrod_wm.api.v1.context import version_ref as vref
 from axelrod_wm.api.v1.problems import ApiError, V1Route
 from axelrod_wm.api.v1.routes_model import AsOf, Cursor, Limit, Version, read_at
 from axelrod_wm.control.controller import ControllerError
+from axelrod_wm.intake.world_view import world_view_of
 
 router = APIRouter(prefix="/v1", route_class=V1Route, tags=["v1"])
 W = "/world-models/{world_model_id}"
@@ -158,6 +160,11 @@ def inverted_surfaces(st: Any) -> list[str]:
     return sorted(x["pattern"] for x in rules.get("subjects", []) if x.get("invert"))
 
 
+def view_of(m: Model) -> WorldView:
+    """The model as ingestion reads it (contract/world_view.py)."""
+    return world_view_of(m.st.controller.engine.wm.graph)
+
+
 def ingestor_for(request: Request, m: Model) -> Ingestor:
     ing: Ingestor = request.app.state.ingestor
     ing.inverted = frozenset(inverted_surfaces(m.st))
@@ -196,7 +203,7 @@ async def create_documents(request: Request, world_model_id: str,
     async def make() -> Response:
         async def work() -> dict:
             def run() -> list[IngestResult]:
-                return ingestor_for(request, m).ingest_many(m.org, blobs, m.st.controller.engine.wm.graph,
+                return ingestor_for(request, m).ingest_many(m.org, blobs, view_of(m),
                                                             source=source, source_type=source_type,
                                                             published_at=published_at, uploaded_by=sub)
 
@@ -304,7 +311,7 @@ async def extract_document(request: Request, world_model_id: str, document_id: s
     async def make() -> Response:
         async def work() -> dict:
             res = await m.st.call(lambda: ingestor_for(request, m).process(m.org, document_id,
-                                                                           m.st.controller.engine.wm.graph))
+                                                                           view_of(m)))
             return {"resource": "bundles", "ids": [] if res.bundle is None else [res.bundle.id],
                     "detail": ingest_summary(res)}
 
@@ -337,7 +344,7 @@ async def create_bundle(request: Request, world_model_id: str) -> Response:
 
     async def make() -> Response:
         res = await m.st.call(lambda: ingestor_for(request, m).ingest_file(
-            m.org, data, f"{body.get('title') or 'bundle'}.json"[:120], m.st.controller.engine.wm.graph,
+            m.org, data, f"{body.get('title') or 'bundle'}.json"[:120], view_of(m),
             uploaded_by=sub))
         audit(request, m, 201, [res.document.id, res.bundle.id])
         return one(request, bundle_view(res.bundle), status=201, location=f"{base(m)}/bundles/{res.bundle.id}")
@@ -389,7 +396,7 @@ async def search(request: Request, world_model_id: str, q: Annotated[str, Query(
 
     def run() -> tuple[list[s.Hit], dict]:
         hits = Searcher(lake(request.app), request.app.state.ingestor.embedder,
-                        m.st.controller.engine.wm.graph).search(m.org, q, mode, limit)
+                        view_of(m)).search(m.org, q, mode, limit)
         return [s.Hit(kind=h.kind, score=h.score, text=h.text, why=list(h.why), document_id=h.doc_id, ordinal=h.ord,
                       title=h.title, filename=h.filename, event_time=h.event_time, ref=h.ref, entity_id=h.entity_id)
                 for h in hits], vref(m.st)

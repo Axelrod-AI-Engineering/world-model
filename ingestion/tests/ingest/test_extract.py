@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from types import SimpleNamespace as NS
 
 import pytest
 
 from axelrod_ingest.contract.bundle import ImportItem
+from axelrod_ingest.contract.world_view import EntityView, WorldView
 from axelrod_ingest.extract import (
     LLM_CONFIDENCE,
     UNDIRECTED_SD,
@@ -438,9 +438,8 @@ def test_item_extra_signals_follow_rule_signals(graph, rules):
 
 
 def test_tickers_only_from_companies():
-    g = NS(entities={"bank": NS(kind="agency", aliases=["CBK"]), "co": NS(kind="company",
-                                                                          aliases=["ACME", "1234 JP", "Acme Inc", "A"])},
-           subentities={})
+    g = WorldView(entities={"bank": EntityView("bank", "Bank", "agency", aliases=("CBK",)),
+                            "co": EntityView("co", "Co", "company", aliases=("ACME", "1234 JP", "Acme Inc", "A"))})
     claims = ChunkClaims(0, "x", found=[Found("move", value_of="co.x", delta=0.1)], entities=["bank", "co"])
     assert _item(g, claims)["tickers"] == ["1234 JP", "ACME"]
 
