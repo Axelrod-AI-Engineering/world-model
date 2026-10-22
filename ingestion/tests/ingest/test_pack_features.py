@@ -134,9 +134,12 @@ def test_a_name_without_a_date_leaves_the_document_dated_when_it_arrived(lake):
     assert res.document.meta["dates"] == {"published_source": "ingested_at"}
 
 
-def test_a_date_after_arrival_is_not_the_publication(lake):
-    res = make(lake).ingest_file(T, b"Acme EV net profit: CNY 8.5bn. Results due 2027-02-01.", "notes.txt", G)
+def test_a_date_after_arrival_is_not_the_publication_when_the_documents_are_real(lake):
+    res = make(lake, ignore_future_dates=True).ingest_file(T, b"Acme EV net profit: CNY 8.5bn. Results due 2027-02-01.", "notes.txt", G)
     assert res.document.published_at is None and res.document.event_time == NOW
+    # by default a date is a date: invented notes and demos are dated ahead of the clock
+    kept = make(lake).ingest_file(T, b"Acme EV net profit: CNY 8.5bn. Results due 2027-02-01.", "notes2.txt", G)
+    assert kept.document.published_at == datetime(2027, 2, 1, tzinfo=UTC)
 
 
 def test_reading_a_document_again_keeps_its_dates_and_an_uploaded_date(lake):

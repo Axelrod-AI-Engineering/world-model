@@ -56,8 +56,9 @@ Every document carries two times:
 
 - **Event time** is when the content became available, from `dates.py`: the date given with the upload (`published_at`);
   else, for a file a pack's manifest lists, the date in its file name (the packs name files `27-Mar-2026_...` after their
-  publication); else the first full date in the opening text; else a date in the file name; else the ingestion time. A date
-  later than when the file arrived cannot be its publication and is passed over. A name that holds no date (`undated`,
+  publication); else the first full date in the opening text; else a date in the file name; else the ingestion time. With
+  `ignore_future_dates` (the pack runner sets it) a date later than when the file arrived cannot be its publication and is passed over;
+  by default it is kept, since invented notes and demos are dated ahead of the clock. A name that holds no date (`undated`,
   `current`, `period-2025`, `monthly-10th`, `Feb-2024`, where a month is no day) gives nothing: it is not guessed from.
   Where nothing dates a document it is dated when it arrived, and `meta.dates.published_source` says `ingested_at`.
 - **Ingestion time** is when the file arrived.

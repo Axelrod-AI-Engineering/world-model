@@ -186,7 +186,7 @@ def run(pack: Path, world: Path, lake_dir: Path, *, tenant: str, clock: datetime
     store = SQLiteLake(lake_dir)
     try:
         ing = Ingestor(store, embedder_from_env(env), provider=provider_from_env(env), clock=lambda: clock, inverted=inverted,
-                       ocr=ocr_from_env(env), screen=True)
+                       ocr=ocr_from_env(env), screen=True, ignore_future_dates=True)
         report = ingest_pack(pack, ing, graph, tenant=tenant)
         return report, lake_digest(store, tenant, embedder=ing.embedder.name)
     finally:

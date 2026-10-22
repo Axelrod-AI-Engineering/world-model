@@ -110,11 +110,12 @@ def _utc(t: datetime) -> datetime:
 class Ingestor:
     def __init__(self, store: LakeStore, embedder: Embedder, *, provider: Provider | None = None,
                  clock: Callable[[], datetime] = lambda: datetime.now(UTC),
-                 inverted: frozenset[str] = frozenset(), ocr: Ocr | None = None, screen: bool = False,
+                 inverted: frozenset[str] = frozenset(), ocr: Ocr | None = None, screen: bool = False, ignore_future_dates: bool = False,
                  timer: Callable[[], float] = time.perf_counter) -> None:
         self.ocr = ocr                          # reads the pages of a scanned PDF (ocr.ocr_from_env); None: they are needs_ocr
         self.screen = screen                    # exclude an untyped web page or PDF that holds no content (sources.classify);
         # off by default: an upload of a short note is a document, a pack's index page is not
+        self.ignore_future_dates = ignore_future_dates   # a date after the file arrived is no publication date (real documents)
         self.store = store
         self.timer = timer
         self.embedder = embedder
@@ -154,7 +155,8 @@ class Ingestor:
         manifest = doc.meta.get("manifest") or {}
         # a date the upload gave stays the upload's on a second reading; one this pipeline derived is derived again
         given = doc.published_at if doc.meta.get("dates", {}).get("published_source", "upload") == "upload" else None
-        dates = resolve_dates(parsed.text, doc.filename, upload=given, manifest=bool(manifest), not_after=doc.ingested_at)
+        dates = resolve_dates(parsed.text, doc.filename, upload=given, manifest=bool(manifest),
+                                not_after=doc.ingested_at if self.ignore_future_dates else None)
         language = language_of(parsed.text)
         yen = resolve_yen(parsed.text, language=language, issuer=(doc.meta.get("hints") or {}).get("issuer_country"))
         needs_ocr = parsed.meta.get("needs_ocr", [])

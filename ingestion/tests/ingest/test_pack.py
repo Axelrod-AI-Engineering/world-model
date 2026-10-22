@@ -92,7 +92,7 @@ def fake_ocr(tmp_path) -> Ocr:
 def run_pack(root: Path, lake_dir: Path, ocr: Ocr | None):
     lake = SQLiteLake(lake_dir)
     try:
-        ing = Ingestor(lake, HashingEmbedder(), clock=lambda: NOW, ocr=ocr, screen=True)
+        ing = Ingestor(lake, HashingEmbedder(), clock=lambda: NOW, ocr=ocr, screen=True, ignore_future_dates=True)
         report = ingest_pack(root, ing, world(), tenant="acme")
         return report, lake_digest(lake, "acme")
     finally:
