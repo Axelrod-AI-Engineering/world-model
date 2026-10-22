@@ -11,7 +11,7 @@ TESTS = Path(__file__).resolve().parent
 FIXTURES = TESTS / "fixtures"
 FIXTURE_CLIENTS = FIXTURES / "clients"              # the synthetic client: scenarios acme_demo, worlds acme_demo
 IMPORT_BUNDLE_SAMPLE = FIXTURES / "import_bundle_sample.json"
-INNER_LOOP_SUITE = FIXTURES / "inner_loop"          # a small invented suite: questions, fixtures, excerpts, recipes
+INNER_LOOP_SUITE = FIXTURES / "inner_loop"          # a small invented suite: questions, fixtures, excerpts
 INNER_LOOP_EXPORT = FIXTURES / "inner_loop_export"     # a tiny invented export for the agent tools
 INNER_LOOP_KEY = FIXTURES / "inner_loop_key" / "answer_key.json"      # its invented key, read only by the grader's tests
 

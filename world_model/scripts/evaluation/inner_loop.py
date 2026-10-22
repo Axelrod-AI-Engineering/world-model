@@ -2,7 +2,6 @@
 
     prepare   task packets (one folder per case) and the shared export, from a questions-only suite
     collect   the answers the agents wrote, checked against the schema, as results for the grader
-    run-recipes   the earlier mechanism: per-case recipes answered by the runner itself (kept, not used)
 
     python world_model/scripts/evaluation/inner_loop.py prepare --suite <suite> --world sally_demo --run <run> --out <packets>
     python world_model/scripts/evaluation/inner_loop.py collect --suite <suite> --packets <packets> --out <results.json>
@@ -24,7 +23,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
 from axelrod_wm.clients import DATA_DIR  # noqa: E402
-from axelrod_wm.evaluation.inner_loop import Access, dumps, load_recipes, load_suite, run_suite  # noqa: E402
+from axelrod_wm.evaluation.inner_loop import Access, dumps, load_suite  # noqa: E402
 from axelrod_wm.evaluation.inner_loop_packets import collect, prepare_packets  # noqa: E402
 from axelrod_wm.evaluation.inner_loop_tools import ModelReads  # noqa: E402
 
@@ -87,12 +86,6 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("--transcripts", nargs="*", default=[])
     c.add_argument("--out", required=True)
     c.add_argument("--only", default="")
-    r = sub.add_parser("run-recipes")
-    r.add_argument("--suite", required=True)
-    r.add_argument("--recipes", required=True, nargs="+")
-    r.add_argument("--world", default="")
-    r.add_argument("--only", default="")
-    r.add_argument("--out", required=True)
     a = ap.parse_args(argv)
     only = [x for x in getattr(a, "only", "").split(",") if x] or None
     if a.cmd == "prepare":
@@ -116,21 +109,6 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{len(res['results'])} cases: " + ", ".join(f"{k} {v}" for k, v in sorted(counts.items()))
               + f"; answers sha256 {res['answers']['sha256']}")
         return 0
-    logging.disable(logging.INFO)
-    access = Access([Path(a.suite), *{Path(x).parent for x in a.recipes}])
-    suite = load_suite(Path(a.suite), access)
-    recipes = {k: v for x in a.recipes for k, v in load_recipes(Path(x), access).items()}
-    client = world_client(a.world) if a.world else None
-    reader = None
-    if client is not None:
-        from axelrod_wm.evaluation.golden import V1Reader
-
-        reader = V1Reader(client)
-    res = run_suite(suite, recipes, reader, only)
-    Path(a.out).parent.mkdir(parents=True, exist_ok=True)
-    Path(a.out).write_text(dumps(res), encoding="utf-8")
-    print(f"{len(res['results'])} cases")
-    return 0
 
 
 if __name__ == "__main__":

@@ -248,8 +248,7 @@ def haystack(result: dict, fields: dict[str, Any]) -> list[tuple[set[str], Any]]
     scope = result.get("scope_period_units_when_applicable") or {}
     hay += [(stems(k.replace("_", " ")) | words(v), v) for k, v in flatten(scope).items()]
     for step in result.get("calculation_trace_when_applicable") or []:
-        # an answer's calculation is {expression, inputs, value}; a recipe run's also has a name
-        label = step.get("name") or step.get("expression", "")
+        label = step.get("expression", "")
         named = {s for k, v in (step.get("inputs") or {}).items() for s in stems(k.replace("_", " ")) | words(v)}
         hay.append((stems(label.replace("_", " ")) | words(step.get("value")) | named, step.get("value")))
     return hay
@@ -280,7 +279,7 @@ def check_case(case: dict, result: dict) -> tuple[bool, dict[str, dict], list[di
     scope = scope if oracle.get("unit") else {}
 
     def factor_for(path: str) -> Decimal:
-        """Our number in the key's unit: the scale of our unit for this field (the recipe's `units`, else its `unit`)."""
+        """Our number in the key's unit: the scale of our unit for this field (the answer's `units`, else its `unit`)."""
         ours = (scope.get("units") or {}).get(path.rsplit(".", 1)[-1], scope.get("unit"))
         if mixed_scales(oracle.get("unit")):
             return Decimal(1)                                      # the key's fields are in their own scales: ours are too

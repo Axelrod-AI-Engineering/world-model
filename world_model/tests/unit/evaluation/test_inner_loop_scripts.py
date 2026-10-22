@@ -1,5 +1,5 @@
 """The command-line scripts, end to end on the invented suite: collect (answers in, results out, byte-stable), the grader
-(handed the invented key by path), the earlier recipe runner, and the packet tools."""
+(handed the invented key by path), and the packet tools."""
 
 from __future__ import annotations
 
@@ -37,7 +37,7 @@ def test_collect_writes_byte_stable_results_and_the_grader_reads_them(tmp_path: 
     args = ["collect", "--suite", str(INNER_LOOP_SUITE), "--packets", str(out), "--transcripts", str(t)]
     said = run("inner_loop.py", *args, "--out", str(tmp_path / "a" / "results.json"))
     run("inner_loop.py", *args, "--out", str(tmp_path / "b.json"))
-    assert "46 cases: answered 1, blocked 45" in said and "answers sha256" in said
+    assert "7 cases: answered 1, blocked 6" in said and "answers sha256" in said
     assert (tmp_path / "a" / "results.json").read_bytes() == (tmp_path / "b.json").read_bytes()
     graded = run("inner_loop_grade.py", "--results", str(tmp_path / "b.json"), "--key", str(INNER_LOOP_KEY), "--run", "t",
                  "--out", str(tmp_path / "card"), "--forbid", "heldout", "--explain")
@@ -49,12 +49,6 @@ def test_collect_writes_byte_stable_results_and_the_grader_reads_them(tmp_path: 
     assert "1 cases: answered 1" in only
     no_explain = run("inner_loop_grade.py", "--results", str(tmp_path / "b.json"), "--key", str(INNER_LOOP_KEY), "--out", str(tmp_path / "c2"))
     assert "G-01-02" not in no_explain
-
-
-def test_the_earlier_recipe_runner_still_works(tmp_path: Path) -> None:
-    said = run("inner_loop.py", "run-recipes", "--suite", str(INNER_LOOP_SUITE), "--recipes", str(INNER_LOOP_SUITE / "recipes.yaml"),
-               "--only", "TST-01-01,TST-01-02", "--out", str(tmp_path / "r.json"))
-    assert said.startswith("2 cases") and json.loads((tmp_path / "r.json").read_text())["results"][0]["status"] == "answered"
 
 
 def test_the_packet_tools_run_from_the_command_line() -> None:

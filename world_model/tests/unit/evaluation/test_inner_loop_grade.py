@@ -235,15 +235,13 @@ def test_grading_is_deterministic_and_takes_the_key_path_only_as_an_argument(tmp
     assert a.replace(str(tmp_path), "") != "" and json.loads(a)["main"] == json.loads(b)["main"]
 
 
-def test_a_calculation_may_have_the_answer_shape_or_the_recipe_shape() -> None:
-    answer_shape = [{"expression": "gross - allowance", "inputs": {"gross": 1000, "allowance": 30}, "value": 970}]
-    recipe_shape = [{"name": "net", "expression": "gross - allowance", "inputs": {"gross": 1000, "allowance": 30}, "value": 970}]
-    for trace in (answer_shape, recipe_shape, [{"expression": "x", "value": 1}]):
-        hay = g.haystack(res("G", {"a": 1}, trace=trace), {"a": 1})
-        assert hay[-1][1] == trace[0]["value"]
-    assert {"gross", "allow"} <= g.haystack(res("G", {"a": 1}, trace=answer_shape), {"a": 1})[-1][0]
+def test_a_calculation_is_graded_in_the_answers_shape() -> None:
+    trace = [{"expression": "gross - allowance", "inputs": {"gross": 1000, "allowance": 30}, "value": 970}]
+    hay = g.haystack(res("G", {"a": 1}, trace=trace), {"a": 1})
+    assert hay[-1][1] == 970 and {"gross", "allow"} <= hay[-1][0]
+    assert g.haystack(res("G", {"a": 1}, trace=[{"expression": "x", "value": 1}]), {"a": 1})[-1][1] == 1
     card = g.grade(results([res("G-01-06", {"delivered": 105, "income": 14, "coefficient": None, "flag": True,
-                                            "mode": "simple mode", "bounds": [180, 220]}, trace=answer_shape)]),
+                                            "mode": "simple mode", "bounds": [180, 220]}, trace=trace)]),
                    INNER_LOOP_KEY, "t", only=("G-01-06",), mode="lexical")
     assert row(card, "G-01-06")["status"] in ("pass", "fail")           # graded, not crashed
 
