@@ -119,21 +119,21 @@ def ids(c):
     decide_all(c, SIGNER)
     thesis = data(c.post(f"{WM}/theses", json={"template_id": "S-T3"}), 201)["id"]
     job = data(c.post(f"{WM}/theses/{thesis}/simulations"), 202)
-    comp = data(c.get(f"{WM}/entities/toyota/compositions"))[0]["id"]
-    path = data(c.get(f"{WM}/entities/toyota/paths"))[0]["id"]
-    evidence = data(c.get(f"{WM}/relationships/m29/evidence"))
+    comp = data(c.get(f"{WM}/entities/acme_motors/compositions"))[0]["id"]
+    path = data(c.get(f"{WM}/entities/acme_motors/paths"))[0]["id"]
+    evidence = data(c.get(f"{WM}/relationships/m24/evidence"))
     return {
-        "world_model_id": "sally_demo", "version_ref": "1", "entity_id": "toyota", "attribute_key": "operating_profit",
-        "composition_id": comp, "path_id": path, "relationship_id": "m29",
+        "world_model_id": "acme_demo", "version_ref": "1", "entity_id": "acme_motors", "attribute_key": "operating_profit",
+        "composition_id": comp, "path_id": path, "relationship_id": "m24",
         "evidence_id": evidence[0]["id"] if evidence else "EV-none",
         "concept_id": data(c.get(f"{WM}/concepts"))[0]["id"], "group_id": data(c.get(f"{WM}/groups"))[0]["id"],
         "event_id": data(c.get(f"{WM}/events"))[0]["id"], "document_id": res["document_id"], "ordinal": "0",
         "bundle_id": res["bundle_id"], "change_id": data(c.get(f"{WM}/changes", params={"status": "all"}))[0]["id"],
-        "thesis_id": thesis, "compartment_id": "sally_focus", "simulation_id": job["result"]["ids"][0], "job_id": job["id"],
+        "thesis_id": thesis, "compartment_id": "acme_focus", "simulation_id": job["result"]["ids"][0], "job_id": job["id"],
     }
 
 
-QUERY = {"/world-models/{world_model_id}/entities/{entity_id}/traces": {"from": "dollar_yen.usd_jpy"}}
+QUERY = {"/world-models/{world_model_id}/entities/{entity_id}/traces": {"from": "dollar.index"}}
 ADMIN_HEADERS = {}
 
 
@@ -148,7 +148,7 @@ def test_every_read_answers_as_declared(c, ids, path):
     check(op, c.get(url, params=QUERY.get(path, {})))
     # and a world model that is not there is a declared 404 problem
     if "{world_model_id}" in path:
-        check(op, c.get(url.replace("/sally_demo", "/nope", 1), params=QUERY.get(path, {})))
+        check(op, c.get(url.replace("/acme_demo", "/nope", 1), params=QUERY.get(path, {})))
 
 
 @pytest.mark.parametrize("path", [p for p in get_operations() if re.search(r"\{(?!world_model_id|version_ref)", p)])
@@ -164,7 +164,7 @@ def test_every_missing_resource_is_a_declared_problem(c, ids, path):
 
 def test_the_writes_answer_as_declared(c, ids):
     p = "/world-models/{world_model_id}"
-    files = [("files", ("w.txt", b"Oct 22, 2026. The ECB cut its deposit rate by 25bp.", "text/plain"))]
+    files = [("files", ("w.txt", b"Oct 22, 2026. Credit spreads rose by 25bp.", "text/plain"))]
     r = c.post(f"{WM}/documents", files=files)
     check(op_of("post", p + "/documents"), r)
     doc = r.json()["data"]["result"]["detail"]["results"][0]
@@ -187,7 +187,7 @@ def test_the_writes_answer_as_declared(c, ids):
     check(op_of("post", p + "/changes/{change_id}/rejections"),
           c.post(url + "/rejections", json={"reason": "no"}, headers={**SIGNER.bearer(), "If-Match": etag}))
     decide_all(c, SIGNER)
-    check(op_of("post", p + "/theses"), c.post(f"{WM}/theses", json={"question": "What if the BoJ hiked by 25bp?"}))
+    check(op_of("post", p + "/theses"), c.post(f"{WM}/theses", json={"question": "What if the central bank hiked by 25bp?"}))
     check(op_of("post", p + "/theses"), c.post(f"{WM}/theses", json={"nonsense": 1}))
     check(op_of("post", p + "/theses/{thesis_id}/simulations"), c.post(f"{WM}/theses/{ids['thesis_id']}/simulations"))
     check(op_of("post", p + "/theses/{thesis_id}/simulations"), c.post(f"{WM}/theses/T-nope/simulations"))
@@ -198,9 +198,9 @@ def test_the_writes_answer_as_declared(c, ids):
 def test_every_companys_construction_answers_as_declared(c):
     """Every company built in the world (its compositions, paths, identities, stock-flows), not just one: each view
     projects onto the contract."""
-    g = c.app.state.world_models["sally_demo"].st.controller.engine.wm.graph
+    g = c.app.state.world_models["acme_demo"].st.controller.engine.wm.graph
     companies = sorted({x.entity_id for x in g.compositions.values()} | {p.entity_id for p in g.paths.values()})
-    assert len(companies) >= 10
+    assert len(companies) >= 3
     p = "/world-models/{world_model_id}/entities/{entity_id}"
     for eid in companies:
         for suffix in ("/construction", "/compositions", "/paths"):

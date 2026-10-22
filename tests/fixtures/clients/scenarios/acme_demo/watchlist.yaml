@@ -1,0 +1,10 @@
+name: Acme's book
+description: 'Invented names on the energy, rates, dollar, and credit themes: banks, a reinsurer, an automaker, a producer, and a shipper, in two regions.'
+entities:
+- acme_bank
+- delta_bank
+- acme_re
+- acme_motors
+- ridge_energy
+- blue_freight
+- harvest_bank

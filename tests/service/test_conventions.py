@@ -22,8 +22,8 @@ TRACE = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
 
 
 def concrete(path: str) -> str:
-    """A route's path in the sally_demo model, every other parameter filled by an id that names nothing."""
-    return re.sub(r"\{[^}]+\}", "nothing-here", path.replace("{world_model_id}", "sally_demo")).replace(
+    """A route's path in the acme_demo model, every other parameter filled by an id that names nothing."""
+    return re.sub(r"\{[^}]+\}", "nothing-here", path.replace("{world_model_id}", "acme_demo")).replace(
         "versions/nothing-here", "versions/999")
 
 

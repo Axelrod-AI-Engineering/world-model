@@ -1,4 +1,4 @@
-"""An imported model (emily_demo, sim/imports.py) through the API: seeded, a bundle previewed and imported, each item
+"""An imported model (acme_demo, sim/imports.py) through the API: seeded, a bundle previewed and imported, each item
 reviewed in date order, and a ready-made question posed."""
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ SAMPLE = json.loads((Path(__file__).resolve().parents[1] / "fixtures" / "import_
 
 @pytest.fixture(scope="module")
 def client():
-    app = create_app(scenario="emily_demo", storage=MemoryBackend(), trace_dir=None, play_delay=0.0)
+    app = create_app(scenario="acme_demo", storage=MemoryBackend(), trace_dir=None, play_delay=0.0)
     with TestClient(app) as c:
         yield c
 
@@ -38,10 +38,10 @@ def test_seeded_model(client):
     st = client.get("/api/sim/status").json()
     assert st["imports"] is True and st["canvas"] == "seeded" and st["examples"] is None
     view = client.get("/api/state").json()
-    assert {"boj", "dollar_yen", "tokio_marine", "toyota"} <= {e["id"] for e in view["entities"]}
-    assert {h["pattern_id"] for h in view["hulls"]} >= {"E1", "E2", "E6"}
+    assert {"central_bank", "dollar", "acme_re", "acme_motors"} <= {e["id"] for e in view["entities"]}
+    assert {h["pattern_id"] for h in view["hulls"]} >= {"S1", "S3", "G1"}
     ready = client.get("/api/scenario-theses").json()
-    assert {t["id"] for t in ready} >= {"E-T1", "E-T4"}
+    assert {t["id"] for t in ready} >= {"S-T1", "S-T4"}
 
 
 def test_preview_import_and_review_in_date_order(client):
@@ -62,7 +62,7 @@ def test_preview_import_and_review_in_date_order(client):
             break
         pid = pending[0]["proposal"]["id"]
         seen.append(pending[0]["proposal"]["market_event_id"])
-        assert client.post(f"/api/proposals/{pid}/approve", json={"by": "emily"}).status_code == 200
+        assert client.post(f"/api/proposals/{pid}/approve", json={"by": "eve"}).status_code == 200
     assert seen == ["IM-T-001", "IM-T-002"]
     again = client.post("/api/import/preview", json={"bundle": SAMPLE}).json()
     assert {x["id"]: x["status"] for x in again["items"]} == {"T-001": "imported", "T-002": "imported", "T-003": "new"}
@@ -70,11 +70,11 @@ def test_preview_import_and_review_in_date_order(client):
 
 
 def test_ready_made_question_forecasts_the_book(client):
-    fv = client.post("/api/theses/E-T4/pose").json()
+    fv = client.post("/api/theses/S-T1/pose").json()
     moved = {v["id"] for v in fv["transmission"]["values"]}
-    assert "dollar_yen.usd_jpy" in moved or "dollar_yen.usd_jpy" in {s["id"] for s in fv["transmission"]["shocked"]}
+    assert "crude_oil.price" in moved or "crude_oil.price" in {s["id"] for s in fv["transmission"]["shocked"]}
     book = {n["id"]: n["status"] for n in fv["transmission"]["watchlist"]["names"]}
-    assert book["tokio_marine"] in ("moves", "small")
+    assert book["acme_re"] in ("moves", "small")
 
 
 def test_local_bundles_listed_only_where_the_folder_exists(client):

@@ -13,9 +13,9 @@ import json
 from fastapi.testclient import TestClient
 from axelrod_wm.api.app import create_app
 from axelrod_wm.repo.snapshots import MemoryBackend
-app = create_app(scenario="sally_demo", storage=MemoryBackend(), trace_dir=None, play_delay=0.0)
+app = create_app(scenario="acme_demo", storage=MemoryBackend(), trace_dir=None, play_delay=0.0)
 with TestClient(app) as c:
-    pack = c.get("/v1/world-models/sally_demo/exports/v4.1.4").json()["data"]["domain_pack"]
+    pack = c.get("/v1/world-models/acme_demo/exports/v4.1.4").json()["data"]["domain_pack"]
 print(json.dumps(sorted((p["path_id"], p["primary_company_id"]) for p in pack["transmission_paths"])))
 """
 
@@ -38,7 +38,7 @@ from fastapi.testclient import TestClient
 from axelrod_wm.api.app import create_app
 from axelrod_wm.context.reading import build_reading_set
 from axelrod_wm.repo.snapshots import MemoryBackend
-app = create_app(scenario="sally_demo", storage=MemoryBackend(), trace_dir=None, play_delay=0.0)
+app = create_app(scenario="acme_demo", storage=MemoryBackend(), trace_dir=None, play_delay=0.0)
 with TestClient(app) as c:
     ctx = c.get("/api/context/v4").json()
 out = Path(tempfile.mkdtemp())

@@ -1,0 +1,21 @@
+# Delta Bank: business construction
+# A synthetic test fixture: invented companies and round numbers. Nothing here describes a real company or client.
+subentities:
+- entity: delta_bank
+  id: delta_bank.cet1_ratio
+  name: Delta Bank CET1 ratio
+  attribute_kind: structural_level
+  unit: pct
+  family: gaussian
+  prior:
+    family: gaussian
+    mu: 13.5
+    sigma: 0.3
+  scale: 0.3
+  aliases:
+  - Delta capital
+  - CET1
+  - CET1 ratio
+  features:
+    view: capital
+    prior: synthetic

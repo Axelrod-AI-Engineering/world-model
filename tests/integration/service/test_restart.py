@@ -40,7 +40,7 @@ def kept_of(c, res) -> dict:
         "raw": c.get(f"{doc}/content", params={"format": "raw"}).content,
         "bundle": data(c.get(f"{WM}/bundles/{res['bundle_id']}")),
         "items": data(c.get(f"{WM}/bundles/{res['bundle_id']}/items")),
-        "hits": data(c.get(f"{WM}/search", params={"q": "Brent crude", "mode": "keyword"})),
+        "hits": data(c.get(f"{WM}/search", params={"q": "crude price", "mode": "keyword"})),
         "counts": {k: v for k, v in data(c.get(WM))["counts"].items() if k in ("documents", "bundles")},
         "audit": data(c.get(f"{WM}/audit-events", params={"limit": 200}, headers=ADMIN)),
     }
@@ -53,8 +53,8 @@ def test_the_lakehouse_survives_a_restart_and_a_replay_rebuilds_the_model(tmp_pa
         propose(c, res["bundle_id"])
         review_all(c, note="matches the release")
         moved = version(c)
-        brent = attribute(c, "oil", "brent")["data"]
-        keyed = c.post(f"{WM}/documents", files=[("files", ("keyed.txt", b"Oct 9, 2026. The ECB held.", "text/plain"))],
+        crude = attribute(c, "crude_oil", "price")["data"]
+        keyed = c.post(f"{WM}/documents", files=[("files", ("keyed.txt", b"Oct 9, 2026. The central bank held.", "text/plain"))],
                        headers={"Idempotency-Key": "restart-1"})
         assert keyed.status_code == 202
         kept = kept_of(c, res)
@@ -64,9 +64,9 @@ def test_the_lakehouse_survives_a_restart_and_a_replay_rebuilds_the_model(tmp_pa
     with service(SIGNER, tmp_path) as c:
         # the lakehouse: all of it, unchanged
         assert kept_of(c, res) == kept and kept["raw"] == RATES_NOTE
-        assert [m.id for m in c.app.state.lake.world_models()] == ["sally_demo"]
+        assert [m.id for m in c.app.state.lake.world_models()] == ["acme_demo"]
         # idempotency keys and jobs are permanent: the same key, and the same content, get the first answers
-        replayed = c.post(f"{WM}/documents", files=[("files", ("keyed.txt", b"Oct 9, 2026. The ECB held.",
+        replayed = c.post(f"{WM}/documents", files=[("files", ("keyed.txt", b"Oct 9, 2026. The central bank held.",
                                                                 "text/plain"))], headers={"Idempotency-Key": "restart-1"})
         assert replayed.json() == keyed.json() and replayed.headers["location"] == keyed.headers["location"]
         assert data(c.get(keyed.headers["location"]))["status"] == "succeeded"
@@ -79,11 +79,11 @@ def test_the_lakehouse_survives_a_restart_and_a_replay_rebuilds_the_model(tmp_pa
         now = version(c)
         assert (now["number"], now["state_hash"]) == (start["number"], start["state_hash"])
         problem(c.get(f"{WM}/versions/{moved['number']}"), 404, "version_not_found")
-        problem(c.get(f"{WM}/graph", params={"entities": "oil", "version": moved["number"]}), 404, "version_not_found")
+        problem(c.get(f"{WM}/graph", params={"entities": "crude_oil", "version": moved["number"]}), 404, "version_not_found")
 
         # a replay of the stored bundle, with the same decisions, rebuilds the same state, exactly
         propose(c, res["bundle_id"])
         review_all(c, note="matches the release")
         replay = version(c)
         assert (replay["number"], replay["state_hash"]) == (moved["number"], moved["state_hash"])
-        assert attribute(c, "oil", "brent")["data"] == brent
+        assert attribute(c, "crude_oil", "price")["data"] == crude

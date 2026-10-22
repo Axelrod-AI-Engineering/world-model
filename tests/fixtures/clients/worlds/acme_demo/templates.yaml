@@ -1,0 +1,87 @@
+# Question rules for acme_demo: a synthetic test fixture (invented companies and themes).
+subjects:
+- pattern: 'acme re(?:''s)?(?: international| overseas)(?: profit| segment)?'
+  subentity: acme_re.international_profit
+- pattern: 'acme re(?:''s)?(?: shares| stock| share price)?'
+  subentity: acme_re.share_price
+- pattern: 'acme motors(?:''s)?(?: profit| earnings)'
+  subentity: acme_motors.operating_profit
+- pattern: acme motors
+  subentity: acme_motors.share_price
+- pattern: acme bank|acme
+  subentity: acme_bank.share_price
+- pattern: 'delta(?: bank)?'
+  subentity: delta_bank.share_price
+- pattern: 'ridge(?: energy)?'
+  subentity: ridge_energy.share_price
+- pattern: 'blue(?: freight)?'
+  subentity: blue_freight.share_price
+- pattern: (?:equity|stock) market|stocks|equities|share prices
+  subentity: capital_markets.equity_index
+- pattern: (?:market |credit )?volatility|vix
+  subentity: capital_markets.market_volatility
+- pattern: deal(?:making| activity)|m&a|issuance
+  subentity: capital_markets.deal_activity
+- pattern: credit spreads?|spreads
+  subentity: credit_markets.credit_spread
+- pattern: oil (?:supply|output)|supply outage
+  subentity: crude_oil.supply
+- pattern: 'oil(?: prices?)?|crude'
+  subentity: crude_oil.price
+- pattern: (?:freight|shipping) (?:costs?|rates?)|freight
+  subentity: shipping.freight_cost
+- pattern: '(?:the )?dollar(?: index)?|dxy'
+  subentity: dollar.index
+- pattern: (?:the )?euro
+  subentity: dollar.index
+  invert: true
+- pattern: (?:2|two)[- ]year (?:government )?(?:bond )?yields?
+  subentity: gov_bonds.yield_2y
+- pattern: (?:government |bond |ten-year |10-year )yields?|treasur(?:y|ies)
+  subentity: gov_bonds.yield_10y
+- pattern: (?:the )?central bank|policy rates?|interest rates|rates
+  subentity: central_bank.policy_rate
+- pattern: industrial (?:output|production)
+  subentity: economy.industrial_output
+- pattern: core (?:inflation|cpi)
+  subentity: economy.core_inflation
+- pattern: inflation|cpi
+  subentity: economy.headline_inflation
+- pattern: (?:real )?growth|gdp
+  subentity: economy.gdp_growth
+verbs:
+- pattern: (?:prices? )?(?:doubled|double|doubles)
+  mode: relative
+  delta: 1.0
+- pattern: (?:halved|halve|halves|fell by half)
+  mode: relative
+  delta: -0.5
+- pattern: '(?:rose|rise|rises|jumped|jump|jumps|climbed|climb|increased|increase|went up|go up|surged|hiked|hike|raised|raise)s?(?: [a-z]+)?
+    by (?P<num>[0-9.]+) ?(?P<unit>%|percent|bp|basis points|sd|standard deviations)?'
+  sign: 1.0
+- pattern: '(?:fell|fall|falls|dropped|drop|drops|declined|decline|decreased|decrease|went down|go down|cut|cuts)s?(?: [a-z]+)? by (?P<num>[0-9.]+)
+    ?(?P<unit>%|percent|bp|basis points|sd|standard deviations)?'
+  sign: -1.0
+- pattern: (?:held|hold|holds|stayed|stay) (?:steady|flat|unchanged)
+  mode: absolute
+  delta: 0.0
+- pattern: (?:spiked|spike|spikes|soared|soar|soars|surged|surge|surges)
+  mode: standardized
+  delta: 2.0
+- pattern: (?:crashed|crash|crashes|collapsed|collapse|collapses|plunged|plunge|plunges)
+  mode: standardized
+  delta: -2.0
+- pattern: (?:unwound|unwinds|unwinding|unwind)
+  mode: standardized
+  delta: -2.0
+timeframes:
+- pattern: next quarter|in three months|in 3 months
+  days: 90
+- pattern: next month|in a month
+  days: 30
+- pattern: next year|in a year
+  days: 365
+- pattern: next week
+  days: 7
+- pattern: tomorrow|today|now
+  days: 0

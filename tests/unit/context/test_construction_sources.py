@@ -226,8 +226,8 @@ def test_reconciliation_at_the_models_levels_flags_parts_that_do_not_add_up(grap
 
 def test_reconciliation_at_given_levels(graph):
     g = graph.model_copy(deep=True)
-    g.compositions["C1"] = g.compositions["C1"].model_copy(update={"residual": "acme.japan"})
-    lv = {"acme.profit": 10.0, "acme.auto": 6.0, "acme.finance": 4.5, "acme.elims": -0.5, "acme.japan": 0.02}
+    g.compositions["C1"] = g.compositions["C1"].model_copy(update={"residual": "acme.home"})
+    lv = {"acme.profit": 10.0, "acme.auto": 6.0, "acme.finance": 4.5, "acme.elims": -0.5, "acme.home": 0.02}
     c1 = next(r for r in reconcile(g, lv) if r["composition_id"] == "C1")
     assert c1["status"] == "ok" and c1["relative_difference"] == pytest.approx(-0.002)       # within 0.5%
     assert c1["residual_to_close"] == pytest.approx(0.0)                                     # the residual's 0.02 - 0.02
@@ -255,10 +255,10 @@ def test_a_part_with_a_negative_accounting_link_subtracts(graph):
 def test_reconciliation_of_a_zero_total_a_unit_mismatch_and_no_levels(graph):
     g = graph.model_copy(deep=True)
     g.subentities["acme.na"] = g.subentities["acme.na"].model_copy(update={"unit": "%"})
-    rows = {r["composition_id"]: r for r in reconcile(g, {"acme.profit": 0.0, "acme.japan": 0.0, "acme.na": 0.0})}
+    rows = {r["composition_id"]: r for r in reconcile(g, {"acme.profit": 0.0, "acme.home": 0.0, "acme.na": 0.0})}
     assert rows["C2"]["relative_difference"] == 0.0 and rows["C2"]["unit_mismatches"] == ["acme.na"]
     assert rows["C2"]["status"] == "flag"
-    z = reconcile(g, {"acme.profit": 0.0, "acme.japan": 1.0, "acme.na": 0.0})
+    z = reconcile(g, {"acme.profit": 0.0, "acme.home": 1.0, "acme.na": 0.0})
     assert next(r for r in z if r["composition_id"] == "C2")["relative_difference"] is None
     none = next(r for r in reconcile(g, {}) if r["composition_id"] == "C1")
     assert none["sum"] is None and none["difference"] is None and none["status"] == "blocked"

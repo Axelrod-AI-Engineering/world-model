@@ -1,5 +1,5 @@
 """Morgan Stanley's business construction (Oct 18): the compositions, operating and financial paths, and their transitions
-in data/worlds/sally_demo/construction/morgan_stanley.yaml, checked in the loaded model, in the v4.1.4 export, and
+in <client root>/worlds/sally_demo/construction/morgan_stanley.yaml, checked in the loaded model, in the v4.1.4 export, and
 through the service API (docs/construction/morgan_stanley.md has the gap register these tests close). An investment bank
 and wealth manager: its segments follow its drivers (markets and deals in Institutional Securities, client assets and
 rates in Wealth Management, AUM in Investment Management), so the segment view is the driven one. Sally's world loads
@@ -22,7 +22,10 @@ from axelrod_wm.model.construction import (
     reconcile_stock_flows,
     validate_construction,
 )
+from tests.clients import client_path, skip_without_client
 from tests.scenario import v1_reads as v1
+
+skip_without_client('sally_demo')
 
 MS = "morgan_stanley"
 P = "morgan_stanley."
@@ -81,7 +84,7 @@ PATHS = {  # the economics asked for -> the named path(s) that carry them
 REDUCED_FORMS = {"s75": "ms.path.rates_wm_nii", "s13": "ms.path.deals_ib", "s15": "ms.path.volatility",
                  "s17": "ms.path.volatility", "ms-c-equity-amfees": "ms.path.market_levels"}
 # the notes in the construction file (each sign-only link that could not take a new form says why)
-with open("data/worlds/sally_demo/construction/morgan_stanley.yaml") as _f:
+with open(client_path("worlds/sally_demo/construction/morgan_stanley.yaml")) as _f:
     NOTES = {i["id"]: i.get("note") or "" for i in yaml.safe_load(_f)["interactions"]}
 SOURCES = {"ms.wb", "ms.vm", "ms.co", "ms.r1", "ms.r2", "ms.r3", "ms.r4", "ms.r5", "ms.x1", "ms.pub"}
 

@@ -44,8 +44,8 @@ def norm2(v):
 
 def test_hashing_is_deterministic_and_unit_norm():
     e = HashingEmbedder()
-    a, b = e.embed(["Toyota raised its operating profit forecast", "Toyota raised its operating profit forecast"])
-    assert a == b == HashingEmbedder().embed(["Toyota raised its operating profit forecast"])[0]
+    a, b = e.embed(["Acme Motors raised its operating profit forecast", "Acme Motors raised its operating profit forecast"])
+    assert a == b == HashingEmbedder().embed(["Acme Motors raised its operating profit forecast"])[0]
     assert len(a) == 256 and e.name == "hashing-256" and e.dim == 256
     assert norm2(a) == pytest.approx(1.0, abs=1e-5)
     assert all(round(x, 6) == x for x in a)
@@ -53,7 +53,7 @@ def test_hashing_is_deterministic_and_unit_norm():
 
 def test_hashing_ignores_case_and_punctuation_but_not_words():
     e = HashingEmbedder(dim=64)
-    a, b, c = e.embed(["The BoJ hiked.", "the boj HIKED", "the ecb cut"])
+    a, b, c = e.embed(["The bank hiked.", "the bank HIKED", "the lender cut"])
     assert a == b and a != c and len(a) == 64 and e.name == "hashing-64"
     assert cosine(a, c) < 1.0
 

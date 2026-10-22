@@ -1,0 +1,129 @@
+# Acme's ready-made questions: a synthetic test fixture (invented companies and themes).
+theses:
+- id: S-T1
+  question: 'An oil supply shock: an outage sends crude up 30% for six months. Who gains and who is squeezed?'
+  mode: scaffolded
+  horizon_days: 180
+  targets:
+  - crude_oil.price
+  - economy.headline_inflation
+  - economy.gdp_growth
+  - shipping.freight_cost
+  - ridge_energy.operating_profit
+  - blue_freight.operating_profit
+  - acme_motors.operating_profit
+  target_groups:
+  - kind: superentity
+    ref: G3
+  - kind: superentity
+    ref: S1
+  event:
+    kind: hypothetical
+    event_type: policy
+    occurred_at: '2026-10-15 00:00:00+00:00'
+    ops:
+    - op: change_value
+      target:
+        kind: concrete
+        subentity_id: crude_oil.price
+      delta: 0.3
+      mode: relative
+      persistence: step
+      at: '2026-10-15 00:00:00+00:00'
+- id: S-T2
+  question: 'The central bank cuts 100 bp: yields fall. What happens to bank interest income and the reinsurer''s reinvestment?'
+  mode: scaffolded
+  horizon_days: 365
+  targets:
+  - central_bank.policy_rate
+  - gov_bonds.yield_10y
+  - acme_bank.net_interest_income
+  - delta_bank.net_interest_income
+  - acme_re.domestic_pc_profit
+  - dollar.index
+  target_groups:
+  - kind: superentity
+    ref: G1
+  - kind: superentity
+    ref: G2
+  event:
+    kind: hypothetical
+    event_type: policy
+    occurred_at: '2026-10-15 00:00:00+00:00'
+    ops:
+    - op: change_value
+      target:
+        kind: concrete
+        subentity_id: central_bank.policy_rate
+      delta: -1.0
+      mode: absolute
+      persistence: step
+      intervention: true
+      window_days: 365
+      at: '2026-10-15 00:00:00+00:00'
+- id: S-T3
+  question: 'A stronger dollar and wider credit spreads: the dollar index rises 8% and spreads blow out. Where does it land in the book?'
+  mode: scaffolded
+  horizon_days: 120
+  targets:
+  - dollar.index
+  - credit_markets.credit_spread
+  - capital_markets.market_volatility
+  - acme_bank.ib_fees
+  - delta_bank.markets_revenue
+  - acme_motors.operating_profit
+  - acme_re.international_profit
+  - acme_re.operating_profit
+  target_groups:
+  - kind: superentity
+    ref: S3
+  - kind: superentity
+    ref: S6
+  event:
+    kind: hypothetical
+    event_type: policy
+    occurred_at: '2026-10-15 00:00:00+00:00'
+    ops:
+    - op: change_value
+      target:
+        kind: concrete
+        subentity_id: credit_markets.credit_spread
+      delta: 2.0
+      mode: standardized
+      persistence: step
+      at: '2026-10-15 00:00:00+00:00'
+    - op: change_value
+      target:
+        kind: concrete
+        subentity_id: dollar.index
+      delta: 0.08
+      mode: relative
+      persistence: step
+      at: '2026-10-15 00:00:00+00:00'
+- id: S-T4
+  question: 'Shipping costs spike: freight rates double. What does it do to Blue Freight and Acme Motors?'
+  mode: scaffolded
+  horizon_days: 270
+  targets:
+  - shipping.freight_cost
+  - blue_freight.freight_revenue
+  - blue_freight.operating_profit
+  - economy.industrial_output
+  target_groups:
+  - kind: superentity
+    ref: S7
+  - kind: entity
+    ref: blue_freight
+  event:
+    kind: hypothetical
+    event_type: policy
+    occurred_at: '2026-10-15 00:00:00+00:00'
+    ops:
+    - op: change_value
+      target:
+        kind: concrete
+        subentity_id: shipping.freight_cost
+      delta: 1.0
+      mode: relative
+      persistence: step
+      at: '2026-10-15 00:00:00+00:00'

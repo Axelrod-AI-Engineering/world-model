@@ -142,10 +142,10 @@ def test_switch_refuses_a_second_demo_while_one_opens(state):
         out = await state.switch("prod_demo")             # the one already opening: its progress
         assert out["switching"]["demo"] == "prod_demo"
         with pytest.raises(ControllerError, match="already opening prod_demo"):
-            await state.switch("emily_demo")
+            await state.switch("oil_shock_demo")
         state.switching = None
         with pytest.raises(ControllerError, match="already opening a demo"):
-            await state.switch("emily_demo")
+            await state.switch("oil_shock_demo")
         state.switch_task.cancel()
 
     asyncio.run(go())

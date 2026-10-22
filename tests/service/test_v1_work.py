@@ -9,9 +9,9 @@ import pytest
 
 import axelrod_wm.api.v1.routes_work as work
 from tests.service.helpers import (
-    ECB_NOTE,
-    FED_NOTE,
     NOTE,
+    OIL_NOTE,
+    SPREAD_NOTE,
     WM,
     Signer,
     data,
@@ -25,9 +25,14 @@ from tests.service.helpers import (
 
 SIGNER = Signer()
 SUPPORT = {"format": "axelrod.import/v1", "title": "Agent research", "items": [
-    {"id": "AG-1", "published_at": "2026-08-10T00:00:00Z", "source": "agent", "headline": "A weaker yen lifts Toyota",
-     "signals": [{"type": "support", "source": "dollar_yen.usd_jpy", "target": "toyota.operating_profit",
-                  "strength": 0.6, "quote": "A weaker yen lifts Toyota"}]}]}
+    {"id": "AG-1", "published_at": "2026-08-10T00:00:00Z", "source": "agent", "headline": "A stronger dollar trims Acme Motors",
+     "signals": [{"type": "support", "source": "dollar.index", "target": "acme_motors.operating_profit",
+                  "strength": 0.6, "quote": "A stronger dollar trims Acme Motors"}]}]}
+# evidence on an earlier link, so that reading a later link's record by its id passes over other records first
+SUPPORT_EARLY = {"format": "axelrod.import/v1", "title": "Agent research, earlier link", "items": [
+    {"id": "AG-0", "published_at": "2026-08-09T00:00:00Z", "source": "agent", "headline": "The policy rate anchors the two-year yield",
+     "signals": [{"type": "support", "source": "central_bank.policy_rate", "target": "gov_bonds.yield_2y",
+                  "strength": 0.6, "quote": "The policy rate anchors the two-year yield"}]}]}
 
 
 @pytest.fixture(scope="module")
@@ -53,7 +58,7 @@ def test_an_upload_is_a_finished_job_naming_its_document_and_bundle(c, note):
 
 
 def test_upload_answers_202_with_a_location_to_poll(c):
-    r = c.post(f"{WM}/documents", files=[("files", ("x.txt", ECB_NOTE, "text/plain"))])
+    r = c.post(f"{WM}/documents", files=[("files", ("x.txt", SPREAD_NOTE, "text/plain"))])
     assert r.status_code == 202 and r.headers["location"] == f"{WM}/jobs/{r.json()['data']['id']}"
     job = data(c.get(r.headers["location"]))
     assert job == r.json()["data"] and job["type"] == "document_ingestion" and job["finished_at"]
@@ -73,7 +78,7 @@ def test_documents_list_by_cursor_one_chunks_content(c, note):
     chunks = data(c.get(f"{WM}/documents/{did}/chunks"))
     assert [ch["ordinal"] for ch in chunks] == [0, 1, 2]
     mentions = [m for ch in chunks for m in ch["mentions"]]
-    assert {"boj.policy_rate"} <= {m["attribute_id"] for m in mentions}
+    assert {"central_bank.policy_rate"} <= {m["attribute_id"] for m in mentions}
     assert data(c.get(f"{WM}/documents/{did}/chunks/1")) == chunks[1]
     problem(c.get(f"{WM}/documents/{did}/chunks/9"), 404, "chunk_not_found")
     problem(c.get(f"{WM}/documents/{did}/chunks/-1"), 422, "invalid_request")
@@ -95,7 +100,7 @@ def test_an_unreadable_document_and_a_file_gone(c, note, monkeypatch):
 
 
 def test_read_again_and_delete(c):
-    res = upload(c, b"Oct 2, 2026. The ECB cut its deposit rate by 25bp.", "again.txt")
+    res = upload(c, b"Oct 2, 2026. Credit spreads rose by 25bp.", "again.txt")
     job = data(c.post(f"{WM}/documents/{res['document_id']}/bundles"), 202)
     assert job["type"] == "document_extraction" and job["result"]["ids"] == [res["bundle_id"]]
     problem(c.post(f"{WM}/documents/nope/bundles"), 404, "document_not_found")
@@ -103,11 +108,11 @@ def test_read_again_and_delete(c):
     assert r.status_code == 204 and not r.content and r.headers["x-request-id"]
     problem(c.delete(f"{WM}/documents/{res['document_id']}"), 404, "document_not_found")
     # the kept answers that named it are forgotten, so the same content uploads afresh
-    assert upload(c, b"Oct 2, 2026. The ECB cut its deposit rate by 25bp.", "again.txt")["new"] is True
+    assert upload(c, b"Oct 2, 2026. Credit spreads rose by 25bp.", "again.txt")["new"] is True
 
 
 def test_a_failed_read_is_a_failed_job(c, monkeypatch):
-    res = upload(c, b"Oct 3, 2026. The Fed held.", "fails.txt")
+    res = upload(c, b"Oct 3, 2026. The central bank held.", "fails.txt")
 
     def boom(*a, **k):
         raise ValueError("the parser broke")
@@ -118,7 +123,7 @@ def test_a_failed_read_is_a_failed_job(c, monkeypatch):
 
 
 def test_a_bug_in_a_job_is_not_hidden(c, monkeypatch):
-    res = upload(c, b"Oct 4, 2026. The Fed held.", "bug.txt")
+    res = upload(c, b"Oct 4, 2026. The central bank held.", "bug.txt")
 
     def bug(*a, **k):
         raise RuntimeError("a bug")
@@ -170,14 +175,14 @@ def test_a_bundle_posted_whole_listed_and_its_items(c, note):
 # -- search ----------------------------------------------------------------------------------------------------------------------
 @pytest.mark.parametrize("mode", ["keyword", "prefix", "semantic", "graph", "hybrid"])
 def test_every_search_mode(c, note, mode):
-    body = c.get(f"{WM}/search", params={"q": "BoJ policy rate", "mode": mode}).json()
+    body = c.get(f"{WM}/search", params={"q": "central bank policy rate", "mode": mode}).json()
     assert body["data"] and body["meta"]["next_cursor"] is None and body["meta"]["version"]
 
 
 def test_search_names_attributes_with_their_entity(c):
-    hits = data(c.get(f"{WM}/search", params={"q": "Toyota op", "mode": "prefix"}))
-    att = next(h for h in hits if h["ref"] == "toyota.operating_profit")
-    assert att["kind"] == "attribute" and att["entity_id"] == "toyota"
+    hits = data(c.get(f"{WM}/search", params={"q": "Acme Motors op", "mode": "prefix"}))
+    att = next(h for h in hits if h["ref"] == "acme_motors.operating_profit")
+    assert att["kind"] == "attribute" and att["entity_id"] == "acme_motors"
     problem(c.get(f"{WM}/search", params={"q": ""}), 422, "invalid_request")
     problem(c.get(f"{WM}/search", params={"q": "x", "mode": "psychic"}), 422, "invalid_request")
 
@@ -229,37 +234,40 @@ def test_a_rejection_needs_a_reason(c):
 
 
 def test_a_second_proposal_while_one_waits_is_a_conflict(c):
-    a = upload(c, b"Oct 20, 2026. The ECB cut its deposit rate by 25bp.", "a.txt")
-    b = upload(c, b"Oct 21, 2026. The BoJ raised its policy rate by 25bp.", "b.txt")
+    a = upload(c, b"Oct 20, 2026. Credit spreads rose by 25bp.", "a.txt")
+    b = upload(c, b"Oct 21, 2026. The central bank raised its policy rate by 25bp.", "b.txt")
     assert propose(c, a["bundle_id"])["result"]["ids"]
     problem(c.post(f"{WM}/changes", json={"bundle_id": b["bundle_id"]}), 409, "update_in_progress")
     problem(c.post(f"{WM}/changes", json={"bundle_id": "nope"}), 404, "bundle_not_found")
     problem(c.post(f"{WM}/changes", json={"bundle_id": b["bundle_id"], "review": "auto"}), 422, "invalid_request")
     decide_all(c, SIGNER)
     # another proposal starting at the same moment (tests/integration/service/test_concurrency.py runs the race)
-    c.app.state.proposing.add("sally_demo")
+    c.app.state.proposing.add("acme_demo")
     try:
         problem(c.post(f"{WM}/changes", json={"bundle_id": b["bundle_id"]}), 409, "update_in_progress")
     finally:
-        c.app.state.proposing.discard("sally_demo")
+        c.app.state.proposing.discard("acme_demo")
     assert propose(c, b["bundle_id"])["result"]["ids"] and not c.app.state.proposing
     decide_all(c, SIGNER)
 
 
 def test_evidence_from_an_approved_support(c):
+    early = data(c.post(f"{WM}/bundles", json=SUPPORT_EARLY), 201)
+    propose(c, early["id"])
+    decide_all(c, SIGNER)
     b = data(c.post(f"{WM}/bundles", json=SUPPORT), 201)
-    before = data(c.get(f"{WM}/relationships/m29"))["evidence_count"]
+    before = data(c.get(f"{WM}/relationships/m24"))["evidence_count"]
     propose(c, b["id"])
     decide_all(c, SIGNER)
-    assert data(c.get(f"{WM}/relationships/m29"))["evidence_count"] == before + 1
-    ev = data(c.get(f"{WM}/relationships/m29/evidence", params={"limit": 200}))
-    assert ev[-1]["relationship_id"] == "m29" and ev[-1]["evidence_type"] and ev[-1]["epistemic_type"]
+    assert data(c.get(f"{WM}/relationships/m24"))["evidence_count"] == before + 1
+    ev = data(c.get(f"{WM}/relationships/m24/evidence", params={"limit": 200}))
+    assert ev[-1]["relationship_id"] == "m24" and ev[-1]["evidence_type"] and ev[-1]["epistemic_type"]
     assert data(c.get(f"{WM}/evidence/{ev[-1]['id']}")) == ev[-1]
 
 
 # -- events and what they did -------------------------------------------------------------------------------------------------------
 def test_events_and_their_impact(c):
-    res = upload(c, FED_NOTE, "fed.txt", source_type="data")
+    res = upload(c, OIL_NOTE, "oil.txt", source_type="data")
     job = propose(c, res["bundle_id"])
     ch = data(c.get(f"{WM}/changes/{job['result']['ids'][0]}"))
     pending = data(c.get(f"{WM}/events/{ch['event_id']}/impact-analysis"))
@@ -269,7 +277,7 @@ def test_events_and_their_impact(c):
     assert ch["id"] in ev["change_ids"] and ev["type"] in ("news", "data_release", "company_filing", "research")
     done = data(c.get(f"{WM}/events/{ch['event_id']}/impact-analysis"))
     direct = [i for i in done["impacts"] if i["order"] == 0]
-    assert done["status"] == "completed" and "oil.brent" in {i["attribute_id"] for i in direct}
+    assert done["status"] == "completed" and "crude_oil.price" in {i["attribute_id"] for i in direct}
     assert all(i["size_sd"] is not None for i in direct)
     on = [i for i in done["impacts"] if i["order"] == 1]
     assert on and all(i["causal_path_ids"] and i["confidence"] is not None for i in on)
@@ -292,13 +300,13 @@ def test_what_an_event_did_before_and_without_a_change(c, monkeypatch):
     assert data(c.get(f"{WM}/events/{eid}/impact-analysis")) == {
         "event_id": eid, "status": "not_imported", "model_version": data(c.get(WM))["latest_version"], "impacts": []}
     ops = [SimpleNamespace(), SimpleNamespace(target=SimpleNamespace(subentity_id="nobody.nothing")),
-           SimpleNamespace(target=SimpleNamespace(subentity_id="oil.brent"), delta=-3.0)]
+           SimpleNamespace(target=SimpleNamespace(subentity_id="crude_oil.price"), delta=-3.0)]
     pending = SimpleNamespace(status="pending", event=SimpleNamespace(id="ME-unapplied", ops=ops))
     monkeypatch.setattr(work, "changes_of_event", lambda ctl, event_id: [pending])
     out = data(c.get(f"{WM}/events/{eid}/impact-analysis"))
     assert out["status"] == "pending_review"
     direct = [i for i in out["impacts"] if i["order"] == 0]
-    assert [(i["attribute_id"], i["direction"], i["size_sd"]) for i in direct] == [("oil.brent", "negative", None)]
+    assert [(i["attribute_id"], i["direction"], i["size_sd"]) for i in direct] == [("crude_oil.price", "negative", None)]
     assert all(i["size_sd"] is None for i in out["impacts"] if i["order"] == 1)
 
 
@@ -315,10 +323,10 @@ def test_a_decision_no_update_waits_on_and_an_import_that_fails(c, monkeypatch):
     ok = data(c.post(f"{WM}/changes/{first}/approvals", json={}, headers={**reviewer(), "If-Match": etag_now(c)}), 201)
     assert ok["status"] == "approved"
     monkeypatch.undo()
-    st = c.app.state.world_models["sally_demo"].st
+    st = c.app.state.world_models["acme_demo"].st
     c.portal.call(st.drive, demo._resume_if_awaited(st, first))                # let this test's update finish
     decide_all(c, SIGNER)
-    other = upload(c, b"Oct 24, 2026. The ECB held its deposit rate.", "ecb2.txt")
+    other = upload(c, b"Oct 24, 2026. Credit spreads held steady.", "spreads2.txt")
 
     def busy(*a, **k):
         raise ControllerError("the engine is busy")
@@ -332,7 +340,7 @@ def test_a_decision_no_update_waits_on_and_an_import_that_fails(c, monkeypatch):
 def test_theses_from_a_question_or_a_template_and_their_simulations(c):
     templates = data(c.get(f"{WM}/thesis-templates", params={"limit": 200}))
     assert "S-T3" in {t["id"] for t in templates}
-    r = c.post(f"{WM}/theses", json={"question": "What if the BoJ hiked by 25bp next quarter?", "horizon_days": 120})
+    r = c.post(f"{WM}/theses", json={"question": "What if the central bank hiked by 25bp next quarter?", "horizon_days": 120})
     q = data(r, 201)
     assert q["horizon_days"] == 120 and q["simulation_ids"] == [] and r.headers["location"].endswith(q["id"])
     t = data(c.post(f"{WM}/theses", json={"template_id": "S-T3"}), 201)
@@ -373,7 +381,7 @@ def test_thesis_errors(c, monkeypatch):
     problem(c.post(f"{WM}/theses", json={"question": "x", "horizon_days": 6}), 422, "invalid_request")
     problem(c.get(f"{WM}/theses/T-nope"), 404, "thesis_not_found")
     problem(c.post(f"{WM}/theses/T-nope/simulations"), 404, "thesis_not_found")
-    st = c.app.state.world_models["sally_demo"].st
+    st = c.app.state.world_models["acme_demo"].st
     monkeypatch.setattr(st.controller, "scenario_dir", None)
     assert data(c.get(f"{WM}/thesis-templates")) == []
 
@@ -382,7 +390,7 @@ def test_an_unbound_thesis_is_a_failed_job(c, monkeypatch):
     from axelrod_wm.inference.task import UnboundThesis
 
     t = data(c.post(f"{WM}/theses", json={"template_id": "S-T1"}), 201)
-    st = c.app.state.world_models["sally_demo"].st
+    st = c.app.state.world_models["acme_demo"].st
 
     def unbound(thesis):
         raise UnboundThesis([{"op_index": 0, "end": "target", "candidates": []}])
@@ -395,7 +403,7 @@ def test_an_unbound_thesis_is_a_failed_job(c, monkeypatch):
 # -- idempotency ------------------------------------------------------------------------------------------------------------------------
 def test_a_retry_with_the_same_key_gets_the_first_answer(c, monkeypatch):
     h = {"Idempotency-Key": "upload-1"}
-    files = [("files", ("idem.txt", b"Idempotent note: Oct 9, 2026. The ECB held.", "text/plain"))]
+    files = [("files", ("idem.txt", b"Idempotent note: Oct 9, 2026. Credit spreads held.", "text/plain"))]
     first = c.post(f"{WM}/documents", files=files, headers=h)
     again = c.post(f"{WM}/documents", files=files, headers=h)
     assert first.status_code == again.status_code == 202 and again.json() == first.json()
@@ -412,7 +420,7 @@ def test_a_retry_with_the_same_key_gets_the_first_answer(c, monkeypatch):
     problem(c.post(f"{WM}/theses", json={"template_id": "S-nope"}, headers=bad), 404, "thesis_not_found")
     problem(c.post(f"{WM}/theses", json={"template_id": "S-nope"}, headers=bad), 404, "thesis_not_found")
     # keys never expire: they are rows in the lakehouse catalog, with no time on them
-    kept = c.app.state.lake.get_idempotency("default", "sally_demo", "/v1/world-models/{world_model_id}/documents",
+    kept = c.app.state.lake.get_idempotency("default", "acme_demo", "/v1/world-models/{world_model_id}/documents",
                                             "upload-1")
     assert kept.status == 202 and kept.headers["location"] == first.headers["location"]
     assert c.post(f"{WM}/documents", files=files, headers=h).json() == first.json()
@@ -421,7 +429,7 @@ def test_a_retry_with_the_same_key_gets_the_first_answer(c, monkeypatch):
 def test_the_same_content_gets_the_same_answer_whoever_sends_it(c):
     """Documents and bundles are keyed on their content too: with no header, from another caller, with other
     metadata, the same files (names and bytes) get the first answer, and its job stays readable."""
-    files = [("files", ("same.txt", b"Content note: Oct 11, 2026. The BoJ held.", "text/plain"))]
+    files = [("files", ("same.txt", b"Content note: Oct 11, 2026. The central bank held.", "text/plain"))]
     first = c.post(f"{WM}/documents", files=files, data={"source": "Desk"})
     assert first.status_code == 202 and first.json()["data"]["result"]["detail"]["results"][0]["new"] is True
     person = SIGNER.bearer(scope="world_model:read documents:create")

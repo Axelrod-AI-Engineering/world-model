@@ -59,8 +59,8 @@ def test_is_abbrev():
 
 
 def test_sentences_are_deterministic():
-    text = "The BoJ raised rates. JGB yields rose 10bp.\n\n- Brent fell 2%."
-    assert sentences(text) == sentences(text) == [(0, 21), (22, 43), (45, 61)]
+    text = "The Bank raised rates. Bond yields rose 10bp.\n\n- Crude fell 2%."
+    assert sentences(text) == sentences(text) == [(0, 22), (23, 45), (47, 63)]
 
 
 # -- chunks -----------------------------------------------------------------------------------------------------------
@@ -81,16 +81,16 @@ def test_chunks_group_sentences_within_a_paragraph():
 
 
 def test_chunks_never_cross_pages_and_carry_page_and_section():
-    p = Parsed("xlsx", (Segment("Sheet: A\nBoJ | 1.25", 1, "A"), Segment("", 2, "Empty"),
-                        Segment("Sheet: C\nECB | 2.25", 3, "C")))
+    p = Parsed("xlsx", (Segment("Sheet: A\nBank | 1.25", 1, "A"), Segment("", 2, "Empty"),
+                        Segment("Sheet: C\nBoard | 2.25", 3, "C")))
     cs = chunk(p, "t", "d")
-    assert [(c.text, c.page, c.section) for c in cs] == [("Sheet: A\nBoJ | 1.25", 1, "A"),
-                                                          ("Sheet: C\nECB | 2.25", 3, "C")]
+    assert [(c.text, c.page, c.section) for c in cs] == [("Sheet: A\nBank | 1.25", 1, "A"),
+                                                          ("Sheet: C\nBoard | 2.25", 3, "C")]
     _check(p, cs)
 
 
 def test_chunks_respect_max_chars_and_a_long_sentence_is_cut_at_spaces():
-    long = "The BoJ " + "very " * 40 + "slowly raised rates."
+    long = "The Bank " + "very " * 40 + "slowly raised rates."
     p = Parsed("text", (Segment(f"Short one. Short two. {long} Short three."),))
     cs = chunk(p, "t", "d", max_chars=30)
     texts = [c.text for c in cs]
@@ -113,12 +113,12 @@ def test_a_long_line_is_cut_at_line_breaks_first_then_hard_when_there_is_no_spac
 
 
 def test_every_table_row_is_a_sentence():
-    text = "Model inputs\nRate | 4.8 | %\nYen | 152 | per $\nThe end of the table."
+    text = "Model inputs\nRate | 4.8 | %\nDollar | 152 | per $\nThe end of the table."
     spans = [text[a:b] for a, b in sentences(text)]
-    assert spans == ["Model inputs", "Rate | 4.8 | %", "Yen | 152 | per $", "The end of the table."]
+    assert spans == ["Model inputs", "Rate | 4.8 | %", "Dollar | 152 | per $", "The end of the table."]
     # a row's cells are never cut at a sentence's end inside a cell
-    text = "BoJ rate | 1.0 | Raised in Sep. Held in Jul. | 2026-10-01\nNext."
-    assert [text[a:b] for a, b in sentences(text)] == ["BoJ rate | 1.0 | Raised in Sep. Held in Jul. | 2026-10-01",
+    text = "Bank rate | 1.0 | Raised in Sep. Held in Jul. | 2026-10-01\nNext."
+    assert [text[a:b] for a, b in sentences(text)] == ["Bank rate | 1.0 | Raised in Sep. Held in Jul. | 2026-10-01",
                                                        "Next."]
 
 
@@ -144,7 +144,7 @@ def test_wrapped_prose_stays_one_sentence_while_headings_and_labels_break():
     assert split(prose) == [prose]                                     # a full-width line wraps into the next
     long_line = "x" * 60
     assert split(f"{long_line}\nAmerica rose.") == [f"{long_line}\nAmerica rose."]
-    assert split("Price (31 Jul 2026) ¥6,994\nRIC: 6301.T") == ["Price (31 Jul 2026) ¥6,994", "RIC: 6301.T"]
+    assert split("Price (31 Jul 2026) $6,994\nRIC: RDGE.N") == ["Price (31 Jul 2026) $6,994", "RIC: RDGE.N"]
     heading = "Deposit Cost Reduction Helps Offset Yield Pressure For The Group"
     assert split(f"{heading}\nFollowing the results, margins rose.") == [heading, "Following the results, margins rose."]
 
@@ -155,9 +155,9 @@ def test_wire_headlines_and_symbol_bullets_break():
 
 
 def test_table_lines_are_sentences():
-    text = "As confirmed in the results, strength continued\n3/26 3/27E 3/28E\nRevenue (¥ bn) 4,132.8 4,472.9 4,738.1"
+    text = "As confirmed in the results, strength continued\n3/26 3/27E 3/28E\nRevenue ($ bn) 4,132.8 4,472.9 4,738.1"
     assert split(text) == ["As confirmed in the results, strength continued", "3/26 3/27E 3/28E",
-                           "Revenue (¥ bn) 4,132.8 4,472.9 4,738.1"]
+                           "Revenue ($ bn) 4,132.8 4,472.9 4,738.1"]
 
 
 def test_a_unit_after_a_figure_ends_no_abbreviation():
@@ -166,7 +166,7 @@ def test_a_unit_after_a_figure_ends_no_abbreviation():
 
 
 def test_symbol_bullets_and_whole_sheet_rows():
-    assert split("Intro text here\n◆ The BoJ hiked.") == ["Intro text here", "◆ The BoJ hiked."]
+    assert split("Intro text here\n◆ The Bank hiked.") == ["Intro text here", "◆ The Bank hiked."]
     row = "Label | " + " | ".join(str(k) for k in range(400))
     chunks = chunk(Parsed("xlsx", (Segment(row),)), "t", "d")
     assert [c.text for c in chunks] == [row]                      # a spreadsheet row longer than a chunk stays whole

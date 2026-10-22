@@ -189,7 +189,7 @@ Pull requests are stacked. Merging to `main` deploys, so nothing below merges wi
 
 ### 3.3 Transmission paths that match Sally's research
 
-- `data/scenarios/sally_demo/expected_paths.yaml` writes down, from her research, which channels each forecast must
+- `<client root>/scenarios/sally_demo/expected_paths.yaml` writes down, from her research, which channels each forecast must
   draw and with which sign, and which way each output must move. `tests/scenario/test_sally_expected_paths.py` holds
   the forecasts to it.
 - Outputs sit at the end of the path. An output that a chain carries past is echoed in the output column, so the

@@ -28,10 +28,10 @@ SPEC = yaml.safe_load((ROOT / "docs/api/openapi.yaml").read_text())
 A, B, R, ADM = "a" * 32, "b" * 32, "r" * 32, "m" * 32
 TWO_ORGS = dict(
     WORLD_MODEL_BASIC_AUTH_USERNAME="admin", WORLD_MODEL_BASIC_AUTH_PASSWORD="pw-admin",
-    WORLD_MODEL_LOGINS="emily:pw-emily:small_demo,dup:pw-dup:sally_demo",
+    WORLD_MODEL_LOGINS="eve:pw-eve:small_demo,dup:pw-dup:acme_demo",
     WORLD_MODEL_OWNERS="dup=acme",
     WORLD_MODEL_API_KEYS=(f"tester:{A}:admin:world_model:read+documents:create+changes:create+simulations:create+admin,"
-                          f"emily-tool:{B}:emily,reader:{R}:admin,ops:{ADM}:admin:admin"),
+                          f"eve-tool:{B}:eve,reader:{R}:admin,ops:{ADM}:admin:admin"),
 )
 
 
@@ -53,7 +53,7 @@ def operations():
 
 
 def concrete(path):
-    fixed = (V1 + path).replace("{world_model_id}", "sally_demo").replace("{version_ref}", "1").replace(
+    fixed = (V1 + path).replace("{world_model_id}", "acme_demo").replace("{version_ref}", "1").replace(
         "{ordinal}", "0")
     return re.sub(r"\{[a-z_]+\}", "x", fixed)
 
@@ -114,27 +114,27 @@ def test_me_names_the_key_and_its_models(c):
     me = data(c.get(f"{V1}/me"))
     assert me["actor"] == {"kind": "key", "org": "admin", "sub": "tester", "name": None, "azp": None, "act": None,
                            "jti": None}
-    assert "changes:approve" not in me["scopes"] and me["world_model_ids"] == ["sally_demo"]
+    assert "changes:approve" not in me["scopes"] and me["world_model_ids"] == ["acme_demo"]
 
 
 # -- organizations ---------------------------------------------------------------------------------------------------------
 def test_each_organization_sees_only_its_world_models(c):
-    assert [m["id"] for m in data(c.get(f"{V1}/world-models"))] == ["sally_demo"]
-    emily = data(c.get(f"{V1}/world-models", headers=as_(B)))
-    assert [m["id"] for m in emily] == ["small_demo"] and emily[0]["organization"] == "emily"
+    assert [m["id"] for m in data(c.get(f"{V1}/world-models"))] == ["acme_demo"]
+    eve = data(c.get(f"{V1}/world-models", headers=as_(B)))
+    assert [m["id"] for m in eve] == ["small_demo"] and eve[0]["organization"] == "eve"
     for url in (WM, f"{WM}/entities", f"{WM}/changes", f"{WM}/jobs/job_x"):
         problem(c.get(url, headers=as_(B)), 404, "world_model_not_found")
     problem(c.get(f"{V1}/world-models/small_demo"), 404, "world_model_not_found")
     problem(c.get(f"{V1}/world-models/nope"), 404, "world_model_not_found")
     # a second engine on the same scenario is named by its login, and WORLD_MODEL_OWNERS puts it in acme
     acme = data(c.get(f"{V1}/world-models", headers=SIGNER.bearer(org="acme")))
-    assert [m["id"] for m in acme] == ["dup-sally_demo"] and acme[0]["organization"] == "acme"
+    assert [m["id"] for m in acme] == ["dup-acme_demo"] and acme[0]["organization"] == "acme"
 
 
 def test_the_registry_is_in_the_lakehouse(c):
     rows = {r.id: r.org_id for r in c.app.state.lake.world_models()}
-    assert rows == {"sally_demo": "admin", "small_demo": "emily", "dup-sally_demo": "acme"}
-    assert [r.id for r in c.app.state.lake.world_models(org_id="emily")] == ["small_demo"]
+    assert rows == {"acme_demo": "admin", "small_demo": "eve", "dup-acme_demo": "acme"}
+    assert [r.id for r in c.app.state.lake.world_models(org_id="eve")] == ["small_demo"]
 
 
 def test_another_organizations_documents_stay_its_own(c):
@@ -146,7 +146,7 @@ def test_another_organizations_documents_stay_its_own(c):
 
 # -- decisions by a person --------------------------------------------------------------------------------------------------
 def test_only_a_person_decides(c):
-    res = upload(c, b"Oct 6, 2026. The BoJ raised its policy rate by 25bp to 1.25%.", "boj.txt")
+    res = upload(c, b"Oct 6, 2026. The central bank raised its policy rate by 25bp to 4.25%.", "rate.txt")
     first = propose(c, res["bundle_id"])["result"]["ids"][0]
     url = f"{WM}/changes/{first}/approvals"
     agent = dict(org="admin", act={"sub": "mcp-client:claude", "name": "Claude"})
@@ -177,7 +177,7 @@ def test_every_write_is_audited_with_who_asked(c):
     person = SIGNER.bearer(org="admin", scope="world_model:read simulations:create", jti="jti-person-1")
     t = data(c.post(f"{WM}/theses", json={"template_id": "S-T1"}, headers=person), 201)
     rows = data(c.get(f"{WM}/audit-events", params={"limit": 200}, headers=as_(ADM)))
-    assert rows and all(r["world_model_id"] == "sally_demo" for r in rows)
+    assert rows and all(r["world_model_id"] == "acme_demo" for r in rows)
     newest = rows[0]
     assert newest["method"] == "POST" and newest["route"] == "/v1/world-models/{world_model_id}/theses"
     assert newest["status"] == 201 and t["id"] in newest["resource_ids"] and newest["request_id"]
@@ -190,7 +190,7 @@ def test_every_write_is_audited_with_who_asked(c):
     assert decided and all(r["actor"]["kind"] in ("token", "session") for r in decided)
     page1 = c.get(f"{WM}/audit-events", params={"limit": 1}, headers=as_(ADM)).json()
     assert page1["meta"]["next_cursor"] and page1["data"][0] == newest
-    assert data(c.get(f"{V1}/world-models/small_demo/audit-events", headers=SIGNER.bearer(org="emily",
+    assert data(c.get(f"{V1}/world-models/small_demo/audit-events", headers=SIGNER.bearer(org="eve",
                                                                                           scope="admin"))) == []
 
 

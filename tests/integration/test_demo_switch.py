@@ -30,14 +30,16 @@ def client():
         yield c
 
 
-def test_the_menu_lists_five_demos(client):
+def test_the_menu_lists_the_repositorys_demos_and_the_clients(client):
     out = client.get("/api/demos").json()
-    assert [d["id"] for d in out["demos"]] == ["small_demo", "prod_demo", "oil_shock_demo", "emily_demo", "sally_demo"]
-    assert [d["label"] for d in out["demos"]] == ["Small demo", "Production demo", "Full demo", "Emily's demo", "Sally's demo"]
+    ids = [d["id"] for d in out["demos"]]
+    assert ids[:4] == ["small_demo", "prod_demo", "oil_shock_demo", "acme_demo"]    # then any real client demos
+    assert "acme_focus" not in ids                                                  # a focused view is no demo
+    assert [d["label"] for d in out["demos"]][:4] == ["Small demo", "Production demo", "Full demo", "Acme's demo"]
     assert out["current"] == "small_demo" and out["switching"] is None
     cur = {d["id"]: d for d in out["demos"]}
     assert cur["small_demo"]["current"] and cur["small_demo"]["ready"]
-    assert not cur["emily_demo"]["ready"] and not cur["emily_demo"]["cold"]      # no history to replay
+    assert not cur["acme_demo"]["ready"] and not cur["acme_demo"]["cold"]      # no history to replay
     assert client.post("/api/demos/no_such_demo").status_code == 404
 
 
@@ -50,25 +52,25 @@ def test_switching_keeps_each_demo_as_it_was_left(client):
 
     with client.websocket_connect("/ws") as ws:
         ws.send_json({"type": "hello", "since_seq": 10**9})
-        first = client.post("/api/demos/emily_demo").json()
-        assert first["switching"] is None or first["switching"]["demo"] == "emily_demo"
-        out = wait_for(client, "emily_demo")
+        first = client.post("/api/demos/acme_demo").json()
+        assert first["switching"] is None or first["switching"]["demo"] == "acme_demo"
+        out = wait_for(client, "acme_demo")
         # the page streaming the small demo is told to reload
         for _ in range(50):
             msg = ws.receive_json()
             if msg.get("type") == "switched":
-                assert msg["scenario"] == "emily_demo"
+                assert msg["scenario"] == "acme_demo"
                 break
         else:
             raise AssertionError("no switched message")
-    assert {d["id"]: d["ready"] for d in out["demos"]}["emily_demo"]
+    assert {d["id"]: d["ready"] for d in out["demos"]}["acme_demo"]
     st = client.get("/api/sim/status").json()
-    assert st["scenario_id"] == "emily_demo" and st["imports"] is True and st["pending_proposals"] == 0
+    assert st["scenario_id"] == "acme_demo" and st["imports"] is True and st["pending_proposals"] == 0
     # its own trace stream: none of the small demo's events
-    emily_trace = client.get("/api/trace").json()
-    loaded = [e for e in emily_trace if e["kind"] == "scenario.loaded"]
-    assert loaded and all(e["refs"] == ["emily_demo"] for e in loaded)
-    assert len(emily_trace) < len(small_trace) + 50
+    acme_trace = client.get("/api/trace").json()
+    loaded = [e for e in acme_trace if e["kind"] == "scenario.loaded"]
+    assert loaded and all(e["refs"] == ["acme_demo"] for e in loaded)
+    assert len(acme_trace) < len(small_trace) + 50
 
     # back to the small demo: immediate, and the waiting review is still there
     back = client.post("/api/demos/small_demo").json()
@@ -81,9 +83,9 @@ def test_sim_load_still_reloads_a_demo_from_its_start(client):
     client.post("/api/demos/small_demo")
     st = client.post("/api/sim/load", json={"scenario": "small_demo"}).json()
     assert st["scenario_id"] == "small_demo" and st["pending_proposals"] == 0
-    st = client.post("/api/sim/load", json={"scenario": "emily_demo"}).json()
-    assert st["scenario_id"] == "emily_demo"
-    assert client.get("/api/demos").json()["current"] == "emily_demo"
+    st = client.post("/api/sim/load", json={"scenario": "acme_demo"}).json()
+    assert st["scenario_id"] == "acme_demo"
+    assert client.get("/api/demos").json()["current"] == "acme_demo"
 
 
 def _sign_in(c: TestClient, username: str, password: str) -> None:
@@ -95,23 +97,23 @@ def test_a_login_switches_only_its_own_engine(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)          # the extra login's storage goes under var/
     monkeypatch.setenv("WORLD_MODEL_BASIC_AUTH_USERNAME", "manav")
     monkeypatch.setenv("WORLD_MODEL_BASIC_AUTH_PASSWORD", "test-password")
-    monkeypatch.setenv("WORLD_MODEL_LOGINS", "emily:other-password:emily_demo")
+    monkeypatch.setenv("WORLD_MODEL_LOGINS", "eve:other-password:acme_demo")
     app = create_app(scenario="small_demo", storage=MemoryBackend(), trace_dir=None)
 
     with TestClient(app) as c:
-        _sign_in(c, "emily", "other-password")
-        assert c.get("/api/demos").json()["current"] == "emily_demo"
+        _sign_in(c, "eve", "other-password")
+        assert c.get("/api/demos").json()["current"] == "acme_demo"
         c.post("/api/demos/small_demo")
         wait_for(c, "small_demo")
         c.cookies.clear()
-        # the main login still serves its own demo, and switching it leaves Emily's engine where she put it
+        # the main login still serves its own demo, and switching it leaves Acme's engine where she put it
         _sign_in(c, "manav", "test-password")
         assert c.get("/api/demos").json()["current"] == "small_demo"
-        c.post("/api/demos/emily_demo")
-        wait_for(c, "emily_demo")
+        c.post("/api/demos/acme_demo")
+        wait_for(c, "acme_demo")
         c.cookies.clear()
-        _sign_in(c, "emily", "other-password")
+        _sign_in(c, "eve", "other-password")
         assert c.get("/api/demos").json()["current"] == "small_demo"
         state = app.state
-        assert state.axelrod.runners["emily_demo"] is not state.axelrod_by_login["emily"].runners["emily_demo"]
-        assert (tmp_path / "var" / "axelrod" / "demo-emily-small_demo").is_dir()
+        assert state.axelrod.runners["acme_demo"] is not state.axelrod_by_login["eve"].runners["acme_demo"]
+        assert (tmp_path / "var" / "axelrod" / "demo-eve-small_demo").is_dir()

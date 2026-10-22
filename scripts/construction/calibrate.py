@@ -35,6 +35,7 @@ from pathlib import Path
 
 import yaml
 
+from axelrod_wm.clients import find_world, load_scenario_yaml, scenario_dirs
 from axelrod_wm.engine.construction_edit import EditError, edit_calibration, interaction_file
 from axelrod_wm.engine.initialize import ConstructionSpec, load_vocabulary, resolve_path, world_taxonomy_dir
 from axelrod_wm.model.calibrate import (
@@ -51,14 +52,15 @@ from axelrod_wm.model.calibrate import (
 
 def world_dir(world: str) -> Path:
     p = resolve_path(world)
-    return p if p.is_dir() else resolve_path(f"data/worlds/{world}")
+    return p if p.is_dir() else find_world(world) or resolve_path(f"data/worlds/{world}")
 
 
-def thesis_shocks(world: Path, scenarios: Path) -> dict[str, list[str]]:
-    """'<scenario>/<thesis id>' -> the values its event changes, for every scenario built on `world`."""
+def thesis_shocks(world: Path, scenarios: Path | None = None) -> dict[str, list[str]]:
+    """'<scenario>/<thesis id>' -> the values its event changes, for every scenario built on `world`. `scenarios` is a
+    folder of scenarios; by default the repository's and the client roots' (axelrod_wm/clients.py)."""
     out: dict[str, list[str]] = {}
-    for f in sorted(scenarios.glob("*/scenario.yaml")):
-        raw = yaml.safe_load(f.read_text()) or {}
+    for f in sorted(p for d in ([scenarios] if scenarios else scenario_dirs()) for p in d.glob("*/scenario.yaml")):
+        raw = load_scenario_yaml(f)
         built_on = (raw.get("initialization") or {}).get("construction_dir")
         if not built_on or resolve_path(built_on).resolve() != world.resolve():
             continue
@@ -149,7 +151,7 @@ def main(argv: list[str] | None = None) -> int:
                     help="sigma as a fraction of the effect, when no range is given (0.25; 0.5 for --support peer)")
     ap.add_argument("--allow-sign-flip", action="store_true")
     ap.add_argument("--reason", help="why the sign changes (recorded on the link)")
-    ap.add_argument("--scenarios", type=Path, default=resolve_path("data/scenarios"))
+    ap.add_argument("--scenarios", type=Path, default=None, help="a folder of scenarios (default: the repository's and the client roots')")
     ap.add_argument("--write", action="store_true", help="edit the construction file in place")
     a = ap.parse_args(argv)
 

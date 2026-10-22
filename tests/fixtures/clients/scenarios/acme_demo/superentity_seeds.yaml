@@ -1,0 +1,201 @@
+# Acme's superentities: a synthetic test fixture (invented companies and themes).
+patterns:
+- id: S1
+  name: Oil and prices
+  description: Expensive crude lifts inflation and freight within a quarter and weighs on growth after two.
+  palette: h2
+  members:
+  - crude_oil
+  - economy
+  - shipping
+  interactions:
+  - m01
+  - m02
+  - m03
+  - m04
+  - m05
+  - m15
+  - m16
+  support: 4
+- id: S2
+  name: Policy reaction and yields
+  description: Inflation and growth set the central bank's rate; the rate anchors the two-year and, through it, the ten-year.
+  palette: h8
+  members:
+  - economy
+  - central_bank
+  - gov_bonds
+  interactions:
+  - m05
+  - m06
+  - m07
+  - m08
+  - m09
+  - m16
+  support: 5
+- id: S3
+  name: Dollar and credit
+  description: A higher policy rate strengthens the dollar and widens credit spreads, which cool dealmaking and lift volatility.
+  palette: h19
+  members:
+  - central_bank
+  - dollar
+  - credit_markets
+  - capital_markets
+  interactions:
+  - m10
+  - m11
+  - m13
+  - m14
+  - m41
+  support: 4
+- id: S4
+  name: Banks and capital markets
+  description: 'Acme Bank and Delta: interest income follows the policy rate; fees follow dealmaking; trading follows volatility.'
+  palette: h1
+  members:
+  - central_bank
+  - gov_bonds
+  - capital_markets
+  - acme_bank
+  - delta_bank
+  interactions:
+  - m08
+  - m09
+  - m17
+  - m18
+  - m19
+  support: 4
+- id: S5
+  name: Reinsurer reinvestment and translation
+  description: Acme Re reinvests at government yields and translates overseas profit at the dollar; spreads mark its bonds.
+  palette: h3
+  members:
+  - gov_bonds
+  - dollar
+  - credit_markets
+  - acme_re
+  interactions:
+  - m09
+  - m20
+  - m21
+  - m22
+  - m23
+  support: 4
+- id: S6
+  name: Dollar-sensitive exporter
+  description: 'Acme Motors: a stronger dollar trims profit; crude and growth set its volumes.'
+  palette: h4
+  members:
+  - dollar
+  - economy
+  - crude_oil
+  - acme_motors
+  interactions:
+  - m01
+  - m02
+  - m04
+  - m05
+  - m16
+  - m24
+  - m25
+  - m26
+  support: 4
+- id: S7
+  name: Energy and freight
+  description: Ridge Energy gains from dear crude; Blue Freight gains on freight but pays for fuel.
+  palette: h6
+  members:
+  - crude_oil
+  - shipping
+  - ridge_energy
+  - blue_freight
+  interactions:
+  - m01
+  - m03
+  - m27
+  - m28
+  - m29
+  - m30
+  - m31
+  - m32
+  support: 4
+- id: G1
+  name: Banks and credit
+  description: Banks whose income follows the policy rate and whose fees and trading follow credit and dealmaking.
+  palette: h11
+  sub_patterns:
+  - S3
+  - S4
+  members:
+  - central_bank
+  - dollar
+  - credit_markets
+  - capital_markets
+  - gov_bonds
+  - acme_bank
+  - delta_bank
+  interactions:
+  - m10
+  - m11
+  - m13
+  - m14
+  - m08
+  - m09
+  - m17
+  - m18
+  - m19
+  - m41
+  support: 5
+- id: G2
+  name: Insurer on yields and the dollar
+  description: The reinsurer's investment income rides government yields and its overseas profit rides the dollar.
+  palette: h13
+  sub_patterns:
+  - S5
+  members:
+  - gov_bonds
+  - dollar
+  - credit_markets
+  - acme_re
+  interactions:
+  - m09
+  - m20
+  - m21
+  - m22
+  - m23
+  support: 5
+- id: G3
+  name: Energy and industrials
+  description: 'Crude, freight, and the companies whose profit follows them: an oil producer, a shipper, and an exporter.'
+  palette: h14
+  sub_patterns:
+  - S1
+  - S6
+  - S7
+  members:
+  - crude_oil
+  - economy
+  - shipping
+  - dollar
+  - acme_motors
+  - ridge_energy
+  - blue_freight
+  interactions:
+  - m01
+  - m02
+  - m03
+  - m04
+  - m05
+  - m15
+  - m16
+  - m24
+  - m25
+  - m26
+  - m27
+  - m28
+  - m29
+  - m30
+  - m31
+  - m32
+  support: 5

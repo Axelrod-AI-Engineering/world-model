@@ -22,7 +22,7 @@ REACHED = {"macro.tariff", "acme.landed_cost", "acme.na", "acme.auto"}
 
 
 def test_coverage_splits_reached_links_into_contributed_and_excluded(graph):
-    cov = forecast_coverage(graph, ["macro.tariff"], REACHED, ["acme.profit", "acme.japan"],
+    cov = forecast_coverage(graph, ["macro.tariff"], REACHED, ["acme.profit", "acme.home"],
                             {"t2": -0.2, "a4": 0.05}, live={"t2", "a4"}, absent={"t3"})
     assert [(r["interaction_id"], r["contribution_sd"]) for r in cov["contributed"]] == [("t2", -0.2), ("a4", 0.05)]
     assert cov["contributed"][1]["edge_type"] == "accounting"
@@ -39,7 +39,7 @@ def test_coverage_splits_reached_links_into_contributed_and_excluded(graph):
          "quantified_routes_through_own_steps": 0, "quantified_routes_through_summary_links_only": 0, "own_steps": 4,
          "own_steps_quantified": 2, "share_own_steps_quantified": 0.5,
          "own_steps_unquantified": ["a0", "t3"], "truncated": False},
-        {"target": "acme.japan", "routes": 0, "quantified_routes": 0, "share_quantified": None,
+        {"target": "acme.home", "routes": 0, "quantified_routes": 0, "share_quantified": None,
          "quantified_routes_through_own_steps": 0, "quantified_routes_through_summary_links_only": 0, "own_steps": 0,
          "own_steps_quantified": 0, "share_own_steps_quantified": None, "own_steps_unquantified": [],
          "truncated": False}]

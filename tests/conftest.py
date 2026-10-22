@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from datetime import date, datetime, timezone
+from pathlib import Path
 
 import pytest
 
@@ -13,7 +14,12 @@ from axelrod_wm.engine.initialize import ConstructionSpec, Initializer, SeedFile
 from axelrod_wm.repo.snapshots import MemoryBackend
 from axelrod_wm.trace import NullTracer
 
-START_DATE = date(2023, 1, 2)                     # day 0 of the constructed engine
+# the synthetic client first, then whatever client root the run names (or data/clients): tests/clients.py
+_REAL_CLIENTS = os.environ.get("WORLD_MODEL_CLIENT_DIR") or str(Path(__file__).resolve().parents[1] / "data" / "clients")
+os.environ["WORLD_MODEL_CLIENT_DIR"] = os.pathsep.join([str(Path(__file__).resolve().parent / "fixtures" / "clients"),
+                                                        _REAL_CLIENTS])
+
+START_DATE = date(2023, 1, 2)                   # day 0 of the constructed engine
 START = datetime(2023, 1, 2, tzinfo=timezone.utc)
 SEEDS = "data/scenarios/oil_shock_demo/superentity_seeds.yaml"
 VOCAB = load_vocabulary("data/taxonomy")

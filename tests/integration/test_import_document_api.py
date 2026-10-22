@@ -13,19 +13,19 @@ from axelrod_wm.repo.snapshots import MemoryBackend
 
 # synthetic text, written for this test
 NOTE = (b"Desk rates note, October 5, 2026.\n\n"
-        b"The BoJ raised its policy rate by 25bp to 1.25%. USD/JPY fell to 152 as the yen strengthened.\n\n"
-        b"Brent crude lifts Komatsu operating profit. Higher oil prices lift Japan's core inflation.\n\n"
-        b"Toyota's operating profit rose 4% y/y.")
+        b"The central bank raised its policy rate by 25bp to 4.25%. The dollar index fell to 98 as the dollar weakened.\n\n"
+        b"Crude oil lifts Acme Re adjusted net income. Higher oil prices lift headline inflation.\n\n"
+        b"Acme Motors's operating profit rose 4% y/y.")
 BUNDLE = {"format": "axelrod.import/v1", "title": "Hand-written bundle", "items": [
     {"id": "T-1", "published_at": "2026-10-06T08:00:00Z", "source": "Test desk", "headline": "Two claims, one unknown",
-     "signals": [{"type": "move", "value_of": "toyota.operating_profit", "delta": 0.5, "mode": "standardized",
+     "signals": [{"type": "move", "value_of": "acme_motors.operating_profit", "delta": 0.5, "mode": "standardized",
                   "quote": "Two claims"},
                  {"type": "observe", "value_of": "nowhere.nothing", "value": 1.0, "quote": "one unknown"}]}]}
 
 
 @pytest.fixture(scope="module")
 def client(tmp_path_factory):
-    app = create_app(scenario="emily_demo", storage=MemoryBackend(), trace_dir=None, play_delay=0.0,
+    app = create_app(scenario="acme_demo", storage=MemoryBackend(), trace_dir=None, play_delay=0.0,
                      lake_dir=tmp_path_factory.mktemp("lake"))
     with TestClient(app) as c:
         yield c
@@ -52,19 +52,19 @@ def test_a_document_becomes_a_bundle_and_its_update_op_by_op(client, view):
     for o in (o for it in view["items"] for o in it["ops"]):
         ops.setdefault((o["op"], o["signal"]), o)          # the first of each kind, in the document's order
     level = ops[("observe_value", "observe")]
-    assert level["values"] == ["boj.policy_rate"] and level["value"] == 1.25 and level["z"] > 0
-    assert level["quote"] == "The BoJ raised its policy rate by 25bp to 1.25%." and level["table_row"] is False
+    assert level["values"] == ["central_bank.policy_rate"] and level["value"] == 4.25 and level["z"] > 0
+    assert level["quote"] == "The central bank raised its policy rate by 25bp to 4.25%." and level["table_row"] is False
     move = ops[("change_value", "move")]
     assert move["mode"] in ("absolute", "relative") and move["z"] > 0
     new = ops[("add_interaction", "link")]
-    assert (new["source"], new["target"], new["polarity"]) == ("oil.brent", "komatsu.operating_profit", 1)
+    assert (new["source"], new["target"], new["polarity"]) == ("crude_oil.price", "acme_re.operating_profit", 1)
     assert new["effect"] > 0 and new["label"] == "lifts"
     ev = ops[("reweight_interaction", "support")]
-    assert (ev["source"], ev["target"], ev["supports"]) == ("oil.brent", "japan_economy.core_cpi", True)
+    assert (ev["source"], ev["target"], ev["supports"]) == ("crude_oil.price", "economy.headline_inflation", True)
     assert ev["interaction_id"] in {i["id"] for i in client.get("/api/state").json()["links"]}
     # every value an op touches is described, and every item names its chunk, whose text holds the quote
     touched = {v for it in view["items"] for o in it["ops"] for v in o["values"]}
-    assert touched <= set(view["values"]) and view["values"]["boj.policy_rate"]["entity"] == "Bank of Japan"
+    assert touched <= set(view["values"]) and view["values"]["central_bank.policy_rate"]["entity"] == "Central bank"
     chunks = {c["ord"]: c["text"] for c in view["chunks"]}
     for it in view["items"]:
         assert it["event_id"] == f"GUE-IM-{it['id']}" and it["imported"] is False and it["dropped"] == []

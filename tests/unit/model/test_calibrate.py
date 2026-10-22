@@ -45,7 +45,7 @@ def construction():
     c["subentities"] += [{"entity": "acme", **_s("acme.price", family="lognormal", mean=50.0, scale=0.1)},
                          {"entity": "acme", **_s("acme.margin", family="beta", mean=0.2, scale=0.5)}]
     c["interactions"] += [
-        {"id": "t4", "source": "macro.tariff", "target": "acme.japan", "label": "dents", "effect": {"mu": -0.2},
+        {"id": "t4", "source": "macro.tariff", "target": "acme.home", "label": "dents", "effect": {"mu": -0.2},
          "kernel": {"delay_days": 1, "lag_days": 5, "duration_days": None},
          "transition": {**TRANSITION, "sign": None, "evidence": {"magnitude": "unknown", "sources": ["s1"]}},
          "note": "kept"},
@@ -136,11 +136,11 @@ def test_a_sign_flip_needs_permission_and_a_reason_and_is_recorded(acme):
 
 def test_which_forecasts_stop_listing_the_link(acme):
     _, spec, _ = acme
-    shocks = {"S/T1": ["macro.tariff"], "S/T2": ["acme.japan"], "S/T3": ["acme.price"]}
+    shocks = {"S/T1": ["macro.tariff"], "S/T2": ["acme.home"], "S/T3": ["acme.price"]}
     assert unquantified_change(spec, shocks, "t1") == {
         "S/T1": {"leaves": "t1", "enters": ["t6"]},                       # landed cost is now reached, so t6 is
         "S/T3": {"leaves": "t1", "enters": ["t6"]}}                       # t5 is bidirectional: price reaches tariff
-    assert unquantified_change(spec, {"S/T2": ["acme.japan"]}, "t1") == {}
+    assert unquantified_change(spec, {"S/T2": ["acme.home"]}, "t1") == {}
 
 
 # -- the text edit ----------------------------------------------------------------------------------------------------
@@ -346,4 +346,5 @@ def test_the_script_prints_and_writes(acme, tmp_path, capsys):
     assert "no forecast of this world's scenarios" in capsys.readouterr().out
     assert script.main([str(d), "a0", "--source-change", "1", "--target-change", "1", "--evidence", "x"]) == 1
     assert "REFUSED" in capsys.readouterr().out
-    assert script.world_dir("sally_demo").resolve() == ROOT / "data" / "worlds" / "sally_demo"
+    assert script.world_dir("small_demo").resolve() == ROOT / "data" / "worlds" / "small_demo"
+    assert script.world_dir("acme_demo").resolve() == (ROOT / "tests" / "fixtures" / "clients" / "worlds" / "acme_demo").resolve()      # a client world, by name

@@ -1,0 +1,562 @@
+# Acme Bank: business construction
+# A synthetic test fixture: invented companies and round numbers. Nothing here describes a real company or client.
+subentities:
+- entity: capital_markets
+  id: capital_markets.equity_index
+  name: US equity market level
+  attribute_kind: asset_price
+  unit: index
+  family: lognormal
+  mean: 6500.0
+  scale: 0.08
+  aliases:
+  - S&P 500
+  - US stocks
+  - US equities
+  features:
+    view: operating_state
+    prior: synthetic
+- entity: acme_bank
+  id: acme_bank.net_revenue
+  name: Acme Bank net revenue
+  attribute_kind: revenue_flow
+  unit: $bn/yr
+  family: lognormal
+  mean: 188.0
+  scale: 0.04
+  features:
+    view: product
+    prior: synthetic
+- entity: acme_bank
+  id: acme_bank.equity_markets
+  name: Acme Bank Equity Markets revenue
+  attribute_kind: revenue_flow
+  unit: $bn/yr
+  family: lognormal
+  mean: 11.0
+  scale: 0.1
+  features:
+    view: product
+    prior: synthetic
+- entity: acme_bank
+  id: acme_bank.markets_nii
+  name: Acme Bank Markets net interest income
+  attribute_kind: revenue_flow
+  unit: $bn/yr
+  family: lognormal
+  mean: 8.0
+  scale: 0.2
+  features:
+    view: product
+    prior: synthetic
+- entity: acme_bank
+  id: acme_bank.nii_ex_markets
+  name: Acme Bank NII ex Markets
+  attribute_kind: revenue_flow
+  unit: $bn/yr
+  family: lognormal
+  mean: 94.0
+  scale: 0.055
+  features:
+    view: product
+    prior: synthetic
+- entity: acme_bank
+  id: acme_bank.other_revenue
+  name: Acme Bank other revenue
+  attribute_kind: revenue_flow
+  unit: $bn/yr
+  family: gaussian
+  prior:
+    family: gaussian
+    mu: 52.5
+    sigma: 2.0
+  scale: 2.0
+  features:
+    view: product
+    prior: synthetic
+- entity: acme_bank
+  id: acme_bank.avg_loans
+  name: Acme Bank average loans
+  attribute_kind: balance
+  unit: $bn
+  family: lognormal
+  mean: 2000.0
+  scale: 0.03
+  features:
+    view: product
+    prior: synthetic
+- entity: acme_bank
+  id: acme_bank.loan_coupon
+  name: Acme Bank loan coupon
+  attribute_kind: bond_yield
+  unit: pct
+  family: gaussian
+  prior:
+    family: gaussian
+    mu: 7.4
+    sigma: 0.4
+  scale: 0.4
+  features:
+    view: product
+    prior: synthetic
+- entity: acme_bank
+  id: acme_bank.interest_income
+  name: Acme Bank interest income
+  attribute_kind: revenue_flow
+  unit: $bn/yr
+  family: lognormal
+  mean: 148.0
+  scale: 0.05
+  features:
+    view: product
+    prior: synthetic
+- entity: acme_bank
+  id: acme_bank.interest_expense
+  name: Acme Bank interest expense
+  attribute_kind: revenue_flow
+  unit: $bn/yr
+  family: gaussian
+  prior:
+    family: gaussian
+    mu: -46.0
+    sigma: 4.0
+  scale: 4.0
+  features:
+    view: product
+    prior: synthetic
+- entity: acme_bank
+  id: acme_bank.deposit_cost
+  name: Acme Bank deposit cost
+  attribute_kind: bank_funding_cost
+  unit: pct
+  family: gaussian
+  prior:
+    family: gaussian
+    mu: 2.1
+    sigma: 0.3
+  scale: 0.3
+  features:
+    view: product
+    prior: synthetic
+- entity: acme_bank
+  id: acme_bank.cet1_capital
+  name: Acme Bank CET1 capital
+  attribute_kind: balance
+  unit: $bn
+  family: lognormal
+  mean: 285.0
+  scale: 0.03
+  features:
+    view: capital
+    prior: synthetic
+- entity: acme_bank
+  id: acme_bank.rwa
+  name: Acme Bank risk-weighted assets
+  attribute_kind: balance
+  unit: $bn
+  family: lognormal
+  mean: 1840.0
+  scale: 0.03
+  features:
+    view: capital
+    prior: synthetic
+- entity: acme_bank
+  id: acme_bank.net_income
+  name: Acme Bank net income
+  attribute_kind: revenue_flow
+  unit: $bn/yr
+  family: lognormal
+  mean: 60.0
+  scale: 0.07
+  features:
+    view: capital
+    prior: synthetic
+- entity: acme_bank
+  id: acme_bank.dividends
+  name: Acme Bank dividends
+  attribute_kind: revenue_flow
+  unit: $bn/yr
+  family: lognormal
+  mean: 16.0
+  scale: 0.05
+  features:
+    view: capital
+    prior: synthetic
+- entity: acme_bank
+  id: acme_bank.buybacks
+  name: Acme Bank buybacks
+  attribute_kind: revenue_flow
+  unit: $bn/yr
+  family: lognormal
+  mean: 30.0
+  scale: 0.15
+  features:
+    view: capital
+    prior: synthetic
+- entity: acme_bank
+  id: acme_bank.consumer_revenue
+  name: Acme Bank consumer revenue
+  attribute_kind: revenue_flow
+  unit: $bn/yr
+  family: lognormal
+  mean: 80.0
+  scale: 0.04
+  features:
+    view: reporting_segments
+    prior: synthetic
+- entity: acme_bank
+  id: acme_bank.wholesale_revenue
+  name: Acme Bank wholesale revenue
+  attribute_kind: revenue_flow
+  unit: $bn/yr
+  family: lognormal
+  mean: 100.0
+  scale: 0.06
+  features:
+    view: reporting_segments
+    prior: synthetic
+- entity: acme_bank
+  id: acme_bank.corporate_revenue
+  name: Acme Bank corporate revenue
+  attribute_kind: revenue_flow
+  unit: $bn/yr
+  family: gaussian
+  prior:
+    family: gaussian
+    mu: 8.0
+    sigma: 3.0
+  scale: 3.0
+  features:
+    view: reporting_segments
+    prior: synthetic
+interactions:
+- id: ab-a-nii
+  source: acme_bank.nii_ex_markets
+  target: acme_bank.net_revenue
+  label: adds to net revenue
+  edge_type: accounting
+  effect:
+    mu: 0.688
+    sigma: 0.001
+  kernel:
+    delay_days: 0
+    lag_days: 1
+    duration_days: null
+  transition:
+    mechanism: Acme Bank NII ex Markets is one part of Acme Bank net revenue; the weight is its scale over the total's
+    timing:
+      onset: same reporting period
+      build: none
+      persistence: identity
+      recognition: quarterly results
+    evidence:
+      existence: documented
+      direction: documented
+      magnitude: model
+      timing: documented
+      sources:
+      - acme.pub
+- id: ab-a-mkts
+  source: acme_bank.markets_revenue
+  target: acme_bank.net_revenue
+  label: adds to net revenue
+  edge_type: accounting
+  effect:
+    mu: 0.298
+    sigma: 0.001
+  kernel:
+    delay_days: 0
+    lag_days: 1
+    duration_days: null
+  transition:
+    mechanism: Acme Bank markets revenue is one part of Acme Bank net revenue; the weight is its scale over the total's
+    timing:
+      onset: same reporting period
+      build: none
+      persistence: identity
+      recognition: quarterly results
+    evidence:
+      existence: documented
+      direction: documented
+      magnitude: model
+      timing: documented
+      sources:
+      - acme.pub
+- id: ab-a-ib
+  source: acme_bank.ib_fees
+  target: acme_bank.net_revenue
+  label: adds to net revenue
+  edge_type: accounting
+  effect:
+    mu: 0.101
+    sigma: 0.001
+  kernel:
+    delay_days: 0
+    lag_days: 1
+    duration_days: null
+  transition:
+    mechanism: Acme Bank investment banking fees is one part of Acme Bank net revenue; the weight is its scale over the total's
+    timing:
+      onset: same reporting period
+      build: none
+      persistence: identity
+      recognition: quarterly results
+    evidence:
+      existence: documented
+      direction: documented
+      magnitude: model
+      timing: documented
+      sources:
+      - acme.pub
+- id: ab-a-other
+  source: acme_bank.other_revenue
+  target: acme_bank.net_revenue
+  label: adds to net revenue
+  edge_type: accounting
+  effect:
+    mu: 0.266
+    sigma: 0.001
+  kernel:
+    delay_days: 0
+    lag_days: 1
+    duration_days: null
+  transition:
+    mechanism: Acme Bank other revenue is one part of Acme Bank net revenue; the weight is its scale over the total's
+    timing:
+      onset: same reporting period
+      build: none
+      persistence: identity
+      recognition: quarterly results
+    evidence:
+      existence: documented
+      direction: documented
+      magnitude: model
+      timing: documented
+      sources:
+      - acme.pub
+- id: ab-a-nii-income
+  source: acme_bank.interest_income
+  target: acme_bank.net_interest_income
+  label: adds to net interest income
+  edge_type: accounting
+  effect:
+    mu: 1.451
+    sigma: 0.001
+  kernel:
+    delay_days: 0
+    lag_days: 1
+    duration_days: null
+  transition:
+    mechanism: Acme Bank interest income is one part of Acme Bank net interest income; the weight is its scale over the total's
+    timing:
+      onset: same reporting period
+      build: none
+      persistence: identity
+      recognition: quarterly results
+    evidence:
+      existence: documented
+      direction: documented
+      magnitude: model
+      timing: documented
+      sources:
+      - acme.pub
+- id: ab-a-nii-expense
+  source: acme_bank.interest_expense
+  target: acme_bank.net_interest_income
+  label: adds to net interest income
+  edge_type: accounting
+  effect:
+    mu: 0.784
+    sigma: 0.001
+  kernel:
+    delay_days: 0
+    lag_days: 1
+    duration_days: null
+  transition:
+    mechanism: Acme Bank interest expense is one part of Acme Bank net interest income; the weight is its scale over the total's
+    timing:
+      onset: same reporting period
+      build: none
+      persistence: identity
+      recognition: quarterly results
+    evidence:
+      existence: documented
+      direction: documented
+      magnitude: model
+      timing: documented
+      sources:
+      - acme.pub
+- id: ab-c-ust-nii
+  source: gov_bonds.yield_10y
+  target: acme_bank.net_interest_income
+  label: lifts interest income
+  effect:
+    mu: 0.4
+    sigma: 0.1
+  kernel:
+    delay_days: 30
+    lag_days: 120
+    duration_days: null
+- id: ab-c-rate-depcost
+  source: central_bank.policy_rate
+  target: acme_bank.deposit_cost
+  label: passes a share of a rate move to deposit rates
+  state:
+    asymmetry:
+      falls:
+        mu: 0.78
+        sigma: 0.06
+      rises:
+        mu: 0.87
+        sigma: 0.08
+  kernel:
+    delay_days: 30
+    lag_days: 180
+    duration_days: null
+  transition:
+    mechanism: The bank reprices deposits by a fraction of a policy-rate move
+    sign: +
+    evidence:
+      existence: documented
+      direction: documented
+      magnitude: broker
+      timing: broker
+      sources:
+      - acme.pub
+    unresolved:
+    - input: deposit beta by segment
+      status: not_yet_reviewed
+- id: ab-c-rate-loanyield
+  source: central_bank.policy_rate
+  target: acme_bank.loan_coupon
+  label: reprices floating loans
+  effect:
+    mu: 0.6
+    sigma: 0.1
+  kernel:
+    delay_days: 5
+    lag_days: 60
+    duration_days: null
+- id: ab-c-vol-mkts
+  source: capital_markets.market_volatility
+  target: acme_bank.markets_revenue
+  label: lifts trading revenue
+  effect:
+    mu: 0.3
+    sigma: 0.1
+  kernel:
+    delay_days: 1
+    lag_days: 30
+    duration_days: 180
+- id: ab-c-deals-ib
+  source: capital_markets.deal_activity
+  target: acme_bank.ib_fees
+  label: lifts underwriting and advisory fees
+  effect:
+    mu: 0.5
+    sigma: 0.1
+  kernel:
+    delay_days: 10
+    lag_days: 90
+    duration_days: null
+- id: ab-c-cap-buyback
+  source: acme_bank.cet1_ratio
+  target: acme_bank.buybacks
+  label: releases buybacks above the requirement
+  effect:
+    mu: 0.4
+    sigma: 0.1
+  state:
+    threshold:
+      value: acme_bank.cet1_ratio
+      above: 12.0
+  kernel:
+    delay_days: 30
+    lag_days: 90
+    duration_days: null
+paths:
+- id: ab.path.rates_nii
+  name: Policy rate to loan income
+  entity_id: acme_bank
+  trigger: the central bank raises the policy rate
+  endpoint: acme_bank.interest_income
+  steps:
+  - interaction_id: ab-c-rate-loanyield
+  - interaction_id: ab.id.loan_income:acme_bank.loan_coupon
+compositions:
+- id: ab.comp.revenue_by_line
+  entity_id: acme_bank
+  view: product
+  basis: net revenue by line
+  unit: $bn/yr
+  period: fiscal year ending December
+  total: acme_bank.net_revenue
+  members:
+  - acme_bank.nii_ex_markets
+  - acme_bank.markets_revenue
+  - acme_bank.ib_fees
+  residual: acme_bank.other_revenue
+- id: ab.comp.revenue_by_segment
+  entity_id: acme_bank
+  view: reporting_segments
+  basis: net revenue by segment
+  unit: $bn/yr
+  period: fiscal year ending December
+  total: acme_bank.net_revenue
+  drives: false
+  members:
+  - acme_bank.consumer_revenue
+  - acme_bank.wholesale_revenue
+  residual: acme_bank.corporate_revenue
+- id: ab.comp.nii
+  entity_id: acme_bank
+  view: product
+  basis: 'net interest income: interest income less interest expense'
+  unit: $bn/yr
+  period: fiscal year ending December
+  total: acme_bank.net_interest_income
+  members:
+  - acme_bank.interest_income
+  - acme_bank.interest_expense
+identities:
+- id: ab.id.loan_income
+  entity_id: acme_bank
+  form: product
+  target: acme_bank.interest_income
+  factors:
+  - acme_bank.avg_loans
+  - acme_bank.loan_coupon
+  coefficient: 0.01
+  unit_check: $bn = $bn x % x 0.01
+- id: ab.id.cet1_ratio
+  entity_id: acme_bank
+  form: ratio
+  target: acme_bank.cet1_ratio
+  numerator:
+  - acme_bank.cet1_capital
+  denominator:
+  - acme_bank.rwa
+  coefficient: 100.0
+  unit_check: '% = $bn / $bn x 100'
+- id: ab.id.nii_ex_markets
+  entity_id: acme_bank
+  form: difference
+  target: acme_bank.nii_ex_markets
+  of: acme_bank.net_interest_income
+  minus:
+  - acme_bank.markets_nii
+stock_flows:
+- id: ab.sf.cet1
+  entity_id: acme_bank
+  stock: acme_bank.cet1_capital
+  period_days: 365
+  inflows:
+  - acme_bank.net_income
+  outflows:
+  - acme_bank.dividends
+  - acme_bank.buybacks
+matrices:
+- id: ab.mx.revenue
+  entity_id: acme_bank
+  rows: ab.comp.revenue_by_line
+  columns: ab.comp.revenue_by_segment

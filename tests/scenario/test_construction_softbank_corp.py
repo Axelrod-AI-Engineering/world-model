@@ -1,5 +1,5 @@
 """SoftBank Corp's business construction (Oct 18): the compositions, operating and financial paths, and their transitions
-in data/worlds/sally_demo/construction/softbank_corp.yaml, checked in the loaded model, in the v4.1.4 export, and
+in <client root>/worlds/sally_demo/construction/softbank_corp.yaml, checked in the loaded model, in the v4.1.4 export, and
 through the service API (docs/construction/softbank_corp.md has the gap register these tests close). The test of
 whether the method carries over to a telecom operator: subscribers times ARPU, churn, price competition and
 regulation, capex and depreciation, the AI build, funding costs in the yen rate environment, listed subsidiaries'
@@ -8,7 +8,6 @@ minorities, and the dividend. Sally's world loads once for the module; no client
 from __future__ import annotations
 
 import math
-from pathlib import Path
 
 import pytest
 import yaml
@@ -18,7 +17,10 @@ from axelrod_wm.api.app import create_app
 from axelrod_wm.context.construction import construction_view, trace
 from axelrod_wm.model.construction import model_levels, reconcile, reconcile_identities, validate_construction
 from axelrod_wm.repo.snapshots import MemoryBackend
+from tests.clients import client_path, skip_without_client
 from tests.scenario import v1_reads as v1
+
+skip_without_client('sally_demo')
 
 SBK = "softbank_corp"
 OP, PRETAX, NI = "softbank_corp.operating_profit", "softbank_corp.pretax_income", "softbank_corp.net_income"
@@ -67,7 +69,7 @@ NEW_MARKET_VALUES = {"japan_mobile_market.competitor_price_pressure", "japan_mob
                      "japan_it_services_market.it_spending", "japan_it_services_market.ai_compute_demand",
                      "japan_power_market.wholesale_price"}
 KEPT = "kept uncalibrated:"      # a step that fits no form says why
-SPEC = Path(__file__).resolve().parents[2] / "data/worlds/sally_demo/construction/softbank_corp.yaml"
+SPEC = client_path("worlds/sally_demo/construction/softbank_corp.yaml")
 # a link's note (the form it needs: identity, stock-flow, matrix, state) lives in the construction file; the loaded
 # graph does not keep notes
 SPEC_LINKS = {i["id"]: i for i in yaml.safe_load(SPEC.read_text())["interactions"]}

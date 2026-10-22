@@ -1,4 +1,4 @@
-"""Toyota's business construction in sally_demo (data/worlds/sally_demo/construction/toyota.yaml, Oct 17).
+"""Toyota's business construction in sally_demo (<client root>/worlds/sally_demo/construction/toyota.yaml, Oct 17).
 
 Holds the build to the reviewer's Toyota requirements (docs/construction/toyota.md): the composition views reconcile by
 accounting links with their residuals and eliminations, and overlapping views never share a part or a calibrated route;
@@ -37,7 +37,10 @@ from axelrod_wm.model.construction import (
     validate_construction,
 )
 from axelrod_wm.repo.snapshots import MemoryBackend
+from tests.clients import skip_without_client
 from tests.scenario import v1_reads as v1
+
+skip_without_client('sally_demo')
 
 ROOT = Path(__file__).resolve().parents[2]
 LOCAL = ROOT / "data" / "sally_data" / "construction"     # the client's data: local only, absent on CI

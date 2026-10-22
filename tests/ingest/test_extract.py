@@ -1,4 +1,4 @@
-"""Extraction: sentences that name the model's values into import signals, by fixed rules, against Sally's world."""
+"""Extraction: sentences that name the model's values into import signals, by fixed rules, against Acme's world."""
 
 from __future__ import annotations
 
@@ -86,7 +86,7 @@ def test_a_hyphenated_pair_reads_its_second_number_as_negative():
 
 def test_unit_kind():
     assert _unit_kind("pct") == _unit_kind("pct y/y") == _unit_kind("%") == _unit_kind("bps pct") == "rate"
-    assert _unit_kind("$bn/yr") == _unit_kind("index") == _unit_kind("¥ per $") == "level"
+    assert _unit_kind("$bn/yr") == _unit_kind("index") == _unit_kind("€ per $") == "level"
 
 
 # -- dates --------------------------------------------------------------------------------------------------------------
@@ -114,106 +114,106 @@ def test_find_date(text, filename, want):
 
 # -- levels (observe) ---------------------------------------------------------------------------------------------------
 def test_rate_level_in_percent(rules):
-    assert one(rules, "The ECB held rates at 2.25% in 2026.") == {
-        "type": "observe", "value_of": "ecb.policy_rate", "value": 2.25, "note": "rule: level"}
+    assert one(rules, "The UCB held rates at 2.25% in 2026.") == {
+        "type": "observe", "value_of": "union_bank.policy_rate", "value": 2.25, "note": "rule: level"}
 
 
 def test_a_level_and_a_move_in_one_clause_are_both_claimed(rules):
-    got = sigs(rules, "The BoJ raised its policy rate by 25bp to 1.25%.")
-    assert [(s["type"], s.get("value"), s.get("delta")) for s in got] == [("observe", 1.25, None), ("move", None, 0.25)]
+    got = sigs(rules, "The ACB raised its policy rate by 25bp to 4.25%.")
+    assert [(s["type"], s.get("value"), s.get("delta")) for s in got] == [("observe", 4.25, None), ("move", None, 0.25)]
 
 
 def test_rate_level_in_basis_points(rules):
-    assert one(rules, "The BoJ policy rate stands at 125bp.")["value"] == 1.25
+    assert one(rules, "The ACB policy rate stands at 425bp.")["value"] == 4.25
 
 
 def test_negative_rate_level(rules):
-    for text in ("US real GDP growth was -0.5%.", "US real GDP growth was −0.5%."):
-        assert one(rules, text) == {"type": "observe", "value_of": "us_economy.gdp_growth", "value": -0.5,
+    for text in ("Acme GDP growth was -0.5%.", "Acme GDP growth was −0.5%."):
+        assert one(rules, text) == {"type": "observe", "value_of": "economy.gdp_growth", "value": -0.5,
                                     "note": "rule: level"}
 
 
 def test_implausible_levels_are_rejected(rules):
-    assert sigs(rules, "The ECB deposit rate was 25%.") == []           # far outside the posterior's band
-    assert sigs(rules, "Brent crude reached 2026.") == []               # a year is not an oil price
-    assert sigs(rules, "Brent crude, see page at 3.") == []
-    assert sigs(rules, "USD/JPY at 1,250.") == []
+    assert sigs(rules, "The UCB policy rate was 25%.") == []            # far outside the posterior's band
+    assert sigs(rules, "Crude oil reached 2026.") == []                 # a year is not an oil price
+    assert sigs(rules, "Crude oil, see page at 3.") == []
+    assert sigs(rules, "The dollar index at 1,250.") == []
 
 
 def test_rate_level_needs_a_percent_or_bp(rules):
-    assert sigs(rules, "The ECB deposit rate was 2.25.") == []
-    assert sigs(rules, "The ECB deposit rate was 2 pp.") == []
+    assert sigs(rules, "The UCB policy rate was 2.25.") == []
+    assert sigs(rules, "The UCB policy rate was 2 pp.") == []
 
 
 def test_price_level_with_matching_or_no_currency(rules):
-    assert one(rules, "Brent crude hit $95.")["value"] == 95.0
-    assert one(rules, "Brent crude hit 95.")["value"] == 95.0
-    assert sigs(rules, "Brent crude hit €95.") == []
+    assert one(rules, "Crude oil hit $95.")["value"] == 95.0
+    assert one(rules, "Crude oil hit 95.")["value"] == 95.0
+    assert sigs(rules, "Crude oil hit €95.") == []
 
 
 def test_fx_level_in_the_units_own_currency(rules):
-    # USD/JPY is in "¥ per $": a yen figure is a level, a dollar figure is not
-    assert one(rules, "USD/JPY fell to ¥152.")["type"] == "observe"
-    assert one(rules, "USD/JPY fell to 152.")["value"] == 152.0
-    assert one(rules, "USD/JPY fell to $152.")["mode"] == "standardized"
+    # the dollar-euro rate is in "€ per $": a euro figure is a level, a dollar figure is not
+    assert one(rules, "The dollar-euro rate fell to €0.87.")["type"] == "observe"
+    assert one(rules, "The dollar-euro rate fell to 0.87.")["value"] == 0.87
+    assert one(rules, "The dollar-euro rate fell to $0.87.")["mode"] == "standardized"
 
 
-@pytest.mark.parametrize("text", ["Toyota operating profit reached ¥3.5 trillion.",
-                                  "Toyota operating profit reached ¥3,500 billion."])
+@pytest.mark.parametrize("text", ["Acme Motors operating profit reached $3.5 billion.",
+                                  "Acme Motors operating profit reached $3,500 million."])
 def test_scaled_levels_convert_to_the_values_unit(rules, text):
-    assert one(rules, text) == {"type": "observe", "value_of": "toyota.operating_profit", "value": 3.5,
+    assert one(rules, text) == {"type": "observe", "value_of": "acme_motors.operating_profit", "value": 3.5,
                                 "note": "rule: level"}
 
 
 def test_scaled_levels_convert_to_bn(rules):
-    assert one(rules, "JPMorgan net interest income was $95 billion.")["value"] == 95.0
-    assert one(rules, "JPMorgan net interest income was $95,000 million.")["value"] == 95.0
+    assert one(rules, "Acme Bank net interest income was $95 billion.")["value"] == 95.0
+    assert one(rules, "Acme Bank net interest income was $95,000 million.")["value"] == 95.0
 
 
 def test_level_rejects_non_level_units(rules):
-    for text in ("Brent crude at 3%.", "Brent crude at 30bp.", "Brent crude at 1.5x."):
+    for text in ("Crude oil at 3%.", "Crude oil at 30bp.", "Crude oil at 1.5x."):
         assert sigs(rules, text) == []
 
 
 # -- moves -------------------------------------------------------------------------------------------------------------
 def test_move_by_basis_points(rules):
-    assert one(rules, "The BoJ raised its policy rate by 25bp.") == {
-        "type": "move", "value_of": "boj.policy_rate", "delta": 0.25, "mode": "absolute",
+    assert one(rules, "The ACB raised its policy rate by 25bp.") == {
+        "type": "move", "value_of": "central_bank.policy_rate", "delta": 0.25, "mode": "absolute",
         "note": "rule: direction + size"}
 
 
 def test_relative_move_for_a_lognormal_value(rules):
-    assert one(rules, "JPMorgan's net interest income rose 4%.") == {
-        "type": "move", "value_of": "jpmorgan.net_interest_income", "delta": 0.04, "mode": "relative",
+    assert one(rules, "Acme Bank's net interest income rose 4%.") == {
+        "type": "move", "value_of": "acme_bank.net_interest_income", "delta": 0.04, "mode": "relative",
         "note": "rule: direction + size"}
-    assert one(rules, "Brent crude fell by about 3%.")["delta"] == -0.03
+    assert one(rules, "Crude oil fell by about 3%.")["delta"] == -0.03
 
 
 def test_rate_moves_in_points(rules):
-    assert one(rules, "US core CPI rose 0.3 percentage points.")["delta"] == 0.3
-    s = one(rules, "The ECB deposit rate rose by 0.25%.")
+    assert one(rules, "Acme core CPI rose 0.3 percentage points.")["delta"] == 0.3
+    s = one(rules, "The UCB policy rate rose by 0.25%.")
     assert (s["delta"], s["mode"]) == (0.25, "absolute")
-    assert one(rules, "Bund yields rose 10bp.") == {"type": "move", "value_of": "bunds.yield_10y", "delta": 0.1,
-                                                     "mode": "absolute", "note": "rule: direction + size"}
+    assert one(rules, "Union Bonds yields rose 10bp.") == {"type": "move", "value_of": "union_bonds.yield_10y", "delta": 0.1,
+                                                            "mode": "absolute", "note": "rule: direction + size"}
 
 
 def test_size_before_the_value(rules):
-    assert one(rules, "A 25bp cut in the ECB deposit rate.") == {
-        "type": "move", "value_of": "ecb.policy_rate", "delta": -0.25, "mode": "absolute",
+    assert one(rules, "A 25bp cut in the Acme policy rate.") == {
+        "type": "move", "value_of": "central_bank.policy_rate", "delta": -0.25, "mode": "absolute",
         "note": "rule: size + direction before"}
 
 
 @pytest.mark.parametrize("text,direction", [
-    ("Citi net interest income fell 95%.", -1),          # a relative move over 90%
-    ("The Fed funds rate rose 6pp.", 1),                  # an absolute move over 5 points
-    ("Brent crude rose 3pp.", 1),                         # points are for rates
-    ("Brent crude rose 30bp.", 1),                        # basis points are for rates
-    ("Brent crude rose by 5.", 1),                        # no unit: no size
-    ("Brent crude rose 0%.", 1),                          # no change is not a size
-    ("A 30bp rise in Brent crude.", 1),                   # a size before that does not fit
-    ("Brent crude rose then fell.", 1),
-    ("Brent crude fell then rose.", -1),
-    ("Brent crude decreased.", -1),
+    ("Delta net interest income fell 95%.", -1),          # a relative move over 90%
+    ("The ACB policy rate rose 6pp.", 1),                 # an absolute move over 5 points
+    ("Crude oil rose 3pp.", 1),                           # points are for rates
+    ("Crude oil rose 30bp.", 1),                          # basis points are for rates
+    ("Crude oil rose by 5.", 1),                          # no unit: no size
+    ("Crude oil rose 0%.", 1),                            # no change is not a size
+    ("A 30bp rise in crude oil.", 1),                     # a size before that does not fit
+    ("Crude oil rose then fell.", 1),
+    ("Crude oil fell then rose.", -1),
+    ("Crude oil decreased.", -1),
 ])
 def test_bare_or_unfit_sizes_become_a_standardized_move(rules, text, direction):
     s = one(rules, text)
@@ -221,135 +221,135 @@ def test_bare_or_unfit_sizes_become_a_standardized_move(rules, text, direction):
                                                              "rule: direction without size")
 
 
-@pytest.mark.parametrize("text", ["Brent crude was mentioned.", "Brent crude in the crisis.",
-                                  "Brent crude data release today.", "Brent crude, again.", "Brent crude risk."])
+@pytest.mark.parametrize("text", ["Crude oil was mentioned.", "Crude oil in the crisis.",
+                                  "Crude oil data release today.", "Crude oil, again.", "Crude oil risk."])
 def test_no_direction_word_no_move(rules, text):
     # direction words match at a word's start only ("crisis", "release", "again", and "risk" carry none)
     assert sigs(rules, text) == []
 
 
 def test_inverted_surface_flips_the_direction(rules):
-    assert one(rules, "The yen strengthened 2%.") == {"type": "move", "value_of": "dollar_yen.usd_jpy",
-                                                      "delta": -0.02, "mode": "relative",
-                                                      "note": "rule: direction + size"}
-    assert one(rules, "The yen weakened.")["delta"] == UNDIRECTED_SD
+    assert one(rules, "The euro strengthened 2%.") == {"type": "move", "value_of": "dollar.index",
+                                                       "delta": -0.02, "mode": "relative",
+                                                       "note": "rule: direction + size"}
+    assert one(rules, "The euro weakened.")["delta"] == UNDIRECTED_SD
 
 
 def test_inverted_surface_never_states_a_level(rules):
-    assert sigs(rules, "The yen was at 150.") == []
-    assert one(rules, "The yen strengthened to 150.")["mode"] == "standardized"
+    assert sigs(rules, "The euro was at 150.") == []
+    assert one(rules, "The euro strengthened to 150.")["mode"] == "standardized"
 
 
-def test_without_inverted_patterns_the_yen_is_usd_jpy(graph, gz):
-    assert one(Rules(graph, gz), "The yen strengthened 2%.")["delta"] == 0.02
+def test_without_inverted_patterns_the_euro_is_the_dollar_index(graph, gz):
+    assert one(Rules(graph, gz), "The euro strengthened 2%.")["delta"] == 0.02
 
 
 def test_one_claim_per_value_per_sentence(rules):
     # the first mention claims for the value (its clause runs over the second): a level and a move, no more
-    got = sigs(rules, "Brent crude rose to 95 and Brent crude rose 3%.")
-    assert [(s["type"], s["value_of"]) for s in got] == [("observe", "oil.brent"), ("move", "oil.brent")]
+    got = sigs(rules, "Crude oil rose to 95 and crude oil rose 3%.")
+    assert [(s["type"], s["value_of"]) for s in got] == [("observe", "crude_oil.price"), ("move", "crude_oil.price")]
     # a later mention gets its chance when the first made no claim
-    got = sigs(rules, "The Fed funds rate rose 6pp.")
-    assert [(s["value_of"], s["mode"]) for s in got] == [("federal_reserve.policy_rate", "standardized")]
-    assert sigs(rules, "Brent crude was quoted; later Brent crude rose 3%.")[0]["delta"] == 0.03
+    got = sigs(rules, "The ACB policy rate rose 6pp.")
+    assert [(s["value_of"], s["mode"]) for s in got] == [("central_bank.policy_rate", "standardized")]
+    assert sigs(rules, "Crude oil was quoted; later crude oil rose 3%.")[0]["delta"] == 0.03
 
 
 def test_each_value_reads_its_own_clause(rules):
-    got = sigs(rules, "JPMorgan net interest income was $95 billion and Citi net interest income rose 3%.")
+    got = sigs(rules, "Acme Bank net interest income was $95 billion and Delta net interest income rose 3%.")
     assert [(s["value_of"], s.get("value"), s.get("delta")) for s in got] == [
-        ("jpmorgan.net_interest_income", 95.0, None), ("citigroup.net_interest_income", None, 0.03)]
+        ("acme_bank.net_interest_income", 95.0, None), ("delta_bank.net_interest_income", None, 0.03)]
 
 
 # -- causal claims ------------------------------------------------------------------------------------------------------
 def test_causal_verb_on_a_known_link_supports_it(rules):
-    assert one(rules, "Higher Brent crude lifts Japan core CPI.") == {
-        "type": "support", "source": "oil.brent", "target": "japan_economy.core_cpi", "strength": 0.5,
+    assert one(rules, "Higher crude oil lifts Acme CPI.") == {
+        "type": "support", "source": "crude_oil.price", "target": "economy.headline_inflation", "strength": 0.5,
         "note": "rule: causal 'lifts' on a known link"}
 
 
 def test_causal_verb_against_the_links_sign_contradicts_it(rules):
-    s = one(rules, "The Fed rate weighs on JPMorgan net interest income.")
-    assert (s["type"], s["source"], s["target"]) == ("contradict", "federal_reserve.policy_rate",
-                                                      "jpmorgan.net_interest_income")
+    s = one(rules, "The ACB policy rate weighs on Acme Bank net interest income.")
+    assert (s["type"], s["source"], s["target"]) == ("contradict", "central_bank.policy_rate",
+                                                      "acme_bank.net_interest_income")
 
 
 def test_a_down_verb_supports_a_negative_link(rules):
-    s = one(rules, "The JGB 10Y yield weighs on SoftBank Corp operating income.")
-    assert (s["type"], s["source"], s["target"]) == ("support", "jgbs.yield_10y", "softbank_corp.operating_profit")
+    s = one(rules, "The dollar index weighs on Acme Motors operating profit.")
+    assert (s["type"], s["source"], s["target"]) == ("support", "dollar.index", "acme_motors.operating_profit")
 
 
 def test_lower_source_flips_the_sign(rules):
-    # Bunds -> European equities is negative: "lower yields lift" agrees, "lower yields weigh on" does not
-    assert one(rules, "Lower Bund yields lift European stocks.")["type"] == "support"
-    assert one(rules, "Lower Bund yields weigh on European stocks.")["type"] == "contradict"
+    # union yields -> union equities is negative: "lower yields lift" agrees, "lower yields weigh on" does not
+    assert one(rules, "Lower Union ten-year yield lifts union equities.")["type"] == "support"
+    assert one(rules, "Lower Union ten-year yield weighs on union equities.")["type"] == "contradict"
 
 
 def test_the_first_causal_verb_decides_and_names_the_claim(rules):
-    s = one(rules, "The Fed weighs on and lifts JPMorgan net interest income.")
+    s = one(rules, "The ACB weighs on and lifts Acme Bank net interest income.")
     assert (s["type"], s["note"]) == ("contradict", "rule: causal 'weighs on' on a known link")
-    s = one(rules, "The Fed rate lifts but weighs on JPMorgan net interest income.")
+    s = one(rules, "The ACB policy rate lifts but weighs on Acme Bank net interest income.")
     assert (s["type"], s["note"]) == ("support", "rule: causal 'lifts' on a known link")
 
 
 def test_entity_mentions_resolve_through_existing_links(rules):
-    s = one(rules, "Oil lifts Japan core CPI.")
-    assert (s["type"], s["source"], s["target"]) == ("support", "oil.brent", "japan_economy.core_cpi")
-    s = one(rules, "Bunds lift Tokio Marine.")
-    assert (s["type"], s["source"], s["target"]) == ("support", "bunds.yield_10y", "tokio_marine.international_profit")
+    s = one(rules, "Oil lifts Acme CPI.")
+    assert (s["type"], s["source"], s["target"]) == ("support", "crude_oil.price", "economy.headline_inflation")
+    s = one(rules, "Union Bonds lift Harvest Bank.")
+    assert (s["type"], s["source"], s["target"]) == ("support", "union_bonds.yield_10y", "harvest_bank.net_interest_income")
 
 
 def test_ambiguous_or_unlinked_entity_pairs_are_skipped(rules):
-    assert sigs(rules, "Oil lifts the United States economy.") == []         # two links: CPI and growth
-    assert sigs(rules, "Oil lifts Toyota.") == []                            # no link
-    assert sigs(rules, "Oil lifts Komatsu operating profit.") == []          # an entity: no new link
-    assert sigs(rules, "JGBs lift Tokio Marine.") == []                      # many links: reinvestment, marks, life
+    assert sigs(rules, "Oil lifts the Acme economy.") == []                  # two links: inflation and growth
+    assert sigs(rules, "Oil lifts Acme Bank.") == []                         # no link
+    assert sigs(rules, "Oil lifts Blue Freight operating profit.") == []     # an entity: no new link
+    assert sigs(rules, "Acme Bonds lift Acme Re.") == []                     # many links: reinvestment, marks, life
 
 
 def test_two_values_with_no_link_propose_one(rules):
-    assert one(rules, "Brent crude lifts Komatsu operating profit.") == {
-        "type": "link", "source": "oil.brent", "target": "komatsu.operating_profit", "label": "lifts",
+    assert one(rules, "Crude oil lifts Blue Freight operating profit.") == {
+        "type": "link", "source": "crude_oil.price", "target": "blue_freight.operating_profit", "label": "lifts",
         "effect": 0.3, "note": "rule: causal 'lifts', no link yet"}
-    s = one(rules, "Brent crude weighs on and lifts Komatsu operating profit.")
+    s = one(rules, "Crude oil weighs on and lifts Blue Freight operating profit.")
     assert (s["label"], s["effect"]) == ("weighs on", -0.3)
 
 
 def test_a_long_gap_is_not_a_causal_claim(rules):
-    assert sigs(rules, "Brent crude, which as everyone knows has been a topic of very long debate among the "
-                       "analysts here, lifts Komatsu operating profit.") == []
+    assert sigs(rules, "Crude oil, which as everyone knows has been a topic of very long debate among the "
+                       "analysts here, lifts Blue Freight operating profit.") == []
 
 
 def test_no_self_links_and_no_duplicate_claims(rules):
-    # "TMNF profit" is the same value as "Tokio Marine Japan P&C profit": no link from it to itself, one support
-    got = sigs(rules, "The JGB 30Y yield lifts Tokio Marine Japan P&C profit and lifts TMNF profit.")
+    # "ACRE domestic profit" is the same value as "Acme Re domestic P&C profit": no link from it to itself, one support
+    got = sigs(rules, "The Acme 10Y yield lifts Acme Re domestic P&C profit and lifts ACRE domestic profit.")
     assert [(s["type"], s["source"], s["target"]) for s in got] == [
-        ("support", "jgbs.yield_30y", "tokio_marine.japan_pc_profit")]
+        ("support", "gov_bonds.yield_10y", "acme_re.domestic_pc_profit")]
 
 
 def test_a_causal_clause_makes_no_bare_moves(rules):
-    got = sigs(rules, "Higher Brent crude lifts Japan core CPI.")
+    got = sigs(rules, "Higher crude oil lifts Acme CPI.")
     assert [s["type"] for s in got] == ["support"]
 
 
 # -- chunks into claims ---------------------------------------------------------------------------------------------------
 def test_claims_of_chunk_carries_context_and_mention_offsets(rules):
-    text = "JPMorgan reported results. Net interest income rose 4%."
+    text = "Acme Bank reported results. Net interest income rose 4%."
     claims, ctx = claims_of_chunk(rules, 3, text, None)
-    assert ctx.recent == [("jpmorgan", 0)] and claims.ord == 3 and claims.entities == ["jpmorgan"]
+    assert ctx.recent == [("acme_bank", 0)] and claims.ord == 3 and claims.entities == ["acme_bank"]
     assert [(text[m.start:m.end], m.subentity_id) for m in claims.mentions] == [
-        ("JPMorgan", None), ("Net interest income", "jpmorgan.net_interest_income")]
-    assert claims.sentence_spans == [(0, 26), (27, 55)]
+        ("Acme Bank", None), ("Net interest income", "acme_bank.net_interest_income")]
+    assert claims.sentence_spans == [(0, 27), (28, 56)]
     assert [f.signal()["delta"] for f in claims.found] == [0.04]
     # context flows into the next chunk, and stays while chunks name nothing, for a few sentences
-    claims, ctx = claims_of_chunk(rules, 4, "Nothing here.", Reading(recent=[("unicredit", 0)]))
-    assert ctx.recent == [("unicredit", 1)] and claims.found == [] and claims.entities == []
+    claims, ctx = claims_of_chunk(rules, 4, "Nothing here.", Reading(recent=[("harvest_bank", 0)]))
+    assert ctx.recent == [("harvest_bank", 1)] and claims.found == [] and claims.entities == []
     claims, _ = claims_of_chunk(rules, 5, "Net interest income rose 2%.", ctx)
-    assert claims.found[0].value_of == "unicredit.net_interest_income"
-    claims, _ = claims_of_chunk(rules, 6, "One. Two. Three. Net interest income rose 2%.", Reading(recent=[("unicredit", 0)]))
+    assert claims.found[0].value_of == "harvest_bank.net_interest_income"
+    claims, _ = claims_of_chunk(rules, 6, "One. Two. Three. Net interest income rose 2%.", Reading(recent=[("harvest_bank", 0)]))
     assert claims.found == []                                   # three sentences on, the context has expired
     # the most recent owner among the entities named lately: a central bank named last does not hide the bank
-    text = "JPMorgan reported. NII rose on higher short-term rates set by the Fed. Net interest income rose 2%."
+    text = "Acme Bank reported. NII rose on higher short-term rates set by the ACB. Net interest income rose 2%."
     claims, _ = claims_of_chunk(rules, 7, text, None)
-    assert [f.value_of for f in claims.found][-1] == "jpmorgan.net_interest_income"
+    assert [f.value_of for f in claims.found][-1] == "acme_bank.net_interest_income"
 
 
 def test_found_signal_shapes():
@@ -361,10 +361,10 @@ def test_found_signal_shapes():
 
 # -- items --------------------------------------------------------------------------------------------------------------
 def test_category_of(graph):
-    assert category_of(graph, [Found("move", value_of="boj.policy_rate")]) == "rates"
-    assert category_of(graph, [Found("support", source="oil.brent", target="japan_economy.core_cpi")]) == "macro"
-    assert category_of(graph, [Found("move", value_of="china_construction_bank.npl_ratio")]) == "other"
-    assert category_of(graph, [Found("move", value_of="no.such"), Found("move", value_of="oil.brent")]) == "commodities"
+    assert category_of(graph, [Found("move", value_of="central_bank.policy_rate")]) == "rates"
+    assert category_of(graph, [Found("support", source="crude_oil.price", target="economy.headline_inflation")]) == "macro"
+    assert category_of(graph, [Found("move", value_of="harvest_bank.cet1_ratio")]) == "other"
+    assert category_of(graph, [Found("move", value_of="no.such"), Found("move", value_of="crude_oil.price")]) == "commodities"
     assert category_of(graph, []) == "other"
     assert category_of(graph, [Found("move", value_of="no.such")]) == "other"
 
@@ -381,13 +381,13 @@ def _item(graph, claims, extra=None):
 
 
 def test_item_of_a_chunk_with_rule_signals(graph, rules):
-    text = "JPMorgan's net interest income rose 4%. Tokio Marine said the BoJ raised its policy rate by 25bp."
+    text = "Acme Bank's net interest income rose 4%. Acme Re said the ACB raised its policy rate by 25bp."
     claims, _ = claims_of_chunk(rules, 7, text, None)
     item = _item(graph, claims)
-    assert item["id"] == "Dabc-0007" and item["headline"] == "JPMorgan's net interest income rose 4%."
+    assert item["id"] == "Dabc-0007" and item["headline"] == "Acme Bank's net interest income rose 4%."
     assert item["summary"] == text and item["source"] == "Desk note" and item["kind"] == "analyst"
-    assert item["entities"] == ["boj", "jpmorgan", "tokio_marine"]
-    assert item["tickers"] == ["8766 JP", "JPM", "TMNF"]           # companies' ticker-like aliases; not the BoJ's
+    assert item["entities"] == ["acme_bank", "acme_re", "central_bank"]
+    assert item["tickers"] == ["ACBK", "ACRE"]                      # companies' ticker-like aliases; not the central bank's
     assert item["category"] == "earnings" and item["stance"] == "up"
     assert item["relevance"] == 0.6 and item["confidence"] == 0.8 and item["tags"] == ["extracted"]
     assert item["published_at"] == D.isoformat()
@@ -397,29 +397,29 @@ def test_item_of_a_chunk_with_rule_signals(graph, rules):
 
 
 def test_item_of_nothing_is_none(graph, rules):
-    claims, _ = claims_of_chunk(rules, 0, "JPMorgan reported.", None)
+    claims, _ = claims_of_chunk(rules, 0, "Acme Bank reported.", None)
     assert _item(graph, claims) is None and _item(graph, claims, extra=[]) is None
 
 
 def test_item_headline_is_truncated(graph, rules):
-    text = "Brent crude rose 3% " + "and kept going " * 20 + "today."
+    text = "Crude oil rose 3% " + "and kept going " * 20 + "today."
     claims, _ = claims_of_chunk(rules, 0, text, None)
     head = _item(graph, claims)["headline"]
     assert len(head) == 198 and head.endswith("…") and text.startswith(head[:-1])
 
 
 def test_item_of_extra_signals_only(graph, rules):
-    claims, _ = claims_of_chunk(rules, 0, "JPMorgan and Citi reported.", None)
-    extra = [{"type": "support", "source": "us_capital_markets.deal_activity", "target": "jpmorgan.ib_fees",
-              "strength": 0.5, "quote": "JPMorgan and Citi reported.", "note": "llm:m"}]
+    claims, _ = claims_of_chunk(rules, 0, "Acme Bank and Delta reported.", None)
+    extra = [{"type": "support", "source": "capital_markets.deal_activity", "target": "acme_bank.ib_fees",
+              "strength": 0.5, "quote": "Acme Bank and Delta reported.", "note": "llm:m"}]
     item = _item(graph, claims, extra)
     assert item["signals"] == extra and item["confidence"] == LLM_CONFIDENCE and item["tags"] == ["extracted", "llm"]
     assert item["category"] == "earnings" and item["stance"] == "" and item["relevance"] == 0.5
-    assert item["tickers"] == ["JPM"]                                     # Citi's "C" is one letter
+    assert item["tickers"] == ["ACBK", "DLTB"]                            # Delta's "D" is one letter
 
 
 @pytest.mark.parametrize("extra,category", [
-    ([{"type": "move", "value_of": "boj.policy_rate", "delta": 0.1}], "rates"),
+    ([{"type": "move", "value_of": "central_bank.policy_rate", "delta": 0.1}], "rates"),
     ([{"type": "move", "value_of": "no.such", "delta": 0.1}], "other"),
     ([{"type": "link", "source": "a", "target": "", "label": "x", "effect": 0.1}], "other"),
 ])
@@ -430,16 +430,16 @@ def test_item_category_from_the_first_extra_signal(graph, extra, category):
 
 
 def test_item_extra_signals_follow_rule_signals(graph, rules):
-    claims, _ = claims_of_chunk(rules, 0, "Brent crude rose 3%.", None)
-    extra = [{"type": "move", "value_of": "boj.policy_rate", "delta": 0.1}]
+    claims, _ = claims_of_chunk(rules, 0, "Crude oil rose 3%.", None)
+    extra = [{"type": "move", "value_of": "central_bank.policy_rate", "delta": 0.1}]
     item = _item(graph, claims, extra)
     assert [s["type"] for s in item["signals"]] == ["move", "move"] and item["signals"][1] == extra[0]
     assert item["category"] == "commodities" and item["relevance"] == 0.6
 
 
 def test_tickers_only_from_companies():
-    g = NS(entities={"bank": NS(kind="agency", aliases=["BOJ"]), "co": NS(kind="company",
-                                                                          aliases=["ACME", "1234 JP", "Acme Inc"])},
+    g = NS(entities={"bank": NS(kind="agency", aliases=["CBK"]), "co": NS(kind="company",
+                                                                          aliases=["ACME", "1234 JP", "Acme Inc", "A"])},
            subentities={})
     claims = ChunkClaims(0, "x", found=[Found("move", value_of="co.x", delta=0.1)], entities=["bank", "co"])
     assert _item(g, claims)["tickers"] == ["1234 JP", "ACME"]

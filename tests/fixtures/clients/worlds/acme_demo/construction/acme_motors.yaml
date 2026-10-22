@@ -1,0 +1,502 @@
+# Acme Motors: business construction
+# A synthetic test fixture: invented companies and round numbers. Nothing here describes a real company or client.
+entities:
+- id: us_vehicle_tariffs
+  name: US vehicle tariffs
+  kind: external_factor
+  category_tags:
+  - SH
+  description: The tariff rate on imported vehicles, as an effective rate.
+  features:
+    region: US
+  subentities:
+  - id: us_vehicle_tariffs.effective_rate
+    name: US effective vehicle tariff rate
+    attribute_kind: rate
+    unit: pct
+    family: gaussian
+    prior:
+      family: gaussian
+      mu: 12.0
+      sigma: 4.0
+    scale: 4.0
+    aliases:
+    - vehicle tariffs
+    - auto tariffs
+subentities:
+- entity: acme_motors
+  id: acme_motors.automotive_operating_income
+  name: Acme Motors automotive operating income
+  attribute_kind: revenue_flow
+  unit: $m/yr
+  family: lognormal
+  mean: 3900.0
+  scale: 0.09
+  features:
+    view: reporting_segments
+    basis: 'segment: automotive operating income'
+    prior: synthetic
+- entity: acme_motors
+  id: acme_motors.financial_services_operating_income
+  name: Acme Motors financial services operating income
+  attribute_kind: revenue_flow
+  unit: $m/yr
+  family: lognormal
+  mean: 520.0
+  scale: 0.1
+  features:
+    view: reporting_segments
+    basis: 'segment: financial services operating income'
+    prior: synthetic
+- entity: acme_motors
+  id: acme_motors.other_operating_income
+  name: Acme Motors other operating income
+  attribute_kind: revenue_flow
+  unit: $m/yr
+  family: gaussian
+  prior:
+    family: gaussian
+    mu: 200.0
+    sigma: 40.0
+  scale: 40.0
+  features:
+    view: reporting_segments
+    basis: 'segment residual: other businesses'
+    prior: synthetic
+- entity: acme_motors
+  id: acme_motors.segment_eliminations
+  name: Acme Motors segment eliminations
+  attribute_kind: revenue_flow
+  unit: $m/yr
+  family: gaussian
+  prior:
+    family: gaussian
+    mu: -120.0
+    sigma: 20.0
+  scale: 20.0
+  features:
+    view: reporting_segments
+    basis: intersegment eliminations (negative)
+    prior: synthetic
+- entity: acme_motors
+  id: acme_motors.north_america_operating_income
+  name: Acme Motors North America operating income
+  attribute_kind: revenue_flow
+  unit: $m/yr
+  family: lognormal
+  mean: 1600.0
+  scale: 0.1
+  features:
+    view: regions
+    basis: 'region: North America'
+    prior: synthetic
+- entity: acme_motors
+  id: acme_motors.home_operating_income
+  name: Acme Motors home-market operating income
+  attribute_kind: revenue_flow
+  unit: $m/yr
+  family: lognormal
+  mean: 2000.0
+  scale: 0.08
+  features:
+    view: regions
+    basis: 'region: home market'
+    prior: synthetic
+- entity: acme_motors
+  id: acme_motors.other_regions_operating_income
+  name: Acme Motors other regions operating income
+  attribute_kind: revenue_flow
+  unit: $m/yr
+  family: gaussian
+  prior:
+    family: gaussian
+    mu: 900.0
+    sigma: 120.0
+  scale: 120.0
+  features:
+    view: regions
+    basis: 'region residual: all other regions'
+    prior: synthetic
+- entity: acme_motors
+  id: acme_motors.net_revenue
+  name: Acme Motors net revenue
+  attribute_kind: revenue_flow
+  unit: $m/yr
+  family: lognormal
+  mean: 45000.0
+  scale: 0.04
+  aliases:
+  - revenue
+  - sales revenue
+  features:
+    view: product
+    basis: consolidated net revenue
+    prior: synthetic
+- entity: acme_motors
+  id: acme_motors.revenue_per_unit
+  name: Acme Motors revenue per vehicle
+  attribute_kind: revenue_flow
+  unit: $k
+  family: lognormal
+  mean: 4.5
+  scale: 0.03
+  aliases:
+  - revenue per unit
+  features:
+    view: product
+    basis: net revenue over consolidated units
+    prior: synthetic
+- entity: acme_motors
+  id: acme_motors.home_production
+  name: Acme Motors home-market production
+  attribute_kind: production_flow
+  unit: k units/yr
+  family: lognormal
+  mean: 3300.0
+  scale: 0.05
+  aliases:
+  - domestic production
+  features:
+    view: operating_state
+    basis: vehicles built in the home market
+    prior: synthetic
+- entity: acme_motors
+  id: acme_motors.inventory_days
+  name: Acme Motors US inventory days
+  attribute_kind: condition_index
+  unit: days
+  family: gaussian
+  prior:
+    family: gaussian
+    mu: 55.0
+    sigma: 8.0
+  scale: 8.0
+  aliases:
+  - US inventory
+  features:
+    view: operating_state
+    basis: days of supply at US dealers
+    prior: synthetic
+- entity: acme_motors
+  id: acme_motors.incentive_spend
+  name: Acme Motors US incentive spend
+  attribute_kind: revenue_flow
+  unit: $m/yr
+  family: lognormal
+  mean: 300.0
+  scale: 0.1
+  features:
+    view: operating_state
+    basis: US sales incentives
+    prior: synthetic
+- entity: acme_motors
+  id: acme_motors.price_recovery
+  name: Acme Motors price recovery
+  attribute_kind: revenue_flow
+  unit: $m/yr
+  family: lognormal
+  mean: 120.0
+  scale: 0.15
+  features:
+    view: operating_state
+    basis: price recovery
+    prior: synthetic
+- entity: acme_motors
+  id: acme_motors.material_cost
+  name: Acme Motors material cost
+  attribute_kind: revenue_flow
+  unit: $m/yr
+  family: lognormal
+  mean: 900.0
+  scale: 0.1
+  features:
+    view: operating_state
+    basis: material cost
+    prior: synthetic
+- entity: acme_motors
+  id: acme_motors.warranty_cost
+  name: Acme Motors warranty cost
+  attribute_kind: revenue_flow
+  unit: $m/yr
+  family: lognormal
+  mean: 250.0
+  scale: 0.12
+  features:
+    view: operating_state
+    basis: warranty cost
+    prior: synthetic
+- entity: acme_motors
+  id: acme_motors.rd_spend
+  name: Acme Motors research and development spend
+  attribute_kind: revenue_flow
+  unit: $m/yr
+  family: lognormal
+  mean: 1200.0
+  scale: 0.05
+  features:
+    view: operating_state
+    basis: research and development spend
+    prior: synthetic
+- entity: acme_motors
+  id: acme_motors.hybrid_share
+  name: Acme Motors hybrid share of sales
+  attribute_kind: revenue_flow
+  unit: $m/yr
+  family: lognormal
+  mean: 40.0
+  scale: 0.1
+  features:
+    view: operating_state
+    basis: hybrid share of sales
+    prior: synthetic
+- entity: acme_motors
+  id: acme_motors.fx_translation
+  name: Acme Motors FX translation effect
+  attribute_kind: revenue_flow
+  unit: $m/yr
+  family: lognormal
+  mean: 150.0
+  scale: 0.2
+  features:
+    view: operating_state
+    basis: FX translation effect
+    prior: synthetic
+- entity: acme_motors
+  id: acme_motors.dealer_stock
+  name: Acme Motors dealer stock
+  attribute_kind: revenue_flow
+  unit: $m/yr
+  family: lognormal
+  mean: 800.0
+  scale: 0.08
+  features:
+    view: operating_state
+    basis: dealer stock
+    prior: synthetic
+interactions:
+- id: am-a-seg-auto
+  source: acme_motors.automotive_operating_income
+  target: acme_motors.operating_profit
+  label: adds to operating profit
+  edge_type: accounting
+  effect:
+    mu: 0.975
+    sigma: 0.001
+  kernel:
+    delay_days: 0
+    lag_days: 1
+    duration_days: null
+  transition:
+    mechanism: Acme Motors automotive operating income is one part of Acme Motors operating profit; the weight is its scale over the total's
+    timing:
+      onset: same reporting period
+      build: none
+      persistence: identity
+      recognition: quarterly results
+    evidence:
+      existence: documented
+      direction: documented
+      magnitude: model
+      timing: documented
+      sources:
+      - acme.pub
+- id: am-a-seg-fs
+  source: acme_motors.financial_services_operating_income
+  target: acme_motors.operating_profit
+  label: adds to operating profit
+  edge_type: accounting
+  effect:
+    mu: 0.144
+    sigma: 0.001
+  kernel:
+    delay_days: 0
+    lag_days: 1
+    duration_days: null
+  transition:
+    mechanism: Acme Motors financial services operating income is one part of Acme Motors operating profit; the weight is its scale over the total's
+    timing:
+      onset: same reporting period
+      build: none
+      persistence: identity
+      recognition: quarterly results
+    evidence:
+      existence: documented
+      direction: documented
+      magnitude: model
+      timing: documented
+      sources:
+      - acme.pub
+- id: am-a-seg-other
+  source: acme_motors.other_operating_income
+  target: acme_motors.operating_profit
+  label: adds to operating profit
+  edge_type: accounting
+  effect:
+    mu: 0.111
+    sigma: 0.001
+  kernel:
+    delay_days: 0
+    lag_days: 1
+    duration_days: null
+  transition:
+    mechanism: Acme Motors other operating income is one part of Acme Motors operating profit; the weight is its scale over the total's
+    timing:
+      onset: same reporting period
+      build: none
+      persistence: identity
+      recognition: quarterly results
+    evidence:
+      existence: documented
+      direction: documented
+      magnitude: model
+      timing: documented
+      sources:
+      - acme.pub
+- id: am-a-seg-elim
+  source: acme_motors.segment_eliminations
+  target: acme_motors.operating_profit
+  label: adds to operating profit
+  edge_type: accounting
+  effect:
+    mu: 0.056
+    sigma: 0.001
+  kernel:
+    delay_days: 0
+    lag_days: 1
+    duration_days: null
+  transition:
+    mechanism: Acme Motors segment eliminations is one part of Acme Motors operating profit; the weight is its scale over the total's
+    timing:
+      onset: same reporting period
+      build: none
+      persistence: identity
+      recognition: quarterly results
+    evidence:
+      existence: documented
+      direction: documented
+      magnitude: model
+      timing: documented
+      sources:
+      - acme.pub
+- id: am-c-tariff-na
+  source: us_vehicle_tariffs.effective_rate
+  target: acme_motors.north_america_operating_income
+  label: weighs on North America profit above a tariff rate
+  state:
+    threshold:
+      value: us_vehicle_tariffs.effective_rate
+      above: 10.0
+  effect:
+    mu: -0.3
+    sigma: 0.08
+  kernel:
+    delay_days: 30
+    lag_days: 120
+    duration_days: null
+  transition:
+    mechanism: Tariffs raise landed cost; absorbed in margin until the rate passes a level
+    sign: '-'
+    evidence:
+      existence: documented
+      direction: documented
+      magnitude: assumption
+      timing: assumption
+      sources:
+      - acme.pub
+- id: am-c-incentive-na
+  source: acme_motors.inventory_days
+  target: acme_motors.incentive_spend
+  label: raises incentives as inventory builds
+  calibration: uncalibrated
+  transition:
+    mechanism: Dealers carrying more days of supply need more incentive to move units
+    sign: +
+    unresolved:
+    - input: incentive per unit by model
+      status: not_disclosed_in_reviewed_sources
+      searched:
+      - acme.pub
+      - 'corpus: incentive per unit'
+- id: am-c-prod-sales
+  source: acme_motors.home_production
+  target: acme_motors.vehicle_sales
+  label: supplies units
+  effect:
+    mu: 0.3
+    sigma: 0.1
+  kernel:
+    delay_days: 15
+    lag_days: 60
+    duration_days: null
+- id: am-c-sales-profit
+  source: acme_motors.vehicle_sales
+  target: acme_motors.automotive_operating_income
+  label: lifts automotive profit
+  effect:
+    mu: 0.5
+    sigma: 0.1
+  kernel:
+    delay_days: 15
+    lag_days: 60
+    duration_days: null
+paths:
+- id: am.path.dollar_profit
+  name: Dollar to operating profit
+  entity_id: acme_motors
+  trigger: the dollar strengthens
+  endpoint: acme_motors.operating_profit
+  description: The exporter path.
+  steps:
+  - interaction_id: m24
+- id: am.path.tariff
+  name: Tariffs to North America profit
+  entity_id: acme_motors
+  trigger: US tariffs rise
+  endpoint: acme_motors.north_america_operating_income
+  active_when: once the effective rate passes 10 percent
+  steps:
+  - interaction_id: am-c-tariff-na
+- id: am.path.units
+  name: Production to profit
+  entity_id: acme_motors
+  trigger: home production rises
+  endpoint: acme_motors.automotive_operating_income
+  steps:
+  - interaction_id: am-c-prod-sales
+    branch: units
+  - interaction_id: am-c-sales-profit
+compositions:
+- id: am.comp.segments
+  entity_id: acme_motors
+  view: reporting_segments
+  basis: operating profit by segment
+  unit: $m/yr
+  period: fiscal year ending December
+  total: acme_motors.operating_profit
+  members:
+  - acme_motors.automotive_operating_income
+  - acme_motors.financial_services_operating_income
+  - acme_motors.other_operating_income
+  eliminations: acme_motors.segment_eliminations
+- id: am.comp.regions
+  entity_id: acme_motors
+  view: regions
+  basis: operating profit by region
+  unit: $m/yr
+  period: fiscal year ending December
+  total: acme_motors.operating_profit
+  drives: false
+  members:
+  - acme_motors.north_america_operating_income
+  - acme_motors.home_operating_income
+  residual: acme_motors.other_regions_operating_income
+identities:
+- id: am.id.revenue
+  entity_id: acme_motors
+  form: product
+  target: acme_motors.net_revenue
+  factors:
+  - acme_motors.vehicle_sales
+  - acme_motors.revenue_per_unit
+  coefficient: 1.0
+  unit_check: $m = k units x $k

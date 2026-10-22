@@ -23,7 +23,7 @@ def test_normalize_collapses_spaces_and_blank_runs_and_unifies_newlines():
 
 
 def test_normalize_composes_unicode_and_keeps_curly_quotes_and_dashes():
-    assert normalize("Cafe\u0301 “yen” — up") == "Café “yen” — up"
+    assert normalize("Cafe\u0301 “dollar” — up") == "Café “dollar” — up"
 
 
 def test_normalize_is_idempotent():
@@ -41,18 +41,18 @@ def test_parsed_text_joins_non_empty_segments_and_spans_index_it_exactly():
 
 # -- PDF ------------------------------------------------------------------------------------------------------------
 def test_pdf_pages_become_segments_with_title_from_metadata():
-    data = pdf(["The BoJ raised its policy rate to 1.25% (a 25bp hike).", "JGB yields rose."], title="BoJ note")
+    data = pdf(["The bank raised its policy rate to 4.25% (a 25bp hike).", "Bond yields rose."], title="Policy note")
     p = parse(data, "note.pdf")
-    assert p.format == "pdf" and p.title == "BoJ note" and p.meta == {"pages": 2}
+    assert p.format == "pdf" and p.title == "Policy note" and p.meta == {"pages": 2}
     assert [s.page for s in p.segments] == [1, 2]
-    assert "BoJ raised its policy rate to 1.25% (a 25bp hike)." in p.segments[0].text
-    assert p.segments[1].text == "JGB yields rose."
+    assert "bank raised its policy rate to 4.25% (a 25bp hike)." in p.segments[0].text
+    assert p.segments[1].text == "Bond yields rose."
     _spans_exact(p)
 
 
 def test_pdf_without_metadata_has_empty_title():
-    p = parse(pdf(["Brent rose."]), "x.PDF")
-    assert p.title == "" and p.text == "Brent rose."
+    p = parse(pdf(["Crude rose."]), "x.PDF")
+    assert p.title == "" and p.text == "Crude rose."
 
 
 @pytest.mark.parametrize("data", [b"", b"not a pdf at all", b"%PDF-1.4\n garbage without a trailer"])
@@ -64,10 +64,10 @@ def test_corrupted_pdf_raises_parse_error(data):
 # -- DOCX -----------------------------------------------------------------------------------------------------------
 def test_docx_paragraphs_tabs_and_breaks():
     body = (para() + para("Rates", "\t", "note") + "<w:p><w:r><w:t/></w:r></w:p>"
-            + para("The BoJ ", "raised rates.", "\n", "JGB yields rose."))
+            + para("The Bank ", "raised rates.", "\n", "Bond yields rose."))
     p = parse(docx(body), "memo.docx")
     assert p.format == "docx"
-    assert p.text == "Rates note\n\nThe BoJ raised rates.\nJGB yields rose."
+    assert p.text == "Rates note\n\nThe Bank raised rates.\nBond yields rose."
     assert p.title == "Rates note"
     assert [s.page for s in p.segments] == [None]
 
@@ -91,14 +91,14 @@ def test_corrupted_docx_raises_parse_error(data, why):
 
 # -- PPTX -----------------------------------------------------------------------------------------------------------
 def test_pptx_slides_in_number_order_with_pages_and_title():
-    data = pptx({10: ["Slide ten"], 2: ["Yen outlook", "USD/JPY fell to 150."], 1: []},
+    data = pptx({10: ["Slide ten"], 2: ["Dollar outlook", "Dollar index fell to 104."], 1: []},
                 extra={"ppt/slides/_rels/slide1.xml.rels": "<r/>", "ppt/slideLayouts/slideLayout1.xml": "<l/>"})
     p = parse(data, "deck.pptx")
     assert p.format == "pptx" and p.meta == {"slides": 3}
-    assert [(s.page, s.text) for s in p.segments] == [(1, ""), (2, "Yen outlook\nUSD/JPY fell to 150."),
+    assert [(s.page, s.text) for s in p.segments] == [(1, ""), (2, "Dollar outlook\nDollar index fell to 104."),
                                                        (3, "Slide ten")]
-    assert p.title == "Yen outlook"
-    assert p.text == "Yen outlook\nUSD/JPY fell to 150.\n\nSlide ten"
+    assert p.title == "Dollar outlook"
+    assert p.text == "Dollar outlook\nDollar index fell to 104.\n\nSlide ten"
     _spans_exact(p)
 
 
@@ -118,12 +118,12 @@ def test_corrupted_pptx_raises_parse_error(data, why):
 
 # -- XLSX -----------------------------------------------------------------------------------------------------------
 def test_xlsx_sheets_rows_and_cell_values():
-    data = xlsx({"Rates": [["Name", "Value", None, None], ["BoJ", 1.25, None, None], [None, None],
-                           ["ECB", 2.0, 7, "pct"], [3e-10]],
+    data = xlsx({"Rates": [["Name", "Value", None, None], ["Bank", 4.25, None, None], [None, None],
+                           ["Board", 2.0, 7, "pct"], [3e-10]],
                  "Empty": []})
     p = parse(data, "book.xlsx")
     assert p.format == "xlsx" and p.meta == {"sheets": ["Rates", "Empty"]} and p.title == ""
-    assert p.segments[0] == Segment("Sheet: Rates\nName | Value\nBoJ | 1.25\nECB | 2 | 7 | pct\n3e-10", page=1,
+    assert p.segments[0] == Segment("Sheet: Rates\nName | Value\nBank | 4.25\nBoard | 2 | 7 | pct\n3e-10", page=1,
                                     label="Rates")
     assert p.segments[1] == Segment("", page=2, label="Empty")
     assert p.text == p.segments[0].text
@@ -134,7 +134,7 @@ def test_xlsm_uses_the_xlsx_parser():
     assert parse(xlsx({"S": [["a"]]}), "macro.xlsm").text == "Sheet: S\na"
 
 
-@pytest.mark.parametrize("value,text", [(None, ""), (2.0, "2"), (1.25, "1.25"), (2.00000000001, "2"),
+@pytest.mark.parametrize("value,text", [(None, ""), (2.0, "2"), (4.25, "4.25"), (2.00000000001, "2"),
                                         (0.1 + 0.2, "0.3"), (3e-10, "3e-10"), (7, "7"), ("x", "x"), (True, "True"),
                                         ("FY26\nCurrent", "FY26 Current"), ("a\r\nb", "a  b")])
 def test_cell_renders_values_deterministically(value, text):
@@ -149,15 +149,15 @@ def test_corrupted_xlsx_raises_parse_error(data):
 
 # -- HTML -----------------------------------------------------------------------------------------------------------
 def test_html_skips_scripts_and_styles_keeps_title_blocks_and_tables():
-    html = b"""<!doctype html><html><head><title>BoJ &amp; the yen</title><style>p{color:red}</style>
-    <script>var x = "Brent rose";</script></head><body><noscript>enable js</noscript>
-    <h1>Rates</h1><p>The BoJ <b>raised</b> rates.</p></script><span>inline</span></span>
-    <table><tr><th>Name</th><th>Rate</th></tr><tr><td>BoJ</td><td>1.25%</td></tr></table>
+    html = b"""<!doctype html><html><head><title>Bank &amp; the dollar</title><style>p{color:red}</style>
+    <script>var x = "Crude rose";</script></head><body><noscript>enable js</noscript>
+    <h1>Rates</h1><p>The Bank <b>raised</b> rates.</p></script><span>inline</span></span>
+    <table><tr><th>Name</th><th>Rate</th></tr><tr><td>Bank</td><td>4.25%</td></tr></table>
     <ul><li>one</li><li>two</li></ul><template>hidden</template>tail<br>end</body></html>"""
     p = parse(html, "page.html")
-    assert p.format == "html" and p.title == "BoJ & the yen"
-    assert p.text == "Rates\n\nThe BoJ raised rates.\ninline\n\nName | Rate\n\nBoJ | 1.25%\n\none\n\ntwo\n\ntail\nend"
-    for hidden in ("color", "Brent", "enable js", "hidden"):
+    assert p.format == "html" and p.title == "Bank & the dollar"
+    assert p.text == "Rates\n\nThe Bank raised rates.\ninline\n\nName | Rate\n\nBank | 4.25%\n\none\n\ntwo\n\ntail\nend"
+    for hidden in ("color", "Crude", "enable js", "hidden"):
         assert hidden not in p.text
 
 
@@ -168,25 +168,25 @@ def test_htm_extension_and_html_mime_fallback():
 
 # -- CSV, Markdown, text ----------------------------------------------------------------------------------------------
 def test_csv_rows_joined_with_bars_and_empty_rows_dropped():
-    p = parse(b'name,rate\r\n"BoJ, Japan",1.25\r\n,\r\n\r\nECB,2.25\r\n', "rates.csv")
-    assert p.format == "csv" and p.text == "name | rate\nBoJ, Japan | 1.25\nECB | 2.25" and p.title == ""
+    p = parse(b'name,rate\r\n"Bank, Home",4.25\r\n,\r\n\r\nBoard,2.25\r\n', "rates.csv")
+    assert p.format == "csv" and p.text == "name | rate\nBank, Home | 4.25\nBoard | 2.25" and p.title == ""
 
 
 def test_markdown_title_is_first_heading_without_hashes():
-    p = parse(b"\n\n## BoJ hikes\n\nThe BoJ raised rates.\n", "note.md")
-    assert p.format == "markdown" and p.title == "BoJ hikes" and p.text == "## BoJ hikes\n\nThe BoJ raised rates."
+    p = parse(b"\n\n## Bank hikes\n\nThe Bank raised rates.\n", "note.md")
+    assert p.format == "markdown" and p.title == "Bank hikes" and p.text == "## Bank hikes\n\nThe Bank raised rates."
     assert parse(b"# x", "n.markdown").format == "markdown"
 
 
 @pytest.mark.parametrize("data", [
-    "Yen — café".encode(),
-    b"\xef\xbb\xbf" + "Yen — café".encode(),
-    "Yen — café".encode("utf-16"),
-    "Yen — café".encode("utf-16-be").join([b"\xfe\xff", b""]),
+    "Dollar — café".encode(),
+    b"\xef\xbb\xbf" + "Dollar — café".encode(),
+    "Dollar — café".encode("utf-16"),
+    "Dollar — café".encode("utf-16-be").join([b"\xfe\xff", b""]),
 ])
 def test_text_decodes_utf8_bom_and_utf16(data):
     p = parse(data, "a.txt")
-    assert p.format == "text" and p.text == "Yen — café" and p.title == "Yen — café"
+    assert p.format == "text" and p.text == "Dollar — café" and p.title == "Dollar — café"
 
 
 def test_text_falls_back_to_latin1_when_not_utf8():
@@ -200,18 +200,18 @@ def test_empty_text_file_parses_empty():
 
 # -- JSON -------------------------------------------------------------------------------------------------------------
 def test_plain_json_is_pretty_printed_with_sorted_keys():
-    p = parse(json.dumps({"b": [1, "¥"], "a": {"c": None}}).encode(), "data.json")
+    p = parse(json.dumps({"b": [1, "€"], "a": {"c": None}}).encode(), "data.json")
     assert p.format == "json" and p.meta == {}
-    assert p.text == '{\n"a": {\n"c": null\n},\n"b": [\n1,\n"¥"\n]\n}'  # lines stripped
+    assert p.text == '{\n"a": {\n"c": null\n},\n"b": [\n1,\n"€"\n]\n}'  # lines stripped
 
 
 def test_import_bundle_json_is_passed_through_whole():
     bundle = {"format": "axelrod.import/v1", "title": "Desk notes", "items": [
-        {"id": "A", "headline": "BoJ hikes", "summary": "The BoJ raised rates."}, "not an item",
-        {"id": "B", "headline": "Yen up"}]}
+        {"id": "A", "headline": "Bank hikes", "summary": "The Bank raised rates."}, "not an item",
+        {"id": "B", "headline": "Dollar up"}]}
     p = parse(json.dumps(bundle).encode(), "bundle.json")
     assert p.format == "bundle" and p.title == "Desk notes" and p.meta == {"bundle": bundle}
-    assert p.text == "BoJ hikes\nThe BoJ raised rates.\n\nYen up"
+    assert p.text == "Bank hikes\nThe Bank raised rates.\n\nDollar up"
 
 
 def test_import_bundle_without_items_or_title():
@@ -254,5 +254,5 @@ def test_mime_of_and_supported():
 
 
 def test_parse_is_deterministic():
-    data = docx(para("The BoJ raised rates.") + para("JGB yields rose 10bp."))
+    data = docx(para("The Bank raised rates.") + para("Bond yields rose 10bp."))
     assert parse(data, "a.docx") == parse(data, "a.docx")

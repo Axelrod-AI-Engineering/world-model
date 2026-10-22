@@ -110,7 +110,7 @@ def logins_client(monkeypatch):
     monkeypatch.setenv("WORLD_MODEL_REQUIRE_BASIC_AUTH", "1")
     monkeypatch.setenv("WORLD_MODEL_BASIC_AUTH_USERNAME", "manav")
     monkeypatch.setenv("WORLD_MODEL_BASIC_AUTH_PASSWORD", "test-password")
-    monkeypatch.setenv("WORLD_MODEL_LOGINS", "emily:other-password:emily_demo")
+    monkeypatch.setenv("WORLD_MODEL_LOGINS", "eve:other-password:acme_demo")
 
     async def page(request):
         return PlainTextResponse(str(request.scope.get("axelrod_login")))
@@ -125,15 +125,15 @@ def test_each_login_is_named_in_the_scope(logins_client):
     sign_in(logins_client)
     assert logins_client.get("/").text == "manav"
     logins_client.get("/logout")
-    sign_in(logins_client, "emily", "other-password")
-    assert logins_client.get("/").text == "emily"
+    sign_in(logins_client, "eve", "other-password")
+    assert logins_client.get("/").text == "eve"
     logins_client.cookies.clear()
     # one login's password does not open another
-    assert sign_in(logins_client, "emily", "test-password").status_code == 401
+    assert sign_in(logins_client, "eve", "test-password").status_code == 401
     assert sign_in(logins_client, "manav", "other-password").status_code == 401
 
 
-@pytest.mark.parametrize("raw", ["emily:pw", "emily::emily_demo", ":pw:emily_demo"])
+@pytest.mark.parametrize("raw", ["eve:pw", "eve::acme_demo", ":pw:acme_demo"])
 def test_malformed_logins_fail_closed(monkeypatch, raw):
     monkeypatch.setenv("WORLD_MODEL_BASIC_AUTH_USERNAME", "manav")
     monkeypatch.setenv("WORLD_MODEL_BASIC_AUTH_PASSWORD", "test-password")
@@ -149,14 +149,14 @@ def test_each_login_serves_its_own_scenario(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)          # the extra login's storage goes under var/
     monkeypatch.setenv("WORLD_MODEL_BASIC_AUTH_USERNAME", "manav")
     monkeypatch.setenv("WORLD_MODEL_BASIC_AUTH_PASSWORD", "test-password")
-    monkeypatch.setenv("WORLD_MODEL_LOGINS", "emily:other-password:emily_demo")
+    monkeypatch.setenv("WORLD_MODEL_LOGINS", "eve:other-password:acme_demo")
     app = create_app(scenario="small_demo", storage=MemoryBackend(), trace_dir=None)
     with TestClient(app) as c:
         sign_in(c)
         assert c.get("/api/sim/status").json()["scenario_id"] == "small_demo"
         c.cookies.clear()
-        sign_in(c, "emily", "other-password")
-        assert c.get("/api/sim/status").json()["scenario_id"] == "emily_demo"
+        sign_in(c, "eve", "other-password")
+        assert c.get("/api/sim/status").json()["scenario_id"] == "acme_demo"
 
 
 # -- the sign-in page and its session cookie (Oct 12) --------------------------------------------------------------
@@ -194,7 +194,7 @@ def test_signing_in_sets_a_session_and_signing_out_clears_it(client):
 def test_a_tampered_or_foreign_session_is_refused(client):
     sign_in(client)
     good = client.cookies["axelrod_session"]
-    raw = base64.urlsafe_b64decode(good).decode().replace("manav|", "emily|", 1)
+    raw = base64.urlsafe_b64decode(good).decode().replace("manav|", "eve|", 1)
     client.cookies.clear()
     client.cookies.set("axelrod_session", base64.urlsafe_b64encode(raw.encode()).decode())
     assert client.get("/api/state").status_code == 401
@@ -209,8 +209,8 @@ def test_sign_in_never_redirects_off_site(client):
 
 
 def test_each_login_signs_in_to_its_own_scope(logins_client):
-    assert sign_in(logins_client, "emily", "other-password").status_code == 303
-    assert logins_client.get("/").text == "emily"
+    assert sign_in(logins_client, "eve", "other-password").status_code == 303
+    assert logins_client.get("/").text == "eve"
 
 
 def test_without_sign_in_configured_login_and_logout_go_to_the_demo(monkeypatch):

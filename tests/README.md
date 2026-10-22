@@ -74,6 +74,7 @@ Counts are from `uv run pytest --collect-only -q <folder>` on Oct 18 and include
 | `slow` | the full oil-demo checklist, the production demo, every slot alternative (`tests/integration/test_api.py`), the browser tests | Collected and skipped unless `--runslow` (`tests/conftest.py`) |
 | `integration` | `tests/integration/service/` | Selects the service's end-to-end flows: `-m integration`, or `-m "not integration"` to leave them out. Registered in `pyproject.toml` |
 | Playwright | `tests/ui/` | Skipped without it (`pytest.importorskip`) or without Chromium; run with `uv run --with playwright==1.58.0 pytest tests/ui --runslow` |
+| `data/clients/` (the client root, `WORLD_MODEL_CLIENT_DIR`; gitignored) | the client-specific scenario tests (`tests/scenario/test_construction_*.py`, `test_sally_*.py`) and `tests/unit/context/test_construction_scripts.py` | Skipped, with the reason, where the client scenarios are absent, as on CI. Everything else runs against a synthetic client, `tests/fixtures/clients` (invented `acme` names), which `tests/conftest.py` puts first on the client roots (`tests/clients.py`) |
 | `data/sally_data/` (local client data, gitignored) | the Tokio Marine and Toyota construction checks that read the client's own files, and `tests/unit/context/test_construction_scripts.py` | Skipped where it is absent, as on CI. `SALLY_CONSTRUCTION` points the Tokio Marine checks at another folder. Never commit that data |
 
 ## Coverage policy
@@ -122,7 +123,7 @@ flow on v1, starts from a fresh service (`tests/service/helpers.py`: `service()`
 restarted service reuses), and uses synthetic, dated notes only. Callers propose with a static key; a person decides
 with a service token (`conftest.py`: `review_all`). They are marked `integration`.
 
-**Budget.** About 50 seconds for the suite on a laptop (each flow 3–15 s; booting the Sally demo takes about 1 s). A
+**Budget.** About 50 seconds for the suite on a laptop (each flow 3–15 s; booting the Acme demo takes about 1 s). A
 new flow should stay under 20 s; one that needs longer is marked `slow` as well.
 
 | # | Flow | What it proves | Status |

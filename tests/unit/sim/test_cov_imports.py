@@ -6,8 +6,8 @@ from __future__ import annotations
 import json
 
 import pytest
-import yaml
 
+from axelrod_wm.clients import load_scenario_yaml
 from axelrod_wm.control.controller import ControllerError
 from axelrod_wm.control.updates import UpdateState
 from axelrod_wm.intake.bundle import ImportBundle
@@ -16,13 +16,13 @@ from axelrod_wm.sim.imports import ImportRunner, load_bundle_file
 from axelrod_wm.sim.scenario import ScenarioScript
 from axelrod_wm.trace import RecordingTracer
 
-EMILY = "data/scenarios/emily_demo/scenario.yaml"
+ACME = "tests/fixtures/clients/scenarios/acme_demo/scenario.yaml"
 
 
 def item(iid: str, at: str, rate: float) -> dict:
     return {"id": iid, "published_at": at, "source": "Synthetic newswire", "source_type": "central_bank",
-            "headline": f"BoJ sets its policy rate at {rate}%", "entities": ["boj"],
-            "signals": [{"type": "observe", "value_of": "boj.policy_rate", "value": rate, "quote": f"{rate}%"}]}
+            "headline": f"The central bank sets its policy rate at {rate}%", "entities": ["central_bank"],
+            "signals": [{"type": "observe", "value_of": "central_bank.policy_rate", "value": rate, "quote": f"{rate}%"}]}
 
 
 def bundle(*items: dict, title: str = "Test bundle") -> dict:
@@ -30,7 +30,7 @@ def bundle(*items: dict, title: str = "Test bundle") -> dict:
 
 
 def script(imports_dir: str | None, seeds: bool = True) -> ScenarioScript:
-    raw = yaml.safe_load(open(EMILY))
+    raw = load_scenario_yaml(ACME)
     raw["imports_dir"] = imports_dir
     if not seeds:
         raw["initialization"]["seeds"] = None
@@ -48,7 +48,7 @@ def review_all(r: ImportRunner, update_id: str) -> None:
     ctl = r.controller
     run = ctl.get_update(update_id)
     while run.state == UpdateState.AWAITING_REVIEW:
-        ctl.approve(run.waiting_on, "emily")        # approving the awaited item resumes the run
+        ctl.approve(run.waiting_on, "eve")        # approving the awaited item resumes the run
 
 
 @pytest.fixture(scope="module")

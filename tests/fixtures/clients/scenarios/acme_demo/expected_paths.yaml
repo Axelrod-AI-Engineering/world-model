@@ -1,0 +1,243 @@
+# What Acme's research expects of each thesis's path: a synthetic test fixture (invented companies and themes).
+theses:
+  S-T1:
+    shock:
+    - crude_oil.price
+    chains:
+    - - crude_oil.price
+      - economy.headline_inflation
+    - - crude_oil.price
+      - shipping.freight_cost
+      - blue_freight.freight_revenue
+      - blue_freight.operating_profit
+    - - crude_oil.price
+      - blue_freight.fuel_cost
+      - blue_freight.operating_profit
+    - - crude_oil.price
+      - ridge_energy.operating_profit
+    - - crude_oil.price
+      - acme_motors.vehicle_sales
+    channels:
+    - source: crude_oil.price
+      target: economy.headline_inflation
+      sign: +
+      order: 1
+      level: must
+      why: dearer fuel passes into consumer prices
+    - source: crude_oil.price
+      target: shipping.freight_cost
+      sign: +
+      order: 1
+      level: must
+      why: fuel is most of a voyage's cost
+    - source: crude_oil.price
+      target: ridge_energy.operating_profit
+      sign: +
+      order: 1
+      level: must
+      why: a producer earns more per barrel
+    - source: crude_oil.price
+      target: blue_freight.fuel_cost
+      sign: +
+      order: 1
+      level: must
+      why: a shipper pays more for fuel
+    - source: crude_oil.price
+      target: acme_motors.vehicle_sales
+      sign: '-'
+      order: 1
+      level: should
+      why: dear fuel weighs on car demand
+    - source: blue_freight.fuel_cost
+      target: blue_freight.operating_profit
+      sign: '-'
+      order: 2
+      level: must
+      why: fuel is a cost against operating profit
+    - source: shipping.freight_cost
+      target: blue_freight.freight_revenue
+      sign: +
+      order: 2
+      level: should
+      why: higher rates lift freight revenue
+    missing_links:
+    - source: crude_oil.price
+      target: acme_re.operating_profit
+      sign: +
+      order: 1
+      level: should
+      why: a reinsurer with energy-linked claims reserves reprices them as crude moves
+    outputs:
+      crude_oil.price: up
+      economy.headline_inflation: up
+      shipping.freight_cost: up
+      ridge_energy.operating_profit: up
+      blue_freight.operating_profit: down
+      acme_motors.operating_profit: down
+      economy.gdp_growth: '?'
+  S-T2:
+    shock:
+    - central_bank.policy_rate
+    chains:
+    - - central_bank.policy_rate
+      - gov_bonds.yield_2y
+      - gov_bonds.yield_10y
+      - acme_re.domestic_pc_profit
+    - - central_bank.policy_rate
+      - acme_bank.net_interest_income
+    - - central_bank.policy_rate
+      - delta_bank.net_interest_income
+    - - central_bank.policy_rate
+      - dollar.index
+    channels:
+    - source: central_bank.policy_rate
+      target: gov_bonds.yield_2y
+      sign: +
+      order: 1
+      level: must
+      why: the front of the curve follows the policy rate
+    - source: gov_bonds.yield_2y
+      target: gov_bonds.yield_10y
+      sign: +
+      order: 2
+      level: must
+      why: the ten-year follows the two-year, less than one for one
+    - source: central_bank.policy_rate
+      target: acme_bank.net_interest_income
+      sign: +
+      order: 1
+      level: must
+      why: loans reprice faster than deposits
+    - source: central_bank.policy_rate
+      target: delta_bank.net_interest_income
+      sign: +
+      order: 1
+      level: should
+      why: loans reprice faster than deposits
+    - source: central_bank.policy_rate
+      target: dollar.index
+      sign: +
+      order: 1
+      level: should
+      why: a lower rate weakens the currency
+    - source: gov_bonds.yield_10y
+      target: acme_re.domestic_pc_profit
+      sign: +
+      order: 3
+      level: should
+      why: lower reinvestment yields cut investment income
+    missing_links:
+    - source: gov_bonds.yield_10y
+      target: acme_bank.net_interest_income
+      sign: +
+      order: 2
+      level: should
+      why: a bank that rolls fixed-rate hedges earns less as long rates fall
+    outputs:
+      central_bank.policy_rate: down
+      gov_bonds.yield_10y: down
+      acme_bank.net_interest_income: down
+      delta_bank.net_interest_income: down
+      acme_re.domestic_pc_profit: down
+      dollar.index: down
+  S-T3:
+    shock:
+    - credit_markets.credit_spread
+    - dollar.index
+    chains:
+    - - credit_markets.credit_spread
+      - capital_markets.market_volatility
+      - delta_bank.markets_revenue
+    - - credit_markets.credit_spread
+      - acme_bank.ib_fees
+    - - dollar.index
+      - acme_motors.operating_profit
+    - - dollar.index
+      - acme_re.international_profit
+      - acme_re.operating_profit
+    channels:
+    - source: credit_markets.credit_spread
+      target: capital_markets.market_volatility
+      sign: +
+      order: 1
+      level: must
+      why: wider spreads come with larger market moves
+    - source: capital_markets.market_volatility
+      target: delta_bank.markets_revenue
+      sign: +
+      order: 2
+      level: should
+      why: trading desks earn more when markets move
+    - source: credit_markets.credit_spread
+      target: acme_bank.ib_fees
+      sign: '-'
+      order: 1
+      level: should
+      why: issuers wait out wide spreads
+    - source: dollar.index
+      target: acme_motors.operating_profit
+      sign: '-'
+      order: 1
+      level: must
+      why: an exporter's profit falls as the dollar strengthens
+    - source: dollar.index
+      target: acme_re.international_profit
+      sign: +
+      order: 1
+      level: must
+      why: overseas profit translates into more dollars when the dollar strengthens
+    - source: acme_re.international_profit
+      target: acme_re.operating_profit
+      sign: +
+      order: 2
+      level: should
+      why: a segment's profit adds to group profit
+    outputs:
+      dollar.index: up
+      credit_markets.credit_spread: up
+      capital_markets.market_volatility: up
+      acme_bank.ib_fees: down
+      delta_bank.markets_revenue: up
+      acme_motors.operating_profit: down
+      acme_re.international_profit: up
+      acme_re.operating_profit: up
+  S-T4:
+    shock:
+    - shipping.freight_cost
+    chains:
+    - - shipping.freight_cost
+      - blue_freight.freight_revenue
+      - blue_freight.operating_profit
+    - - shipping.freight_cost
+      - economy.industrial_output
+    channels:
+    - source: shipping.freight_cost
+      target: blue_freight.freight_revenue
+      sign: +
+      order: 1
+      level: must
+      why: higher rates lift a shipper's revenue
+    - source: blue_freight.freight_revenue
+      target: blue_freight.operating_profit
+      sign: +
+      order: 2
+      level: should
+      why: revenue adds to operating profit
+    - source: shipping.freight_cost
+      target: economy.industrial_output
+      sign: '-'
+      order: 1
+      level: should
+      why: dear freight slows factories
+    missing_links:
+    - source: shipping.freight_cost
+      target: acme_motors.operating_profit
+      sign: '-'
+      order: 1
+      level: should
+      why: parts and finished cars both ride the freight market
+    outputs:
+      shipping.freight_cost: up
+      blue_freight.freight_revenue: up
+      blue_freight.operating_profit: up
+      economy.industrial_output: down

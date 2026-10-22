@@ -53,13 +53,13 @@ def acme_construction():
             {"entity": "acme", **_s("acme.auto", features={"view": "reporting_segments"})},
             {"entity": "acme", **_s("acme.finance", features={"view": "reporting_segments"})},
             {"entity": "acme", **_s("acme.elims", mean=-1.0)},
-            {"entity": "acme", **_s("acme.japan", features={"view": "regions"})},
+            {"entity": "acme", **_s("acme.home", features={"view": "regions"})},
             {"entity": "acme", **_s("acme.na", features={"view": "regions"})},
             {"entity": "acme", **_s("acme.landed_cost", features={"view": "operating_state"})},
         ],
         "interactions": [
             *[{"id": f"a{k}", "source": f"acme.{p}", "target": "acme.profit", "label": "adds to", "edge_type": "accounting",
-               "effect": {"mu": 0.33, "sigma": 0.001}} for k, p in enumerate(["auto", "finance", "elims", "japan", "na"])],
+               "effect": {"mu": 0.33, "sigma": 0.001}} for k, p in enumerate(["auto", "finance", "elims", "home", "na"])],
             {"id": "t1", "source": "macro.tariff", "target": "acme.landed_cost", "label": "raises", "calibration": "uncalibrated",
              "transition": TRANSITION},
             {"id": "t2", "source": "acme.landed_cost", "target": "acme.na", "label": "squeezes",
@@ -74,7 +74,7 @@ def acme_construction():
             {"id": "C1", "entity_id": "acme", "view": "reporting_segments", "basis": "segment operating income",
              "unit": "bn/yr", "total": "acme.profit", "members": ["acme.auto", "acme.finance"], "eliminations": "acme.elims"},
             {"id": "C2", "entity_id": "acme", "view": "regions", "basis": "regional operating income", "unit": "bn/yr",
-             "total": "acme.profit", "members": ["acme.japan", "acme.na"], "note": "overlaps C1"}],
+             "total": "acme.profit", "members": ["acme.home", "acme.na"], "note": "overlaps C1"}],
     }
 
 
@@ -166,12 +166,12 @@ def test_the_check_finds_broken_paths_and_compositions(graph):
                               steps=[PathStep(interaction_id="t1"), PathStep(interaction_id="a0"),
                                      PathStep(interaction_id="t2", branch="b"), PathStep(interaction_id="a1", branch="b")])
     g.interactions["a1"] = g.interactions["a1"].model_copy(update={"retired_at": g.interactions["a1"].created_at})
-    g.paths["P5"] = NamedPath(id="P5", name="x", entity_id="acme", trigger="t", endpoint="acme.japan",
+    g.paths["P5"] = NamedPath(id="P5", name="x", entity_id="acme", trigger="t", endpoint="acme.home",
                               steps=[PathStep(interaction_id="t1")])
     g.compositions["C3"] = Composition(id="C3", entity_id="ghost", view="v", basis="b", unit="u", total="acme.profit",
                                        members=["acme.profit", "acme.none", "acme.landed_cost", "acme.auto"])
     g.compositions["C4"] = Composition(id="C4", entity_id="acme", view="products", basis="b", unit="u",
-                                       total="acme.profit", members=["acme.japan"], additive=False)
+                                       total="acme.profit", members=["acme.home"], additive=False)
     g.interactions["t1"] = g.interactions["t1"].model_copy(update={"transition": None})
     problems = validate_construction(g)
     expected = [
@@ -180,7 +180,7 @@ def test_the_check_finds_broken_paths_and_compositions(graph):
         "path P4: step 1 (a0) starts at acme.auto, which no earlier step reaches",
         "path P4: step 3 (a1) is retired",
         "path P4: branch 'b' steps start at different values ['acme.finance', 'acme.landed_cost']",
-        "path P5: no step reaches its endpoint acme.japan",
+        "path P5: no step reaches its endpoint acme.home",
         "composition C3: unknown entity 'ghost'", "composition C3: unknown value 'acme.none'",
         "composition C3: the total is also a part",
         "composition C3: acme.profit has no accounting link to its total acme.profit",

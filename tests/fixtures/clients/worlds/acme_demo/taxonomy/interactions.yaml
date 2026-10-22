@@ -1,0 +1,97 @@
+# Acme's interaction taxonomy: a synthetic test fixture.
+root: gen:int:root
+nodes:
+- id: gen:int:root
+  name: Causal relation
+  parent: null
+- id: gen:int:cost_push
+  name: Cost push
+  parent: gen:int:root
+- id: gen:int:energy_to_prices
+  name: Energy to prices
+  parent: gen:int:cost_push
+  instances:
+  - m02
+  - m03
+  - m05
+  - m29
+- id: gen:int:energy_to_activity
+  name: Energy to activity
+  parent: gen:int:root
+  instances:
+  - m04
+  - m15
+  - m25
+  - m27
+  - m28
+- id: gen:int:policy_reaction
+  name: Policy reaction
+  parent: gen:int:root
+  instances:
+  - m06
+  - m07
+- id: gen:int:rate_pass_through
+  name: Rate pass-through
+  parent: gen:int:root
+  instances:
+  - m08
+  - m09
+  - m11
+  - m12
+- id: gen:int:fx_translation
+  name: FX translation
+  parent: gen:int:root
+  signature:
+    required:
+      source_attr:
+      - fx_rate
+  instances:
+  - m10
+  - m23
+  - m24
+- id: gen:int:reinvestment
+  name: Reinvestment income
+  parent: gen:int:root
+  signature:
+    required:
+      source_attr:
+      - bond_yield
+      target_attr:
+      - revenue_flow
+  instances:
+  - m20
+- id: gen:int:margin_channel
+  name: Rates to bank income
+  parent: gen:int:root
+  instances:
+  - m17
+  - m18
+- id: gen:int:firm_financials
+  name: Firm financials
+  parent: gen:int:root
+  signature:
+    required:
+      scope:
+      - internal
+  instances:
+  - m21
+  - m22
+  - m31
+  - m32
+- id: gen:int:asset_repricing
+  name: Asset repricing
+  parent: gen:int:root
+  instances: []
+- id: gen:int:credit_channel
+  name: Credit conditions
+  parent: gen:int:root
+  instances:
+  - m13
+  - m14
+- id: gen:int:capital_markets
+  name: Capital-markets activity
+  parent: gen:int:root
+  instances:
+  - m16
+  - m19
+  - m33

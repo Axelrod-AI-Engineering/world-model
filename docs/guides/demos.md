@@ -1,6 +1,6 @@
 # The demos
 
-There are five demos. All five serve the same interface ([gui.md](gui.md)) over the same engine.
+There are five demos: three in the repository and two client demos, which appear where the client root holds them (see below). All of them serve the same interface ([gui.md](gui.md)) over the same engine.
 
 <!-- toc -->
 **Contents**
@@ -21,11 +21,13 @@ There are five demos. All five serve the same interface ([gui.md](gui.md)) over 
 | **Emily's demo** | `uv run axelrod demo --scenario emily_demo` | The ordinary use case: a PM's world model brought up to date by importing research, then forecasts of her book. See [below](#emilys-demo). |
 | **Sally's demo** | `uv run axelrod demo --scenario sally_demo` | Eleven names across banks, insurers, and Japan's exporters, brought up to date one day of research at a time; each forecast reads as a scenario table, and the model exports as context for a client's agents. See [below](#sallys-demo). |
 
+Emily's and Sally's demos are client content (Oct 21): their scenarios, worlds, and configs are not tracked in the repository. They live in the client root (`WORLD_MODEL_CLIENT_DIR`, default `data/clients`), and the demo menu lists them only where that folder holds them ([deployment](deployment.md#client-content)). The test suite uses a synthetic client in `tests/fixtures/clients` (invented names, scenario `acme_demo`) in their place.
+
 The small and production demos serve http://127.0.0.1:8765. The full demo serves http://127.0.0.1:8000 unless you pass `--port`.
 
 ## Switching demos
 
-You don't need to restart the server to change demos. The **demo menu** beside the name in the top bar lists all five. Choosing one switches the running server to it, and the page reloads into the new demo.
+You don't need to restart the server to change demos. The **demo menu** beside the name in the top bar lists them all. Choosing one switches the running server to it, and the page reloads into the new demo.
 
 - **A demo opened before comes back as you left it**, with its reviews, examples, and versions. Each demo keeps its own storage (next to the first one's, for example `var/axelrod/demo-prod_demo`) and its own trace stream. To start a demo over, use **Reset**, or Admin › Scenario; **Reset to the original demo** (☰) starts every demo under the login over at once.
 - **A demo opened for the first time is built in the background.** The demo you're on keeps working, and a card under the menu shows the progress. The production and full demos replay three years of synthetic history the first time they open on a machine, which takes about two and a half minutes. The card counts the days as they're replayed, and the menu marks those demos *First open replays its history: a few minutes*. After that the history is cached in `var/oil_shock_demo/` (the two demos share it), and opening either one takes seconds.
@@ -59,7 +61,7 @@ The world model as the **context layer** for a client's agents. The client's age
 
 Policy divergence and oil and inflation sit above all three. Other names in the research (Zurich, Munich Re, NN, Duke Energy, National Grid) are sector context only: they inform the drivers, and have no entities. AIB and MS&AD have no research yet, so they move only through their drivers.
 
-**The taxonomy** (V1.0, Oct 15, 2026) is the world's object taxonomy in long-term memory (`data/worlds/sally_demo/taxonomy/objects.yaml`), and each entity's outline on the canvas is its concept in it:
+**The taxonomy** (V1.0, Oct 15, 2026) is the world's object taxonomy in long-term memory (`<client root>/worlds/sally_demo/taxonomy/objects.yaml`), and each entity's outline on the canvas is its concept in it:
 
 | Branch | Concepts | Entities |
 |---|---|---|

@@ -156,7 +156,7 @@ def test_data_feed_with_a_given_map_and_nothing_known(eng, tctx):
 RULES = """
 subjects:
   - {pattern: "oil", subentity: resources_energy.oil_price}
-  - {pattern: "yen", subentity: fx.usd_jpy, invert: true}
+  - {pattern: "euro", subentity: fx.dollar_index, invert: true}
   - {pattern: "gas", subentity: resources_energy.gas_price}
 verbs:
   - {pattern: "wobbled"}
@@ -179,13 +179,13 @@ def template(tmp_path):
     ("oil moved by 2 sd", -2.0, "standardized"),
     ("oil moved by 3 points", -3.0, "absolute"),
     ("oil moved by 10%", -0.1, "relative"),
-    ("the yen doubled", 1.0 / 2.0 - 1.0, "relative"),
-    ("the yen moved by 2 sd", 2.0, "standardized"),
+    ("the euro doubled", 1.0 / 2.0 - 1.0, "relative"),
+    ("the euro moved by 2 sd", 2.0, "standardized"),
 ])
 def test_template_units_and_inverted_subjects(template, text, delta, mode):
     ops, spans = template.parse(text, AT)
     assert len(ops) == 1 and ops[0]["delta"] == pytest.approx(delta) and ops[0]["mode"] == mode
-    assert text[spans[0][0]:spans[0][1]].startswith(("oil", "yen"))
+    assert text[spans[0][0]:spans[0][1]].startswith(("oil", "euro"))
 
 
 def test_template_skips_verbs_without_a_size_and_unmatched_subjects(template):

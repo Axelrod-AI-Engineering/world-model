@@ -17,33 +17,33 @@ from axelrod_wm.lake.embed import HashingEmbedder
 from axelrod_wm.lake.sqlite import SQLiteLake
 from axelrod_wm.lake.store import canonical_json, digest
 from tests.ingest.builders import docx, para, pdf, pptx, xlsx
-from tests.ingest.conftest import NOW, sally_graph, sally_inverted
+from tests.ingest.conftest import NOW, acme_graph, acme_inverted
 
 T = "desk"
 ROOT = Path(__file__).resolve().parents[2]
 
-BOJ = ("The BoJ raised its policy rate by 25bp to 1.25%. JGB yields rose 10bp, and Bund yields rose 10bp. "
-       "The yen strengthened 2%. Higher JGB yields lift Tokio Marine Japan P&C profit.")
-BANKS = ("JPMorgan's net interest income rose 4% in Q3. Citi net interest income was $64 billion. "
-         "The Fed rate weighs on JPMorgan net interest income.")
+POLICY = ("The central bank raised its policy rate by 25bp to 4.25%. Government bonds 10Y yield rose 10bp, and the dollar "
+          "index rose 2%. Higher government bonds 10Y yield lifts Acme Re domestic P&C profit.")
+BANKS = ("Acme Bank's net interest income rose 4% in Q3. Delta net interest income was $64 billion. "
+         "The central bank policy rate weighs on Acme Bank net interest income.")
 
 
 def documents() -> dict[str, bytes]:
     """The corpus, built once: several formats, each with claims of several kinds."""
     return {
-        "boj_2026-10-05.md": f"# BoJ watch\n\n{BOJ}\n\n- Brent crude lifts Komatsu operating profit.\n".encode(),
-        "banks.html": (f"<html><head><title>US banks</title><script>Brent fell 9%.</script></head><body>"
-                       f"<p>{BANKS}</p><table><tr><td>Brent crude</td><td>rose 3%</td></tr></table></body></html>"
+        "policy_2026-10-05.md": f"# Policy watch\n\n{POLICY}\n\n- Crude oil price lifts Ridge Energy operating profit.\n".encode(),
+        "banks.html": (f"<html><head><title>Banks</title><script>Crude oil price fell 9%.</script></head><body>"
+                       f"<p>{BANKS}</p><table><tr><td>Crude oil price</td><td>rose 3%</td></tr></table></body></html>"
                        ).encode(),
-        "memo.docx": docx(para("Desk memo, 5 Oct 2026") + para("A 25bp cut in the ECB deposit rate.", "\n",
-                                                                  "Lower Bund yields lift European stocks.")),
-        "rates.xlsx": xlsx({"Levels": [["Value", "Level"], ["BoJ policy rate at", "1.25%"],
-                                       ["US core CPI rose", "0.3 percentage points"]],
-                            "Notes": [["USD/JPY fell to ¥152."], [None], ["Brent crude hit $95."]]}),
-        "wire.txt": "Toyota operating profit reached ¥3.5 trillion.\nThe yen weakened.\n".encode("utf-16"),
-        "deck.pptx": pptx({2: ["UniCredit net interest income rose 3%."], 1: ["ECB held rates at 2.25%."]}),
-        "scan.pdf": pdf(["October 9, 2026", "UST 2Y yields jumped 15bp."]),
-        "table.csv": b"series,unit,2026-09-30,2026-10-01\nBrent crude,$/bbl,94,95\nUSD/JPY,yen,151,152\n",
+        "memo.docx": docx(para("Desk memo, 5 Oct 2026") + para("A 25bp cut in the central bank policy rate.", "\n",
+                                                                  "Higher freight rates lift credit spreads.")),
+        "rates.xlsx": xlsx({"Levels": [["Value", "Level"], ["Central bank policy rate at", "4.25%"],
+                                       ["Core inflation rose", "0.3 percentage points"]],
+                            "Notes": [["Dollar index fell to 104."], [None], ["Crude oil price hit $95."]]}),
+        "wire.txt": "Ridge Energy operating profit reached $6.5 billion.\nThe dollar weakened.\n".encode("utf-16"),
+        "deck.pptx": pptx({2: ["Delta net interest income rose 3%."], 1: ["The central bank held rates at 4.25%."]}),
+        "scan.pdf": pdf(["October 9, 2026", "Two-year yields jumped 15bp."]),
+        "table.csv": b"series,unit,2026-09-30,2026-10-01\nCrude oil price,$/bbl,94,95\nDollar index,index,104,105\n",
     }
 
 
@@ -68,7 +68,7 @@ def snapshot(lake: SQLiteLake, results) -> dict:
 def ingest_all(lake_dir: Path, files: list[tuple[bytes, str]], graph) -> tuple[dict, list[str]]:
     lake = SQLiteLake(lake_dir)
     try:
-        ing = Ingestor(lake, HashingEmbedder(), clock=lambda: NOW, inverted=sally_inverted())
+        ing = Ingestor(lake, HashingEmbedder(), clock=lambda: NOW, inverted=acme_inverted())
         results = ing.ingest_many(T, files, graph, source="Desk", source_type="broker_research")
         return snapshot(lake, results), [r.document.filename for r in results]
     finally:
@@ -78,7 +78,7 @@ def ingest_all(lake_dir: Path, files: list[tuple[bytes, str]], graph) -> tuple[d
 def run_dir(src: str, lake_dir: str) -> str:
     """For a fresh process: ingest every file in `src` (sorted) and print the snapshot as canonical JSON."""
     files = [(p.read_bytes(), p.name) for p in sorted(Path(src).iterdir())]
-    snap, order = ingest_all(Path(lake_dir), files, sally_graph())
+    snap, order = ingest_all(Path(lake_dir), files, acme_graph())
     return canonical_json({"snapshot": snap, "order": order})
 
 
@@ -140,7 +140,7 @@ def test_a_bundle_id_does_not_depend_on_when_it_was_read(corpus, graph, tmp_path
         content = {**a.bundle, "collected_at": None} == {**b.bundle, "collected_at": None}
         assert (a.id == b.id) is content, name
         same += content
-    assert same >= 3                                    # the dated files: boj_2026-10-05.md, memo.docx, scan.pdf, ...
+    assert same >= 3                                    # the dated files: policy_2026-10-05.md, memo.docx, scan.pdf, ...
 
 
 @pytest.mark.parametrize("seed", [1, 2, 3])
@@ -160,7 +160,7 @@ def test_event_time_order_is_by_date_then_id(corpus, graph, tmp_path):
     keys = [(snap[n]["document"]["event_time"], snap[n]["document"]["id"]) for n in order]
     assert keys == sorted(keys)
     # Sep 30 (the table's first column), then Oct 5 (by id), then Oct 9
-    assert order[0] == "table.csv" and set(order[1:3]) == {"boj_2026-10-05.md", "memo.docx"} and order[3] == "scan.pdf"
+    assert order[0] == "table.csv" and set(order[1:3]) == {"policy_2026-10-05.md", "memo.docx"} and order[3] == "scan.pdf"
 
 
 def test_same_bundle_in_fresh_processes_with_different_hash_seeds(corpus, graph, tmp_path):

@@ -1,0 +1,862 @@
+# Acme's world (acme_demo): a synthetic test fixture. Invented companies and a macro layer of energy, prices, rates, the dollar, and credit.
+# Written from scratch for the tests; nothing here describes a real company, market view, or client.
+decision_variables:
+- central_bank.policy_rate
+entities:
+- id: crude_oil
+  name: Crude oil
+  kind: market
+  description: 'Crude oil: price and supply. A sustained rise feeds headline inflation within a quarter, lifts freight, and weighs on growth after
+    two.'
+  category_tags: &id001
+  - MF
+  features:
+    market: commodity
+  aliases:
+  - oil
+  - crude
+  - oil prices
+  subentities:
+  - id: crude_oil.price
+    name: Crude oil price
+    attribute_kind: commodity_price
+    unit: $/bbl
+    family: lognormal
+    mean: 85.0
+    scale: 0.08
+    aliases:
+    - oil price
+    - crude price
+    - price of crude
+    - crude oil
+  - id: crude_oil.supply
+    name: Crude oil supply
+    attribute_kind: production_flow
+    unit: index
+    family: lognormal
+    mean: 100.0
+    scale: 0.04
+    aliases:
+    - oil supply
+    - oil output
+    - crude supply
+    - supply outage
+- id: economy
+  name: Acme economy
+  kind: macro_factor
+  description: 'Prices, growth, and industrial activity in the Acme economy: what the central bank reacts to.'
+  category_tags: *id001
+  features:
+    region: US
+  aliases:
+  - the economy
+  - economy
+  subentities:
+  - id: economy.headline_inflation
+    name: Headline inflation
+    attribute_kind: inflation_rate
+    unit: pct y/y
+    family: gaussian
+    prior:
+      family: gaussian
+      mu: 3.0
+      sigma: 0.3
+    scale: 0.3
+    aliases:
+    - inflation
+    - headline CPI
+    - consumer prices
+    - CPI
+    - Acme CPI
+  - id: economy.core_inflation
+    name: Core inflation
+    attribute_kind: inflation_rate
+    unit: pct y/y
+    family: gaussian
+    prior:
+      family: gaussian
+      mu: 2.7
+      sigma: 0.2
+    scale: 0.2
+    aliases:
+    - core CPI
+    - underlying inflation
+    - Acme core CPI
+  - id: economy.gdp_growth
+    name: Real GDP growth
+    attribute_kind: growth_rate
+    unit: pct y/y
+    family: gaussian
+    prior:
+      family: gaussian
+      mu: 1.8
+      sigma: 0.4
+    scale: 0.4
+    aliases:
+    - growth
+    - GDP
+    - GDP growth
+    - Acme GDP growth
+  - id: economy.industrial_output
+    name: Industrial output
+    attribute_kind: production_flow
+    unit: index
+    family: lognormal
+    mean: 100.0
+    scale: 0.03
+    aliases:
+    - industrial production
+    - factory output
+- id: central_bank
+  name: Central bank
+  kind: agency
+  description: The central bank. Its policy rate answers inflation and growth, anchors the front of the yield curve, and moves the dollar.
+  category_tags: *id001
+  features:
+    region: US
+    function: monetary_policy
+  aliases:
+  - the central bank
+  - monetary authority
+  - Acme central bank
+  - ACB
+  subentities:
+  - id: central_bank.policy_rate
+    name: Policy rate
+    attribute_kind: policy_rate
+    unit: pct
+    family: gaussian
+    prior:
+      family: gaussian
+      mu: 4.0
+      sigma: 0.25
+    scale: 0.25
+    aliases:
+    - policy rates
+    - the policy rate
+    - benchmark rate
+    - base rate
+    - interest rates
+    - short-term rates
+    - Acme policy rate
+- id: gov_bonds
+  name: Government bonds
+  kind: market
+  description: The government yield curve. The two-year follows the policy rate's expected path; the ten-year sets what insurers reinvest at.
+  category_tags: *id001
+  features:
+    region: US
+    market: rates
+  aliases:
+  - government bonds
+  - sovereign bonds
+  - bond market
+  - Acme bonds
+  subentities:
+  - id: gov_bonds.yield_2y
+    name: Two-year yield
+    attribute_kind: bond_yield
+    unit: pct
+    family: gaussian
+    prior:
+      family: gaussian
+      mu: 4.1
+      sigma: 0.2
+    scale: 0.2
+    aliases:
+    - two-year yield
+    - 2-year yield
+    - 2Y yield
+    - 2yr yield
+    - two-year government yield
+    - Acme 2Y yield
+  - id: gov_bonds.yield_10y
+    name: Ten-year yield
+    attribute_kind: bond_yield
+    unit: pct
+    family: gaussian
+    prior:
+      family: gaussian
+      mu: 4.6
+      sigma: 0.2
+    scale: 0.2
+    aliases:
+    - ten-year yield
+    - 10-year yield
+    - 10Y yield
+    - 10yr yield
+    - bond yields
+    - government yields
+    - the ten-year
+    - the 10-year
+    - Acme 10Y yield
+- id: dollar
+  name: Dollar
+  kind: market
+  description: The dollar against a trade-weighted basket. A higher policy rate strengthens it; it trims exporters' translated profit and lifts
+    overseas profit at home.
+  category_tags: *id001
+  features:
+    market: fx
+  aliases:
+  - US dollar
+  - the dollar
+  - dollar basket
+  subentities:
+  - id: dollar.index
+    name: Dollar index
+    attribute_kind: fx_rate
+    unit: index
+    family: lognormal
+    mean: 100.0
+    scale: 0.03
+    aliases:
+    - DXY
+    - dollar index
+    - trade-weighted dollar
+    - the dollar
+    - dollar strength
+    - the euro
+    - euro
+  - id: dollar.eur_rate
+    name: Dollar in euros
+    attribute_kind: fx_rate
+    unit: € per $
+    family: lognormal
+    mean: 0.87
+    scale: 0.03
+    aliases:
+    - dollar-euro
+    - euros per dollar
+    - EUR
+- id: credit_markets
+  name: Credit markets
+  kind: market
+  description: Corporate credit. Spreads widen when growth slows and money tightens, and they cool dealmaking and lift volatility.
+  category_tags: *id001
+  features:
+    market: credit
+  aliases:
+  - credit
+  - credit spreads
+  subentities:
+  - id: credit_markets.credit_spread
+    name: Credit spread
+    attribute_kind: stress_index
+    unit: bp
+    family: gaussian
+    prior:
+      family: gaussian
+      mu: 120.0
+      sigma: 25.0
+    scale: 25.0
+    aliases:
+    - credit spreads
+    - spreads
+    - corporate spreads
+    - high-grade spreads
+- id: capital_markets
+  name: Capital markets
+  kind: market
+  description: 'Equities, volatility, and dealmaking: underwriting and advisory follow deal activity; trading desks earn more when markets move.'
+  category_tags: *id001
+  features:
+    market: capital_markets
+  aliases:
+  - equity markets
+  - stock market
+  - deal activity
+  subentities:
+  - id: capital_markets.deal_activity
+    name: Deal and issuance activity
+    attribute_kind: production_flow
+    unit: index
+    family: lognormal
+    mean: 100.0
+    scale: 0.08
+    aliases:
+    - M&A
+    - issuance
+    - dealmaking
+    - IPOs
+    - deal activity
+  - id: capital_markets.market_volatility
+    name: Market volatility
+    attribute_kind: volatility
+    unit: index
+    family: lognormal
+    mean: 100.0
+    scale: 0.1
+    aliases:
+    - volatility
+    - VIX
+    - MOVE
+    - OVX
+    - market volatility
+- id: shipping
+  name: Shipping
+  kind: market
+  description: Freight markets. Fuel is most of a voyage's cost, so freight follows crude; dear freight slows industrial output.
+  category_tags: *id001
+  features:
+    market: freight
+  aliases:
+  - freight
+  - freight market
+  subentities:
+  - id: shipping.freight_cost
+    name: Freight cost index
+    attribute_kind: cost_index
+    unit: index
+    family: lognormal
+    mean: 100.0
+    scale: 0.1
+    aliases:
+    - freight rates
+    - freight costs
+    - shipping costs
+    - shipping rates
+    - container rates
+- id: acme_bank
+  name: Acme Bank Corp
+  short: Acme Bank
+  kind: company
+  description: A large bank. Rates held higher for longer keep its net interest income up; dealmaking and volatility drive its fees and trading.
+  category_tags:
+  - SC
+  features:
+    sector: banking
+    region: US
+  aliases:
+  - ACBK
+  - Acme Bank
+  levels:
+    share_price: 300.0
+  subentities:
+  - id: acme_bank.net_interest_income
+    name: Acme Bank net interest income
+    attribute_kind: revenue_flow
+    unit: $bn/yr
+    features:
+      view: product
+      basis: firmwide net interest income
+      metric: net_interest_income
+    family: lognormal
+    mean: 102.0
+    scale: 0.05
+    aliases:
+    - NII
+    - net interest income
+    - net II
+  - id: acme_bank.ib_fees
+    name: Acme Bank investment banking fees
+    attribute_kind: revenue_flow
+    unit: $bn/yr
+    features:
+      view: product
+      basis: 'line: investment banking fees, firmwide'
+      metric: investment_banking_fees
+    family: lognormal
+    mean: 9.5
+    scale: 0.08
+    aliases:
+    - advisory and underwriting
+    - banking fees
+  - id: acme_bank.markets_revenue
+    name: Acme Bank markets revenue
+    attribute_kind: revenue_flow
+    unit: $bn/yr
+    features:
+      view: product
+      basis: 'line: fixed income and equity markets revenue'
+      metric: markets_revenue
+    family: lognormal
+    mean: 32.0
+    scale: 0.07
+    aliases:
+    - trading
+    - markets
+  - id: acme_bank.cet1_ratio
+    name: Acme Bank CET1 ratio
+    attribute_kind: structural_level
+    unit: pct
+    features:
+      view: capital
+      basis: CET1 capital over risk-weighted assets
+      metric: cet1_ratio
+    family: gaussian
+    prior:
+      family: gaussian
+      mu: 15.5
+      sigma: 0.3
+    scale: 0.3
+    aliases:
+    - capital
+    - CET1
+    - CET1 ratio
+    - CET-1
+    - CET-1 ratio
+    - Common Equity Tier 1 ratio
+    - Common Equity Tier 1 Capital Ratio
+- id: delta_bank
+  name: Delta Bank
+  short: Delta
+  kind: company
+  description: A bank in restructuring. Its interest income follows the policy rate; its services fees follow cross-border flows.
+  category_tags:
+  - SC
+  features:
+    sector: banking
+    region: US
+  aliases:
+  - Delta
+  - DLTB
+  - D
+  levels:
+    share_price: 125.0
+  subentities:
+  - id: delta_bank.net_interest_income
+    name: Delta net interest income
+    attribute_kind: revenue_flow
+    unit: $bn/yr
+    features:
+      view: product
+      basis: 'line: net interest income incl. markets NII'
+      metric: net_interest_income
+    family: lognormal
+    mean: 64.0
+    scale: 0.05
+    aliases:
+    - Delta NII
+    - NII
+    - net interest income
+    - net II
+  - id: delta_bank.services_revenue
+    name: Delta services revenue
+    attribute_kind: revenue_flow
+    unit: $bn/yr
+    features:
+      view: reporting_segments
+      basis: 'segment: services revenue'
+      metric: services_revenue
+    family: lognormal
+    mean: 20.0
+    scale: 0.05
+    aliases:
+    - treasury and trade solutions
+    - Delta services
+  - id: delta_bank.markets_revenue
+    name: Delta markets revenue
+    attribute_kind: revenue_flow
+    unit: $bn/yr
+    features:
+      view: reporting_segments
+      basis: 'segment: markets revenue'
+      metric: markets_revenue
+    family: lognormal
+    mean: 21.0
+    scale: 0.07
+    aliases:
+    - Delta trading
+- id: acme_re
+  name: Acme Re
+  short: Acme Re
+  kind: company
+  description: 'A reinsurer with a large overseas arm. A stronger dollar lifts translated overseas profit (partly offset by hedging cost); higher
+    yields lift income only on the share of the portfolio that reinvests. Business construction: construction/acme_re.yaml.'
+  category_tags:
+  - SC
+  features:
+    sector: insurance
+    region: US
+  aliases:
+  - Acme Re Holdings
+  - ACRE
+  levels:
+    share_price: 6000.0
+  subentities:
+  - id: acme_re.international_profit
+    name: Acme Re international business profit
+    attribute_kind: revenue_flow
+    unit: $bn/yr
+    features:
+      view: reporting_segments
+      basis: international business adjusted net income, company definition
+      metric: international_adjusted_net_income
+    family: lognormal
+    mean: 640.0
+    scale: 0.06
+    aliases:
+    - international segment
+    - overseas profit
+    - international business
+  - id: acme_re.domestic_pc_profit
+    name: Acme Re domestic P&C profit
+    attribute_kind: revenue_flow
+    unit: $bn/yr
+    features:
+      view: reporting_segments
+      basis: domestic P&C business adjusted net income, company definition
+      metric: domestic_pc_adjusted_net_income
+    family: lognormal
+    mean: 225.0
+    scale: 0.06
+    aliases:
+    - domestic P&C
+    - home P&C
+    - domestic property and casualty
+    - ACRE domestic profit
+  - id: acme_re.operating_profit
+    name: Acme Re adjusted net income
+    attribute_kind: revenue_flow
+    unit: $bn/yr
+    features:
+      view: reporting_segments
+      basis: group adjusted net income, company definition; not operating profit
+      metric: adjusted_net_income
+    family: lognormal
+    mean: 960.0
+    scale: 0.05
+    aliases:
+    - adjusted profit
+    - adjusted net profit
+- id: acme_motors
+  name: Acme Motors
+  short: Acme Motors
+  kind: company
+  description: 'An automaker with automotive, financial-services and other businesses in several regions. It builds more at home than it sells
+    there, so the dollar matters: a stronger dollar trims operating profit, and North America carries the tariff and finance exposure. Construction:
+    construction/acme_motors.yaml.'
+  category_tags:
+  - SC
+  features:
+    sector: autos
+    region: US
+  aliases:
+  - Acme Motors
+  - ACMO
+  levels:
+    share_price: 2800.0
+  subentities:
+  - id: acme_motors.operating_profit
+    name: Acme Motors operating profit
+    attribute_kind: revenue_flow
+    unit: $bn/yr
+    features:
+      view: reporting_segments
+      basis: consolidated operating income; the total of the business-segment and the regional views, which overlap
+    family: lognormal
+    mean: 3.4
+    scale: 0.08
+    aliases:
+    - Acme Motors earnings
+    - OP
+    - Op. profit
+    - operating profit
+    - operating income
+    - EBIT
+  - id: acme_motors.vehicle_sales
+    name: Acme Motors global vehicle sales
+    attribute_kind: production_flow
+    unit: m units/yr
+    features:
+      view: product
+      basis: retail units worldwide, including units sold through joint ventures
+    family: lognormal
+    mean: 10.5
+    scale: 0.04
+    aliases:
+    - Acme Motors volumes
+    - unit sales
+    - vehicle sales
+    - global vehicle sales
+- id: ridge_energy
+  name: Ridge Energy
+  short: Ridge
+  kind: company
+  description: An oil producer. Its profit follows the crude price on the barrels it pumps.
+  category_tags:
+  - SC
+  features:
+    sector: energy
+    region: US
+  aliases:
+  - Ridge
+  - RDGE
+  levels:
+    share_price: 48.0
+  subentities:
+  - id: ridge_energy.operating_profit
+    name: Ridge Energy operating profit
+    attribute_kind: revenue_flow
+    unit: $bn/yr
+    features:
+      view: product
+      basis: consolidated operating profit
+    family: lognormal
+    mean: 6.0
+    scale: 0.1
+    aliases:
+    - Ridge profit
+    - operating profit
+    - earnings
+  - id: ridge_energy.oil_output
+    name: Ridge Energy oil output
+    attribute_kind: production_flow
+    unit: mb/d
+    features:
+      view: operating_state
+      basis: barrels produced per day
+    family: lognormal
+    mean: 1.8
+    scale: 0.05
+    aliases:
+    - production
+    - barrels pumped
+    - oil production
+- id: blue_freight
+  name: Blue Freight
+  short: Blue
+  kind: company
+  description: A container shipper. Freight rates lift its revenue; fuel is its largest cost, so crude squeezes its margin.
+  category_tags:
+  - SC
+  features:
+    sector: shipping
+    region: US
+  aliases:
+  - Blue
+  - BLFR
+  levels:
+    share_price: 22.0
+  subentities:
+  - id: blue_freight.operating_profit
+    name: Blue Freight operating profit
+    attribute_kind: revenue_flow
+    unit: $bn/yr
+    features:
+      view: product
+      basis: consolidated operating profit
+    family: lognormal
+    mean: 2.2
+    scale: 0.12
+    aliases:
+    - Blue profit
+    - operating profit
+    - earnings
+  - id: blue_freight.freight_revenue
+    name: Blue Freight freight revenue
+    attribute_kind: revenue_flow
+    unit: $bn/yr
+    features:
+      view: product
+      basis: 'line: freight revenue'
+    family: lognormal
+    mean: 18.0
+    scale: 0.06
+    aliases:
+    - freight revenue
+    - shipping revenue
+  - id: blue_freight.fuel_cost
+    name: Blue Freight fuel cost
+    attribute_kind: revenue_flow
+    unit: $bn/yr
+    features:
+      view: product
+      basis: 'line: fuel cost'
+    family: lognormal
+    mean: 4.5
+    scale: 0.08
+    aliases:
+    - fuel bill
+    - bunker cost
+    - fuel cost
+- id: union_bank
+  name: Union central bank
+  kind: agency
+  description: The central bank of the neighbouring currency union. Its policy rate anchors its own yield curve and sets its banks' interest income.
+  category_tags:
+  - MF
+  features:
+    region: EU
+    function: monetary_policy
+  aliases:
+  - the union bank
+  - UCB
+  subentities:
+  - id: union_bank.policy_rate
+    name: Union policy rate
+    attribute_kind: policy_rate
+    unit: pct
+    family: gaussian
+    prior:
+      family: gaussian
+      mu: 2.5
+      sigma: 0.25
+    scale: 0.25
+    aliases:
+    - policy rates
+    - the policy rate
+    - benchmark rate
+    - base rate
+    - interest rates
+    - short-term rates
+- id: union_bonds
+  name: Union government bonds
+  kind: market
+  description: The union's yield curve; its ten-year sets what the union's banks reinvest at.
+  category_tags:
+  - MF
+  features:
+    region: EU
+    market: rates
+  aliases:
+  - union bonds
+  subentities:
+  - id: union_bonds.yield_10y
+    name: Union ten-year yield
+    attribute_kind: bond_yield
+    unit: pct
+    family: gaussian
+    prior:
+      family: gaussian
+      mu: 2.9
+      sigma: 0.2
+    scale: 0.2
+    aliases:
+    - ten-year yield
+    - 10-year yield
+    - 10Y yield
+    - 10yr yield
+    - bond yields
+    - government yields
+    - the ten-year
+    - the 10-year
+- id: union_economy
+  name: Union economy
+  kind: macro_factor
+  description: 'Prices and growth in the neighbouring currency union: what its central bank reacts to.'
+  category_tags:
+  - MF
+  features:
+    region: EU
+  aliases:
+  - the union
+  subentities:
+  - id: union_economy.headline_inflation
+    name: Union headline inflation
+    attribute_kind: inflation_rate
+    unit: pct y/y
+    family: gaussian
+    prior:
+      family: gaussian
+      mu: 2.6
+      sigma: 0.3
+    scale: 0.3
+    aliases:
+    - inflation
+    - headline CPI
+    - consumer prices
+    - CPI
+  - id: union_economy.core_inflation
+    name: Union core inflation
+    attribute_kind: inflation_rate
+    unit: pct y/y
+    family: gaussian
+    prior:
+      family: gaussian
+      mu: 2.2
+      sigma: 0.2
+    scale: 0.2
+    aliases:
+    - core CPI
+    - Union core CPI
+    - underlying inflation
+  - id: union_economy.gdp_growth
+    name: Union real GDP growth
+    attribute_kind: growth_rate
+    unit: pct y/y
+    family: gaussian
+    prior:
+      family: gaussian
+      mu: 0.9
+      sigma: 0.4
+    scale: 0.4
+    aliases:
+    - growth
+    - GDP
+    - GDP growth
+- id: union_capital_markets
+  name: Union capital markets
+  kind: market
+  description: The union's equity market.
+  category_tags:
+  - MF
+  features:
+    region: EU
+    market: capital_markets
+  aliases:
+  - union equities
+  subentities:
+  - id: union_capital_markets.equity_index
+    name: Union equity market level
+    attribute_kind: asset_price
+    unit: index
+    family: lognormal
+    mean: 5400.0
+    scale: 0.08
+    aliases:
+    - union stocks
+    - union equities
+- id: harvest_bank
+  name: Harvest Bank
+  short: Harvest
+  kind: company
+  description: A bank of the neighbouring currency union. The union policy rate and its ten-year yield set its net interest income.
+  category_tags:
+  - SC
+  features:
+    sector: banking
+    region: EU
+  aliases:
+  - HVBK
+  levels:
+    share_price: 80.0
+  subentities:
+  - id: harvest_bank.net_interest_income
+    name: Harvest Bank net interest income
+    attribute_kind: revenue_flow
+    unit: €bn/yr
+    features:
+      view: product
+      basis: 'line: group net interest income'
+      metric: net_interest_income
+    family: lognormal
+    mean: 14.5
+    scale: 0.04
+    aliases:
+    - Harvest NII
+    - NII
+    - net interest income
+    - net II
+  - id: harvest_bank.cet1_ratio
+    name: Harvest Bank CET1 ratio
+    attribute_kind: structural_level
+    unit: pct
+    features:
+      view: capital
+      basis: CET1 capital over risk-weighted assets
+      metric: cet1_ratio
+    family: gaussian
+    prior:
+      family: gaussian
+      mu: 15.9
+      sigma: 0.3
+    scale: 0.3
+    aliases:
+    - Harvest capital
+    - CET1
+    - CET1 ratio
+    - CET-1
+    - CET-1 ratio
+    - Common Equity Tier 1 ratio

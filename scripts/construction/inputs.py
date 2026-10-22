@@ -24,6 +24,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+from axelrod_wm.clients import find_world
 from axelrod_wm.context.construction import input_needs, search_inputs, search_markdown
 from axelrod_wm.engine.initialize import ConstructionSpec, resolve_path, world_taxonomy_dir
 from axelrod_wm.ingest.parse import ParseError, parse, supported
@@ -31,7 +32,7 @@ from axelrod_wm.ingest.parse import ParseError, parse, supported
 
 def world_dir(world: str) -> Path:
     p = resolve_path(world)
-    return p if p.is_dir() else resolve_path(f"data/worlds/{world}")
+    return p if p.is_dir() else find_world(world) or resolve_path(f"data/worlds/{world}")
 
 
 def extra_terms(pairs: list[str]) -> dict[str, list[str]]:

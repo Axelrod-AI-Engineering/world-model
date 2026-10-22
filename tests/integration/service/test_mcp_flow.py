@@ -46,18 +46,18 @@ def test_an_agent_proposes_over_mcp_and_a_person_decides():
     with service(SIGNER, headers=AS_AGENT, **ENV) as c:
         async def propose(tool):
             start = (await tool("world_model_get_world_model"))["meta"]["version"]
-            brent0 = (await tool("world_model_get_attribute", entity_id="oil", attribute="brent"))["data"]
+            crude0 = (await tool("world_model_get_attribute", entity_id="crude_oil", attribute="price"))["data"]
             job = (await tool("world_model_ingest_document", filename="2026-09-01_data.txt",
                               text=RATES_NOTE.decode(), source="Data desk", source_type="data"))["data"]
             up = job["result"]["detail"]["results"][0]
             bundle = await tool("world_model_get_bundle", bundle_id=up["bundle_id"])
             proposed = (await tool("world_model_propose_changes", bundle_id=up["bundle_id"]))["data"]
             pending = (await tool("world_model_list_changes"))["data"]
-            return start, brent0, up, bundle, proposed, pending
+            return start, crude0, up, bundle, proposed, pending
 
-        start, brent0, up, bundle, proposed, pending = run_tools(c, propose)
+        start, crude0, up, bundle, proposed, pending = run_tools(c, propose)
         assert up["new"] and c.get(f"{WM}/documents/{up['document_id']}").json()["data"]["uploaded_by"] == "agent"
-        assert any(s.get("value_of") == "oil.brent" for i in bundle["items"] for s in i["signals"])
+        assert any(s.get("value_of") == "crude_oil.price" for i in bundle["items"] for s in i["signals"])
         assert proposed["status"] == "succeeded" and proposed["result"]["detail"]["version_before"] == start["number"]
         assert pending and all(ch["proposed_by"]["sub"] == "agent" for ch in pending)
 
@@ -73,22 +73,22 @@ def test_an_agent_proposes_over_mcp_and_a_person_decides():
         assert decided and all(d["decided_by"]["kind"] == "token" for d in decided)
 
         async def read(tool):
-            now = await tool("world_model_get_attribute", entity_id="oil", attribute="oil.brent")
-            then = await tool("world_model_get_attribute", entity_id="oil", attribute="brent",
+            now = await tool("world_model_get_attribute", entity_id="crude_oil", attribute="crude_oil.price")
+            then = await tool("world_model_get_attribute", entity_id="crude_oil", attribute="price",
                               version=start["number"])
-            hits = await tool("world_model_search", q="Brent crude", mode="keyword")
-            names = await tool("world_model_list_entities", q="brent")
+            hits = await tool("world_model_search", q="crude price", mode="keyword")
+            names = await tool("world_model_list_entities", q="crude")
             changes = await tool("world_model_get_change", change_id=decided[0]["change_id"])
             return now, then, hits, names, changes
 
         now, then, hits, names, changes = run_tools(c, read)
-        assert then["data"] == brent0 and then["meta"]["version"]["number"] == start["number"]
+        assert then["data"] == crude0 and then["meta"]["version"]["number"] == start["number"]
         assert now["meta"]["version"]["number"] > start["number"] and now["data"]["observed"]
-        assert abs(now["data"]["level"]["mean"] - 103) < abs(brent0["level"]["mean"] - 103)
+        assert abs(now["data"]["level"]["mean"] - 103) < abs(crude0["level"]["mean"] - 103)
         assert hits["data"][0]["document_id"] == up["document_id"]
-        assert any(a["id"] == "oil.brent" for e in names["data"] for a in e["attributes"])
+        assert any(a["id"] == "crude_oil.price" for e in names["data"] for a in e["attributes"])
         assert changes["data"]["status"] == "approved" and changes["data"]["decided_by"]["azp"] == "core-web"
 
         # the same read over REST gives the same answer
-        rest = c.get(f"{WM}/entities/oil/attributes/brent", params={"version": start["number"]}).json()
+        rest = c.get(f"{WM}/entities/crude_oil/attributes/price", params={"version": start["number"]}).json()
         assert rest["data"] == then["data"] and rest["meta"]["version"] == then["meta"]["version"]

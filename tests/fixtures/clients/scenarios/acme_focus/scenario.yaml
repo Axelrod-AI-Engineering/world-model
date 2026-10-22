@@ -1,0 +1,30 @@
+# Acme's demo narrowed to two names (engine/focus.py): a synthetic test fixture (invented companies and themes; nothing here describes a real company or client).
+id: acme_focus
+title: 'Acme''s demo, focused: Acme Motors and Acme Re and the players they connect to'
+focus:
+  base: acme_demo
+  companies:
+  - acme_motors
+  - acme_re
+  overrides:
+    S5:
+      name: Reinsurer's reinvestment
+      description: Acme Re reinvests at government yields, translates overseas profit at the dollar, and marks its bonds with credit spreads.
+    S6:
+      name: Dollar-sensitive exporter
+      description: 'Acme Motors: a stronger dollar trims its profit; crude and growth set its volumes.'
+    S-T2:
+      question: 'The central bank cuts 100 bp: yields fall. What happens to the reinsurer''s reinvestment and the dollar?'
+    S-T3:
+      question: 'A stronger dollar and wider credit spreads: what does it do to Acme Motors''s profit and Acme Re''s overseas profit?'
+    economy:
+      description: 'Prices, growth, and industrial activity: what the central bank reacts to, and what car demand follows.'
+    watchlist:
+      name: Acme's book, focused
+      description: 'Two names on the dollar, yields, and energy themes: a reinsurer and an automaker.'
+context_pack:
+  domain_pack_id: PACK_ACME_AUTOMAKER_AND_REINSURER_FOCUS
+  name: Acme Automaker and Reinsurer Focus
+  slug: acme_automaker_reinsurer_focus
+  file_index: '037'
+  edge_id_start: 60

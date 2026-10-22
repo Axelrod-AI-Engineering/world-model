@@ -1,0 +1,242 @@
+# Acme's object taxonomy: a synthetic test fixture. Institutions, economies, and markets; every company has a share price driven by its profit.
+root: gen:obj:root
+nodes:
+- id: gen:obj:root
+  name: World Model
+  parent: null
+- id: gen:obj:institutions
+  name: Institutions
+  parent: gen:obj:root
+  signature:
+    required:
+      kind:
+      - agency
+      - company
+      - person
+- id: gen:obj:public_institutions
+  name: Public institutions
+  parent: gen:obj:institutions
+  signature:
+    required:
+      kind:
+      - agency
+- id: gen:obj:central_bank
+  name: Central banks
+  parent: gen:obj:public_institutions
+  signature:
+    required:
+      function:
+      - monetary_policy
+    any_of:
+      attribute_kinds:
+      - policy_rate
+  instances:
+  - central_bank
+- id: gen:obj:companies
+  name: Companies
+  parent: gen:obj:institutions
+  signature:
+    required:
+      kind:
+      - company
+  defaults:
+  - slot: share_price
+    name: share price
+    attribute_kind: asset_price
+    unit: local ccy
+    mean: 100.0
+    scale: 0.08
+    features:
+      per_share: 'true'
+  default_links:
+  - source: operating_profit
+    target: share_price
+    label: drives
+    effect: 0.5
+    kernel:
+      delay_days: 1
+      lag_days: 21
+      duration_days: null
+    generalization: gen:int:asset_repricing
+  - source: net_interest_income
+    target: share_price
+    label: drives
+    effect: 0.5
+    kernel:
+      delay_days: 1
+      lag_days: 21
+      duration_days: null
+    generalization: gen:int:asset_repricing
+- id: gen:obj:financials
+  name: Financials
+  parent: gen:obj:companies
+  signature:
+    required:
+      sector:
+      - banking
+      - insurance
+- id: gen:obj:bank
+  name: Banks
+  parent: gen:obj:financials
+  signature:
+    required:
+      sector:
+      - banking
+  instances:
+  - delta_bank
+  - acme_bank
+- id: gen:obj:insurer
+  name: Insurance
+  parent: gen:obj:financials
+  signature:
+    required:
+      sector:
+      - insurance
+  instances:
+  - acme_re
+- id: gen:obj:consumer_discretionary
+  name: Consumer discretionary
+  parent: gen:obj:companies
+  signature:
+    required:
+      sector:
+      - autos
+- id: gen:obj:automobiles
+  name: Automobiles
+  parent: gen:obj:consumer_discretionary
+  signature:
+    required:
+      sector:
+      - autos
+  instances:
+  - acme_motors
+- id: gen:obj:economies
+  name: Economies
+  parent: gen:obj:root
+  signature:
+    required:
+      kind:
+      - macro_factor
+  instances:
+  - economy
+- id: gen:obj:markets
+  name: Markets and asset classes
+  parent: gen:obj:root
+  signature:
+    required:
+      kind:
+      - market
+- id: gen:obj:commodities
+  name: Commodities
+  parent: gen:obj:markets
+  signature:
+    required:
+      market:
+      - commodity
+  instances:
+  - crude_oil
+- id: gen:obj:foreign_exchange
+  name: Foreign exchange
+  parent: gen:obj:markets
+  signature:
+    required:
+      market:
+      - fx
+    any_of:
+      attribute_kinds:
+      - fx_rate
+  instances:
+  - dollar
+- id: gen:obj:fixed_income
+  name: Fixed income
+  parent: gen:obj:markets
+  signature:
+    required:
+      market:
+      - rates
+- id: gen:obj:sovereign_bonds
+  name: Sovereign bonds
+  parent: gen:obj:fixed_income
+  signature:
+    required:
+      market:
+      - rates
+    any_of:
+      attribute_kinds:
+      - bond_yield
+  instances:
+  - gov_bonds
+- id: gen:obj:capital_markets
+  name: Capital markets
+  parent: gen:obj:markets
+  signature:
+    required:
+      market:
+      - capital_markets
+  instances:
+  - capital_markets
+- id: gen:obj:configuration
+  name: Configuration
+  parent: gen:obj:root
+  signature:
+    required:
+      object_type:
+      - superentity
+- id: gen:obj:policy_config
+  name: Policy configuration
+  parent: gen:obj:configuration
+  instances:
+  - S1
+  - S2
+- id: gen:obj:shock_config
+  name: Shock configuration
+  parent: gen:obj:configuration
+  instances:
+  - S3
+- id: gen:obj:market_config
+  name: Exposure configuration
+  parent: gen:obj:configuration
+  instances:
+  - S4
+  - S5
+  - S6
+  - S7
+  - G1
+  - G2
+  - G3
+- id: gen:obj:energy
+  name: Energy
+  parent: gen:obj:companies
+  signature:
+    required:
+      sector:
+      - energy
+  instances:
+  - ridge_energy
+- id: gen:obj:transport
+  name: Transportation
+  parent: gen:obj:companies
+  signature:
+    required:
+      sector:
+      - shipping
+  instances:
+  - blue_freight
+- id: gen:obj:credit
+  name: Credit
+  parent: gen:obj:markets
+  signature:
+    required:
+      market:
+      - credit
+  instances:
+  - credit_markets
+- id: gen:obj:freight
+  name: Freight
+  parent: gen:obj:markets
+  signature:
+    required:
+      market:
+      - freight
+  instances:
+  - shipping

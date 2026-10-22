@@ -29,7 +29,7 @@ The data stays synthetic. Real names make the graph concrete, but nothing in it 
 - The tutorial: examples and their articles, with a chain that rewinds and replays your decisions, plus "more like this".
 - `DemoSession`, which implements [M14](M14-interfaces.md)'s `Session` and declares its capabilities.
 - The fixture plugins it registers: the `synthetic_data_feed` source and the `example` translator.
-- `data/worlds/`, `data/scenarios/`, `data/taxonomy/`; `configs/demo.yaml`, `small_demo.yaml`, `emily_demo.yaml`.
+- `data/worlds/`, `data/scenarios/`, `data/taxonomy/`; `configs/demo.yaml`, `small_demo.yaml`. A client's scenarios, worlds, and configs (Emily's, Sally's) are not tracked: they live in the client root (`WORLD_MODEL_CLIENT_DIR`, `src/axelrod_wm/clients.py`).
 
 ## Depends on
 

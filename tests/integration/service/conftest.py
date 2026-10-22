@@ -11,10 +11,10 @@ from fastapi.testclient import TestClient
 
 from tests.service.helpers import WM, Signer, data
 
-# synthetic, dated notes: each names attributes the sally_demo model holds (no real event is reported)
-RATES_NOTE = b"Data, September 1, 2026. The Fed held rates at 3.875%. Brent crude rose to $103 a barrel."
-ECB_NOTE = b"Rates wire, September 3, 2026. The ECB cut its deposit rate by 25bp."
-BOJ_NOTE = b"Rates wire, September 4, 2026. The BoJ raised its policy rate by 25bp to 1.25%."
+# synthetic, dated notes: each names attributes the acme_demo model holds (no real event is reported)
+RATES_NOTE = b"Data, September 1, 2026. The central bank held rates at 4.0%. The crude price rose to $103 a barrel."
+CUT_NOTE = b"Rates wire, September 3, 2026. The central bank cut its policy rate by 25bp."
+DOLLAR_NOTE = b"Rates wire, September 4, 2026. The dollar index rose to 104."
 SIGNER = Signer()
 
 

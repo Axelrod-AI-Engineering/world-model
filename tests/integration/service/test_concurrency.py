@@ -8,7 +8,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
-from tests.integration.service.conftest import BOJ_NOTE, ECB_NOTE, SIGNER, WM, propose, review_all, upload
+from tests.integration.service.conftest import CUT_NOTE, DOLLAR_NOTE, SIGNER, WM, propose, review_all, upload
 from tests.service.helpers import problem, service
 
 pytestmark = pytest.mark.integration
@@ -16,8 +16,8 @@ pytestmark = pytest.mark.integration
 
 def test_two_proposals_at_once_one_runs_one_is_refused():
     with service(SIGNER) as c:
-        a = upload(c, ECB_NOTE, "ecb.txt")["bundle_id"]
-        b = upload(c, BOJ_NOTE, "boj.txt")["bundle_id"]
+        a = upload(c, CUT_NOTE, "cut.txt")["bundle_id"]
+        b = upload(c, DOLLAR_NOTE, "dollar.txt")["bundle_id"]
 
         def post(bid: str):
             return c.post(f"{WM}/changes", json={"bundle_id": bid})
@@ -29,7 +29,7 @@ def test_two_proposals_at_once_one_runs_one_is_refused():
         assert ran.json()["data"]["result"]["ids"]
         problem(refused, 409, "update_in_progress")
         # reads answer while the update waits for review
-        assert c.get(f"{WM}/entities/boj").status_code == 200 and c.get(WM).status_code == 200
+        assert c.get(f"{WM}/entities/dollar").status_code == 200 and c.get(WM).status_code == 200
 
         review_all(c)
         assert propose(c, refused_bundle)["result"]["ids"]

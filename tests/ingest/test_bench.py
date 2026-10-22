@@ -22,34 +22,34 @@ from axelrod_wm.ingest.bench import (
     timing,
 )
 
-OBS = {"type": "observe", "value_of": "boj.policy_rate", "value": 1.25, "quote": "to 1.25%"}
-UP = {"type": "move", "value_of": "jgbs.yield_10y", "delta": 0.1, "mode": "absolute", "quote": "rose 10bp"}
-SUP = {"type": "support", "source": "dollar_yen.usd_jpy", "target": "toyota.operating_profit", "quote": "weak yen"}
+OBS = {"type": "observe", "value_of": "central_bank.policy_rate", "value": 4.25, "quote": "to 4.25%"}
+UP = {"type": "move", "value_of": "gov_bonds.yield_10y", "delta": 0.1, "mode": "absolute", "quote": "rose 10bp"}
+SUP = {"type": "support", "source": "dollar.index", "target": "acme_motors.operating_profit", "quote": "stronger dollar"}
 
 
 def test_ends_names_a_value_or_a_pair():
-    assert ends(OBS) == ("boj.policy_rate",)
-    assert ends(SUP) == ("dollar_yen.usd_jpy", "toyota.operating_profit")
+    assert ends(OBS) == ("central_bank.policy_rate",)
+    assert ends(SUP) == ("dollar.index", "acme_motors.operating_profit")
 
 
 @pytest.mark.parametrize("pred, gold, ok", [
     (OBS, OBS, True),
-    ({**OBS, "value": 1.27}, OBS, True),                     # within 0.05 in its unit
-    ({**OBS, "value": 1.4}, OBS, False),
+    ({**OBS, "value": 4.27}, OBS, True),                     # within 0.05 in its unit
+    ({**OBS, "value": 4.4}, OBS, False),
     ({**OBS, "value": 101.5}, {**OBS, "value": 100.0}, True),  # within 2%
     ({**OBS, "value": 103.0}, {**OBS, "value": 100.0}, False),
-    (UP, OBS | {"value_of": "jgbs.yield_10y"}, False),       # a move does not observe a level
+    (UP, OBS | {"value_of": "gov_bonds.yield_10y"}, False),       # a move does not observe a level
     (UP, {**UP, "delta": 0.5, "mode": "standardized"}, True),  # same direction, any size or mode
     ({**UP, "delta": -0.1}, UP, False),
     ({**UP, "delta": 0.0}, {**UP, "delta": 0.0}, False),     # no direction says nothing
-    ({**OBS, "value_of": "jgbs.yield_10y", "value": 1.0}, UP, False),
+    ({**OBS, "value_of": "gov_bonds.yield_10y", "value": 1.0}, UP, False),
     (SUP, SUP, True),
     ({**SUP, "type": "link", "label": "lifts", "effect": 0.3}, SUP, True),
     (SUP, {**SUP, "type": "link"}, True),
     ({**SUP, "type": "contradict"}, SUP, False),
     ({**SUP, "type": "contradict"}, {**SUP, "type": "contradict"}, True),
     (SUP, {**SUP, "type": "contradict"}, False),
-    ({**SUP, "target": "komatsu.operating_profit"}, SUP, False),
+    ({**SUP, "target": "ridge_energy.operating_profit"}, SUP, False),
 ])
 def test_agreement(pred, gold, ok):
     assert agrees(pred, gold) is ok
@@ -93,9 +93,9 @@ def test_scoring_matches_each_gold_once_and_judges_the_rest_by_labels():
             GoldSignal("D", 0, OBS, ("f",), verdict="unsupported"), GoldSignal("E", 0, OBS, ()),
             GoldSignal("F", 0, OBS, ("f",), extractable="chart_only")]
     wrong = {**UP, "delta": -0.1}
-    extra = {"type": "observe", "value_of": "oil.brent", "value": 90.0, "quote": "Brent at $90"}
-    junk = {"type": "observe", "value_of": "oil.brent", "value": 9.0, "quote": "9"}
-    unknown = {"type": "move", "value_of": "oil.brent", "delta": 1.0, "quote": "?"}
+    extra = {"type": "observe", "value_of": "crude_oil.price", "value": 90.0, "quote": "Crude at $90"}
+    junk = {"type": "observe", "value_of": "crude_oil.price", "value": 9.0, "quote": "9"}
+    unknown = {"type": "move", "value_of": "crude_oil.price", "delta": 1.0, "quote": "?"}
     preds = {"f": [OBS, extra, junk], "g": [wrong, SUP, unknown]}
     labels = {label_key("f", extra): "correct", label_key("f", junk): "incorrect"}
     sc = score(preds, gold, labels)
@@ -147,8 +147,8 @@ def test_the_report_names_scores_speed_misses_and_errors():
     assert text.startswith("# T\n") and "**Recall** 0.0% (0 of 3" in text and "**Precision** 0.0%" in text
     assert "| move | 1 | 0 | 0% |" in text and "Not counted: unsupported 1." in text
     assert "## Speed" in text and "| extract | 1.5 | 75% |" in text
-    assert "## Misses (first 2 of 3)" in text and "- A#0: observe boj.policy_rate = 1.25" in text
-    assert "- B#0: move jgbs.yield_10y +0.1 (absolute); read as move jgbs.yield_10y -0.2 (absolute)" in text
+    assert "## Misses (first 2 of 3)" in text and "- A#0: observe central_bank.policy_rate = 4.25" in text
+    assert "- B#0: move gov_bonds.yield_10y +0.1 (absolute); read as move gov_bonds.yield_10y -0.2 (absolute)" in text
     assert "C#0" not in text                                                    # past the first two
     assert "## Incorrect predictions (1)" in text and "- f: link a.x → b.y" in text
     bare = report(score({}, []), timing([]))

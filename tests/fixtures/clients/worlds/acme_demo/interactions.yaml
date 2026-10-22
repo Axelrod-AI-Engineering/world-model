@@ -1,0 +1,448 @@
+# Acme's world (acme_demo): a synthetic test fixture. Links of the macro layer and its companies.
+# Written from scratch for the tests; nothing here describes a real company, market view, or client.
+interactions:
+- id: m01
+  source: crude_oil.supply
+  target: crude_oil.price
+  label: tightens
+  effect:
+    mu: -0.6
+  kernel:
+    delay_days: 5
+    lag_days: 30
+    duration_days: 240
+- id: m02
+  source: crude_oil.price
+  target: economy.headline_inflation
+  label: raises
+  effect:
+    mu: 0.45
+  kernel:
+    delay_days: 20
+    lag_days: 75
+    duration_days: 300
+- id: m03
+  source: crude_oil.price
+  target: shipping.freight_cost
+  label: raises
+  effect:
+    mu: 0.4
+  kernel:
+    delay_days: 10
+    lag_days: 45
+    duration_days: 240
+- id: m04
+  source: crude_oil.price
+  target: economy.gdp_growth
+  label: weighs on
+  effect:
+    mu: -0.02
+  kernel:
+    delay_days: 60
+    lag_days: 180
+    duration_days: 360
+- id: m05
+  source: economy.headline_inflation
+  target: economy.core_inflation
+  label: spreads to
+  effect:
+    mu: 0.35
+  kernel:
+    delay_days: 45
+    lag_days: 120
+    duration_days: null
+- id: m06
+  source: economy.core_inflation
+  target: central_bank.policy_rate
+  label: keeps the bank tight
+  effect:
+    mu: 0.5
+  kernel:
+    delay_days: 30
+    lag_days: 60
+    duration_days: null
+- id: m07
+  source: economy.gdp_growth
+  target: central_bank.policy_rate
+  label: lets the bank hold
+  effect:
+    mu: 0.35
+  kernel:
+    delay_days: 30
+    lag_days: 90
+    duration_days: null
+- id: m08
+  source: central_bank.policy_rate
+  target: gov_bonds.yield_2y
+  label: anchors
+  effect:
+    mu: 0.85
+  kernel:
+    delay_days: 1
+    lag_days: 10
+    duration_days: null
+- id: m09
+  source: gov_bonds.yield_2y
+  target: gov_bonds.yield_10y
+  label: lifts
+  effect:
+    mu: 0.5
+  kernel:
+    delay_days: 1
+    lag_days: 14
+    duration_days: null
+- id: m10
+  source: central_bank.policy_rate
+  target: dollar.index
+  label: strengthens
+  effect:
+    mu: 0.6
+  kernel:
+    delay_days: 1
+    lag_days: 30
+    duration_days: null
+- id: m11
+  source: central_bank.policy_rate
+  target: credit_markets.credit_spread
+  label: widens
+  effect:
+    mu: 0.2
+  kernel:
+    delay_days: 10
+    lag_days: 60
+    duration_days: null
+- id: m12
+  source: economy.gdp_growth
+  target: credit_markets.credit_spread
+  label: narrows
+  effect:
+    mu: -0.3
+  kernel:
+    delay_days: 10
+    lag_days: 90
+    duration_days: null
+- id: m13
+  source: credit_markets.credit_spread
+  target: capital_markets.market_volatility
+  label: lifts
+  effect:
+    mu: 0.4
+  kernel:
+    delay_days: 1
+    lag_days: 20
+    duration_days: 180
+- id: m14
+  source: credit_markets.credit_spread
+  target: capital_markets.deal_activity
+  label: cools
+  effect:
+    mu: -0.4
+  kernel:
+    delay_days: 10
+    lag_days: 90
+    duration_days: null
+- id: m15
+  source: shipping.freight_cost
+  target: economy.industrial_output
+  label: weighs on
+  effect:
+    mu: -0.15
+  kernel:
+    delay_days: 30
+    lag_days: 120
+    duration_days: null
+- id: m16
+  source: economy.gdp_growth
+  target: economy.industrial_output
+  label: lifts
+  effect:
+    mu: 0.5
+  kernel:
+    delay_days: 20
+    lag_days: 90
+    duration_days: null
+- id: m17
+  source: central_bank.policy_rate
+  target: acme_bank.net_interest_income
+  label: widens margins
+  state:
+    asymmetry:
+      rises:
+        mu: 0.36
+        sigma: 0.013
+      falls:
+        mu: 0.37
+        sigma: 0.013
+  kernel:
+    delay_days: 30
+    lag_days: 90
+    duration_days: null
+- id: m18
+  source: central_bank.policy_rate
+  target: delta_bank.net_interest_income
+  label: widens margins
+  state:
+    asymmetry:
+      rises:
+        mu: 0.3
+        sigma: 0.02
+      falls:
+        mu: 0.34
+        sigma: 0.02
+  kernel:
+    delay_days: 30
+    lag_days: 90
+    duration_days: null
+- id: m19
+  source: capital_markets.market_volatility
+  target: delta_bank.markets_revenue
+  label: lifts trading revenue
+  effect:
+    mu: 0.3
+    sigma: 0.1
+  kernel:
+    delay_days: 1
+    lag_days: 30
+    duration_days: 180
+- id: m20
+  source: gov_bonds.yield_10y
+  target: acme_re.domestic_pc_profit
+  label: lifts reinvestment income
+  effect:
+    mu: 0.3
+  kernel:
+    delay_days: 20
+    lag_days: 90
+    duration_days: null
+- id: m21
+  source: acme_re.international_profit
+  target: acme_re.operating_profit
+  label: adds to
+  edge_type: accounting
+  effect:
+    mu: 0.8
+    sigma: 0.001
+  kernel:
+    delay_days: 0
+    lag_days: 1
+    duration_days: null
+- id: m22
+  source: acme_re.domestic_pc_profit
+  target: acme_re.operating_profit
+  label: adds to
+  edge_type: accounting
+  effect:
+    mu: 0.28
+    sigma: 0.001
+  kernel:
+    delay_days: 0
+    lag_days: 1
+    duration_days: null
+- id: m23
+  source: dollar.index
+  target: acme_re.international_profit
+  label: lifts translated profit
+  effect:
+    mu: 0.4
+    sigma: 0.1
+  kernel:
+    delay_days: 20
+    lag_days: 90
+    duration_days: null
+- id: m24
+  source: dollar.index
+  target: acme_motors.operating_profit
+  label: a stronger dollar trims
+  effect:
+    mu: -0.5
+    sigma: 0.25
+  kernel:
+    delay_days: 30
+    lag_days: 90
+    duration_days: null
+- id: m25
+  source: crude_oil.price
+  target: acme_motors.vehicle_sales
+  label: weighs on
+  effect:
+    mu: -0.5
+    sigma: 0.08
+  kernel:
+    delay_days: 30
+    lag_days: 120
+    duration_days: null
+- id: m26
+  source: economy.gdp_growth
+  target: acme_motors.vehicle_sales
+  label: lifts
+  effect:
+    mu: 0.4
+    sigma: 0.1
+  kernel:
+    delay_days: 30
+    lag_days: 90
+    duration_days: null
+- id: m27
+  source: crude_oil.price
+  target: ridge_energy.operating_profit
+  label: lifts
+  effect:
+    mu: 0.6
+    sigma: 0.1
+  kernel:
+    delay_days: 5
+    lag_days: 45
+    duration_days: null
+- id: m28
+  source: ridge_energy.oil_output
+  target: ridge_energy.operating_profit
+  label: lifts
+  effect:
+    mu: 0.5
+    sigma: 0.1
+  kernel:
+    delay_days: 10
+    lag_days: 60
+    duration_days: null
+- id: m29
+  source: crude_oil.price
+  target: blue_freight.fuel_cost
+  label: raises
+  effect:
+    mu: 0.5
+    sigma: 0.1
+  kernel:
+    delay_days: 5
+    lag_days: 45
+    duration_days: null
+- id: m30
+  source: shipping.freight_cost
+  target: blue_freight.freight_revenue
+  label: lifts
+  effect:
+    mu: 0.4
+    sigma: 0.1
+  kernel:
+    delay_days: 10
+    lag_days: 60
+    duration_days: null
+- id: m31
+  source: blue_freight.freight_revenue
+  target: blue_freight.operating_profit
+  label: adds to
+  edge_type: accounting
+  effect:
+    mu: 0.7
+    sigma: 0.001
+  kernel:
+    delay_days: 0
+    lag_days: 1
+    duration_days: null
+- id: m32
+  source: blue_freight.fuel_cost
+  target: blue_freight.operating_profit
+  label: weighs on
+  edge_type: accounting
+  effect:
+    mu: -0.45
+    sigma: 0.001
+  kernel:
+    delay_days: 0
+    lag_days: 1
+    duration_days: null
+- id: m33
+  source: credit_markets.credit_spread
+  target: acme_bank.ib_fees
+  label: weighs on
+  effect:
+    mu: -0.15
+    sigma: 0.06
+  kernel:
+    delay_days: 10
+    lag_days: 90
+    duration_days: null
+- id: m34
+  source: union_bank.policy_rate
+  target: union_bonds.yield_10y
+  label: anchors
+  effect:
+    mu: 0.6
+  kernel:
+    delay_days: 1
+    lag_days: 14
+    duration_days: null
+- id: m35
+  source: union_bank.policy_rate
+  target: harvest_bank.net_interest_income
+  label: widens margins
+  effect:
+    mu: 0.4
+    sigma: 0.1
+  kernel:
+    delay_days: 30
+    lag_days: 90
+    duration_days: null
+- id: m36
+  source: union_bonds.yield_10y
+  target: union_capital_markets.equity_index
+  label: weighs on
+  effect:
+    mu: -0.2
+    sigma: 0.08
+  kernel:
+    delay_days: 10
+    lag_days: 60
+    duration_days: null
+- id: m37
+  source: union_economy.headline_inflation
+  target: union_bank.policy_rate
+  label: keeps the union bank tight
+  effect:
+    mu: 0.45
+  kernel:
+    delay_days: 30
+    lag_days: 75
+    duration_days: null
+- id: m38
+  source: union_bonds.yield_10y
+  target: harvest_bank.net_interest_income
+  label: lifts
+  effect:
+    mu: 0.35
+    sigma: 0.1
+  kernel:
+    delay_days: 30
+    lag_days: 120
+    duration_days: null
+- id: m39
+  source: dollar.index
+  target: capital_markets.equity_index
+  label: weighs on
+  effect:
+    mu: -0.2
+    sigma: 0.08
+  kernel:
+    delay_days: 10
+    lag_days: 60
+    duration_days: null
+- id: m40
+  source: union_economy.core_inflation
+  target: union_bank.policy_rate
+  label: keeps the union bank tight
+  effect:
+    mu: 0.5
+  kernel:
+    delay_days: 30
+    lag_days: 60
+    duration_days: null
+
+- id: m41
+  source: dollar.index
+  target: credit_markets.credit_spread
+  label: tightens conditions
+  effect:
+    mu: 0.3
+  kernel:
+    delay_days: 5
+    lag_days: 45
+    duration_days: null

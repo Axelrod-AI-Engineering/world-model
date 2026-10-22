@@ -25,7 +25,8 @@ from typing import Any
 
 import yaml
 
-from axelrod_wm.engine.focus import SCENARIOS_DIR, FocusSpec, focus_result
+from axelrod_wm.clients import scenario_dirs
+from axelrod_wm.engine.focus import FocusSpec, focus_result
 
 
 @dataclass(frozen=True)
@@ -38,12 +39,13 @@ class Compartment:
 def discover(unified: str) -> dict[str, Compartment]:
     """Every scenario focused on the unified scenario, by id."""
     out = {}
-    for path in sorted(SCENARIOS_DIR.glob("*/scenario.yaml")):
+    for path in (p for d in scenario_dirs() for p in sorted(d.glob("*/scenario.yaml"))):
         raw = yaml.safe_load(path.read_text()) or {}
         focus = raw.get("focus")
         if focus and focus.get("base") == unified:
             sid = raw.get("id") or path.parent.name
-            out[sid] = Compartment(id=sid, title=str(raw.get("title") or sid), spec=FocusSpec.model_validate(focus))
+            out.setdefault(sid, Compartment(id=sid, title=str(raw.get("title") or sid),
+                                            spec=FocusSpec.model_validate(focus)))
     return out
 
 
