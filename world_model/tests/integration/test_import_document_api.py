@@ -117,7 +117,7 @@ def test_imported_items_are_marked(client, view):
 def test_bad_uploads_are_refused(client, monkeypatch):
     assert upload(client, source_type="gossip").status_code == 422
     assert upload(client, b"").status_code == 422
-    import axelrod_wm.api.v1.routes_work as service
+    import axelrod_wm.api.v1.routes_ingest as service
 
     monkeypatch.setattr(service, "MAX_UPLOAD", 4)
     assert upload(client).status_code == 413

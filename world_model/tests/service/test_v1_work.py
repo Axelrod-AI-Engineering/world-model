@@ -7,6 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 
+import axelrod_wm.api.v1.routes_ingest as ingest
 import axelrod_wm.api.v1.routes_work as work
 from tests.service.helpers import (
     NOTE,
@@ -117,7 +118,7 @@ def test_a_failed_read_is_a_failed_job(c, monkeypatch):
     def boom(*a, **k):
         raise ValueError("the parser broke")
 
-    monkeypatch.setattr(work.Ingestor, "process", boom)
+    monkeypatch.setattr(ingest.Ingestor, "process", boom)
     job = data(c.post(f"{WM}/documents/{res['document_id']}/bundles"), 202)
     assert job["status"] == "failed" and job["error"]["code"] == "invalid_request" and job["result"] is None
 
@@ -128,17 +129,17 @@ def test_a_bug_in_a_job_is_not_hidden(c, monkeypatch):
     def bug(*a, **k):
         raise RuntimeError("a bug")
 
-    monkeypatch.setattr(work.Ingestor, "process", bug)
+    monkeypatch.setattr(ingest.Ingestor, "process", bug)
     with pytest.raises(RuntimeError):
         c.post(f"{WM}/documents/{res['document_id']}/bundles")
 
 
 def test_upload_limits_and_validation(c, monkeypatch):
-    monkeypatch.setattr(work, "MAX_FILES", 2)
+    monkeypatch.setattr(ingest, "MAX_FILES", 2)
     files = [("files", (f"n{k}.txt", f"limit note {k}".encode(), "text/plain")) for k in range(3)]
     assert c.post(f"{WM}/documents", files=files[:2]).status_code == 202
     problem(c.post(f"{WM}/documents", files=files), 413, "too_many_files")
-    monkeypatch.setattr(work, "MAX_UPLOAD", 8)
+    monkeypatch.setattr(ingest, "MAX_UPLOAD", 8)
     assert c.post(f"{WM}/documents", files=[("files", ("s.txt", b"x" * 8, "text/plain"))]).status_code == 202
     problem(c.post(f"{WM}/documents", files=[("files", ("s.txt", b"x" * 9, "text/plain"))]), 413, "payload_too_large")
     problem(c.post(f"{WM}/documents", data={"source": "x"}), 422, "invalid_request")
@@ -147,7 +148,7 @@ def test_upload_limits_and_validation(c, monkeypatch):
 
 
 def test_the_real_limits_are_the_documented_ones():
-    assert work.MAX_FILES == 20 and work.MAX_UPLOAD == 50 * 1024 * 1024
+    assert ingest.MAX_FILES == 20 and ingest.MAX_UPLOAD == 50 * 1024 * 1024
 
 
 # -- bundles -----------------------------------------------------------------------------------------------------------------

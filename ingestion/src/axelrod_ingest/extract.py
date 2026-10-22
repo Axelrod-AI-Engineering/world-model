@@ -57,7 +57,7 @@ from typing import Any
 
 from axelrod_ingest.chunk import CELL, sentences, tabular
 from axelrod_ingest.contract.world_view import WorldView
-from axelrod_ingest.gazetteer import METRICS, Gazetteer, Match, norm
+from axelrod_ingest.gazetteer import METRICS, Gazetteer, Match
 from axelrod_ingest.tables import (
     FIGURE,
     FIGURE_CELL,
@@ -73,6 +73,7 @@ from axelrod_ingest.tables import (
     pick,
     revise,
 )
+from axelrod_ingest.text import norm
 
 # -- numbers ------------------------------------------------------------------------------------------------------
 CODES = {"usd": "$", "us$": "$", "jpy": "¥", "yen": "¥", "eur": "€", "gbp": "£", "cny": "CNY", "rmb": "CNY"}

@@ -8,6 +8,7 @@ import re
 
 import yaml
 
+from axelrod_wm.api.v1.routes_ingest import router as ingest_router
 from axelrod_wm.api.v1.routes_model import router as model_router
 from axelrod_wm.api.v1.routes_work import router as work_router
 from tests.where import CORE_PATCH, OPENAPI
@@ -22,7 +23,7 @@ def _norm(path: str) -> str:
 
 
 def _served() -> set[tuple[str, str]]:
-    return {(m, _norm(r.path.removeprefix("/v1"))) for router in (model_router, work_router) for r in router.routes
+    return {(m, _norm(r.path.removeprefix("/v1"))) for router in (model_router, ingest_router, work_router) for r in router.routes
             for m in r.methods}
 
 

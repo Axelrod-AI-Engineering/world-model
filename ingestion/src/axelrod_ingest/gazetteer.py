@@ -38,9 +38,8 @@ from collections import Counter
 from dataclasses import dataclass
 
 from axelrod_ingest.contract.world_view import WorldView
+from axelrod_ingest.text import norm, tokens
 
-TOKEN = re.compile(r"[A-Za-z0-9]+(?:[&./-][A-Za-z0-9]+)*|[&$¥€£%]")
-POSSESSIVE = re.compile(r"^(?:s|S)$")
 # a name right before a head word: "Bund yields", "Komatsu's profit", "the Fed raised rates", "the BoJ held its rate"
 RATE_WORDS = re.compile(r"\b(?:rate (?:hikes?|cuts?|rises?)|hikes|hike|hiking)\b", re.I)
 OTHER_HIKES = re.compile(r"\b(?:price|prices|tariff|tariffs|tax|taxes|wage|wages|fee|fees|rent|cost|costs|premium|"
@@ -76,14 +75,6 @@ OTHER_COMPANY = re.compile(r"\b([A-Z]{2,5})['’]s\b|^\s*([A-Z]{2,5})\s+(?=[\d$(
                            r"posted|expects|expected|raised|lowered|reiterated|sees|said|beat|missed)\b)")
 
 
-def norm(word: str) -> str:
-    """A token's matching form: lower case, and a plural's -s dropped (yields, rates), so forms meet."""
-    w = word.lower()
-    if len(w) > 3 and w.endswith("s") and not w.endswith(("ss", "us", "is")) and w.isalpha():
-        w = w[:-1]
-    return w
-
-
 @dataclass(frozen=True)
 class Surface:
     words: tuple[str, ...]          # lower-cased tokens
@@ -103,16 +94,6 @@ class Match:
     end: int
     surface: str
     via: str = "name"                # how a value was resolved: name | sentence | context | subject | region
-
-
-def tokens(text: str) -> list[tuple[str, int, int]]:
-    """Word tokens with their spans; a possessive's s ("JPMorgan's", "Tokio Marine’s") is not a token of its own."""
-    out = []
-    for m in TOKEN.finditer(text):
-        if POSSESSIVE.match(m.group(0)) and m.start() > 0 and text[m.start() - 1] in "'’":
-            continue
-        out.append((m.group(0), m.start(), m.end()))
-    return out
 
 
 def _words(s: str) -> tuple[str, ...]:

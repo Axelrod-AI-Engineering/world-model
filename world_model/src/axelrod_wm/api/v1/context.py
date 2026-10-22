@@ -10,16 +10,20 @@ import secrets
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any
+from pathlib import Path
+from typing import Annotated, Any
 
-from fastapi import Request
+import yaml
+from fastapi import Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from axelrod_ingest.contract.world_view import WorldView
 from axelrod_ingest.lake.store import AuditRecord, IdempotencyRecord, LakeStore, WorldModelRecord
 from axelrod_wm.api.app import AppState
 from axelrod_wm.api.tokens import Principal
 from axelrod_wm.api.v1.problems import ApiError, as_api_error, problem_body
+from axelrod_wm.intake.world_view import world_view_of
 
 
 @dataclass
@@ -273,3 +277,31 @@ def job_of(request: Request, m: Model, job_id: str) -> dict:
     if job is None:
         raise ApiError("job_not_found", f"no job {job_id}")
     return job
+
+
+# -- query parameters every list and read takes -----------------------------------------------------------------------
+Version = Annotated[int | None, Query(ge=1)]
+AsOf = Annotated[datetime | None, Query()]
+Limit = Annotated[int, Query(ge=1, le=200)]
+Cursor = Annotated[str | None, Query()]
+
+
+def base(m: Model) -> str:
+    """The model's own path under /v1."""
+    return f"/v1/world-models/{m.id}"
+
+
+# -- the model as ingestion reads it ----------------------------------------------------------------------------------
+def inverted_surfaces(st: Any) -> list[str]:
+    """The question subjects the world's templates mark as an attribute's reciprocal ("the yen" for USD/JPY)."""
+    wd = st.controller.world_dir()
+    path = Path(wd) / "templates.yaml" if wd is not None else None
+    if path is None or not path.exists():
+        return []
+    rules = yaml.safe_load(path.read_text()) or {}
+    return sorted(x["pattern"] for x in rules.get("subjects", []) if x.get("invert"))
+
+
+def view_of(m: Model) -> WorldView:
+    """The model as ingestion reads it (contract/world_view.py)."""
+    return world_view_of(m.st.controller.engine.wm.graph)

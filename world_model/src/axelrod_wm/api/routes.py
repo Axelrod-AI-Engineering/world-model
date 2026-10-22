@@ -1415,7 +1415,7 @@ def _tenant(request: Request) -> str:
 async def _document_view(request: Request, st: AppState, read: Any) -> dict:
     """Run `read(ingestor, tenant, graph)` (the service's ingestion path) and draw the update its bundle would make."""
     from axelrod_wm.api.ingest_view import document_view
-    from axelrod_wm.api.v1.routes_work import inverted_surfaces
+    from axelrod_wm.api.v1.context import inverted_surfaces
     from axelrod_wm.intake.world_view import world_view_of
 
     tenant = _tenant(request)
@@ -1437,7 +1437,7 @@ async def import_document(request: Request, file: UploadFile = File(...), source
     """A raw document (PDF, DOCX, XLSX, HTML, CSV, Markdown, text, or a JSON bundle) stored in the lakehouse, read
     into an import bundle, and drawn as the graph update each item would make. Nothing in the model changes."""
     from axelrod_ingest.pipeline import SOURCE_TYPES
-    from axelrod_wm.api.v1.routes_work import MAX_UPLOAD
+    from axelrod_wm.api.v1.routes_ingest import MAX_UPLOAD
 
     st = S(request)
     if source_type not in SOURCE_TYPES:

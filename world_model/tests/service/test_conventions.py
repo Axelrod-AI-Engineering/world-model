@@ -10,13 +10,13 @@ import re
 import pytest
 import yaml
 
-from axelrod_wm.api.v1 import routes_erid, routes_model, routes_work
+from axelrod_wm.api.v1 import routes_erid, routes_ingest, routes_model, routes_work
 from tests.service.helpers import V1, Signer, service
 from tests.where import OPENAPI
 
 SPEC = yaml.safe_load(OPENAPI.read_text())
 CODES = set(SPEC["components"]["schemas"]["ProblemCode"]["enum"])
-ROUTES = sorted((m, r.path) for router in (routes_model.router, routes_work.router, routes_erid.router) for r in router.routes
+ROUTES = sorted((m, r.path) for router in (routes_model.router, routes_ingest.router, routes_work.router, routes_erid.router) for r in router.routes
                 for m in r.methods if m != "HEAD")
 SIGNER = Signer()
 TRACE = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
@@ -40,7 +40,7 @@ def test_the_walk_covers_the_routes():
 
 @pytest.mark.parametrize("method,path", ROUTES)
 def test_every_route_has_a_summary(method, path):
-    route = next(r for router in (routes_model.router, routes_work.router, routes_erid.router) for r in router.routes
+    route = next(r for router in (routes_model.router, routes_ingest.router, routes_work.router, routes_erid.router) for r in router.routes
                  if r.path == path and method in r.methods)
     assert route.summary, f"{method} {path} has no summary"
 

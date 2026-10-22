@@ -1,4 +1,4 @@
-"""Shared fixtures: every test gets a lakehouse of its own and the exact hashing embedder, with no LLM step."""
+"""Shared fixtures. The isolated lake, the hashing embedder, and no LLM step come from the plugin the package ships."""
 
 from __future__ import annotations
 
@@ -9,22 +9,7 @@ import pytest
 from axelrod_ingest.contract.world_view import WorldView
 from tests.where import ACME_WORLD_VIEW
 
-
-@pytest.fixture(autouse=True, scope="session")
-def _session_lake(tmp_path_factory):
-    mp = pytest.MonkeyPatch()
-    mp.setenv("WORLD_MODEL_LAKE_DIR", str(tmp_path_factory.mktemp("session") / "lake"))
-    mp.setenv("WORLD_MODEL_EMBEDDER", "hashing")
-    mp.delenv("WORLD_MODEL_LLM_PROVIDER", raising=False)
-    yield
-    mp.undo()
-
-
-@pytest.fixture(autouse=True)
-def _isolated_lake(tmp_path, monkeypatch):
-    monkeypatch.setenv("WORLD_MODEL_LAKE_DIR", str(tmp_path / "lake"))
-    monkeypatch.setenv("WORLD_MODEL_EMBEDDER", "hashing")
-    monkeypatch.delenv("WORLD_MODEL_LLM_PROVIDER", raising=False)
+pytest_plugins = ["axelrod_ingest.testing"]
 
 
 def _acme() -> dict:

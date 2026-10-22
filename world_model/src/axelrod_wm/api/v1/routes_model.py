@@ -13,7 +13,11 @@ from axelrod_wm.api.tokens import ADMIN, READ
 from axelrod_wm.api.v1 import project as pj
 from axelrod_wm.api.v1 import schemas as s
 from axelrod_wm.api.v1.context import (
+    AsOf,
+    Cursor,
+    Limit,
     Model,
+    Version,
     decode_cursor,
     lake,
     many,
@@ -30,12 +34,6 @@ from axelrod_wm.intake.world_view import world_view_of
 
 router = APIRouter(prefix="/v1", route_class=V1Route, tags=["v1"])
 W = "/world-models/{world_model_id}"
-
-Version = Annotated[int | None, Query(ge=1)]
-AsOf = Annotated[datetime | None, Query()]
-Limit = Annotated[int, Query(ge=1, le=200)]
-Cursor = Annotated[str | None, Query()]
-
 
 async def read_at(m: Model, version: int | None, as_of: datetime | None, cursor: str | None = None):
     """(working memory, long-term memory, version ref, offset) for a pinned read; a cursor keeps its version."""

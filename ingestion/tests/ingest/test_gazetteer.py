@@ -5,7 +5,8 @@ from __future__ import annotations
 import pytest
 
 from axelrod_ingest.contract.world_view import EntityView, ValueView, WorldView
-from axelrod_ingest.gazetteer import Gazetteer, _case_sensitive, norm, tokens
+from axelrod_ingest.gazetteer import Gazetteer, _case_sensitive
+from axelrod_ingest.text import norm, tokens
 
 
 def found(gz: Gazetteer, text: str, context: str | None = None) -> list[tuple]:

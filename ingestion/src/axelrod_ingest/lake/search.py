@@ -14,9 +14,10 @@ same results in the same order.
 from __future__ import annotations
 
 from axelrod_ingest.contract.world_view import WorldView
-from axelrod_ingest.gazetteer import Gazetteer, norm, tokens
+from axelrod_ingest.gazetteer import Gazetteer
 from axelrod_ingest.lake.embed import Embedder, cosine
 from axelrod_ingest.lake.store import Hit, LakeStore
+from axelrod_ingest.text import norm, tokens
 
 MODES = ("keyword", "prefix", "semantic", "graph", "hybrid")
 RRF_K = 60

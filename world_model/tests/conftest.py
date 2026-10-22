@@ -42,35 +42,20 @@ def pytest_collection_modifyitems(config, items):
             item.add_marker(skip)
 
 
+pytest_plugins = ["axelrod_ingest.testing"]       # an isolated lake per test, the hashing embedder, no LLM step
+
+
 @pytest.fixture(autouse=True, scope="session")
-def _session_lake(tmp_path_factory):
-    """Module- and session-scoped apps are built before any function fixture runs: give them a lakehouse of their own
-    too, so no test ever reads or writes the repo's var/lake."""
+def _session_keys():
+    """No API keys from the environment: tests set their own."""
     mp = pytest.MonkeyPatch()
-    mp.setenv("WORLD_MODEL_LAKE_DIR", str(tmp_path_factory.mktemp("session") / "lake"))
-    mp.setenv("WORLD_MODEL_EMBEDDER", "hashing")
-    mp.delenv("WORLD_MODEL_LLM_PROVIDER", raising=False)
     mp.delenv("WORLD_MODEL_API_KEYS", raising=False)
     yield
     mp.undo()
 
 
-@pytest.fixture(autouse=True, scope="module")
-def _module_lake(tmp_path_factory):
-    """A module-scoped app gets a lakehouse of its module's own, so no module sees documents another one uploaded
-    (autouse, so it is set before the module's own fixtures build their apps)."""
-    mp = pytest.MonkeyPatch()
-    mp.setenv("WORLD_MODEL_LAKE_DIR", str(tmp_path_factory.mktemp("module") / "lake"))
-    yield
-    mp.undo()
-
-
 @pytest.fixture(autouse=True)
-def _isolated_lake(tmp_path, monkeypatch):
-    """Every test gets its own lakehouse and the hashing embedder (exact, and no model download), and no LLM step."""
-    monkeypatch.setenv("WORLD_MODEL_LAKE_DIR", str(tmp_path / "lake"))
-    monkeypatch.setenv("WORLD_MODEL_EMBEDDER", "hashing")
-    monkeypatch.delenv("WORLD_MODEL_LLM_PROVIDER", raising=False)
+def _no_keys(monkeypatch):
     monkeypatch.delenv("WORLD_MODEL_API_KEYS", raising=False)
 
 
