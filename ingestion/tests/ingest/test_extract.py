@@ -446,3 +446,8 @@ def test_tickers_only_from_companies():
 
 def test_num_is_a_value_record():
     assert Num(1.0, "%", "", 1.0, 0, 2, False) == Num(1.0, "%", "", 1.0, 0, 2, False)
+
+
+def test_a_date_that_is_no_day_is_skipped():
+    from axelrod_ingest.extract import _dates_in
+    assert _dates_in("on 30-Feb-2026 and Feb 31, 2026 and 2026-13-01") == []

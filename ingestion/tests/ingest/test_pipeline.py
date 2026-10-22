@@ -103,9 +103,14 @@ def test_ingest_markdown_end_to_end(ingestor, lake, graph):
     doc = res.document
     assert res.new and doc.status == "extracted" and doc.title == "Central bank watch"
     assert doc.published_at == doc.event_time == datetime(2026, 10, 5, tzinfo=UTC) and doc.ingested_at == NOW
-    assert doc.meta == {"format": "markdown"}
+    assert doc.meta == {
+        "format": "markdown", "encoding": {"name": "utf-8", "how": "utf-8"}, "language": "en",
+        "dates": {"published_source": "content", "published_at": "2026-10-05T00:00:00+00:00"},
+        "currency": {"yen": {"code": "JPY", "basis": "default", "signs": 0, "cny_words": 0, "jpy_words": 0, "language": "en",
+                             "issuer_country": ""}},
+        "doc_type": {"type": "other", "reason": "no evidence of a more specific type", "excluded": False, "basis": "default"}}
     text, parser = lake.get_text(T, doc.id)
-    assert parser == "markdown/parse-1.0" and text == NOTE.decode()
+    assert parser == "markdown/parse-1.1" and text == NOTE.decode()
     chunks = lake.get_chunks(T, doc.id)
     assert res.chunks == len(chunks) == 5 and [c.ord for c in chunks] == list(range(5))
     assert all(text[c.start:c.end] == c.text for c in chunks)
@@ -182,7 +187,8 @@ def test_an_import_bundle_is_passed_through(ingestor, lake, graph):
                       "quote": "The central bank raised rates to 4.25%."}]}]}
     res = ingestor.ingest_file(T, json.dumps(bundle).encode(), "bundle.json", graph)
     assert res.new and res.document.status == "extracted" and res.document.title == "Agent bundle"
-    assert res.document.meta == {"format": "bundle"} and res.chunks == 1 and res.signals == 1 and res.mentions == 0
+    assert res.document.meta["format"] == "bundle" and res.document.meta["encoding"] == {"name": "utf-8", "how": "utf-8"}
+    assert res.chunks == 1 and res.signals == 1 and res.mentions == 0
     assert res.bundle.bundle == ImportBundle.model_validate(bundle).model_dump(mode="json")
     assert res.bundle.items == 1 and res.bundle.id == bundle_id(res.bundle.bundle)
     assert res.document.event_time == NOW                         # no date in its text
@@ -205,7 +211,8 @@ def test_llm_step_reads_only_chunks_with_entities_and_no_rule_signals(lake, inve
     # the rules' paragraph and the line naming nothing are never sent
     assert p.calls == ["# Central bank watch", OVERSEAS]
     items = res.bundle.bundle["items"]
-    assert [i["tags"] for i in items] == [["extracted"], ["extracted", "llm"]]
+    assert [i["tags"] for i in items] == [["extracted", "doc_type:other", "lang:en"],
+                                          ["extracted", "llm", "doc_type:other", "lang:en"]]
     llm_item = items[1]
     assert llm_item["signals"] == [{"type": "support", "source": "dollar.index",
                                     "target": "acme_re.international_profit", "strength": 0.5, "quote": OVERSEAS,

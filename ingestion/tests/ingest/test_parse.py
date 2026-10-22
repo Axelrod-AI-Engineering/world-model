@@ -156,7 +156,7 @@ def test_html_skips_scripts_and_styles_keeps_title_blocks_and_tables():
     <ul><li>one</li><li>two</li></ul><template>hidden</template>tail<br>end</body></html>"""
     p = parse(html, "page.html")
     assert p.format == "html" and p.title == "Bank & the dollar"
-    assert p.text == "Rates\n\nThe Bank raised rates.\ninline\n\nName | Rate\n\nBank | 4.25%\n\none\n\ntwo\n\ntail\nend"
+    assert p.text == "Rates\n\nThe Bank raised rates.\ninline\n\nName | Rate\nBank | 4.25%\n\none\n\ntwo\n\ntail\nend"
     for hidden in ("color", "Crude", "enable js", "hidden"):
         assert hidden not in p.text
 
@@ -201,7 +201,7 @@ def test_empty_text_file_parses_empty():
 # -- JSON -------------------------------------------------------------------------------------------------------------
 def test_plain_json_is_pretty_printed_with_sorted_keys():
     p = parse(json.dumps({"b": [1, "€"], "a": {"c": None}}).encode(), "data.json")
-    assert p.format == "json" and p.meta == {}
+    assert p.format == "json" and p.meta == {"encoding": {"name": "utf-8", "how": "utf-8"}}
     assert p.text == '{\n"a": {\n"c": null\n},\n"b": [\n1,\n"€"\n]\n}'  # lines stripped
 
 
@@ -210,7 +210,7 @@ def test_import_bundle_json_is_passed_through_whole():
         {"id": "A", "headline": "Bank hikes", "summary": "The Bank raised rates."}, "not an item",
         {"id": "B", "headline": "Dollar up"}]}
     p = parse(json.dumps(bundle).encode(), "bundle.json")
-    assert p.format == "bundle" and p.title == "Desk notes" and p.meta == {"bundle": bundle}
+    assert p.format == "bundle" and p.title == "Desk notes" and p.meta == {"bundle": bundle, "encoding": {"name": "utf-8", "how": "utf-8"}}
     assert p.text == "Bank hikes\nThe Bank raised rates.\n\nDollar up"
 
 
@@ -256,3 +256,84 @@ def test_mime_of_and_supported():
 def test_parse_is_deterministic():
     data = docx(para("The Bank raised rates.") + para("Bond yields rose 10bp."))
     assert parse(data, "a.docx") == parse(data, "a.docx")
+
+
+# -- charsets, width, and spaced Chinese ---------------------------------------------------------------------------------
+@pytest.mark.parametrize("label,codec", [("gb2312", "gbk"), ("gbk", "gbk"), ("gb18030", "gb18030"), ("euc-kr", "euc-kr"),
+                                         ("cp949", "cp949")])
+def test_an_html_page_in_a_legacy_charset_is_decoded_by_its_declaration(label, codec):
+    body = "净利润同比增长" if "gb" in label else "영업이익은 증가했습니다"
+    html = (f'<html><head><meta http-equiv="Content-Type" content="text/html; charset={label}">'
+            f"<title>{body}</title></head><body><p>{body}</p></body></html>")
+    p = parse(html.encode(codec), "page.html")
+    assert p.text == body and p.title == body
+    assert p.meta["encoding"] == {"name": {"gb2312": "gb18030", "gbk": "gb18030", "euc-kr": "cp949"}.get(label, label),
+                                  "how": "declared"}
+
+
+def test_an_undeclared_non_utf8_page_is_a_reported_fallback():
+    p = parse("<html><body>café</body></html>".encode("latin-1"), "a.html")
+    assert p.text == "café" and p.meta["encoding"] == {"name": "latin-1", "how": "fallback"}
+
+
+def test_text_is_width_normalized_and_a_spaced_chinese_name_rejoined():
+    p = parse("艾 克 米 股 份 有 限 公 司\n２０２６年，营收１，２３４．５亿元（同比＋７．１％）".encode(), "a.txt")
+    assert p.text == "艾克米股份有限公司\n2026年,营收1,234.5亿元(同比+7.1%)"
+    assert normalize("好！　真的？") == "好！ 真的？"
+
+
+# -- HTML tables ----------------------------------------------------------------------------------------------------
+def table_lines(html: str) -> list[str]:
+    return parse(f"<html><body>{html}</body></html>".encode(), "t.html").text.split("\n")
+
+
+def test_a_table_row_stays_on_one_line_with_its_spanned_label_and_empty_cells_for_a_colspan():
+    rows = table_lines(
+        '<table><tr><td colspan="2"><div>Unit :</div><div>KRW million</div></td><td>Q2 2026</td><td>Q1 2026</td><td>QoQ (%)</td></tr>'
+        '<tr><td rowspan="2"><div>Sales</div><div>Revenue</div></td><td>Current<br>Period</td><td>49,215,328</td><td>45,938,886</td>'
+        '<td>7.1</td></tr><tr><td>Cumulative Period</td><td>95,154,214</td><td>-</td><td>-</td></tr></table>')
+    assert [r for r in rows if r] == ["Unit : KRW million | | Q2 2026 | Q1 2026 | QoQ (%)",
+                                      "Sales Revenue | Current Period | 49,215,328 | 45,938,886 | 7.1",
+                                      "Sales Revenue | Cumulative Period | 95,154,214 | - | -"]
+    from axelrod_ingest.tables import header_of
+    assert header_of("Unit : KRW million | | Q2 2026 | Q1 2026 | QoQ (%)") is not None            # the header row's periods line up
+
+
+def test_a_rowspan_over_several_rows_and_a_colspan_together():
+    rows = table_lines('<table><tr><td rowspan="3" colspan="2">Group</td><td>a</td></tr><tr><td>b</td></tr><tr><td>c</td></tr>'
+                       '<tr><td>x</td><td>y</td><td>z</td></tr></table>')
+    assert [r for r in rows if r] == ["Group | | a", "Group | | b", "Group | | c", "x | y | z"]
+
+
+def test_end_tags_a_page_leaves_out_do_not_break_a_table():
+    assert [r for r in table_lines("<table><tr><td>a<td>b<tr><td>c<td>d</table>") if r] == ["a | b", "c | d"]
+    assert [r for r in table_lines("<table><tr><th>a</th><th>b</th></tr><td>c</td><td>d</td></table>") if r] == ["a | b", "c | d"]
+    assert [r for r in table_lines("<table><tr><td>a</td><td>b</td></tr><tr><td>c") if r] == ["a | b", "c"]       # never closed
+    assert [r for r in table_lines("<table><tr><td>a</td><td>b</tr><tr><td>c</td><td>d</tr></table>") if r] == ["a | b", "c | d"]
+    assert [r for r in table_lines("<table><tr><td>a</td><td>b</td><tr></tr><tr><td></td></tr></table>") if r] == ["a | b"]
+
+
+def test_a_leading_empty_cell_keeps_its_column():
+    assert [r for r in table_lines("<table><tr><td></td><td>x</td><td>y</td></tr></table>") if r] == ["| x | y"]
+
+
+def test_a_table_of_long_cells_is_a_page_layout_and_reads_as_blocks():
+    long = "The company reported results for the quarter and said that margins improved across all regions. " * 3
+    rows = table_lines(f"<table><tr><td><p>{long}</p></td><td><p>{long}</p></td></tr></table>")
+    assert [r for r in rows if r] == [long.strip(), long.strip()]
+    assert [r for r in table_lines("<table><tr><td>one</td></tr><tr><td>two</td></tr></table>") if r] == ["one", "two"]
+
+
+def test_a_nested_table_reads_inside_its_cell():
+    rows = table_lines("<table><tr><td>outer</td><td><table><tr><td>a</td><td>b</td></tr></table></td></tr></table>")
+    assert [r for r in rows if r] == ["outer | a | b"]
+
+
+def test_cells_outside_a_table_and_stray_end_tags_are_harmless():
+    assert [r for r in table_lines("<td>lost</td></td></tr></table>text") if r] == ["lost", "text"]
+    assert [r for r in table_lines("<tr>row</tr>after") if r] == ["row", "after"]
+
+
+def test_span_values_that_are_no_numbers_or_absurd_are_clamped():
+    rows = table_lines('<table><tr><td colspan="x" rowspan="0">a</td><td colspan="999">b</td></tr></table>')
+    assert [r for r in rows if r][0].startswith("a | b")
