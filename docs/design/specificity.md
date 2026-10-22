@@ -339,8 +339,8 @@ the same result every time. The full mathematical specification, with its known 
 
 ### Construction
 
-The construction file (`data/worlds/<world>/construction/<company>.yaml`) loads into the world graph
-(`model/construction.py`). Values, compositions, identities, stock-flows and links are typed objects.
+The construction file (`worlds/<world>/construction/<company>.yaml` under the client root) loads into the world
+graph (`model/construction.py`). Values, compositions, identities, stock-flows and links are typed objects.
 `validate_construction` enforces the structural rules: transitions on causal links, one driving view per total, and
 terms that exist. `check.py` adds sources, input statuses and reconciliation at medians and at dated baselines;
 reconciliation also flags parts whose units differ from the total's. Identity and stock-flow weights are derived from

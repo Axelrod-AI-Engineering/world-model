@@ -21,8 +21,8 @@ The order is fixed: structure first, sizes last. A size is never fitted to struc
 
 ## Objects
 
-A construction is one YAML file per company (`data/worlds/<world>/construction/<company>.yaml`), loaded into the
-world's graph.
+A construction is one YAML file per company (`worlds/<world>/construction/<company>.yaml` under the client root),
+loaded into the world's graph.
 
 ![The construction's objects and how they relate](../design/diagrams/construction-objects.svg)
 
