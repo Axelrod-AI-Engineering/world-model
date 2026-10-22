@@ -17,6 +17,7 @@
 - [Calibrate from disclosed scenarios](#calibrate-from-disclosed-scenarios)
 - [Trace through totals](#trace-through-totals)
 - [Smaller additions and known gaps (Oct 18)](#smaller-additions-and-known-gaps-oct-18)
+- [Inner-loop accuracy suite (Oct 22)](#inner-loop-accuracy-suite-oct-22)
 <!-- /toc -->
 
 This page holds the method; the rules it serves are in [design/specificity.md](../design/specificity.md). Each
@@ -440,3 +441,40 @@ Code: `model/construction.py` (objects, weights, checks, reconciliation), `engin
 (`compile_construction`), `dynamics/kernels.py` and `dynamics/propagation.py` (accumulation, piecewise moderators),
 `model/calibrate.py` and `engine/construction_edit.py` (sides, conditions, scenarios), `intake/overlap.py`,
 `context/construction.py` (view, trace), `context/v4.py` (export).
+
+## Inner-loop accuracy suite (Oct 22)
+
+A reviewer's bank of questions with a held-out answer key (a company's inner loop: identity and scope, composition,
+document contradictions, periods and versions, transmission, proof limits, accounting, timing, offsets, unknowns). The
+runner answers it from the world model and the grader scores it; the two never share the key.
+
+```
+uv run python world_model/scripts/evaluation/inner_loop.py --suite <suite folder> --recipes <recipes.yaml> \
+    --world <scenario> --out <results.json>
+uv run python world_model/scripts/evaluation/inner_loop_grade.py --results <results.json> --key <answer key> \
+    --run <label> --out <scorecard path without extension> [--explain]
+```
+
+- **The runner** (`evaluation/inner_loop.py`) reads only the suite folder and the recipes, through a guard that refuses any
+  other path and logs every file read with its hash. A recipe says where each input comes from (the question, the
+  fixture, a frozen page by locator, the world model) and how the answer is built; it holds no answers. The arithmetic is
+  Decimal, deterministic, in a restricted expression language. Operations: a calculation, a reconciliation of a
+  composition's parts (the composition is the model's), an identity of the model, update and undo with its audit log,
+  a repeated import and a two-order ingestion on clean worlds, and the review gates. A missing recipe, source, store or
+  operation is `blocked` with its reason; a case the runner is told to skip is `not_run`.
+- **The contract** is the suite's own field list, mapped from ours (`FIELD_MAP`), with a stated reason where a field does
+  not apply (no baseline is invented for an isolated fixture). Our schema is not renamed: the result keeps it under
+  `internal`, with the grounding of the answer (model objects, frozen pages, stated facts).
+- **The grader** (`evaluation/inner_loop_grade.py`) takes the key's path as an argument and nothing else does. A case
+  passes only when every applicable check passes: values at displayed precision (a tolerance only where the clarifications
+  name one), assertions by facet (mechanism, accounting destination, proof limits), expected unknowns, and the prose
+  directives of the acceptance check, which are matched lexically and therefore remain subject to a domain owner's review.
+  The scorecard reports pass, fail, blocked and not run, the executed pass rate (pass over pass and fail), the execution
+  coverage (pass and fail over the 98 main cases), the two review gates apart with the separation evidence, and that a
+  high pass rate does not resolve a material blocked requirement. A validation candidate keeps its status and no detail.
+- **Separation as evidence.** The runner module never names the key (a test asserts its text); the grader reports what the
+  runner read against the key's folder and the runner's roots.
+- **Tests.** An invented suite and key (`world_model/tests/fixtures/inner_loop*`) exercise every branch; the client test
+  runs the real suite end to end where client data is present and asserts no pass rate.
+
+Code: `evaluation/inner_loop.py`, `evaluation/inner_loop_grade.py`, `scripts/evaluation/inner_loop*.py`.

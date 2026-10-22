@@ -49,7 +49,8 @@ COMPS = {"ty.comp.reporting_segments", "ty.comp.regional_operating_income", "ty.
          "ty.comp.retail_units_bridge", "ty.comp.retail_units_by_powertrain", "ty.comp.financial_services",
          "ty.comp.pretax_bridge", "ty.comp.net_income_bridge", "ty.comp.segment_revenue",
          "ty.comp.us_customs_base_by_origin", "ty.comp.fs_by_scope",
-         "ty.comp.fs_revenue_lines", "ty.comp.fs_cost_lines", "ty.comp.us_fin_contribution"}
+         "ty.comp.fs_revenue_lines", "ty.comp.fs_cost_lines", "ty.comp.us_fin_contribution",
+         "ty.comp.segment_external_revenue"}                # Oct 22, the inner-loop suite: a reconciling view of net revenue
 PATHS = {"ty.path.regional_growth", "ty.path.pricing_competition", "ty.path.asia_entrants", "ty.path.product_mix",
          "ty.path.tariffs_sourcing", "ty.path.yen", "ty.path.financing_funding", "ty.path.financing_credit_residual",
          "ty.path.execution_share", "ty.path.new_initiatives", "ty.path.china_affiliates", "ty.path.group_bridge",
@@ -370,7 +371,9 @@ IDENTITIES = {"ty.id.na_revenue", "ty.id.japan_revenue", "ty.id.europe_revenue",
               # Batch 2, Part 3 (gaps the seeds exposed): US brand units, EPS on weighted-average shares, pure translation
               "ty.id.us_brand_units", "ty.id.eps", "ty.id.us_translation",
               "ty.id.hybrid_mix_op", "ty.id.price_recovery_in_year", "ty.id.cost_recognized_in_year", "ty.id.pricing_net_op",
-              "ty.id.us_duty_avoided"}
+              "ty.id.us_duty_avoided",
+              # Oct 22, the inner-loop suite: the balance sheet, its attribution, and comprehensive income
+              "ty.id.balance_sheet", "ty.id.equity_attribution", "ty.id.comprehensive_income"}
 
 
 def test_one_driving_view_per_total(g):
@@ -474,7 +477,8 @@ def test_compositions_reconcile_at_the_local_baselines(g):
     assert {r["composition_id"] for r in rows} == COMPS
     # Batch 2: the customs base by origin and the finance scope view have no reported parts: blocked, never flagged
     unreported = {"ty.comp.us_customs_base_by_origin", "ty.comp.fs_by_scope",
-         "ty.comp.fs_revenue_lines", "ty.comp.fs_cost_lines", "ty.comp.us_fin_contribution"}
+         "ty.comp.fs_revenue_lines", "ty.comp.fs_cost_lines", "ty.comp.us_fin_contribution",
+         "ty.comp.segment_external_revenue"}                # Oct 22, the inner-loop suite: a reconciling view of net revenue
     assert all(r["status"] == "blocked" for r in rows if r["composition_id"] in unreported)
     rows = [r for r in rows if r["composition_id"] not in unreported]
     assert all(r["status"] == "ok" and not r["missing_levels"] for r in rows), \

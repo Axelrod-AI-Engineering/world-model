@@ -22,7 +22,8 @@ class FakeReader:
 
     def construction(self, entity_id: str) -> dict:
         self.calls.append(entity_id)
-        return {"attributes": [{"id": "attr.a"}], "identities": [{"id": "id.x"}], "paths": [{"id": "path.p"}],
+        return {"attributes": [{"id": "attr.a"}], "identities": [{"id": "id.x"}, {"id": "id.diff", "form": "difference", "target": "attr.t", "formula": "t = a - b",
+                                        "terms": [{"value": "attr.a", "role": "total"}, {"value": "attr.b", "role": "deduction"}]}], "paths": [{"id": "path.p"}],
                 "compositions": [
                     {"id": "c.seg", "role": "driving", "total_attribute_id": "attr.total",
                      "member_attribute_ids": ["attr.a", "attr.b"], "residual_attribute_id": "attr.r",
@@ -162,6 +163,18 @@ def test_a_reconciliation_takes_its_parts_from_the_models_composition(full) -> N
     assert (a["row_sum"], a["reported"], a["residual"], a["difference"], a["reconciles"], a["check"]) == (450, 450, 0, 0, True, 0)
     objs = full["TST-01-06"]["evidence_and_object_bindings_when_applicable"]["objects"]
     assert objs[0]["id"] == "c.seg" and objs[0]["parts"] == ["attr.a", "attr.b", "attr.r", "attr.e"]
+
+
+def test_an_identity_of_the_model_is_checked_against_the_sources_figures(full) -> None:
+    a = answer(full, "TST-06-01")
+    assert (a["computed_target"], a["reported_target"], a["difference"], a["holds"]) == (100, 100, 0, True)
+    assert a["identity"] == "t = a - b" and a["terms"] == {"attr.a": 300, "attr.b": 200}
+    obj = full["TST-06-01"]["evidence_and_object_bindings_when_applicable"]["objects"][0]
+    assert obj["id"] == "id.diff" and obj["terms"][1] == {"value": "attr.b", "role": "deduction"}
+    assert answer(full, "TST-06-04")["holds"] is False and answer(full, "TST-06-04")["difference"] == 1
+    assert "not in the world model's construction of co" in full["TST-06-02"]["reason"]
+    assert full["TST-06-03"]["reason"] == "id.diff has terms with no figure in the source: attr.b"
+    assert "needs the world model's identity" in by_id(run())["TST-06-01"]["reason"]
 
 
 def test_every_way_a_case_is_blocked_names_its_reason(full) -> None:

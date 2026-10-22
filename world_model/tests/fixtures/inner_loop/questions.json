@@ -433,6 +433,54 @@
    "question": "Composition missing from the model.",
    "frozen_excerpt_ids": [],
    "scorecard_group": "main_model_tests"
+  },
+  {
+   "test_id": "TST-06-01",
+   "family_id": 6,
+   "failure_family": "Family 6",
+   "title": "t",
+   "answer_type": "Fixture",
+   "question": "An identity holds.",
+   "frozen_excerpt_ids": [
+    "T-001"
+   ],
+   "scorecard_group": "main_model_tests"
+  },
+  {
+   "test_id": "TST-06-02",
+   "family_id": 6,
+   "failure_family": "Family 6",
+   "title": "t",
+   "answer_type": "Fixture",
+   "question": "An identity the model lacks.",
+   "frozen_excerpt_ids": [
+    "T-001"
+   ],
+   "scorecard_group": "main_model_tests"
+  },
+  {
+   "test_id": "TST-06-03",
+   "family_id": 6,
+   "failure_family": "Family 6",
+   "title": "t",
+   "answer_type": "Fixture",
+   "question": "An identity with a term missing.",
+   "frozen_excerpt_ids": [
+    "T-001"
+   ],
+   "scorecard_group": "main_model_tests"
+  },
+  {
+   "test_id": "TST-06-04",
+   "family_id": 6,
+   "failure_family": "Family 6",
+   "title": "t",
+   "answer_type": "Fixture",
+   "question": "An identity that does not hold.",
+   "frozen_excerpt_ids": [
+    "T-001"
+   ],
+   "scorecard_group": "main_model_tests"
   }
  ]
 }

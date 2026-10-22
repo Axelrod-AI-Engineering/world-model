@@ -17,7 +17,8 @@ deterministic, free-standing calculator (Decimal arithmetic, a restricted expres
     unknowns   what the case's inputs leave undetermined, named; they are returned, never counted as zero
 
 Operations (`op`): `calc` (the above), `reconcile` (a composition's parts against its total: the parts come from the
-world model's composition, the figures from the source), `ledger` (update and undo of a stipulated input and its
+world model's composition, the figures from the source), `identity` (one of the model's identities against the source's
+figures, with the golden bank's arithmetic), `ledger` (update and undo of a stipulated input and its
 dependent output, with the audit history), `review_mapping` and `review_golden` (the two review gates: artifacts in,
 a classification out), and `blocked` (a requirement the system cannot run, with its reason). A missing recipe, a missing
 source or an unresolvable input is `blocked` with a reason, never a guess.
@@ -46,6 +47,8 @@ from pathlib import Path
 from typing import Any, Protocol
 
 import yaml
+
+from axelrod_wm.evaluation.golden import eval_identity
 
 CONTRACT_FIELDS = (
     "test_id", "actual_result", "status", "scope_period_units_when_applicable",
@@ -460,6 +463,33 @@ def reconcile(recipe: dict, run: Run, env: dict[str, Any]) -> tuple[dict, list[d
     return answer, trace
 
 
+def run_identity(recipe: dict, run: Run, env: dict[str, Any]) -> tuple[dict, list[dict]]:
+    """An identity of the world model (a difference, a product, a ratio) checked against the source: the model supplies
+    the identity and its terms' roles; the source supplies every term and the reported target. The arithmetic is the
+    golden bank's `eval_identity`."""
+    if run.reader is None:
+        raise Blocked("an identity check needs the world model's identity, and none was supplied")
+    entity, iid = recipe["entity"], recipe["identity"]
+    ident = next((i for i in run.reader.construction(entity).get("identities", []) if i["id"] == iid), None)
+    if ident is None:
+        raise Blocked(f"identity {iid} is not in the world model's construction of {entity}")
+    figures = recipe.get("terms") or {}
+    missing = [t["value"] for t in ident["terms"] if t["value"] not in figures]
+    if missing:
+        raise Blocked(f"{iid} has terms with no figure in the source: {', '.join(missing)}")
+    values = {t["value"]: locate(figures[t["value"]], run) for t in ident["terms"]}
+    computed = Decimal(str(eval_identity(ident, {k: float(v) for k, v in values.items()})))
+    reported = locate(recipe["target"], run)
+    run.objects.append({"id": iid, "kind": "identity", "entity": entity, "target": ident["target"],
+                        "terms": [{"value": t["value"], "role": t["role"]} for t in ident["terms"]]})
+    env.update({"identity_target": reported, "identity_computed": computed})
+    answer = {"identity": ident.get("formula") or iid, "computed_target": computed, "reported_target": reported,
+              "difference": reported - computed, "holds": reported == computed, "terms": values}
+    trace = [{"name": "computed_target", "expression": ident.get("formula") or iid, "inputs": plain(values),
+              "value": plain(computed)}]
+    return answer, trace
+
+
 # -- the stipulated state: update and undo ---------------------------------------------------------------------------------
 class Ledger:
     """An isolated fixture state (baseline, scenario, inputs, dependent outputs) with an append-only audit log. An undo
@@ -643,6 +673,8 @@ def answer_case(suite: Suite, case: dict, recipe: dict | None, reader: Reader | 
         answer, trace = run_ledger(recipe, run)
     elif op == "reconcile":
         answer, trace = reconcile(recipe, run, env)
+    elif op == "identity":
+        answer, trace = run_identity(recipe, run, env)
     elif op == "ingest_repeat":
         answer = run_ingest_repeat(recipe, run)
     elif op == "ingest_order":

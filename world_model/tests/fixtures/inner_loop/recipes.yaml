@@ -279,3 +279,36 @@ TST-05-02:
   composition: c.nope
   parts: {}
   total: {const: 1}
+
+TST-06-01:
+  op: identity
+  entity: co
+  identity: id.diff
+  terms:
+    attr.a: {excerpt: T-001, after: 'Segment A', index: 0}
+    attr.b: {excerpt: T-001, after: 'Segment B', index: 0}
+  target: {const: 100}
+
+TST-06-02:
+  op: identity
+  entity: co
+  identity: id.nope
+  terms: {}
+  target: {const: 1}
+
+TST-06-03:
+  op: identity
+  entity: co
+  identity: id.diff
+  terms:
+    attr.a: {const: 1}
+  target: {const: 1}
+
+TST-06-04:
+  op: identity
+  entity: co
+  identity: id.diff
+  terms:
+    attr.a: {excerpt: T-001, after: 'Segment A', index: 0}
+    attr.b: {excerpt: T-001, after: 'Segment B', index: 0}
+  target: {const: 101}
