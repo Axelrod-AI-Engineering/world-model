@@ -12,6 +12,7 @@ Formats: PDF (PDFium, through pypdfium2: fast, and it reads PDFs whose fonts pyp
 from __future__ import annotations
 
 import csv
+import hashlib
 import io
 import json
 import re
@@ -21,7 +22,11 @@ from dataclasses import dataclass, field
 from html.parser import HTMLParser
 from pathlib import PurePath
 
-PARSER_VERSION = "parse-1.0"
+from axelrod_ingest.cjk import width
+from axelrod_ingest.encoding import Decoded, decode
+from axelrod_ingest.ocr import DPI, Ocr, OcrError, pgm_of
+
+PARSER_VERSION = "parse-1.1"
 
 
 class ParseError(ValueError):
@@ -62,26 +67,66 @@ _BLANKS = re.compile(r"\n{3,}")
 
 
 def normalize(text: str) -> str:
-    text = unicodedata.normalize("NFC", text).replace("\r\n", "\n").replace("\r", "\n").replace("\f", "\n")
+    text = width(unicodedata.normalize("NFC", text)).replace("\r\n", "\n").replace("\r", "\n").replace("\f", "\n")
     lines = [_SPACES.sub(" ", ln).strip() for ln in text.split("\n")]
     return _BLANKS.sub("\n\n", "\n".join(lines)).strip()
 
 
 # -- formats ----------------------------------------------------------------------------------------------------
-def _pdf(data: bytes) -> Parsed:
+MIN_TEXT = 20                    # fewer letters and digits than this on a page that is a picture: it has no text layer
+IMAGE_SHARE = 0.25               # a page is a picture when one image covers at least this share of it
+
+
+def _is_picture(page) -> bool:
+    """Whether a page is a scan: a large image on it (the text layer, if any, is a footer or a watermark)."""
+    import pypdfium2.raw as pdfium_c
+
+    width, height = page.get_size()
+    return any((r - left) * (top - b) >= IMAGE_SHARE * width * height for left, b, r, top in (
+        obj.get_bounds() for obj in page.get_objects(filter=[pdfium_c.FPDF_PAGEOBJ_IMAGE])))
+
+
+def _pgm(page) -> bytes:
+    """The page drawn as a grayscale PGM at the OCR's resolution."""
+    bitmap = page.render(scale=DPI / 72, grayscale=True)
+    return pgm_of(bitmap.width, bitmap.height, bitmap.stride, bytes(bitmap.buffer))
+
+
+def _pdf(data: bytes, ocr: Ocr | None = None) -> Parsed:
+    """PDF, page by page. A page that is a picture with no text layer is read by `ocr` when there is one; otherwise (or
+    where the engine fails) its number goes in `meta["needs_ocr"]`, so a scan never parses to nothing without a word."""
     import pypdfium2 as pdfium
 
     try:
         doc = pdfium.PdfDocument(data)
     except pdfium.PdfiumError as err:
         raise ParseError(f"not a readable PDF: {err}") from err
+    sha = hashlib.sha256(data).hexdigest()
+    pages: list[str] = []
+    needs: list[int] = []
+    done: list[int] = []
     try:
-        pages = [normalize(doc[k].get_textpage().get_text_range()) for k in range(len(doc))]
+        for k in range(len(doc)):
+            page = doc[k]
+            text = normalize(page.get_textpage().get_text_range())
+            if sum(c.isalnum() for c in text) < MIN_TEXT and _is_picture(page):
+                try:
+                    if ocr is None:
+                        raise OcrError("no OCR engine")
+                    text = normalize(ocr.page_text(sha, k + 1, lambda page=page: _pgm(page)))
+                    done.append(k + 1)
+                except OcrError:
+                    needs.append(k + 1)
+            pages.append(text)
         title = normalize(str(doc.get_metadata_dict().get("Title") or ""))
     finally:
         doc.close()
-    return Parsed("pdf", tuple(Segment(t, page=k + 1) for k, t in enumerate(pages)), title=title,
-                  meta={"pages": len(pages)})
+    meta: dict = {"pages": len(pages)}
+    if done:
+        meta["ocr"] = {**(ocr.meta if ocr else {}), "pages": done}
+    if needs:
+        meta["needs_ocr"] = needs
+    return Parsed("pdf", tuple(Segment(t, page=k + 1) for k, t in enumerate(pages)), title=title, meta=meta)
 
 
 _W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
@@ -172,9 +217,47 @@ def _xlsx(data: bytes) -> Parsed:
     return Parsed("xlsx", tuple(segs), meta={"sheets": [s.label for s in segs]})
 
 
+def _encoding(d: Decoded) -> dict[str, str]:
+    """How the bytes were read, for the document's metadata: a fallback to Latin-1 is visible there, never silent."""
+    return {"name": d.encoding, "how": d.how}
+
+
+@dataclass
+class _Table:
+    """A table being read: finished rows, the row and the cell open now, and the cells a rowspan carries into later rows."""
+
+    rows: list[list[str]] = field(default_factory=list)
+    row: list[str] | None = None
+    cell: list[str] | None = None
+    span: tuple[int, int] = (1, 1)                       # the open cell's colspan and rowspan
+    pending: dict[int, list] = field(default_factory=dict)      # column -> [text, rows still to cover]
+
+    def fill(self) -> None:
+        """Put the cells a rowspan carries down into this row, from where it stands."""
+        assert self.row is not None
+        while (col := len(self.row)) in self.pending:
+            text, left = self.pending.pop(col)
+            self.row.append(text)
+            if left > 1:
+                self.pending[col] = [text, left - 1]
+
+
+MAX_SPAN = 30                    # a colspan or rowspan beyond this is a typo
+DATA_CELL_CHARS = 160            # a table of cells longer than this on average lays out a page; it is not data
+
+
+def _span(attrs: list, name: str) -> int:
+    value = dict(attrs).get(name) or ""
+    return min(int(value), MAX_SPAN) if value.isdigit() and int(value) > 0 else 1
+
+
 class _Text(HTMLParser):
+    """HTML to text. A data table becomes one line per row ("Sales Revenue | Current Period | 49,215,328 | 45,938,886"): a cell's
+    own line breaks become spaces, a colspan leaves empty cells, a rowspan's text is carried into the rows it covers, so each
+    row's label and figures stay together. A table of long cells (a page laid out in a table) is read as blocks, as text."""
+
     BLOCK = {"p", "div", "br", "li", "tr", "h1", "h2", "h3", "h4", "h5", "h6", "section", "article", "table",
-             "ul", "ol", "header", "footer", "blockquote", "pre"}      # td/th: " | " within their row's line
+             "ul", "ol", "header", "footer", "blockquote", "pre"}
     SKIP = {"script", "style", "noscript", "template", "head"}
 
     def __init__(self) -> None:
@@ -183,71 +266,142 @@ class _Text(HTMLParser):
         self.skip = 0
         self.title: list[str] = []
         self.in_title = False
+        self.tables: list[_Table] = []
+
+    def _sink(self) -> list[str]:
+        """Where text goes: the open cell of the innermost table, else the page."""
+        cell = self.tables[-1].cell if self.tables else None
+        return self.out if cell is None else cell
+
+    def _break(self) -> str:
+        return "\n" if not self.tables or self.tables[-1].cell is None else " "
+
+    def _open_row(self) -> None:
+        t = self.tables[-1]
+        if t.cell is not None:
+            self._close_cell()
+        if t.row is not None:
+            self._close_row()
+        t.row = []
+        t.fill()
+
+    def _open_cell(self, attrs: list) -> None:
+        t = self.tables[-1]
+        if t.cell is not None:
+            self._close_cell()
+        if t.row is None:
+            self._open_row()
+        t.cell, t.span = [], (_span(attrs, "colspan"), _span(attrs, "rowspan"))
+
+    def _close_cell(self) -> None:
+        t = self.tables[-1]
+        assert t.cell is not None and t.row is not None
+        text = " ".join("".join(t.cell).split())
+        t.fill()
+        col, (colspan, rowspan) = len(t.row), t.span
+        t.row += [text] + [""] * (colspan - 1)
+        if rowspan > 1:
+            t.pending.update({col + j: [text if j == 0 else "", rowspan - 1] for j in range(colspan)})
+        t.cell = None
+
+    def _close_row(self) -> None:
+        t = self.tables[-1]
+        assert t.row is not None
+        t.fill()
+        if any(t.row):
+            t.rows.append(t.row)
+        t.row = None
+
+    def _close_table(self) -> None:
+        t = self.tables[-1]
+        if t.cell is not None:
+            self._close_cell()
+        if t.row is not None:
+            self._close_row()
+        self.tables.pop()
+        cells = [c for row in t.rows for c in row if c]
+        wide = any(sum(bool(c) for c in row) >= 2 for row in t.rows)
+        data = wide and sum(map(len, cells)) <= DATA_CELL_CHARS * len(cells)
+        lines = [" | ".join(row).rstrip(" |") for row in t.rows] if data else cells
+        self._sink().append(self._break() + self._break().join(lines) + self._break())
 
     def handle_starttag(self, tag: str, attrs: list) -> None:
         if tag == "title":
             self.in_title = True
         if tag in self.SKIP:
             self.skip += 1
+        elif tag == "table":
+            self.tables.append(_Table())
+        elif tag == "tr" and self.tables:
+            self._open_row()
+        elif tag in ("td", "th") and self.tables:
+            self._open_cell(attrs)
         elif tag in self.BLOCK:
-            self.out.append("\n")
-        if tag in ("td", "th"):
-            self.out.append(" | ")
+            self._sink().append(self._break())
 
     def handle_endtag(self, tag: str) -> None:
         if tag == "title":
             self.in_title = False
         if tag in self.SKIP and self.skip:
             self.skip -= 1
-        elif tag in self.BLOCK:
-            self.out.append("\n")
+        elif tag in ("td", "th") and self.tables and self.tables[-1].cell is not None:
+            self._close_cell()
+        elif tag == "tr" and self.tables and self.tables[-1].row is not None:
+            if self.tables[-1].cell is not None:
+                self._close_cell()
+            self._close_row()
+        elif tag == "table" and self.tables:
+            self._close_table()
+        elif tag in self.BLOCK and not (self.tables and tag in ("table", "tr")):
+            self._sink().append(self._break())
 
     def handle_data(self, data: str) -> None:
         if self.in_title:
             self.title.append(data)
         elif not self.skip:
-            self.out.append(data)
+            self._sink().append(data)
+
+    def close(self) -> None:
+        super().close()
+        while self.tables:                               # a table the page never closed
+            self._close_table()
 
 
 def _html(data: bytes) -> Parsed:
     p = _Text()
-    p.feed(_decode(data))
+    d = decode(data, html=True)
+    p.feed(d.text)
     p.close()
-    text = normalize(re.sub(r"(\n *\| *)", "\n", "".join(p.out)))
-    return Parsed("html", (Segment(text),), title=normalize("".join(p.title))[:160])
-
-
-def _decode(data: bytes) -> str:
-    """UTF-16 when the bytes say so (a byte-order mark), else UTF-8, else Latin-1 (which never fails)."""
-    if data[:2] in (b"\xff\xfe", b"\xfe\xff"):
-        return data.decode("utf-16")
-    try:
-        return data.decode("utf-8-sig")
-    except UnicodeDecodeError:
-        return data.decode("latin-1")
+    text = normalize("".join(p.out))
+    return Parsed("html", (Segment(text),), title=normalize("".join(p.title))[:160], meta={"encoding": _encoding(d)})
 
 
 def _csv(data: bytes) -> Parsed:
-    rows = [" | ".join(r).strip() for r in csv.reader(io.StringIO(_decode(data)))]
-    return Parsed("csv", (Segment(normalize("\n".join(r for r in rows if r.strip("| ")))),))
+    d = decode(data)
+    rows = [" | ".join(r).strip() for r in csv.reader(io.StringIO(d.text))]
+    return Parsed("csv", (Segment(normalize("\n".join(r for r in rows if r.strip("| ")))),), meta={"encoding": _encoding(d)})
 
 
 def _text(data: bytes, fmt: str = "text") -> Parsed:
-    text = normalize(_decode(data))
+    d = decode(data)
+    text = normalize(d.text)
     first = next((ln.lstrip("# ").strip() for ln in text.split("\n") if ln.strip()), "")
-    return Parsed(fmt, (Segment(text),), title=first[:160])
+    return Parsed(fmt, (Segment(text),), title=first[:160], meta={"encoding": _encoding(d)})
 
 
 def _json(data: bytes) -> Parsed:
+    d = decode(data)
     try:
-        obj = json.loads(_decode(data))
+        obj = json.loads(d.text)
     except json.JSONDecodeError as err:
         raise ParseError(f"not valid JSON: {err}") from err
     if isinstance(obj, dict) and obj.get("format") == "axelrod.import/v1":
         items = obj.get("items") or []
         text = "\n\n".join(normalize(f"{i.get('headline', '')}\n{i.get('summary', '')}") for i in items if isinstance(i, dict))
-        return Parsed("bundle", (Segment(text),), title=str(obj.get("title", ""))[:160], meta={"bundle": obj})
-    return Parsed("json", (Segment(normalize(json.dumps(obj, indent=1, sort_keys=True, ensure_ascii=False))),))
+        return Parsed("bundle", (Segment(text),), title=str(obj.get("title", ""))[:160],
+                      meta={"bundle": obj, "encoding": _encoding(d)})
+    return Parsed("json", (Segment(normalize(json.dumps(obj, indent=1, sort_keys=True, ensure_ascii=False))),),
+                  meta={"encoding": _encoding(d)})
 
 
 PARSERS = {".pdf": _pdf, ".docx": _docx, ".pptx": _pptx, ".xlsx": _xlsx, ".xlsm": _xlsx, ".html": _html, ".htm": _html,
@@ -269,10 +423,11 @@ def supported(filename: str, mime: str = "") -> bool:
     return PurePath(filename).suffix.lower() in PARSERS or mime in MIMES
 
 
-def parse(data: bytes, filename: str, mime: str = "") -> Parsed:
-    """The document's text. Raises ParseError for an unsupported format or a file that is not what it claims."""
+def parse(data: bytes, filename: str, mime: str = "", *, ocr: Ocr | None = None) -> Parsed:
+    """The document's text. Raises ParseError for an unsupported format or a file that is not what it claims. `ocr`
+    reads the pages of a PDF that are pictures (see ocr.py); without it they are listed in `meta["needs_ocr"]`."""
     ext = PurePath(filename).suffix.lower()
     fn = PARSERS.get(ext) or PARSERS.get(MIMES.get(mime, ""))
     if fn is None:
         raise ParseError(f"unsupported file type: {ext or mime or 'unknown'}")
-    return fn(data)
+    return fn(data, ocr) if fn is _pdf else fn(data)
