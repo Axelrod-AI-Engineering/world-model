@@ -10,7 +10,18 @@ What it produces. A status for every case, each with a reason: `pass`, `fail`, `
 - the two review gates (the cases the key puts in the `review_gate` group) have their own section;
 - a high pass rate does not resolve a material blocked or failed requirement, and the scorecard says so.
 
-How a case is graded. Three kinds of check, kept apart; a case passes only when every applicable one does, so a
+Two ways to grade, reported side by side (`--mode` picks the headline). The field names of the key describe the meaning being
+checked; they are not a schema the answer must use, so the main grading does not read them as one.
+
+- The numeric layer matches each expected number to any number the answer states (its result fields and its quantities), by
+  value at displayed precision and in the key's unit and scale. Exactly one distinct match is a match; none is a failure; two
+  different numbers that could each match is ambiguous and goes to a judge.
+- The judge layer holds what a number cannot settle (assertions, mechanism, accounting destination, proof limits, an ambiguous
+  number). `inner_loop_judge.py` writes one packet per case for a reader to judge on meaning; the verdicts are combined here
+  deterministically. A facet with no verdict is not run, never a pass.
+- The lexical mode (the earlier one) matches field names and wording; it is kept for comparison.
+
+How the lexical mode grades a case. Three kinds of check, kept apart; a case passes only when every applicable one does, so a
 correct endpoint reached through a wrong bridge fails.
 
 - values: each expected value of the numeric oracle is matched to our field of the same meaning, at the *displayed
@@ -28,10 +39,11 @@ validation candidate it keeps the status only: the builder sees pass and fail co
 
 from __future__ import annotations
 
+import hashlib
 import inspect
 import json
 import re
-from decimal import Decimal
+from decimal import Decimal, localcontext
 from pathlib import Path
 from typing import Any
 
@@ -210,6 +222,23 @@ def clauses(text: str) -> list[tuple[set[str], bool]]:
     return out
 
 
+def clause_texts(text: str) -> list[tuple[str, bool]]:
+    """The same clauses as `clauses`, as the key's own words: (clause text, negative)."""
+    out = []
+    for sentence in re.split(r"[.;:]\s+|[.;:]$", text.strip()):
+        body = sentence.strip()
+        if not DIRECTIVE.match(body):
+            continue
+        reject = bool(re.match(r"(reject|no)\b", body, re.I))
+        body = re.sub(r"^(assert|require|reject|flag|preserve)\b\s*", "", body, flags=re.I)
+        for part in re.split(r",\s+|\s+and\s+|\s+before\s+", body):
+            asked = re.match(r"(require|assert|flag|check)\b", part, re.I)
+            if stems(part):
+                said = re.sub(r"^(require|assert|flag|check)\b\s*", "", part.strip(" ."), flags=re.I)
+                out.append((said, (reject and not asked) or part.lower().startswith(NEGATIVE_START)))
+    return out
+
+
 def haystack(result: dict, fields: dict[str, Any]) -> list[tuple[set[str], Any]]:
     """Every statement our result makes, as (stems of its name and its words, value): fields, assumptions, trace inputs."""
     def words(v: Any) -> set[str]:
@@ -298,35 +327,184 @@ def check_case(case: dict, result: dict) -> tuple[bool, dict[str, dict], list[di
     return ok, facets, failed
 
 
+# -- layer one: the numbers, by value (the field's name does not matter) ---------------------------------------------------
+def split_key(case: dict) -> tuple[list[tuple[str, Decimal]], list[tuple[str, str]], list[str]]:
+    """What the key asks, in three kinds: the numbers (label, value) it expects, the assertions (kind, text) a reader must
+    decide on meaning, and the unknowns it expects to stay unknown."""
+    oracle = case.get("numeric_oracle") or {}
+    numbers: list[tuple[str, Decimal]] = []
+    for label, v in (oracle.get("expected_values") or {}).items():
+        numbers += [(label, d) for x in (v if isinstance(v, list) else [v]) if (d := to_decimal(x)) is not None]
+    covered = {d for _, d in numbers}
+    assertions: list[tuple[str, str]] = []
+    pairs, prose = scan_pairs(case.get("acceptance_check", ""))
+    for name, raw in pairs:
+        value = expected_of(raw)
+        items = value if isinstance(value, list) else [value]
+        digits = [to_decimal(x) for x in items]
+        if all(d is not None for d in digits):
+            numbers += [(name, d) for d in digits if d not in covered]
+        elif isinstance(value, str) and re.search(r"[-+*/]", value):
+            prose += f". Assert {name} {value}"                       # a formula: the key's way of naming a bridge
+        else:
+            assertions.append((facet_of(name), f"{name} = {raw}"))
+    unknowns = list(oracle.get("expected_unknowns") or [])
+    assertions += [("proof_limits", f"{u} has no determined value, and the answer names what is missing") for u in unknowns]
+    assertions += [(facet_of(text), ("NOT: " if neg else "") + text) for text, neg in clause_texts(prose)]
+    return numbers, assertions, unknowns
+
+
+def answer_numbers(result: dict) -> list[dict]:
+    """Every number the answer states, wherever it sits: its result fields and its quantities, each with the unit it carries."""
+    scope = result.get("scope_period_units_when_applicable") or {}
+    out = []
+    for path, v in flatten(result.get("actual_result") or {}).items():
+        leaf = path.rsplit(".", 1)[-1]
+        unit = (scope.get("units") or {}).get(leaf, scope.get("unit"))
+        for x in (v if isinstance(v, list) else [v]):
+            if isinstance(x, (int, float)) and not isinstance(x, bool):
+                out.append({"value": Decimal(str(x)), "unit": str(unit or ""), "label": path})
+    for q in result.get("quantities") or []:
+        d = to_decimal(q.get("value"))
+        if d is not None:
+            out.append({"value": d, "unit": f"{q.get('unit', '')} {q.get('scale', '')}".strip(), "label": q["label"]})
+    return out
+
+
+def match_number(expected: Decimal, got: Decimal, tol: Decimal, factor: Decimal) -> Decimal | None:
+    """`got` in the key's unit, when it equals the expected value at its displayed precision (the converted number itself, so
+    two different numbers that both round to the expected value stay two)."""
+    places = Decimal(1).scaleb(-max(0, -expected.as_tuple().exponent))
+    with localcontext() as ctx:
+        ctx.prec = 80                                    # a yen figure with a trillion scale needs more than 28 digits
+        value = got * factor
+        return value.normalize() if abs(value.quantize(places) - expected.quantize(places)) <= tol else None
+
+
+def numeric_layer(case: dict, result: dict) -> list[dict]:
+    """Each expected number against the answer's numbers: matched (exactly one distinct number equals it, at displayed
+    precision, in the key's unit), unmatched (none does) or ambiguous (two different numbers each could)."""
+    oracle = case.get("numeric_oracle") or {}
+    tol, key_unit = tolerance(case, oracle), oracle.get("unit")
+    numbers, _, _ = split_key(case)
+    nums = answer_numbers(result)
+    out = []
+    for label, expected in numbers:
+        hits: dict[Decimal, list[str]] = {}
+        for n in nums:
+            factor = Decimal(1) if not key_unit or mixed_scales(key_unit) else unit_scale(n["unit"]) / unit_scale(key_unit)
+            if (v := match_number(expected, n["value"], tol, factor)) is not None:
+                hits.setdefault(v, []).append(n["label"])
+        status = "matched" if len(hits) == 1 else "unmatched" if not hits else "ambiguous"
+        out.append({"label": label, "expected": inner_loop.plain(expected), "unit": key_unit, "status": status,
+                    "candidates": sorted({lab for labs in hits.values() for lab in labs})})
+    return out
+
+
+# -- layer two: a reader's verdicts on meaning -----------------------------------------------------------------------------
+def judge_facets(case: dict, result: dict) -> list[dict]:
+    """What a judge must decide for this case and answer: the key's assertions, and each number the first layer could not
+    settle. Ids are stable for the same key and answer."""
+    _, assertions, _ = split_key(case)
+    items = [{"kind": k, "text": t} for k, t in assertions]
+    items += [{"kind": "quantity", "text": f"Does the answer state the key's quantity '{n['label']}' (expected value "
+                                           f"{n['expected']}{' ' + n['unit'] if n['unit'] else ''}), under any label? "
+                                           f"Candidate numbers in the answer: {', '.join(n['candidates'])}"}
+              for n in numeric_layer(case, result) if n["status"] == "ambiguous"]
+    return [{"id": f"f{i:02d}", **x} for i, x in enumerate(items, 1)]
+
+
+def verdict_schema() -> dict:
+    return {"$schema": "https://json-schema.org/draft/2020-12/schema", "title": "A judge's verdicts for one case",
+            "type": "object", "required": ["test_id", "facets"], "additionalProperties": False,
+            "properties": {"test_id": {"type": "string"}, "facets": {
+                "type": "object", "additionalProperties": {
+                    "type": "object", "required": ["verdict", "reason"], "additionalProperties": False,
+                    "properties": {"verdict": {"type": "string", "enum": ["pass", "fail"]},
+                                   "reason": {"type": "string", "description": "one line, quoting the answer"}}}}}}
+
+
+def read_verdicts(directory: Path | None) -> tuple[dict[str, dict], dict | None]:
+    """The valid verdict files of a folder, and what was read (folder, file count, a sha256 over every file, the invalid ones)."""
+    if directory is None:
+        return {}, None
+    directory = Path(directory)
+    verdicts, hashes, invalid = {}, {}, []
+    for f in sorted(directory.glob("*.json")):
+        raw = f.read_bytes()
+        hashes[f.stem] = hashlib.sha256(raw).hexdigest()
+        try:
+            body = json.loads(raw)
+        except ValueError:
+            invalid.append(f.stem)
+            continue
+        if inner_loop_packets.validate(body, verdict_schema()) or body["test_id"] != f.stem:
+            invalid.append(f.stem)
+        else:
+            verdicts[f.stem] = body
+    overall = hashlib.sha256("".join(f"{t} {h}\n" for t, h in sorted(hashes.items())).encode()).hexdigest()
+    return verdicts, {"dir": str(directory), "files": len(hashes), "sha256": overall, "invalid": invalid}
+
+
+def judge_outcome(case: dict, result: dict, verdict: dict | None) -> dict:
+    """The case's status from both layers: a failed number or facet fails it; a facet with no verdict is not_run, never a pass."""
+    numeric = numeric_layer(case, result)
+    facets = []
+    for f in judge_facets(case, result):
+        v = ((verdict or {}).get("facets") or {}).get(f["id"])
+        facets.append({**f, "verdict": v["verdict"] if v else "not_run", "reason": v["reason"] if v else "no verdict was written"})
+    failed = [{"facet": "values", "label": n["label"], "expected": n["expected"], "actual": "no number of that value in the answer"}
+              for n in numeric if n["status"] == "unmatched"]
+    failed += [{"facet": f["kind"], "label": f["text"], "expected": "stated", "actual": f["reason"]} for f in facets if f["verdict"] == "fail"]
+    waiting = [f["id"] for f in facets if f["verdict"] == "not_run"]
+    if failed:
+        status = "fail"
+    elif waiting:
+        status = "not_run"
+    else:
+        status = "pass" if numeric or facets else "fail"
+    reason = {"fail": "; ".join(f"{d['facet']}: {d['label']}" for d in failed) or "no check could be made",
+              "not_run": f"judge verdict missing for {', '.join(waiting)}", "pass": "every applicable check passed"}[status]
+    return {"status": status, "reason": reason, "numeric": numeric, "facets": facets, "failed": failed}
+
+
 def plain_text(value: Any) -> Any:
     return inner_loop.plain(value)
 
 
-def grade_case(case: dict, result: dict | None, validation: bool) -> dict:
-    """One case's scorecard row. A case the runner did not report is not run."""
+def grade_case(case: dict, result: dict | None, validation: bool, verdict: dict | None = None, mode: str = "judge") -> dict:
+    """One case's scorecard row, graded both ways (`status_lexical`, `status_judge`); `status` is the chosen mode's.
+    A case the runner did not report is not run."""
     row: dict[str, Any] = {"test_id": case["test_id"], "family": case["failure_family"],
                            "family_id": case["family_id"], "group": case["scorecard_group"],
                            "split": case["development_split"]}
     if result is None or result["status"] == inner_loop.NOT_RUN:
-        return row | {"status": "not_run", "reason": (result or {}).get("reason") or "the runner did not report it"}
+        why = (result or {}).get("reason") or "the runner did not report it"
+        return row | {"status": "not_run", "status_lexical": "not_run", "status_judge": "not_run", "reason": why}
     if result["status"] == inner_loop.BLOCKED:
-        return row | {"status": "blocked", "reason": result["reason"]}
+        return row | {"status": "blocked", "status_lexical": "blocked", "status_judge": "blocked", "reason": result["reason"]}
     ok, facets, failed = check_case(case, result)
+    lexical = {"status": "pass" if ok else "fail", "failed": failed,
+               "reason": "every applicable check passed" if ok else "; ".join(f"{f['facet']}: {f['label']}" for f in failed)
+               or "no check could be made"}
+    judged = judge_outcome(case, result, verdict)
+    chosen = judged if mode == "judge" else lexical
     g = result.get("internal", {}).get("grounding", {})
-    row |= {"status": "pass" if ok else "fail", "facets": facets,
+    row |= {"status": chosen["status"], "status_lexical": lexical["status"], "status_judge": judged["status"], "facets": facets,
             "grounding": {"operation": g.get("operation"), "model_objects": len(g.get("model_objects", [])),
-                          "source_excerpts": len(g.get("source_excerpts", [])), "stated_facts": len(g.get("stated", []))}}
+                          "source_excerpts": len(g.get("source_excerpts", [])), "stated_facts": len(g.get("stated", [])),
+                          "quantities": len(result.get("quantities") or [])}}
     if validation:
         return row | {"reason": "validation candidate: detail withheld"}
-    reason = "every applicable check passed" if ok else "; ".join(
-        f"{f['facet']}: {f['label']}" for f in failed) or "no check could be made"
-    return row | {"reason": reason, "detail": failed, "key_text": {"precise_answer": case.get("precise_answer"),
-                                                                   "acceptance_check": case.get("acceptance_check")}}
+    return row | {"reason": chosen["reason"], "detail": chosen["failed"],
+                  "judge": {"numeric": judged["numeric"], "facets": judged["facets"], "reason": judged["reason"]},
+                  "lexical": {"reason": lexical["reason"], "detail": failed},
+                  "key_text": {"precise_answer": case.get("precise_answer"), "acceptance_check": case.get("acceptance_check")}}
 
 
 # -- the scorecard ---------------------------------------------------------------------------------------------------------
-def rates(rows: list[dict]) -> dict:
-    n = {s: sum(r["status"] == s for r in rows) for s in STATUSES}
+def rates(rows: list[dict], key: str = "status") -> dict:
+    n = {s: sum(r[key] == s for r in rows) for s in STATUSES}
     ran = n["pass"] + n["fail"]
     return n | {"executed": ran, "executed_pass_rate": None if not ran else round(n["pass"] / ran, 4),
                 "execution_coverage": round(ran / MAIN_CASES, 4)}
@@ -364,12 +542,14 @@ def separation_evidence(key_path: Path, results: dict, forbid: tuple[str, ...] =
 
 
 def grade(results: dict, key_path: Path, run: str = "run", forbid: tuple[str, ...] = (),
-          only: tuple[str, ...] = ()) -> dict:
-    """The scorecard for `results` (the runner's output) against the key at `key_path`."""
+          only: tuple[str, ...] = (), mode: str = "judge", verdicts: Path | None = None) -> dict:
+    """The scorecard for `results` (the runner's output) against the key at `key_path`, graded both ways: `mode` picks which
+    sets the headline, and the other is reported beside it. `verdicts` is the folder of judge verdicts."""
     key = json.loads(Path(key_path).read_text(encoding="utf-8"))
     by_id = {r["test_id"]: r for r in results["results"]}
-    rows = [grade_case(c, by_id.get(c["test_id"]), c["development_split"] != "development") for c in key["cases"]
-            if not only or c["test_id"] in only]
+    judged, judged_info = read_verdicts(verdicts)
+    rows = [grade_case(c, by_id.get(c["test_id"]), c["development_split"] != "development", judged.get(c["test_id"]), mode)
+            for c in key["cases"] if not only or c["test_id"] in only]
     main = [r for r in rows if r["group"] != "review_gate"]
     gates = [r for r in rows if r["group"] == "review_gate"]
     families: dict[str, dict] = {}
@@ -385,7 +565,8 @@ def grade(results: dict, key_path: Path, run: str = "run", forbid: tuple[str, ..
             "blocked": sorted({(r["test_id"], r["reason"]) for r in main if r["status"] == "blocked"}),
             "not_run": sorted({(r["test_id"], r["reason"]) for r in main if r["status"] == "not_run"}),
             "review_gates": review, "cases": main, "note": NOTE, "graded_inputs": results.get("answers"),
-            "only": list(only) or None,
+            "only": list(only) or None, "mode": mode, "graded_verdicts": judged_info,
+            "modes": {m: rates(main, f"status_{m}") | {"gates": rates(gates, f"status_{m}")} for m in ("lexical", "judge")},
             "tolerances": "exact at displayed precision; one million yen for rounding residuals; 0.005 percentage "
                           "point for the automotive margin"}
 
@@ -400,7 +581,13 @@ def markdown(card: dict) -> str:
              "| pass | fail | blocked | not run | executed pass rate | execution coverage |", "|---|---|---|---|---|---|",
              f"| {m['pass']} | {m['fail']} | {m['blocked']} | {m['not_run']} | {pct(m['executed_pass_rate'])} "
              f"({m['pass']}/{m['executed']}) | {pct(m['execution_coverage'])} ({m['executed']}/{MAIN_CASES}) |", "",
-             card["note"], "", "## By family", "",
+             card["note"], "", f"Headline mode: **{card['mode']}**. Both modes, side by side:", "",
+             "| mode | pass | fail | blocked | not run | executed pass rate |", "|---|---|---|---|---|---|",
+             *[f"| {k} | {v['pass']} | {v['fail']} | {v['blocked']} | {v['not_run']} | {pct(v['executed_pass_rate'])} |"
+               for k, v in card["modes"].items()],
+             *(["", f"Graded verdicts: `{card['graded_verdicts']['dir']}` ({card['graded_verdicts']['files']} files, sha256 "
+                     f"`{card['graded_verdicts']['sha256']}`, invalid: {card['graded_verdicts']['invalid'] or 'none'})"]
+               if card.get("graded_verdicts") else []), "", "## By family", "",
              "| family | pass | fail | blocked | not run |", "|---|---|---|---|---|"]
     lines += [f"| {k} | {v['pass']} | {v['fail']} | {v['blocked']} | {v['not_run']} |" for k, v in card["by_family"].items()]
     lines += ["", "## Cases", "", "| case | status | reason |", "|---|---|---|"]

@@ -66,3 +66,16 @@ def test_the_packet_tools_run_from_the_command_line() -> None:
                               str(INNER_LOOP_SUITE / "fixture_inputs.json")], capture_output=True, text=True, check=True)
     body = json.loads(refused.stdout)
     assert body["supported"] is False and "undo" in body["reason"]
+
+
+def test_the_judge_script_writes_packets_and_the_grader_combines_the_verdicts(tmp_path: Path) -> None:
+    out = packets(tmp_path)
+    run("inner_loop.py", "collect", "--suite", str(INNER_LOOP_SUITE), "--packets", str(out), "--out", str(tmp_path / "r.json"))
+    said = run("inner_loop_judge.py", "prepare", "--results", str(tmp_path / "r.json"), "--key", str(INNER_LOOP_KEY),
+               "--run", "j", "--out", str(tmp_path / "judge"), "--only", "G-01-01")
+    assert said.startswith("0 judge packets") and (tmp_path / "judge" / "judge_run.json").exists()
+    (tmp_path / "judge" / "verdicts").mkdir(exist_ok=True)
+    graded = run("inner_loop_grade.py", "--results", str(tmp_path / "r.json"), "--key", str(INNER_LOOP_KEY), "--mode", "lexical",
+                 "--verdicts", str(tmp_path / "judge" / "verdicts"), "--out", str(tmp_path / "card"))
+    card = json.loads((tmp_path / "card.json").read_text())
+    assert card["mode"] == "lexical" and card["graded_verdicts"]["files"] == 0 and "[judge]" in graded and "[lexical]" in graded

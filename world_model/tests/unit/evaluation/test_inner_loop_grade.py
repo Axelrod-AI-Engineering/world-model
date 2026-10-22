@@ -63,7 +63,7 @@ STATUS = {"G-01-01": "pass", "G-01-02": "fail", "G-01-03": "pass", "G-01-04": "f
 
 @pytest.fixture(scope="module")
 def card() -> dict:
-    return g.grade(results(ROWS), INNER_LOOP_KEY, "t1")
+    return g.grade(results(ROWS), INNER_LOOP_KEY, "t1", mode="lexical")
 
 
 def row(card: dict, tid: str) -> dict:
@@ -244,12 +244,12 @@ def test_a_calculation_may_have_the_answer_shape_or_the_recipe_shape() -> None:
     assert {"gross", "allow"} <= g.haystack(res("G", {"a": 1}, trace=answer_shape), {"a": 1})[-1][0]
     card = g.grade(results([res("G-01-06", {"delivered": 105, "income": 14, "coefficient": None, "flag": True,
                                             "mode": "simple mode", "bounds": [180, 220]}, trace=answer_shape)]),
-                   INNER_LOOP_KEY, "t", only=("G-01-06",))
+                   INNER_LOOP_KEY, "t", only=("G-01-06",), mode="lexical")
     assert row(card, "G-01-06")["status"] in ("pass", "fail")           # graded, not crashed
 
 
 def test_only_leaves_the_other_cases_out_rather_than_counting_them() -> None:
-    card = g.grade(results(ROWS), INNER_LOOP_KEY, "t", only=("G-01-01", "G-01-02", "G-03-10"))
+    card = g.grade(results(ROWS), INNER_LOOP_KEY, "t", only=("G-01-01", "G-01-02", "G-03-10"), mode="lexical")
     assert [r["test_id"] for r in card["cases"]] == ["G-01-01", "G-01-02"]
     assert card["main"]["cases"] == 2 and card["main"]["not_run"] == 0 and card["main"]["blocked"] == 0
     assert [r["test_id"] for r in card["review_gates"]["cases"]] == ["G-03-10"] and card["only"] == ["G-01-01", "G-01-02", "G-03-10"]

@@ -720,6 +720,7 @@ def to_contract(case: dict, status: str, internal: dict | None, reason: str, req
     for label in required:
         if label in FIELD_MAP:
             out[label] = (internal or {}).get(FIELD_MAP[label], na(reason or "not answered"))
+    out["quantities"] = (internal or {}).get("quantities", [])
     out["family"] = case.get("failure_family")
     out["scorecard_group"] = case.get("scorecard_group")
     out["internal"] = internal or {}

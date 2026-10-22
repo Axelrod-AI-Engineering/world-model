@@ -28,11 +28,14 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--run", default="run")
     ap.add_argument("--out", required=True)
     ap.add_argument("--only", default="", help="grade only these test ids (comma separated); the others are left out, not counted")
+    ap.add_argument("--mode", choices=("judge", "lexical"), default="judge", help="which grading sets the headline; both are reported")
+    ap.add_argument("--verdicts", help="the folder of judge verdicts (inner_loop_judge.py prepare writes the packets)")
     ap.add_argument("--explain", action="store_true")
     ap.add_argument("--forbid", action="append", default=[], help="a marker to look for in the agents' transcripts (e.g. the held-out folder name)")
     a = ap.parse_args(argv)
     results = json.loads(Path(a.results).read_text(encoding="utf-8"))
-    card = grade(results, Path(a.key), a.run, tuple(a.forbid), tuple(x for x in a.only.split(",") if x))
+    card = grade(results, Path(a.key), a.run, tuple(a.forbid), tuple(x for x in a.only.split(",") if x), a.mode,
+                 Path(a.verdicts) if a.verdicts else None)
     out = Path(a.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.with_suffix(".json").write_text(json.dumps(card, indent=2, sort_keys=True, ensure_ascii=False) + "\n", encoding="utf-8")
@@ -42,6 +45,9 @@ def main(argv: list[str] | None = None) -> int:
           f"executed pass rate {m['executed_pass_rate']}; execution coverage {m['execution_coverage']}")
     for fam, v in card["by_family"].items():
         print(f"  {fam}: pass {v['pass']} fail {v['fail']} blocked {v['blocked']} not_run {v['not_run']}")
+    for mode, v in card["modes"].items():
+        print(f"  [{mode}] pass {v['pass']} fail {v['fail']} blocked {v['blocked']} not_run {v['not_run']} "
+              f"executed pass rate {v['executed_pass_rate']}")
     g = card["review_gates"]["counts"]
     print(f"review gates: pass {g['pass']} fail {g['fail']} blocked {g['blocked']} not_run {g['not_run']}")
     if a.explain:

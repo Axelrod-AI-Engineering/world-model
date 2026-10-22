@@ -455,8 +455,11 @@ uv run python world_model/scripts/evaluation/inner_loop.py prepare --suite <suit
 #   ... agents answer: one answers/<test_id>.json each, using the tools in their packet ...
 uv run python world_model/scripts/evaluation/inner_loop.py collect --suite <suite> --packets <packets> --out <results.json> \
     [--transcripts <files>]
+uv run python world_model/scripts/evaluation/inner_loop_judge.py prepare --results <results.json> --key <answer key> --run <run> \
+    --out <judge folder>          # judges then write <judge folder>/verdicts/<test_id>.json
 uv run python world_model/scripts/evaluation/inner_loop_grade.py --results <results.json> --key <answer key> --run <label> \
-    --out <scorecard path without extension> [--explain] [--forbid <marker>]
+    --out <scorecard path without extension> [--verdicts <judge folder>/verdicts] [--mode judge|lexical] [--only ids] \
+    [--explain] [--forbid <marker>]
 ```
 
 - **Packets** (`evaluation/inner_loop_packets.py`): `<packets>/<test_id>/` holds `task.md` (the question, the return contract and
@@ -472,14 +475,22 @@ uv run python world_model/scripts/evaluation/inner_loop_grade.py --results <resu
   with the reason. An answer's evidence is checked against the case's own pages (the quoted passage must be on the page) and its
   calculations against the calculator's log. The results record the graded answers (folder, a sha256 over every file) and the
   agents' transcripts (path and hash); the same answers give byte-identical results.
-- **Grader** (`evaluation/inner_loop_grade.py`): takes the key's path as an argument and nothing else does. A case passes only when
-  every applicable check passes: values at displayed precision (a tolerance only where the clarifications name one), assertions by
-  facet (mechanism, accounting destination, proof limits), expected unknowns, and the prose directives of the acceptance check,
-  which are matched lexically and so remain subject to a domain owner's review. The scorecard reports pass, fail, blocked and not
-  run, the executed pass rate (pass over pass and fail), the execution coverage (pass and fail over the 98 main cases), the two
-  review gates apart with the separation evidence (what the runner read, what its modules name, what the transcripts mention), the
-  graded answers' hash, and that a high pass rate does not resolve a material blocked requirement. A validation candidate keeps
-  its status and no detail.
+- **Grader, in two layers** (`evaluation/inner_loop_grade.py`, `inner_loop_judge.py`; the key's path is an argument and nothing
+  else is given it). The key's field names describe the meaning being checked, not a schema the answer must use, so the main
+  grading does not read them as one.
+  1. The numeric layer matches each expected number to any number the answer states (its result fields, and its `quantities`),
+     by value at displayed precision in the key's unit and scale, whatever the field is called. Exactly one distinct match is
+     a match, none is a failure, and two different numbers that could each match is ambiguous and goes to a judge. A tolerance is
+     used only where the clarifications name one.
+  2. The judge layer decides on meaning what a number cannot: the key's assertions (wording, mechanism, accounting destination,
+     proof limits) and an ambiguous number. `inner_loop_judge.py prepare` writes one packet per case that has facets
+     (`judge.md`, `facets.json`, `answer.json`, `verdict.schema.json`) apart from the answerers' packets; judges write
+     `verdicts/<test_id>.json`; the grader combines them deterministically. A facet with no verdict is not run, never a pass.
+  The scorecard reports pass, fail, blocked and not run, the executed pass rate, the execution coverage over the 98 main cases, the
+  two review gates apart with the separation evidence (what the runner read, what its modules name, what the transcripts mention),
+  the graded answers' and verdicts' hashes, and that a high pass rate does not resolve a material blocked requirement. The
+  earlier lexical mode (field names and wording) is kept as `--mode lexical`, and both modes are reported side by side. A
+  validation candidate keeps its status and no detail.
 - **Tests.** An invented suite, export and key (`world_model/tests/fixtures/inner_loop*`) exercise every branch; the client test
   prepares and collects the real suite without answers and asserts no pass rate.
 

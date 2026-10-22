@@ -51,6 +51,14 @@ def answer_schema() -> dict:
             "evidence": {"type": "array", "items": {
                 "type": "object", "required": ["excerpt_id", "location", "passage"], "additionalProperties": False,
                 "properties": {"excerpt_id": text, "location": text, "passage": {**text, "description": "quoted from the page"}}}},
+            "quantities": {"type": "array", "description": "every number the answer relies on, each with a plain descriptive label", "items": {
+                "type": "object", "required": ["label", "value"], "additionalProperties": False,
+                "properties": {"label": {**text, "description": "what the number is, in plain words"}, "value": {},
+                               "unit": {**text, "description": "currency, percent, units, shares, dates ..."},
+                               "scale": {**text, "description": "thousand, million, billion, trillion, or empty"},
+                               "period": {**text, "description": "the period or date the number is for"},
+                               "scope": {**text, "description": "entity, perimeter, basis where it matters"},
+                               "object_id": {**text, "description": "the model object that holds it, if one does"}}}},
             "objects": {**strings, "description": "ids of the model objects the answer rests on"},
             "assumptions": strings,
             "missing_inputs": {**strings, "description": "what the case leaves undetermined"},
@@ -62,7 +70,7 @@ def answer_schema() -> dict:
 
 def validate(x: Any, schema: dict, where: str = "$") -> list[str]:
     """The schema's problems with `x`: the subset of JSON Schema `answer_schema` uses (type, enum, required, properties,
-    additionalProperties, items)."""
+    additionalProperties (false, or a schema), items)."""
     kinds = {"object": dict, "array": list, "string": str}
     t = schema.get("type")
     if t and not isinstance(x, kinds[t]):
@@ -77,6 +85,10 @@ def validate(x: Any, schema: dict, where: str = "$") -> list[str]:
             out += [f"{where}: unexpected field {k}" for k in sorted(set(x) - set(props))]
         for k in sorted(set(x) & set(props)):
             out += validate(x[k], props[k], f"{where}.{k}")
+        extra = schema.get("additionalProperties")
+        if isinstance(extra, dict):                      # every other member is checked against this schema
+            for k in sorted(set(x) - set(props)):
+                out += validate(x[k], extra, f"{where}.{k}")
     if t == "array":
         for i, v in enumerate(x):
             out += validate(v, schema["items"], f"{where}[{i}]")
@@ -141,7 +153,13 @@ answers, and do not try to find one.
 5. Never invent an input. If something needed is missing, list it in `missing_inputs`. A result that is genuinely undetermined by
    the stipulated inputs is a valid answer: give the field as `null` or `"undetermined"`, say why, and name what is missing. If you
    cannot run the specified check at all (no source, no operation), set `status` to `blocked` and state the reason.
-6. List your assumptions, and the ids of the model objects (values, compositions, identities) your answer rests on.
+6. State every number your answer relies on in `quantities`: a plain descriptive label (what the number is, in words), its value, unit,
+   scale (thousand, million, billion ...), the period it is for and the scope where they matter. The labels are for a reader, not a
+   schema: describe the quantity, do not abbreviate it.
+7. Find out whether the model already holds a quantity (`model-construction`, `model-get`, the export). If it does, cite the
+   object's id in `objects` and in that quantity's `object_id`. Do not cite an id you have not seen in a tool result.
+8. When the question involves a mechanism or an accounting treatment, state them explicitly and apart: the mechanism by which an
+   effect arises, and the account it lands in, when it is recognized and on what basis. Say what is not determined, and why.
 
 ## Return contract
 
@@ -251,6 +269,7 @@ def internal_of(suite: il.Suite, packets: Path, case: dict, ans: dict) -> dict:
         "scope": scope or il.na("the answer states no period, unit or scope"),
         "evidence_and_objects": {"evidence": evidence, "objects": objects} if evidence or objects
         else il.na("the answer cites no source page or model object"),
+        "quantities": ans.get("quantities", []),
         "calculations": logged + declared,
         "baseline": ans.get("baseline") or il.na("isolated arithmetic or no baseline stated: none is invented"),
         "assumptions_and_missing": {"assumptions": ans.get("assumptions", []), "unresolved": ans.get("missing_inputs", [])},
