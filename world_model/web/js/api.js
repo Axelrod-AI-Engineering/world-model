@@ -139,6 +139,7 @@ export const api = {
   group: (body) => post("/structure/group", body),
   dissolve: (pattern_id, reason, by = "human") => post("/structure/dissolve", { pattern_id, reason, by }),
   retire: (body) => post("/structure/retire", body),
+  relabelClusters: () => post("/clusters/relabel"),
   examples: () => get("/examples"),
   runExample: (id, manual = null) => post(`/examples/${q(id)}`, manual ? { manual } : undefined),
   prepareExample: (id) => post(`/examples/${q(id)}/prepare`),

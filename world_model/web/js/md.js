@@ -4,7 +4,7 @@
 // heading become a numbered reference list.
 import { esc } from "./util.js";
 
-const slug = (t) => t.toLowerCase().replace(/<[^>]+>/g, "").replace(/[^\w\s-]/g, "").trim().replace(/\s+/g, "-");
+const slug = (t) => t.toLowerCase().replace(/[^\w\s-]/g, "").trim().replace(/\s+/g, "-");
 
 function inline(text) {
   let s = esc(text);

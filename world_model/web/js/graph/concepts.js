@@ -58,3 +58,28 @@ export function conceptGroups(view) {
   }
   return { groups: [...byKey.values()], byKey, ofEntity };
 }
+
+// The same shape from the nested superentities the server computes (view.clusters, api/hierarchy.py): groups of groups,
+// each a region of the layout. Their members sit together, so a collapsed group can stand for its region, and the
+// arrangement stays the same whatever the zoom. Falls back to the taxonomy's concepts when the view has none.
+export function clusterGroups(view) {
+  const byKey = new Map();
+  const groups = [];
+  const cs = view?.clusters ?? [];
+  const keyOf = (id) => `cluster:${id}`;
+  for (const c of cs) {
+    const g = { key: keyOf(c.id), cluster: c.id, members: new Set(c.members), children: c.children.map(keyOf),
+                parents: c.parent ? [keyOf(c.parent)] : [], transient: false, level: c.depth };
+    byKey.set(g.key, g);
+    groups.push(g);
+  }
+  // an entity belongs to its group and every group above it, deepest last
+  const ofEntity = new Map();
+  for (const g of [...groups].sort((a, b) => a.level - b.level)) {
+    for (const m of g.members) {
+      if (!ofEntity.has(m)) ofEntity.set(m, []);
+      ofEntity.get(m).push(g.key);
+    }
+  }
+  return { groups, byKey, ofEntity };
+}

@@ -188,6 +188,24 @@ async def get_state(request: Request, version: int | None = None) -> dict:
     return await st.call(lambda: _json(st.controller.state_view(version)))
 
 
+@router.post("/clusters/relabel")
+async def post_relabel_clusters(request: Request) -> dict:
+    """Ask the configured language model (temperature 0) to name the superentities the cache lacks. Answers are cached by a
+    hash of the members' ids, so a name never changes afterwards; with no provider set, nothing is called (501)."""
+    from axelrod_wm.api import hierarchy
+    from axelrod_wm.intake.translators import LLMNotConfigured
+
+    labels = hierarchy.LABELS
+    if labels is None or labels.provider is None:
+        raise LLMNotConfigured("no language model is configured: set WORLD_MODEL_LLM_PROVIDER (anthropic or openai) "
+                               "and its API key; superentities keep the names their words give them")
+    st = S(request)
+    view = await st.call(lambda: _json(st.controller.state_view(None)))
+    names = {e["id"]: e["name"] for e in view["entities"]}
+    fresh, failed = await asyncio.to_thread(labels.relabel, view["clusters"], names)
+    return {"relabelled": fresh, "failed": failed, "provider": labels.provider.name}
+
+
 @router.get("/versions")
 async def get_versions(request: Request) -> list:
     st = S(request)

@@ -121,6 +121,22 @@ class HullView(_V):
     pattern_open: float = 1.0         # its pattern's reserve, beside its rivals, for a group not seen yet
 
 
+class ClusterView(_V):
+    """A group of groups (api/hierarchy.py): the canvas draws these at low zoom and reveals members as the view closes in."""
+
+    id: str
+    parent: str | None
+    depth: int
+    label: str
+    keywords: list[str]
+    source: str                       # "keywords" (deterministic) or "llm" (cached relabel)
+    size: int
+    subentities: int
+    children: list[str]
+    entity_ids: list[str]             # entities held directly, in no child group
+    members: list[str]                # every entity in the group
+
+
 class SuperLinkView(_V):
     id: str
     source: str
@@ -176,6 +192,7 @@ class GraphView(_V):
     links: list[LinkView]
     entity_links: list[EntityLinkView]
     hulls: list[HullView]
+    clusters: list[ClusterView] = []
     super_links: list[SuperLinkView]
     frontier: list[FrontierLineView]
     fuzzy: list[FuzzyView]
@@ -319,6 +336,11 @@ def build_graph_view(wm: WorkingMemory, ltm: LongTermMemory, controller: WorldMo
                               interaction_ids=list(inst.interaction_ids), origin=str(p.origin),
                               description=p.description, sub_pattern_ids=list(p.sub_pattern_ids),
                               open=inst_open.get(iid, 1.0), pattern_open=pat_open.get(p.id, 1.0)))
+    from axelrod_wm.api.hierarchy import clusters_for
+
+    clusters = [ClusterView(**c) for c in clusters_for(
+        entities, [(el.source, el.target, el.significance) for el in ent_links],
+        [h.members for h in hulls if not h.transient and h.status != "dissolved"])]
     sups = [SuperLinkView(id=s.id, source=s.source_instance_id, target=s.target_instance_id, kind=str(s.kind),
                           label=s.label, interaction_ids=list(s.underlying_interaction_ids),
                           shared_entity_ids=list(s.shared_entity_ids), significance=round(s.significance, 4))
@@ -344,7 +366,7 @@ def build_graph_view(wm: WorkingMemory, ltm: LongTermMemory, controller: WorldMo
                       "current_day": wm.deviations.date_of(min(cur, run.last_day)).isoformat()}
     today = wm.deviations.date_of(wm.last_processed_day).isoformat() if wm.last_processed_day >= 0 else None
     return GraphView(version=version, sim_time=wm.clock, entities=entities, subentities=subs, links=links,
-                     entity_links=ent_links, hulls=hulls, super_links=sups, frontier=frontier, fuzzy=fuzzy,
+                     entity_links=ent_links, hulls=hulls, clusters=clusters, super_links=sups, frontier=frontier, fuzzy=fuzzy,
                      proposals_pending=pending, palettes=dict(ltm.object_generalizations.palettes),
                      read_only=controller is not None and version != controller.engine.version, update=update,
                      today=today)

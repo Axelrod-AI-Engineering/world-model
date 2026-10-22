@@ -1,13 +1,14 @@
 // The canvas (§13.3). Drawing sits behind the GraphRenderer interface, so a canvas or WebGL renderer
 // can replace SVG if the node count passes about 2,000.
 /* global d3 */
-import { conceptGroups, conceptStyles } from "./concepts.js";
+import { clusterGroups, conceptGroups, conceptStyles } from "./concepts.js";
 import { densityCurve } from "../charts/density.js";
 import { createSimulation, resolveCollisions, staticLayout } from "./forces.js";
 import { drawRibbons, prettyNode } from "./fuzzy.js";
 import { buildGroups, hullContourCached, hullPolygon, PAD, superentityMarks } from "./hulls.js";
 import { figurePosition, slotPosition } from "./layouts.js";
-import { computeModel, fmtMove, fmtValue, GEOM, kinKey, ROW_GEOM, rowCenterY, rowLabels, textWidth, truncate, valueWidth } from "./model.js";
+import { computeModel, fmtMove, fmtValue, GEOM, kinKey, pillWidth, ROW_GEOM, rowCenterY, rowLabels, textWidth, truncate, valueWidth } from "./model.js";
+import { createSemantic } from "./semantic.js";
 import { openNode } from "./open-node.js";
 import { createAttention } from "./attention.js";
 import { filterView } from "./isolate.js";
@@ -42,7 +43,9 @@ export class GraphRenderer {
 const ARROW = 8;                // arrowhead length (world units): a routed edge stops this far from the border
 const EDGE_IN_MS = 300;         // an interaction that is new draws itself in from its cause
 const EDGE_OUT_MS = 180;
-const LABEL_SETTLE = 3;        // layouts in a row a hidden label needs room before it shows again
+const LABEL_SETTLE = 3;         // layouts in a row a hidden label needs room before it shows again
+const LABEL_MIN_K = 0.5;        // below this zoom an interaction's label would be under 6 px: none is drawn
+const MAX_LABELS = 36;          // labels drawn at once, the most significant first (Oct 22)
 // theme colors, read once a frame: reading computed style on every tick forced the page's styles to be recomputed
 const cssCache = new Map();
 const css = (name) => {
@@ -76,7 +79,7 @@ export class SvgRenderer extends GraphRenderer {
     this.svg = d3.select(container).select("svg");
     this.defs = this.svg.append("defs");
     this.makeMarkers();
-    const grid = installGrid(this.svg, this.defs);
+    const grid = installGrid(this.svg);
     this.root = this.svg.append("g").attr("class", "root");
     this.layers = {};
     for (const name of ["lane", "netlines", "edges", "frontier", "ghosts", "fuzzy", "nodes", "overlays"]) {
@@ -99,6 +102,7 @@ export class SvgRenderer extends GraphRenderer {
     this.marks = new Map();
     // the taxonomy's concepts, which arrange the canvas (graph/concepts.js); not drawn either
     this.layoutGroups = { groups: [], byKey: new Map(), ofEntity: new Map() };
+    this.arrangement = this.layoutGroups;     // the groups the layout nests its regions by: the superentities, else the concepts
     this.model = null;
     this.subIndex = new Map();
     this.highlight = null;
@@ -115,7 +119,7 @@ export class SvgRenderer extends GraphRenderer {
     this.sim = createSimulation({
       getMode: () => this.mode,
       getBlocks: () => this.blocks(),
-      getGroups: () => this.layoutGroups.groups,
+      getGroups: () => this.arrangement.groups,
       groupByCategory: () => this.opts.groupByCategory,
       onTick: () => this.ticked(),
     });
@@ -128,9 +132,11 @@ export class SvgRenderer extends GraphRenderer {
     this.autoDetail = true;
     this.attention = createAttention("default");
     this.lod = createLOD(this, this.attention);
+    // Oct 22: groups of groups at low zoom, members as the view closes in (graph/semantic.js)
+    this.sem = createSemantic(this, { pillWidth });
     this.lastMove = 0;
     this.personZoomUntil = 0;
-    this.zoom = createZoom(this.svg, this.root, { grid, onRest: () => this.releaseLayout(), onZoom: (t, byUser) => {
+    this.zoom = createZoom(this.svg, this.root, { grid, onRest: () => { this.releaseLayout(); this.fitClusterTitles(); this.labelsDirty = true; this.layoutLabels(); }, onZoom: (t, byUser) => {
       this.lastMove = performance.now();
       if (byUser) {
         this.autoFrame = false;
@@ -151,6 +157,7 @@ export class SvgRenderer extends GraphRenderer {
       // detail follows zooms a person makes (wheel, pinch, drag, the slider, + and −), never the app's own framing,
       // so the first view stays as laid out
       if (byUser || performance.now() < this.personZoomUntil) this.lod.update();
+      this.sem.update();            // the app's own framing too: the first view is framed after it is drawn
       this.handlers.onZoomChange?.(t);
     } });
     // attention: every half second the view is still, the nodes in its middle count as looked at
@@ -162,7 +169,7 @@ export class SvgRenderer extends GraphRenderer {
         || document.body.classList.contains("gupdate") || document.querySelector("#walkthrough:not(.hidden)");
       if (this.autoFrame && this.mode === "gravity" && !framed) { this.autoFrame = false; this.frameAll(500); }
     });
-    const isBackground = (ev) => ev.target === this.svg.node() || ev.target.closest?.(".grid-bg");
+    const isBackground = (ev) => ev.target === this.svg.node();
     this.svg.on("click", (ev) => { if (isBackground(ev)) this.handlers.onSelect?.(null); });
     this.svg.on("contextmenu", (ev) => {
       if (!isBackground(ev)) return;
@@ -240,6 +247,8 @@ export class SvgRenderer extends GraphRenderer {
     }
     if (mode === "figure1") this.applyFlow();
     this.sim.alpha(mode === "figure1" ? 0.6 : 0.9).restart();
+    // superentities are drawn as boxes in the gravity layout only
+    this.sem.now();
   }
 
   setData(view, extras = {}) {
@@ -285,6 +294,7 @@ export class SvgRenderer extends GraphRenderer {
   hasFixedHome(id) { return this.fixedHome(id) != null; }
 
   entityHome(id) {
+    if (id.startsWith("cl:")) return this.sem.homeOf(id);
     return this.fixedHome(id) ?? (this.byGravity(id) ? this.gravHomes.get(id) : null) ?? this.homes.get(id);
   }
 
@@ -347,23 +357,32 @@ export class SvgRenderer extends GraphRenderer {
 
   recompute(reason) {
     if (!this.view) return;
+    // a change of the cut through the superentities fades; it does not grow or draw itself in
+    this.tierDraw = reason === "tier";
     this.subIndex = new Map(this.view.subentities.map((s) => [s.id, s]));
     this.entIndex = new Map(this.view.entities.map((e) => [e.id, e]));
     this.groupsInfo = buildGroups(this.view, { showCandidates: this.ui.showCandidates,
                                                pendingPatterns: this.extras.pendingPatterns ?? new Set() });
     this.marks = superentityMarks(this.view, this.groupsInfo);
+    // Oct 22: a model with nested superentities (view.clusters) is arranged by them, so each group is a region its box can
+    // stand for; a small model keeps the taxonomy's arrangement
     this.layoutGroups = conceptGroups(this.view);
+    this.arrangement = this.view.clusters?.length ? clusterGroups(this.view) : this.layoutGroups;
+    this.sem.setView(this.view);
     for (const id of [...this.ui.expanded]) if (!this.view.entities.some((e) => e.id === id)) this.ui.expanded.delete(id);
     this.updateHomes();
-    this.model = computeModel(this.view, this.ui);
+    this.model = computeModel(this.view, this.ui, this.sem.active() && this.sem.ready() ? this.sem.shown() : null);
     this.openShifts();
     // an entity opened or closed by hand also grows over a few frames, so its edges and outline follow its border
     this.easeSizes = reason === "lod" || (reason === "structure" && this.animOK());
     const structural = this.syncNodes();
-    const nodes = [...this.nodes.values()];
-    this.sim.nodes(nodes);
-    this.sim.force("link").links(this.model.edges.filter((e) => this.nodes.has(e.a.box) && this.nodes.has(e.b.box))
-      .map((e) => ({ source: e.a.box, target: e.b.box, significance: e.sig })));
+    let nodes = [...this.nodes.values()];
+    const bindSim = () => {
+      this.sim.nodes(nodes);
+      this.sim.force("link").links(this.model.edges.filter((e) => this.nodes.has(e.a.box) && this.nodes.has(e.b.box))
+        .map((e) => ({ source: e.a.box, target: e.b.box, significance: e.sig })));
+    };
+    bindSim();
     // a change of detail (lod) keeps every box's home: an opened entity grows in place and its neighbors step aside
     const unplaced = nodes.some((n) => n.kind === "entity" && this.byGravity(n.id) && !this.gravHomes.has(n.id) && !this.hasFixedHome(n.id));
     // DECISION (Oct 11, supersedes "a change of detail keeps every home"): a change of structure (a new entity) re-packs
@@ -371,8 +390,17 @@ export class SvgRenderer extends GraphRenderer {
     // the entity nearest the middle of the view stays put.
     // Oct 14: the layout is solved at full detail (fullDetail), so a change of detail (lod) moves nothing; only a change of
     // structure (an entity added or retired) lays the graph out again
-    if (reason !== "first" && ((structural && reason !== "lod") || unplaced) && this.blocks()) this.repack();
-    else if (unplaced || reason === "first" || (structural && reason !== "lod")) this.relayout();
+    // Oct 22: a change of the cut through the superentities (tier) moves nothing either: boxes sit at their homes
+    const keepsHomes = reason === "lod" || reason === "tier";
+    if (reason !== "first" && ((structural && !keepsHomes) || unplaced) && this.blocks()) this.repack();
+    else if (unplaced || reason === "first" || (structural && !keepsHomes)) this.relayout();
+    // the first layout gives the groups their regions: only now can they be drawn as boxes
+    if (!this.model.shown && this.sem.active() && this.sem.ready()) {
+      this.model = computeModel(this.view, this.ui, this.sem.shown());
+      this.syncNodes();
+      nodes = [...this.nodes.values()];
+      bindSim();
+    }
     // homes may have moved (a layout); the pushes of open entities follow them
     this.openShifts();
     for (const n of this.nodes.values()) {
@@ -386,9 +414,11 @@ export class SvgRenderer extends GraphRenderer {
       this.ticked(true);
       // the first view (Oct 11): the gravity layout shows the whole graph, with detail following that zoom, so it opens on
       // the top of the hierarchy and zooming in opens it level by level; the hand-placed Figure 1 opens readable
-      setTimeout(() => this.frameAll(0), 30);
+      setTimeout(() => { this.frameAll(0); this.sem.now(); }, 30);
     }
-    if (reason === "lod") {
+    if (reason === "tier") {
+      // a change of the cut through the superentities: boxes appear at their homes and nothing glides or re-frames
+    } else if (reason === "lod") {
       // before a person has moved the view, the first view keeps framing the whole graph as it opens (only the camera
       // moves; the boxes keep their places)
       if (!this.userMoved) this.autoFrame = true;
@@ -397,6 +427,7 @@ export class SvgRenderer extends GraphRenderer {
       if (structural) this.autoFrame = true;
       this.sim.alpha(Math.max(this.sim.alpha(), 0.55)).restart();
     }
+    this.tierDraw = false;
     this.handlers.onDetail?.(this.detailLevel());
   }
 
@@ -421,7 +452,7 @@ export class SvgRenderer extends GraphRenderer {
       else { n.w = b.w; n.h = b.h; n.wGoal = null; n.hGoal = null; }
       Object.assign(n, { kind: b.kind, ref: b.ref, oy: b.oy, box: b, hx: home.x, hy: home.y,
                          tags: b.entity?.category_tags,
-                         groupKeys: this.layoutGroups.ofEntity.get(b.id) ?? [] });
+                         groupKeys: this.arrangement.ofEntity.get(b.id) ?? [] });
       next.set(b.id, n);
     }
     if (old.size !== next.size) structural = true;
@@ -492,7 +523,7 @@ export class SvgRenderer extends GraphRenderer {
       const start = fixed ? (this.fixedHome(b.id) ?? this.homes.get(b.id) ?? { x: 600, y: 440 })
         : was ?? (n ? { x: n.x, y: n.y } : this.homes.get(b.id) ?? { x: 600, y: 440 });
       return { id: b.id, kind: "entity", w: b.w, h: b.h, oy: b.oy, tags: b.entity?.category_tags,
-               groupKeys: this.layoutGroups.ofEntity.get(b.id) ?? [], x: start.x, y: start.y, fixed, anchor: was };
+               groupKeys: this.arrangement.ofEntity.get(b.id) ?? [], x: start.x, y: start.y, fixed, anchor: was };
     });
     const laneIds = new Set(nodes.filter(inLane).map((n) => n.id));
     const links = full.links.filter((l) => !laneIds.has(l.source) && !laneIds.has(l.target));
@@ -500,7 +531,7 @@ export class SvgRenderer extends GraphRenderer {
     // left of effects, nothing overlapping. Later changes keep boxes near their homes with the gravity physics, so a
     // new entity finds its place without reshuffling the rest. Oct 17: the regions are the taxonomy's concepts.
     const fresh0 = fresh || copies.every((c) => !c.anchor);
-    const groups = this.layoutGroups.groups;
+    const groups = this.arrangement.groups;
     const placed = fresh0 && !this.opts.groupByCategory && copies.every((c) => !c.fixed)
       ? hierarchicalLayout(copies, links, groups)
       : staticLayout(copies, links, { groups, groupByCategory: this.opts.groupByCategory });
@@ -648,6 +679,7 @@ export class SvgRenderer extends GraphRenderer {
 
   // A new free entity grows out of the boxes it interacts with (so it arrives next to them, not in a far grid slot).
   startPosition(b, old) {
+    if (this.tierDraw) return this.homeOf(b);
     if (!figurePosition(this.layout, b.id) && !this.hasFixedHome(b.id)) {
       const near = (this.view?.entity_links ?? []).flatMap((l) => (l.source === b.id ? [l.target] : l.target === b.id ? [l.source] : []))
         .map((id) => old.get(id)).filter(Boolean);
@@ -839,9 +871,11 @@ export class SvgRenderer extends GraphRenderer {
 
   // two levels (Oct 17: the superentity level left the canvas with the superentities): every entity closed, or open
   setDetail(level) {
-    this.record({ entity: "close every entity", sub: "open every entity" }[level] ?? level, { camera: true });
-    if (level === "entity") this.ui.expanded.clear();
-    else if (level === "sub") this.ui.expanded = new Set(this.view?.entities.map((e) => e.id) ?? []);
+    this.record({ super: "group into superentities", entity: "close every entity", sub: "open every entity" }[level] ?? level, { camera: true });
+    // Oct 22: three levels: superentities (groups, nothing opened), every entity closed, or open
+    if (level === "super") { this.ui.expanded.clear(); this.sem.setAll(false, false); }
+    else if (level === "entity") { this.ui.expanded.clear(); this.sem.setAll(true, false); }
+    else if (level === "sub") { this.ui.expanded = new Set(this.view?.entities.map((e) => e.id) ?? []); this.sem.setAll(true, false); }
     this.recompute("structure");
     setTimeout(() => this.fit(320), this.opts.reducedMotion ? 30 : 220);
   }
@@ -849,6 +883,11 @@ export class SvgRenderer extends GraphRenderer {
   detailLevel() {
     const nEnt = this.view?.entities.length ?? 0;
     const { expanded } = this.ui;
+    if (this.sem.active() && !expanded.size) {
+      if (![...this.sem.clusters().keys()].some((id) => this.sem.isOpen(id))) return "super";
+      if ([...this.sem.clusters().keys()].every((id) => this.sem.isOpen(id))) return "entity";
+      return null;
+    }
     if (!expanded.size) return "entity";
     if (expanded.size === nEnt) return "sub";
     return null;
@@ -861,6 +900,8 @@ export class SvgRenderer extends GraphRenderer {
     const sub = this.subIndex.get(id);
     const eid = sub ? sub.entity_id : id;
     let changed = false;
+    // Oct 22: the superentities on the way to it open too
+    if (this.sem.active() && this.sem.reveal([eid])) changed = true;
     if (sub && !this.ui.expanded.has(eid)) { this.ui.expanded.add(eid); changed = true; }
     if (changed) {
       if (!this.quiet) {
@@ -958,6 +999,7 @@ export class SvgRenderer extends GraphRenderer {
     this.drawGhosts();
     this.drawFuzzy(false);
     this.drawNodes();
+    this.drawClusters();
     this.applyFocus();
     this.drawnOnce = true;
     this.applyHighlight();
@@ -988,13 +1030,15 @@ export class SvgRenderer extends GraphRenderer {
   }
 
   drawNodes() {
-    const ents = this.model.boxes;
+    const ents = this.model.boxes.filter((b) => b.kind === "entity");
     const sel = this.layers.nodes.selectAll("g.pill:not(.exiting)").data(ents, (d) => d.id);
-    const dur = this.animOK() ? 200 : 0;
+    const fade = this.tierDraw && this.animOK();
+    const dur = this.animOK() && !this.tierDraw ? 200 : 0;
     sel.exit().classed("exiting", true).style("pointer-events", "none")
-      .transition().duration(dur ? 120 : 0).style("opacity", 0).remove();
+      .transition().duration(dur || fade ? 120 : 0).style("opacity", 0).remove();
     const enter = sel.enter().append("g").attr("class", "pill").attr("tabindex", 0).attr("role", "button")
-      .attr("data-kind", "entity");
+      .attr("data-kind", "entity").classed("tier-in", fade);
+    if (fade) setTimeout(() => this.layers.nodes.selectAll(".tier-in").classed("tier-in", false), 320);
     const inner = enter.append("g").attr("class", "inner");
     inner.append("rect").attr("class", "halo");
     inner.append("rect").attr("class", "body").attr("rx", 8);
@@ -1010,7 +1054,13 @@ export class SvgRenderer extends GraphRenderer {
         .transition().duration(dur + 30).ease(d3.easeBackOut.overshoot(1.05)).attr("transform", "scale(1)").style("opacity", 1);
     }
     const all = enter.merge(sel);
-    const subsOf = (d) => this.view.subentities.filter((s) => s.entity_id === d.id);
+    // indexed once: filtering every subentity for every pill was quadratic in the model's size
+    const subsBy = new Map();
+    for (const s of this.view.subentities) {
+      if (!subsBy.has(s.entity_id)) subsBy.set(s.entity_id, []);
+      subsBy.get(s.entity_id).push(s);
+    }
+    const subsOf = (d) => subsBy.get(d.id) ?? [];
     all.attr("data-id", (d) => d.id)
       .classed("loose", (d) => d.entity.loose)
       .classed("open", (d) => d.open)
@@ -1069,6 +1119,74 @@ export class SvgRenderer extends GraphRenderer {
     });
     this.bindNodeEvents(all);
     this.pillSel = all;
+  }
+
+  // A closed superentity (Oct 22): the box around its members, with its keywords as a label that keeps one size on the
+  // screen (fitClusterTitles) so it reads at any zoom. A box fades in and out as the cut changes.
+  drawClusters() {
+    const data = this.model.boxes.filter((b) => b.kind === "cluster");
+    const sel = this.layers.nodes.selectAll("g.cnode:not(.exiting)").data(data, (d) => d.id);
+    const fade = this.animOK();
+    sel.exit().classed("exiting", true).style("pointer-events", "none")
+      .transition().duration(fade ? 160 : 0).style("opacity", 0).remove();
+    const enter = sel.enter().append("g").attr("class", "cnode").attr("tabindex", 0).attr("role", "button")
+      .attr("data-kind", "cluster").classed("tier-in", fade);
+    enter.append("rect").attr("class", "body").attr("rx", 16);
+    const title = enter.append("g").attr("class", "ctitle");
+    title.append("text").attr("class", "cname");
+    title.append("text").attr("class", "csub");
+    if (fade) setTimeout(() => this.layers.nodes.selectAll(".tier-in").classed("tier-in", false), 320);
+    const all = enter.merge(sel);
+    all.attr("data-id", (d) => d.ref).attr("aria-label", (d) => `${d.cluster.label}, a superentity of ${d.cluster.size} entities`);
+    all.select("rect.body").attr("x", (d) => -d.w / 2).attr("y", (d) => d.oy).attr("width", (d) => d.w).attr("height", (d) => d.h);
+    all.select("text.cname").text((d) => d.cluster.label);
+    all.select("text.csub").text((d) => `${d.cluster.size} entities · ${d.cluster.subentities} subentities`);
+    all.classed("llm", (d) => d.cluster.source === "llm").classed("deep", (d) => d.cluster.depth > 1);
+    all.on("click", (ev, d) => { ev.stopPropagation(); this.openCluster(d.ref); })
+      .on("keydown", (ev, d) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); this.openCluster(d.ref); } })
+      .on("contextmenu", (ev, d) => { ev.preventDefault(); ev.stopPropagation(); this.handlers.onContext?.(ev, { kind: "cluster", id: d.ref }); })
+      .on("mouseenter", (ev, d) => { this.setFocus({ box: d.id }); this.handlers.onHover?.(ev, { kind: "cluster", id: d.ref }); })
+      .on("mousemove", (ev) => this.handlers.onHoverMove?.(ev))
+      .on("mouseleave", () => { this.setFocus(null); this.handlers.onHover?.(null); });
+    this.clusterSel = all;
+    this.fitClusterTitles();
+  }
+
+  // A superentity's label is drawn at one size on the screen, however far the view is zoomed out: the box scales with the
+  // map, the words do not. Narrower than its box it wraps to what fits; too small to read, it is left out.
+  fitClusterTitles() {
+    if (!this.clusterSel || this.clusterSel.empty()) return;
+    const k = this.zoom.transform().k;
+    this.clusterSel.each((d, i, els) => {
+      const g = els[i].querySelector("g.ctitle");
+      const name = els[i].querySelector("text.cname");
+      const sub = els[i].querySelector("text.csub");
+      const need = Math.max(textWidth(d.cluster.label, "700 14px Instrument Sans"), textWidth(sub.textContent, "500 11px Instrument Sans"));
+      // a size that reads (14 px on the screen at most; larger when zoomed in, it scales with the box)
+      const s = Math.min(Math.max(1, 1 / k), (d.w - 24) / need);
+      const readable = s * k >= 0.62;
+      g.classList.toggle("lbl-hidden", !readable);
+      g.setAttribute("transform", `translate(0,${d.oy + d.h / 2}) scale(${s.toFixed(3)})`);
+      name.setAttribute("y", -4);
+      sub.setAttribute("y", 12);
+    });
+  }
+
+  zoomToCluster(id) {
+    const box = this.sem.geometry().get(id);
+    if (!box) return;
+    this.zoom.fit([[box.x0, box.y0], [box.x1, box.y1]], this.opts.reducedMotion ? 0 : 420, { pad: this.freePad({ top: 96, right: 40, bottom: 80, left: 40 }), maxK: 1.2 });
+  }
+
+  // Open a closed superentity: its members appear in place, and the view comes in to them when they would be too small
+  openCluster(id) {
+    const box = this.sem.geometry().get(id);
+    this.sem.toggle(id, true);
+    if (!box) return;
+    const k = this.zoom.transform().k;
+    if (Math.sqrt(box.w * box.h) * k < 260) {
+      this.zoom.fit([[box.x0, box.y0], [box.x1, box.y1]], this.opts.reducedMotion ? 0 : 420, { pad: this.freePad({ top: 96, right: 40, bottom: 80, left: 40 }), maxK: 1.2 });
+    }
   }
 
   // Color by (Oct 9): one question at a time. "change" tints each pill by its largest move from normal (green up, red
@@ -1295,12 +1413,20 @@ export class SvgRenderer extends GraphRenderer {
     const anim = this.animOK();
     sel.exit().each((d, i, els) => {
       const gone = !(d.ids ?? []).some((x) => ids.has(x));
-      if (!anim || !gone) { els[i].remove(); return; }
+      if (!anim || !gone || this.tierDraw) { els[i].remove(); return; }
       d3.select(els[i]).classed("exiting", true).classed("entering", false).style("pointer-events", "none")
         .transition("exit").duration(EDGE_OUT_MS).ease(d3.easeCubicOut).style("opacity", 0).remove();
     });
     const enter = sel.enter().append("g").attr("class", "edge");
-    if (anim && before) enter.filter((d) => !(d.ids ?? []).some((x) => before.has(x))).classed("entering", true);
+    if (anim && this.tierDraw) {
+      // one fade for the whole layer of arrows, not one per arrow: an animated element is a compositor layer of its own,
+      // and a hundred long arrows fading at once were a hundred large layers
+      const layer = this.layers.edges.node();
+      layer.classList.remove("tier-dip");
+      void layer.getBoundingClientRect();
+      layer.classList.add("tier-dip");
+      setTimeout(() => layer.classList.remove("tier-dip"), 320);
+    } else if (anim && before) enter.filter((d) => !(d.ids ?? []).some((x) => before.has(x))).classed("entering", true);
     enter.append("path").attr("class", "hit");
     enter.append("path").attr("class", "line");
     enter.append("path").attr("class", "flow");
@@ -1489,7 +1615,15 @@ export class SvgRenderer extends GraphRenderer {
     items.sort((a, b) => b.pri - a.pri);
     const FS = [0.5, 0.4, 0.6, 0.3, 0.7, 0.22, 0.78];
     let waiting = false;
+    // a cap, by priority, and none at all when the view is too far out to read them (Oct 22)
+    const cap = this.zoom.transform().k < LABEL_MIN_K ? 0 : MAX_LABELS;
+    let placed = 0;
     for (const it of items) {
+      if (placed >= cap && !it.now) {
+        it.el.classList.add("lbl-hidden");
+        it.badge?.classList.add("lbl-hidden");
+        continue;
+      }
       const w = textWidth(it.text, it.font) + 8;
       const was = it.el.__lbl;
       let spot = null;
@@ -1516,6 +1650,7 @@ export class SvgRenderer extends GraphRenderer {
       it.el.setAttribute("x", spot.x);
       it.el.setAttribute("y", spot.y);
       occupied.push(spot.r);
+      placed += 1;
       if (it.badge) {
         const b = { x0: spot.r.x1 + 2, x1: spot.r.x1 + 11, y0: spot.r.y0, y1: spot.r.y1 };
         const ok = free(b);
@@ -1622,6 +1757,7 @@ export class SvgRenderer extends GraphRenderer {
       }
     }
     this.pillSel?.attr("transform", (d) => { const n = this.nodes.get(d.id); return n ? `translate(${n.x},${n.y})` : null; });
+    this.clusterSel?.attr("transform", (d) => { const n = this.nodes.get(d.id); return n ? `translate(${n.x},${n.y})` : null; });
     this.tickEdges();
     this.enterEdges();
     this.tickFrontier();
@@ -1897,6 +2033,15 @@ export class SvgRenderer extends GraphRenderer {
   // mid-animation, so a step that also opens entities frames the settled picture.
   frame(ids, { top = 0, left = 0, right = 0, duration = 360, maxK = 1.0 } = {}) {
     if (!this.model) return false;
+    // Oct 22: what is framed is shown: the superentities that hold it open first
+    if (this.sem.active()) {
+      const eids = (ids ?? []).flatMap((raw) => {
+        const id = String(raw ?? "").replace(/^new:/, "");
+        const gk = this.groupsInfo.ofInstance.get(id) ?? (this.groupsInfo.byKey.has(id) ? id : null);
+        return gk ? [...(this.groupsInfo.byKey.get(gk)?.members ?? [])] : [this.subIndex.get(id)?.entity_id ?? (id.includes(".") ? id.split(".")[0] : id)];
+      });
+      if (this.sem.reveal(eids)) this.recompute("tier");
+    }
     const boxes = new Set();
     for (const raw of ids ?? []) {
       const id = String(raw ?? "").replace(/^new:/, "");
