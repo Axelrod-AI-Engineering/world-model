@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from axelrod_wm.model.construction import composition_role, validate_construction
+from axelrod_wm.model.interaction import FIXED_EDGE_TYPES
 
 UNKNOWN = "unknown"
 
@@ -128,8 +129,10 @@ def construction_view(graph: Any, entity_id: str) -> dict:
     problems = [p for p in validate_construction(graph) if entity_id in p or any(x in p for x in mine)]
     return {"entity_id": entity_id, "name": ent.name, "attributes": attributes, "compositions": comps,
             "identities": identities, "stock_flows": stock_flows, "matrices": matrices, "paths": paths,
-            "links": {"total": len(links), "calibrated": sum(1 for i in links if i.quantified),
-                      "uncalibrated": sum(1 for i in links if not i.quantified),
+            "links": {"total": len(links),
+                      "sized_causal": sum(1 for i in links if i.edge_type not in FIXED_EDGE_TYPES and i.quantified),
+                      "uncalibrated_causal": sum(1 for i in links if i.edge_type not in FIXED_EDGE_TYPES and not i.quantified),
+                      "fixed": sum(1 for i in links if i.edge_type in FIXED_EDGE_TYPES),
                       "accounting": sum(1 for i in links if str(i.edge_type) == "accounting"),
                       "identity": sum(1 for i in links if str(i.edge_type) == "identity"),
                       "stock_flow": sum(1 for i in links if str(i.edge_type) == "stock_flow"),
@@ -198,9 +201,10 @@ def to_markdown(view: dict) -> str:
     """The readable view: compositions, then each path as a chain and a transition table."""
     lines = [f"# {view['name']}: business construction", ""]
     lk = view["links"]
-    lines += [f"{lk['total']} links touch its values: {lk['calibrated']} calibrated, {lk['uncalibrated']} uncalibrated "
-              f"(represented, size unknown), {lk['accounting']} accounting, {lk['identity']} identity, "
-              f"{lk['stock_flow']} stock-flow; {lk['state_dependent']} state-dependent; {lk['with_transition']} carry a "
+    lines += [f"{lk['total']} links touch its values: {lk['sized_causal']} sized causal, {lk['uncalibrated_causal']} "
+              f"uncalibrated causal (represented, size unknown), and {lk['fixed']} fixed by construction "
+              f"({lk['accounting']} accounting, {lk['identity']} identity, {lk['stock_flow']} stock-flow; their weights are "
+              f"derived, not estimated); {lk['state_dependent']} state-dependent; {lk['with_transition']} carry a "
               "transition.", ""]
     names = {a["id"]: a["name"] for a in view["attributes"]}
     if view["compositions"]:
@@ -322,21 +326,35 @@ COMMON_WORDS = frozenset(
 
 
 def keyword_risks(graph: Any, entity_id: str) -> list[dict]:
-    """The company's values whose head word (the gazetteer's single-word keyword) is a common English word."""
+    """The company's values the extraction gazetteer would match on a common English word.
+
+    Mirrors the gazetteer (axelrod_ingest/gazetteer.py): the last word of a value's own phrase (its id's slot in words,
+    and its name without the entity's leading words, parentheses dropped) becomes a head keyword only when it is a word
+    of more than two letters AND exactly one of the entity's values ends in it (two values with one head make no
+    keyword, so nothing can match). A head keyword matches only right after the entity's name or its possessive
+    ("Toyota's total"), or as the label of a short key-data line, so the warning is for values whose unique head is a
+    common word (`COMMON_WORDS`)."""
     ent = graph.entities[entity_id]
     mine = set(re.findall(r"[a-z0-9]+", " ".join([ent.name, *ent.aliases]).lower()))
-    out = []
+    owners: dict[str, set[str]] = {}
     for sid in ent.subentity_ids:
         s = graph.subentities.get(sid)
         if s is None:
             continue
-        phrases = [sid.split(".", 1)[-1].replace("_", " "),
-                   " ".join(w for w in re.findall(r"[a-z0-9]+", re.sub(r"\([^)]*\)", "", s.name.lower()))
-                            if w not in mine)]
-        heads = sorted({p.split()[-1] for p in phrases if len(p.split()) > 1} & COMMON_WORDS)
-        if heads:
-            out.append({"value_id": sid, "name": s.name, "keywords": heads})
-    return out
+        name = re.sub(r"\([^)]*\)", "", s.name.lower())
+        words = re.findall(r"[a-z0-9]+", name)
+        lead = 0
+        while lead < len(words) - 1 and words[lead] in mine:
+            lead += 1
+        phrases = [sid.split(".", 1)[-1].replace("_", " ").split(), words[lead:]]
+        for w in phrases:
+            if len(w) > 1 and w[-1].isalpha() and len(w[-1]) > 2:
+                owners.setdefault(w[-1], set()).add(sid)
+    out: dict[str, set[str]] = {}
+    for head in sorted(owners):
+        if head in COMMON_WORDS and len(owners[head]) == 1:
+            out.setdefault(next(iter(owners[head])), set()).add(head)
+    return [{"value_id": sid, "name": graph.subentities[sid].name, "keywords": sorted(h)} for sid, h in sorted(out.items())]
 
 
 # -- sources and citations (Oct 18)-------------------------------------------------------------------------------------

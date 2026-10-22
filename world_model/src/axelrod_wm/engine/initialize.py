@@ -191,6 +191,11 @@ def read_construction(d: Path) -> tuple[dict, dict[str, str]]:
     # entities, new entities, interactions, readable paths, and compositions
     for f in sorted((d / "construction").glob("*.yaml")) if (d / "construction").is_dir() else []:
         doc = yaml.safe_load(f.read_text()) or {}
+        # a file's own entities first, so its top-level `subentities:` may name them (and an earlier file's)
+        for e in doc.get("entities", []) or []:
+            origin[str(e.get("id"))] = f.stem
+            origin.update({str(s.get("id")): f.stem for s in e.get("subentities", []) or []})
+        data["entities"] += doc.get("entities", []) or []
         by_id = {e.get("id"): e for e in data["entities"]}
         for extra in doc.get("subentities", []) or []:
             owner = by_id.get(extra.get("entity"))
@@ -198,10 +203,6 @@ def read_construction(d: Path) -> tuple[dict, dict[str, str]]:
                 raise ConstructionError(f"{f.name}: value {extra.get('id')!r} names unknown entity {extra.get('entity')!r}")
             owner.setdefault("subentities", []).append({k: v for k, v in extra.items() if k != "entity"})
             origin[str(extra.get("id"))] = f.stem
-        for e in doc.get("entities", []) or []:
-            origin[str(e.get("id"))] = f.stem
-            origin.update({str(s.get("id")): f.stem for s in e.get("subentities", []) or []})
-        data["entities"] += doc.get("entities", []) or []
         by_id = {e.get("id"): e for e in data["entities"]}
         for act in doc.get("corporate_actions", []) or []:
             owner = by_id.get(act.get("entity"))

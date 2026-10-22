@@ -24,7 +24,9 @@ company's page holds its gap register and completion report (AIB Group, China Co
 Komatsu, Morgan Stanley, MS&AD, SoftBank Corp, Tokio Marine, Toyota with its before-and-after of the review, and
 UniCredit). Those pages are client content: they are local, not tracked, and live in the client root as
 `docs/construction/<company>.md` (`WORLD_MODEL_CLIENT_DIR`, default `data/clients`; see
-[the deployment guide](../../../docs/deployment.md#client-content)). A narrowed world of some covered companies and the
+[the deployment guide](../../../docs/deployment.md#client-content)). A private client root needs `scenarios/<id>/scenario.yaml`
+and `configs/<name>.yaml` beside `worlds/<name>/`, not `worlds/` alone: every script loads a world through a scenario, and a
+root without one stops with "no scenario ..." naming the folders it searched. A narrowed world of some covered companies and the
 players they connect to is in [focus.md](focus.md) (Oct 18). The pipeline as a whole, stage by stage, is in
 [pipeline.md](pipeline.md).
 
@@ -176,13 +178,17 @@ uv run python world_model/scripts/construction/inputs.py sally_demo --entities t
   it contains (the input's name and its extra terms), plus the share of the name's words it contains (stopwords
   dropped, plurals folded). A passage is a candidate only if it holds a phrase, or at least three in five of the words
   (two at minimum, or the only one). Candidates sort by score, then file, then location, so a rerun gives the same report.
-- **What it writes.** `<corpus>/construction/<company>/input_search.json` and `.md`: per input, the queries, the
-  files searched, and the best candidate passages with file and location. It refuses to write where git would track
-  the report, since the passages are client text. It never edits a world file.
+- **What it writes.** `<out>/<company>/input_search.json` and `.md`: per input, the queries, the
+  files searched, and the best candidate passages with file and location. `--out` defaults to the work folder
+  `<data>/work/<corpus folder name>/construction` (`data/work/sally/construction` for `data/sources/sally`); the corpus is
+  only read. It refuses to write where git would track the report, since the passages are client text. It never edits a
+  world file.
 - **What it suggests.** Candidates found: `found_not_connected`. Read the passage, then bind it (a value, an
   observation, or a citation) and mark the input `found_connected`. Nothing found: `not_disclosed_in_reviewed_sources`,
   with `searched` = the files and `corpus: <query>` entries it ran.
-- **The check** prints each company's inputs by status and every input still `not_yet_reviewed`.
+- **The check** prints each company's inputs by status and every input still `not_yet_reviewed`. Its link summary keeps
+  what is estimated apart from what is fixed: `N sized causal, M uncalibrated causal, K fixed (accounting a, identity i,
+  stock-flow s)`. An accounting, identity or stock-flow link carries a derived weight, so it is never counted as sized.
 
 Code: `context/construction.py` (`input_needs`, `inputs_by_status`, `search_inputs`, `search_markdown`).
 
@@ -290,7 +296,10 @@ stock_flows:
   level is the stock's own baseline path, not added by the link. The weight is linearized at the construction levels.
 - **Check.** `reconcile_stock_flows(graph, bundle_series(bundle))` checks closing = opening + inflows - outflows
   between each pair of dated stock levels, summing the flows dated in between (`check.py --reconcile --baselines`).
-  The model's own levels (one per value) cannot check a roll-forward.
+  The model's own levels (one per value) cannot check a roll-forward. A level is dated by the window it describes: the
+  item's `occurred_at` (a period end, a balance-sheet date), and only without one by `published_at`. A flow reported in a
+  later notice still belongs to its own period. `bundle_availability` gives each level's publication day, and the check
+  prints it beside the dates.
 - **Export.** `dependency_type: accounting_identity`, `axelrod.identity` with the roll-forward, the period, and how
   it computes; the stock-flow under `financial_identities` with `form: stock_flow`.
 
@@ -416,9 +425,13 @@ and stocks are endpoints too.
 - **Public but not supplied.** `support: public_not_supplied` (a claim the company discloses publicly, not in the
   supplied material) and the input status `disclosed_not_supplied` (it needs `searched`; say where in the `note`),
   apart from `not_disclosed_in_reviewed_sources`.
-- **Extraction keywords.** check.py prints `KEYWORD` for a value whose head word (the last word of its id's slot, or
-  of its name without the company's words) is a common English word: the ingest gazetteer would match it anywhere
-  ("securities held" made "held" a keyword). `context/construction.keyword_risks`.
+- **Extraction keywords.** check.py prints `KEYWORD` for a value whose head word is a common English word and really
+  becomes an extraction keyword. The ingest gazetteer makes the last word of a value's own phrase (its id's slot in words,
+  and its name without the company's leading words) a head keyword only when it has more than two letters and exactly
+  one of the company's values ends in it; two values sharing a last word ("securities held" and "loans held") make no
+  keyword, so nothing is flagged. A head keyword matches right after the company's name or possessive ("the ECB held",
+  "Acme's total") or as the label of a short key-data line, not anywhere. The words that count as common are a fixed list
+  (`COMMON_WORDS`), because a word's frequency in prose cannot be read from the model. `context/construction.keyword_risks`.
 - **Joint shocks.** An all-currency sensitivity is one scenario moving several sources; scenario calibration
   attributes it across their links when other scenarios separate them (else it is refused as underdetermined).
 - **Horizon-dependent responses.** A book neutral in year one and positive in year two is two links from one source:

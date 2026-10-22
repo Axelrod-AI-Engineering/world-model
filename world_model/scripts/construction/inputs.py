@@ -7,13 +7,14 @@
 Reads the world's files (never edits them), collects the inputs of every link that touches the company's values
 (`transition.unresolved`), parses the files (axelrod_ingest.parse) and scores each line of each page, sheet, or slide
 against the input's name, its words, and any extra terms (context/construction.search_inputs: plain, deterministic
-keyword scoring). Writes <corpus>/construction/<company>/input_search.json and .md (the candidate passages per input, with
-file and location) and prints a suggested status per input: candidates found -> found_not_connected (confirm and bind
+keyword scoring). Writes <out>/<company>/input_search.json and .md (the candidate passages per input, with
+file and location); `--out` defaults to the work folder `<data>/work/<corpus folder name>/construction`
+(data/work/sally/construction for data/sources/sally), never the corpus. It prints a suggested status per input: candidates found -> found_not_connected (confirm and bind
 it); nothing found -> not_disclosed_in_reviewed_sources, with the files and queries searched.
 
 Files are --files, else every supported file under --dirs, else under --corpus; relative paths are read against
 --corpus. Folders named in --exclude (default: construction, bench) are skipped. The report holds client text: it is
-written only under the corpus folder and refused inside a tracked part of the repository.
+written only where git ignores it: a report folder that git would track is refused. The corpus is read and never written.
 """
 
 from __future__ import annotations
@@ -25,7 +26,7 @@ import sys
 from pathlib import Path
 
 from axelrod_ingest.parse import ParseError, parse, supported
-from axelrod_wm.clients import find_world
+from axelrod_wm.clients import DATA_DIR, find_world
 from axelrod_wm.context.construction import input_needs, search_inputs, search_markdown
 from axelrod_wm.engine.initialize import ConstructionSpec, resolve_path, world_taxonomy_dir
 
@@ -61,6 +62,11 @@ def corpus_files(corpus: Path, files: list[str], dirs: list[str], exclude: list[
     return out
 
 
+def default_out(corpus: Path) -> Path:
+    """Where a corpus's reports go when --out is not given: the client's work folder, outside the corpus."""
+    return DATA_DIR / "work" / corpus.resolve().name / "construction"
+
+
 def tracked(path: Path) -> bool:
     """Whether `path` lies in the repository and git would track it (it is not ignored)."""
     r = subprocess.run(["git", "-C", str(path.parent), "check-ignore", "-q", str(path)], capture_output=True)
@@ -72,7 +78,8 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("world", help="a world name (world_model/examples/worlds/<name>) or folder")
     ap.add_argument("--entities", nargs="+", required=True)
-    ap.add_argument("--corpus", type=Path, required=True, help="the client's material; the report is written under it")
+    ap.add_argument("--corpus", type=Path, required=True, help="the client's material (read only)")
+    ap.add_argument("--out", type=Path, help="the folder for <company>/input_search.*; default <data>/work/<corpus name>/construction")
     src = ap.add_mutually_exclusive_group()
     src.add_argument("--files", nargs="+", default=[])
     src.add_argument("--dirs", nargs="+", default=[])
@@ -102,7 +109,7 @@ def main(argv: list[str] | None = None) -> int:
         needs = input_needs([(x.id, x.transition) for x in sorted(spec.interactions, key=lambda x: x.id)
                              if x.source in own or x.target in own])
         rows = search_inputs(needs, docs, extra, a.top)
-        out = a.corpus / "construction" / eid
+        out = (a.out or default_out(a.corpus)) / eid
         out.mkdir(parents=True, exist_ok=True)
         if tracked(out / "input_search.json"):
             print(f"REFUSED {out} is tracked by git; the report holds client text")

@@ -805,26 +805,42 @@ def reconcile_matrices(graph: Any, levels: dict[str, float] | None = None, toler
     return rows
 
 
-def bundle_series(bundle: dict) -> dict[str, list[tuple[str, float]]]:
-    """Every level an axelrod.import/v1 bundle observes, per value, as (publication date, level) in date order (one
-    level per value and date: the later in the file)."""
-    seen: dict[str, dict[str, float]] = {}
+def _observed(bundle: dict) -> dict[str, dict[str, tuple[str, float]]]:
+    """Each observed value of a bundle -> {date it describes: (date it was published, level)}; one level per value and
+    date, the later in the file. An item describes the day it `occurred_at` (a reported figure's period end, a balance
+    sheet date); without one it describes its publication day."""
+    seen: dict[str, dict[str, tuple[str, float]]] = {}
     for item in bundle.get("items") or []:
-        at = str(item.get("published_at") or "")[:10]
+        published = str(item.get("published_at") or "")[:10]
+        at = str(item.get("occurred_at") or "")[:10] or published
         for sig in item.get("signals") or []:
             if sig.get("type") == "observe" and sig.get("value_of") is not None and sig.get("value") is not None:
-                seen.setdefault(sig["value_of"], {})[at] = float(sig["value"])
-    return {sid: sorted(d.items()) for sid, d in sorted(seen.items())}
+                seen.setdefault(sig["value_of"], {})[at] = (published, float(sig["value"]))
+    return seen
 
 
-def reconcile_stock_flows(graph: Any, series: dict[str, list[tuple[str, float]]],
-                          tolerance: float = TOLERANCE) -> list[dict]:
+def bundle_series(bundle: dict) -> dict[str, list[tuple[str, float]]]:
+    """Every level an axelrod.import/v1 bundle observes, per value, as (date it describes, level) in date order (one
+    level per value and date: the later in the file). A flow is dated by the window it occurred in (`occurred_at`, the
+    period end), never by its notice's publication date (Oct 18); `bundle_availability` gives when each was published."""
+    return {sid: sorted((at, lvl) for at, (_pub, lvl) in d.items()) for sid, d in sorted(_observed(bundle).items())}
+
+
+def bundle_availability(bundle: dict) -> dict[str, dict[str, str]]:
+    """Per value and described date (the dates of `bundle_series`), the day the figure was published: when a reader
+    could first have known it."""
+    return {sid: {at: pub for at, (pub, _lvl) in sorted(d.items())} for sid, d in sorted(_observed(bundle).items())}
+
+
+def reconcile_stock_flows(graph: Any, series: dict[str, list[tuple[str, float]]], tolerance: float = TOLERANCE,
+                          available: dict[str, dict[str, str]] | None = None) -> list[dict]:
     """For each stock-flow and each pair of consecutive dated stock levels (`bundle_series` of the baselines): does
     closing = opening + inflows - outflows, the flows summed over the levels dated after the opening and up to the
     closing? A roll-forward needs two dated stock levels, so the model's own levels (one per value) cannot check it.
 
     Each row: the stock-flow, the dates, the opening and closing levels, each flow's sum, the implied closing, the
-    difference and relative difference (over |closing|), flows with no level in the window, and `ok` or `flag`."""
+    difference and relative difference (over |closing|), flows with no level in the window, and `ok` or `flag`. With
+    `available` (`bundle_availability`), the rows also give the publication day of the opening and closing levels."""
     rows = []
     for sfid, x in sorted(graph.stock_flows.items()):
         if x.measure == "period_average":
@@ -841,7 +857,9 @@ def reconcile_stock_flows(graph: Any, series: dict[str, list[tuple[str, float]]]
                          "outflows": {v: sum(inside[v]) for v in x.outflows}, "implied_closing": implied,
                          "difference": diff, "relative_difference": rel, "missing_flows": missing,
                          "tolerance": tolerance, "status": verdict(missing, [], rel, tolerance),
-                         "blocked_by": missing})
+                         "blocked_by": missing,
+                         **({"opening_published_at": available[x.stock][t0], "closing_published_at": available[x.stock][t1]}
+                            if available else {})})
     return rows
 
 

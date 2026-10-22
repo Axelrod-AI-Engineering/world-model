@@ -157,7 +157,13 @@ class ScenarioScript(_M):
 def _scenario_path(scenario: str | Path) -> Path:
     p = Path(scenario)
     if not p.exists():
-        return (find_scenario(str(scenario)) or SCENARIOS_DIR / str(scenario)) / "scenario.yaml"
+        found = find_scenario(str(scenario))
+        if found is None and not (SCENARIOS_DIR / str(scenario) / "scenario.yaml").exists():
+            where = ", ".join(str(d) for d in scenario_dirs())
+            raise FileNotFoundError(
+                f"no scenario {str(scenario)!r}: looked for <root>/{scenario}/scenario.yaml in {where}. A client root "
+                f"(WORLD_MODEL_CLIENT_DIR) holds scenarios/, worlds/ and configs/ side by side, not worlds/ alone")
+        return (found or SCENARIOS_DIR / str(scenario)) / "scenario.yaml"
     return p / "scenario.yaml" if p.is_dir() else p
 
 

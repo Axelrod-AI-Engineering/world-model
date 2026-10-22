@@ -66,7 +66,7 @@ def test_the_readable_view_shows_formulas_roll_forwards_grids_and_states(eng):
     g = eng.wm.graph
     v = construction_view(g, "acme")
     md = to_markdown(v)
-    assert "6 identity, 2 stock-flow; 3 state-dependent" in md
+    assert "6 identity, 2 stock-flow; their weights are derived, not estimated); 3 state-dependent" in md
     assert "## Identities" in md and "| `acme.id.cet1` (ratio) | cet1 = 100 x capital / rwa |" in md
     assert "capital (numerator, +2.000); rwa (denominator, -1.200)" in md and "bn = bn x % x 0.01" in md
     assert "## Stocks and flows" in md and "capital (closing) = capital (opening) + income - dividends, per 91 days" in md
@@ -192,9 +192,14 @@ def test_values_whose_head_word_is_a_common_word(eng):
     g.subentities["acme.ghost"] = sub.model_copy(update={"id": "acme.securities_held"})
     g.entities["acme"].subentity_ids.extend(["acme.securities_held", "acme.missing"])
     g.subentities["acme.securities_held"] = g.subentities.pop("acme.ghost")
-    assert keyword_risks(g, "acme") == [
-        {"value_id": "acme.dom", "name": "Acme securities held (AFS)", "keywords": ["held"]},
-        {"value_id": "acme.securities_held", "name": "dom", "keywords": ["held"]}]
+    # two values end in "held": the gazetteer makes no head keyword of a word two values share, so nothing is flagged
+    assert keyword_risks(g, "acme") == []
+    g.entities["acme"].subentity_ids.remove("acme.securities_held")
+    assert keyword_risks(g, "acme") == [{"value_id": "acme.dom", "name": "Acme securities held (AFS)", "keywords": ["held"]}]
+    g.subentities["acme.dom"] = g.subentities["acme.dom"].model_copy(update={"name": "Acme securities rarely held"})
+    assert [r["value_id"] for r in keyword_risks(g, "acme")] == ["acme.dom"]       # the unique head is still the common word
+    g.subentities["acme.dom"] = g.subentities["acme.dom"].model_copy(update={"name": "Acme AFS portfolio"})
+    assert keyword_risks(g, "acme") == []                                          # a specific last word is fine
 
 
 def test_an_identity_reference_to_a_missing_object(eng):
@@ -241,6 +246,10 @@ def test_the_check_scripts_identity_matrix_and_roll_forward_tables(eng, capsys):
     assert check.print_stock_flows(rows, "b.json") == 0                     # blocked by a missing flow, not a flag
     out = capsys.readouterr().out
     assert "a -> b  opening 12, closing 13, implied 13" in out and "no flow: acme.dividends" in out
+    rows = reconcile_stock_flows(g, {"acme.capital": [("a", 12.0), ("b", 13.0)], "acme.income": [("b", 1.0)]},
+                                 available={"acme.capital": {"a": "a2", "b": "b2"}})
+    check.print_stock_flows(rows, "b.json")
+    assert "published a2 and b2" in capsys.readouterr().out
 
 
 def test_the_bundle_check_names_totals_with_two_driving_views(eng):

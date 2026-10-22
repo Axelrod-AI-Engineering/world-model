@@ -30,7 +30,7 @@ def test_the_view_holds_compositions_paths_transitions_and_link_counts(graph):
     assert t1["sign"] == "+" and t1["transition"]["breaker"] == "local sourcing"
     assert p["steps"][3]["edge_type"] == "accounting" and p["steps"][3]["effect"] == pytest.approx(0.33)
     assert p["uncalibrated_steps"] == 1 and p["steps_without_transition"] == 2
-    assert v["links"] == {"total": 8, "calibrated": 7, "uncalibrated": 1, "accounting": 5, "identity": 0,
+    assert v["links"] == {"total": 8, "sized_causal": 2, "uncalibrated_causal": 1, "fixed": 5, "accounting": 5, "identity": 0,
                           "stock_flow": 0, "state_dependent": 0, "with_transition": 2}
     assert v["problems"] == [TWO_DRIVING]
     assert [c["role"] for c in v["compositions"]] == ["driving", "driving"]
@@ -59,7 +59,7 @@ def test_a_level_without_a_mean_still_shows_its_unit(graph):
 def test_the_readable_view(graph):
     md = to_markdown(construction_view(graph, "acme"))
     assert md.startswith("# Acme: business construction")
-    assert "8 links touch its values: 7 calibrated, 1 uncalibrated" in md
+    assert "8 links touch its values: 2 sized causal, 1 uncalibrated causal" in md and "5 fixed by construction (5 accounting" in md
     assert "### reporting segments: segment operating income (bn/yr)" in md and "| Eliminations: elims | `acme.elims` |" in md
     assert "never added to it." in md and "overlaps C1" in md and "carry changes into it" in md
     assert "### Tariffs and sourcing" in md and "tariff → landed cost? → [regional] na → [segment] auto → profit" in md
@@ -72,7 +72,7 @@ def test_the_readable_view(graph):
 
 
 def test_the_readable_view_of_bare_structure():
-    view = {"name": "X", "attributes": [], "links": {"total": 0, "calibrated": 0, "uncalibrated": 0, "accounting": 0,
+    view = {"name": "X", "attributes": [], "links": {"total": 0, "sized_causal": 0, "uncalibrated_causal": 0, "fixed": 0, "accounting": 0,
                                                   "identity": 0, "stock_flow": 0, "state_dependent": 0,
                                                   "with_transition": 0},
             "compositions": [{"id": "C", "view": "products", "basis": "b", "unit": "u", "period": "FY", "additive": False,
