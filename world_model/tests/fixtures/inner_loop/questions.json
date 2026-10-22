@@ -1,0 +1,88 @@
+{
+ "suite_id": "SYNTHETIC-1",
+ "version": "test",
+ "adapter_field_policy": "Labels are semantic targets.",
+ "source_index": "source_index.json",
+ "cases": [
+  {
+   "test_id": "TST-01-01",
+   "family_id": 1,
+   "failure_family": "Family 1",
+   "title": "t",
+   "answer_type": "Fixture",
+   "question": "Cumulative profit is 100 for Q1 and 230 for the half-year. What is Q2 profit?",
+   "frozen_excerpt_ids": [],
+   "scorecard_group": "main_model_tests"
+  },
+  {
+   "test_id": "TST-01-02",
+   "family_id": 1,
+   "failure_family": "Family 1",
+   "title": "t",
+   "answer_type": "Fixture",
+   "question": "A fixture says price is 12 and units are 10. What is revenue?",
+   "frozen_excerpt_ids": [],
+   "scorecard_group": "main_model_tests"
+  },
+  {
+   "test_id": "TST-01-03",
+   "family_id": 1,
+   "failure_family": "Family 1",
+   "title": "t",
+   "answer_type": "Fixture",
+   "question": "What does the page report for revenue, costs and the totals?",
+   "frozen_excerpt_ids": [
+    "T-001"
+   ],
+   "scorecard_group": "main_model_tests"
+  },
+  {
+   "test_id": "TST-01-05",
+   "family_id": 1,
+   "failure_family": "Family 1",
+   "title": "t",
+   "answer_type": "Fixture",
+   "question": "Was the report available by April 1, 2030?",
+   "frozen_excerpt_ids": [
+    "T-001"
+   ],
+   "scorecard_group": "main_model_tests"
+  },
+  {
+   "test_id": "TST-04-01",
+   "family_id": 4,
+   "failure_family": "Family 4",
+   "title": "t",
+   "answer_type": "Fixture",
+   "question": "A page whose hash differs.",
+   "frozen_excerpt_ids": [
+    "T-003"
+   ],
+   "scorecard_group": "main_model_tests"
+  },
+  {
+   "test_id": "TST-04-02",
+   "family_id": 4,
+   "failure_family": "Family 4",
+   "title": "t",
+   "answer_type": "Fixture",
+   "question": "A page whose file is absent.",
+   "frozen_excerpt_ids": [
+    "T-004"
+   ],
+   "scorecard_group": "main_model_tests"
+  },
+  {
+   "test_id": "TST-05-04",
+   "family_id": 5,
+   "failure_family": "Family 5",
+   "title": "t",
+   "answer_type": "Source",
+   "question": "A page that has no layout copy.",
+   "frozen_excerpt_ids": [
+    "T-002"
+   ],
+   "scorecard_group": "main_model_tests"
+  }
+ ]
+}

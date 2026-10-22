@@ -17,6 +17,12 @@
 - [Calibrate from disclosed scenarios](#calibrate-from-disclosed-scenarios)
 - [Trace through totals](#trace-through-totals)
 - [Smaller additions and known gaps (Oct 18)](#smaller-additions-and-known-gaps-oct-18)
+- [Inner-loop accuracy suite (Oct 22)](#inner-loop-accuracy-suite-oct-22)
+  - [The file protocol](#the-file-protocol)
+  - [Two-layer grading](#two-layer-grading)
+  - [Holdout rules](#holdout-rules)
+  - [Reproducing a run](#reproducing-a-run)
+  - [Tests](#tests)
 <!-- /toc -->
 
 This page holds the method; the rules it serves are in [design/specificity.md](../design/specificity.md). Each
@@ -440,3 +446,106 @@ Code: `model/construction.py` (objects, weights, checks, reconciliation), `engin
 (`compile_construction`), `dynamics/kernels.py` and `dynamics/propagation.py` (accumulation, piecewise moderators),
 `model/calibrate.py` and `engine/construction_edit.py` (sides, conditions, scenarios), `intake/overlap.py`,
 `context/construction.py` (view, trace), `context/v4.py` (export).
+
+## Inner-loop accuracy suite (Oct 22)
+
+A reviewer's bank of questions with a held-out answer key (a company's inner loop: identity and scope, composition, document
+contradictions, periods and versions, transmission, proof limits, accounting, timing, offsets, unknowns). The system under test is
+an agent that reads our export the way an analyst's agent does. The repository does not answer a case: it prepares task packets,
+collects the answers the agents write, and grades them. Per-case scripted answerers were tried and retired: they measured the
+scripts, not the model.
+
+```
+prepare   uv run python world_model/scripts/evaluation/inner_loop.py prepare --suite <suite> --world <scenario> --run <run> \
+              --out <packets> [--days <bundles>] [--construction-sources <folder>]
+answer    one subagent per packet, in its own context, writes <packets>/answers/<test_id>.json
+collect   uv run python world_model/scripts/evaluation/inner_loop.py collect --suite <suite> --packets <packets> \
+              --out <results.json> [--transcripts <files>] [--only ids]
+judge     uv run python world_model/scripts/evaluation/inner_loop_judge.py prepare --results <results.json> --key <key> \
+              --run <run> --out <judge folder>        # judges write <judge folder>/verdicts/<test_id>.json
+grade     uv run python world_model/scripts/evaluation/inner_loop_grade.py --results <results.json> --key <key> --run <label> \
+              --out <scorecard path without extension> [--verdicts <judge folder>/verdicts] [--mode judge|lexical] \
+              [--only ids] [--explain] [--forbid <marker>]
+```
+
+### The file protocol
+
+- **Prepare** (`evaluation/inner_loop_packets.py`) builds, from the suite folder only, one folder per case, beside a shared export
+  made by `export_context.py` for the world under test and a memo of world reads:
+
+  ```
+  <packets>/run.json                 run label, suite, export, case list
+            export/                  shared, read-only: reading/ shards, domain and evidence packs, source catalogue
+            model_reads/             memoized v1 reads (world.txt names the world); the tools write only here
+            answers/                 the agents' answers, one <test_id>.json each
+            <test_id>/task.md        the question, the return contract and the suite's field policy, the tool commands (with the
+                                     data folder written in), and generic instructions; no case-specific hint
+                      fixture_inputs.json   only when the case has stipulated inputs, and nothing of the suite's own labels
+                      excerpts/      the frozen pages bound to the case (text, and the page's layout), the only admissible evidence
+                      excerpt_index.json    source, version, availability date, pages, hashes
+                      answer.schema.json
+                      calc_log.jsonl        written by the calculator when `--log` is used
+  ```
+
+- **The answerers** are subagents with only a packet and the tools of `scripts/evaluation/il_tools.py`
+  (`evaluation/inner_loop_tools.py`): a Decimal calculator with a log; export list, search and read, which refuse any path outside
+  the export; reads of the v1 API (in process, memoized, read routes only); a company's compositions, identities, values and paths
+  by section and word; and the two state operations (ingest in both orders, update and undo), which report `supported: false` with
+  the reason when the system cannot run them. An answer states its result, the unit and scale, the period and scope, every number
+  it relies on in `quantities` with a descriptive label and the model object that holds it, the mechanism and the accounting
+  treatment where the question has them, what is undetermined and why, its evidence (page id, location, quoted passage), the model
+  objects it rests on, and its assumptions. It never invents an input: an unsupported check is `blocked` with the reason.
+- **Collect** validates each answer against the schema. A missing or invalid answer, and an answer's own `blocked`, are `blocked`
+  with the reason. Evidence is checked against the case's own pages (the quoted passage must be on the page) and calculations against
+  the calculator's log. The results carry the suite's contract (our fields mapped onto its labels, `FIELD_MAP`), the graded answers
+  (folder, per-file sha256, and one sha256 over all of them) and the agents' transcripts (path and hash).
+
+### Two-layer grading
+
+The key's field names describe the meaning being checked; they are not a schema the answer must use, so the main grading does not
+read them as one (`evaluation/inner_loop_grade.py`, `inner_loop_judge.py`).
+
+1. **The numeric layer** matches each number the key expects to any number the answer states (its result fields and its
+   `quantities`), by value at displayed precision, in the key's unit and scale after conversion, whatever the field is called.
+   Exactly one distinct match is a match, none is a failure, and two different numbers that could each match is ambiguous and goes
+   to a judge. A tolerance is used only where the clarifications name one (a one-million-yen rounding residual; 0.005 percentage
+   point on one margin). The key states a unit but no period or scope, so those are not matched.
+2. **The judge layer** decides on meaning what a number cannot: the key's assertions (wording, mechanism, accounting destination,
+   proof limits, expected unknowns) and each ambiguous number. `inner_loop_judge.py prepare` writes one packet per answered case
+   that has such facets (`judge.md` with a generic rubric, `facets.json` with this case's facets and stable ids, `answer.json`,
+   `verdict.schema.json`) under a folder of its own, never inside the answerers' packets (it refuses such a folder). Judges write
+   `verdicts/<test_id>.json`: per facet, pass or fail and a one-line reason quoting the answer. The grader combines numbers and
+   verdicts deterministically; a failed number or facet fails the case, and a facet with no verdict is `not_run`, never a pass.
+
+The earlier lexical mode, which matches field names and the key's wording, is kept as `--mode lexical`. Both modes are always
+computed and reported side by side; `--mode` chooses the headline. The scorecard gives pass, fail, blocked and not run, the executed
+pass rate (pass over pass and fail), the execution coverage over the 98 main cases, the two review gates apart, and the note that a
+high pass rate does not resolve a material blocked requirement. A validation candidate keeps its status and no detail.
+
+### Holdout rules
+
+- The answer key lives outside the repository's runner side. The runner, the packets and the tools never name
+  it (a test asserts the modules' text), and only the grader and the judge preparation are handed its path.
+- Everything the runner side reads goes through a guard that refuses a path outside the suite folder and the packets and logs each
+  file read with its hash. The answerers' packets hold no label of the suite's (split, execution mode) and no facet of the key.
+- Iteration on the model uses development cases only. For validation candidates (cases 09 and 10 of each family) only pass and fail
+  counts are read, never expected answers or diffs.
+- **The transcript scan.** `collect` records the agents' transcripts; the grader scans them for the key's path, its file name and any
+  marker given with `--forbid` (such as the held-out folder's name), and the review section reports how many transcripts mention each,
+  beside what the runner read and what its modules name. This is the evidence for the golden-provenance review, from the run itself.
+
+### Reproducing a run
+
+Grading is a deterministic function of its inputs. A scorecard records the graded answers (folder, file count, sha256 over every
+answer) and, in judge mode, the verdicts (folder, file count, sha256, and any invalid file). The same answers and verdicts give a
+byte-identical scorecard; a changed answer or verdict changes the hash. To reproduce a run, keep the packets' `answers/`, the
+transcripts and the verdicts folder with the scorecard.
+
+### Tests
+
+An invented suite, export and key (`world_model/tests/fixtures/inner_loop*`) exercise every branch; the client test prepares and
+collects a client's real suite without answers and asserts no pass rate.
+
+Code: `evaluation/inner_loop.py` (suite, read guard, calculator, contract), `inner_loop_packets.py`, `inner_loop_tools.py`,
+`inner_loop_judge.py`, `inner_loop_grade.py`; `scripts/evaluation/inner_loop.py`, `il_tools.py`, `inner_loop_judge.py`,
+`inner_loop_grade.py`.

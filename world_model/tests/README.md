@@ -69,7 +69,7 @@ lakehouse's suites moved to `ingestion/tests/` with the code they test.
 | `context/` | 42 | The construction view, sources and citations, the construction scripts and export, the v4.1.4 export |
 | `flows/` | 28 | The flowchart is well formed and current in `docs/flowchart.svg` |
 | `cli/` | 21 | The `axelrod` command |
-| `evaluation/`, `memory/`, `events/`, `trace/` | 58 | Backtests and metrics; Entity memories, the frontier, working and long-term memory; graph-update events; the trace |
+| `evaluation/`, `memory/`, `events/`, `trace/` | 58 | Backtests and metrics, the inner-loop runner and grader on an invented suite (`fixtures/inner_loop*`); Entity memories, the frontier, working and long-term memory; graph-update events; the trace |
 | top level | 40 | Basic auth, the build info, the paths, signals into operations (the bundle's schema tests moved to ingestion) |
 
 ## Markers, skips, and extras

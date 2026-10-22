@@ -206,10 +206,11 @@ def test_continue_a_run_waiting_on_review_then_cancel_it(blank):
     assert blank.get(f"/api/updates/{uid}").json()["state"] == "awaiting_review"
     out = blank.post(f"/api/updates/{uid}/continue").json()
     assert out["id"] == uid and out["state"] in ("running", "done")
+    # the background run may finish before the cancel lands (done) or be stopped by it (cancelled)
     done = blank.post(f"/api/updates/{uid}/cancel").json()
-    assert done["state"] == "done" and done["market_events"][0]["events"][0]["status"] == "deferred"
+    assert done["state"] in ("done", "cancelled") and done["market_events"][0]["events"][0]["status"] == "deferred"
     again = blank.post(f"/api/updates/{uid}/continue").json()       # a finished run stays finished
-    assert again["state"] == "done"
+    assert again["state"] == done["state"]
 
 
 # -- decisions ------------------------------------------------------------------------------------------

@@ -1,0 +1,19 @@
+{
+ "TST-01-02": {
+  "test_id": "TST-01-02",
+  "execution_mode": "fixture_calculation",
+  "fixture_inputs": {
+   "price": 12,
+   "units": 10,
+   "nested": {
+    "deep": 4
+   }
+  },
+  "required_output_fields": [
+   "test_id",
+   "actual_result",
+   "status",
+   "scope_period_units_when_applicable"
+  ]
+ }
+}
