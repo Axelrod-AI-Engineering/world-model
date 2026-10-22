@@ -44,7 +44,7 @@ New to the repository? Read these four, in order (about an hour):
 | Know why memory works like a mind, not a search index | [design/cognition.md](design/cognition.md) |
 | Know why we don't just use Cognee or Semantica | [design/frameworks.md](design/frameworks.md) |
 | Check a model is specific enough (rules R1–R17) | [design/specificity.md](design/specificity.md) |
-| Build a company's business construction | [construction/README.md](construction/README.md), then the company's page (local client content, not tracked) |
+| Build a company's business construction | [construction/pipeline.md](construction/pipeline.md) (the stages), [construction/README.md](construction/README.md) (the method), then the company's page (local client content, not tracked) |
 | Read the math as built, and what is wrong with it | [ml/stack.md](ml/stack.md) |
 | See the plan to replace each heuristic (R0–R20) | [ml/roadmap.md](ml/roadmap.md) |
 | Brief a colleague on what core needs from us | [briefs/sally-onboarding.md](briefs/sally-onboarding.md) (dated Oct 17) |

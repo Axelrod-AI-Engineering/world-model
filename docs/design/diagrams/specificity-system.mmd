@@ -1,0 +1,8 @@
+flowchart LR
+  Y["Construction YAML<br/>(values, compositions,<br/>identities, paths)"]:::start ==> G["World graph"]:::wm
+  Y --> K{"check.py<br/>structure · sources ·<br/>inputs · reconciliation"}:::check
+  D["Document"]:::ext ==> I["Ingestion<br/>rules; LLM off or cached"]:::step ==> B["Import bundle<br/>id = content hash"]:::store ==> R{"Review<br/>a person approves<br/>each item"}:::check ==> F["Fold<br/>Kalman update"]:::inf ==> G
+  G --> L["Long-term learners<br/>kernel · level noise ·<br/>frontier · superentities"]:::ltm
+  L -->|proposals only| R
+  G ==> P["Forecast<br/>seeded Monte Carlo"]:::inf ==> X["Export and<br/>reading set"]:::done
+  G --> X

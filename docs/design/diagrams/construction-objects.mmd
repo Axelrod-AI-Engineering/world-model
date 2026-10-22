@@ -1,0 +1,17 @@
+flowchart TB
+  V["Value<br/>view · basis · unit · period"]:::wm
+  C["Composition<br/>total = parts + residual − eliminations<br/>one driving view, others reconcile"]:::step
+  I["Identity<br/>product · ratio · difference<br/>derived weights"]:::step
+  S["Stock-flow<br/>closing = opening + flows"]:::step
+  L["Link<br/>causal · accounting · identity · stock-flow"]:::inf
+  T["Transition<br/>mechanism · condition · timing<br/>evidence · breaker · open inputs"]:::opt
+  P["Path<br/>trigger → steps and branches → account"]:::done
+  X["sources.json · citations.json · baselines<br/>(local)"]:::ext
+  C -->|totals and parts| V
+  I -->|terms| V
+  S -->|stock and flows| V
+  L -->|source and target| V
+  T -->|specifies| L
+  P -->|orders| L
+  X -.->|cites| T
+  X -.->|observes| V

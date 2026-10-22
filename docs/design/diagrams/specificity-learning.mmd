@@ -1,0 +1,7 @@
+flowchart LR
+  A["Approved item<br/>observe or move"]:::start ==> F["Fold<br/>joint Kalman update of<br/>level and in-effects"]:::inf ==> P["Posterior<br/>value · effects · existence"]:::wm
+  F --> N["Normalized innovation"]:::step --> T["Frontier test<br/>lagged co-movement"]:::ltm
+  P --> W["Weekly learners<br/>kernel grid · level noise"]:::ltm --> P
+  T -->|proposed edge| R{"Review"}:::check
+  P --> C["Concepts<br/>priors for new items"]:::ltm
+  X["Accounting · identity ·<br/>stock-flow links"]:::ext -.->|weights derived,<br/>never learned| P
