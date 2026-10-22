@@ -16,7 +16,7 @@ change is a patch, ready to apply on a core branch and review there.
 `01886b5` (after #67 and #72). It extends core's own seam, `register_mcp_world_model_tools` in
 `src/axelrod_app/mcp_world_model.py`, which #67 left for "further World Model reads". `search_canonical` is unchanged.
 
-Every tool calls the service's v1 API ([../../docs/api/](../../world_model/docs/api/README.md)) under `/v1/world-models/{world_model_id}`
+Every tool calls the service's v1 API ([../../docs/api/](../../docs/api/README.md)) under `/v1/world-models/{world_model_id}`
 (`{wm}` below). Each tool takes a `world_model_id`, which defaults to the organization's only world model.
 
 | Tool | World model route | Effect |
@@ -33,7 +33,7 @@ Every tool calls the service's v1 API ([../../docs/api/](../../world_model/docs/
 | `world_model_export_v4` | `GET {wm}/exports/v4.1.4` | read |
 | `world_model_list_documents`, `world_model_get_bundle`, `world_model_list_changes` | `GET {wm}/documents`, `{wm}/bundles/{id}` and `…/items`, `{wm}/changes` | read |
 
-**Read only.** As agreed in the API review (Oct 19, [world_model/docs/archive/architecture-plan.md](../../world_model/docs/archive/architecture-plan.md)),
+**Read only.** As agreed in the API review (Oct 19, [docs/archive/architecture-plan.md](../../docs/archive/architecture-plan.md)),
 core's backend MCP reads the world model and does not write to it. The three write tools of the earlier patch
 (`world_model_simulate`, `world_model_ingest_source`, `world_model_propose_changes`) are removed. Documents, proposed
 changes and simulations reach the world model through its web interface (a signed-in person) and the data-ingestion
@@ -103,7 +103,7 @@ returns `world_model_unavailable`, and the rest of the catalog is unaffected.
 
 ## What comes next: service tokens
 
-[world_model/docs/design/core-mcp-auth.md](../../world_model/docs/design/core-mcp-auth.md) replaces the org keys with a short-lived ES256 token
+[docs/design/core-mcp-auth.md](../../docs/design/core-mcp-auth.md) replaces the org keys with a short-lived ES256 token
 that core mints per call (`sub` = the org user, `org`, `scope`, `azp: core-mcp`, and `act` naming the MCP host). The
 world model service already verifies such tokens (`WORLD_MODEL_TRUSTED_ISSUERS`) and records each actor. The patch
 does not mint them yet: that is core's step 3 of the rollout (a mint function, a JWKS route, signing-key settings, and
@@ -113,5 +113,5 @@ calls as the key's caller, with no person.
 ## Keeping the two catalogs in step
 
 `world_model/tests/service/test_core_integration.py` in this repo reads the patch. It checks that every request the patch's tools
-make is a route of [world_model/docs/api/openapi.yaml](../../world_model/docs/api/openapi.yaml) that this service serves, with the same
+make is a route of [docs/api/openapi.yaml](../../docs/api/openapi.yaml) that this service serves, with the same
 method, and that no tool decides a change. When a route changes here, that test fails until the patch is regenerated.

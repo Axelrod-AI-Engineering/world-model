@@ -70,10 +70,9 @@ ingestion and the v1 plumbing, so they move with ingestion if it is ever served 
 | `docs/` | This front door |
 | `configs/` | Stage settings (`world_model*.toml`): trusted issuers, owners, compartments. No secrets |
 | `data/`, `feedback/`, `var/` | Local and gitignored: client content, meeting notes, runtime data |
-| `scripts/` | The coverage gate, the docs tools (contents, diagrams, links), the Railway checks, `video/` |
+| `scripts/` | The coverage gate and the docs tools (contents, diagrams, links) |
 | `tests/` | The repository's own tests: the Railway drift verifier, the gate, the links |
-| `integrations/core/` | The proposed patch to core's MCP server |
-| `.railway/`, `Dockerfile` | The hosted deployment ([deployment.md](deployment.md)) |
+| `.railway/`, `Dockerfile` | The hosted deployment: IaC, start and release scripts, the Railway CLI's `package.json` ([deployment.md](deployment.md)) |
 
 `world_model/src/axelrod_wm/paths.py` is the one source of the roots: `REPO_ROOT` (which holds `data/`, `var/`,
 `configs/`) and `WM_ROOT` (`world_model/`, which holds `examples/`, `taxonomy/`, `configs/` and `web/`). The Docker

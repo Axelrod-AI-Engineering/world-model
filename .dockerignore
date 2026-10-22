@@ -1,13 +1,14 @@
 .git
 .venv
-node_modules
+**/node_modules
 var
 data
 feedback
 __pycache__
 .pytest_cache
 .ruff_cache
-.railway
+.railway/*
+!.railway/start-railway.sh
 **/tests
 **/docs
 .creds.*

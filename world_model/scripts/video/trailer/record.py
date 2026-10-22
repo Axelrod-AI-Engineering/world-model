@@ -1,6 +1,6 @@
 """Footage for the external trailer (docs/media/EmilyVideo.m4a), one recording per shot, timed to the voiceover.
 
-    uv run --with "playwright==1.58.0" python scripts/video/trailer/record.py OUT [SLOW] [shot ...]
+    uv run --with "playwright==1.58.0" python world_model/scripts/video/trailer/record.py OUT [SLOW] [shot ...]
 
 The app shots drive Emily's demo on port 8777 (start it fresh: `uv run axelrod demo --scenario emily_demo --port 8777`);
 the others are graphics.html and Emily's Oil-to-Portfolio Canvas (CANVAS, a local copy). Every shot opens with a

@@ -1,4 +1,4 @@
-"""The patch that puts this service's tools in core's MCP catalog (integrations/core) stays in step with the service:
+"""The patch that puts this service's tools in core's MCP catalog (world_model/integrations/core) stays in step with the service:
 every route it calls is a v1 route the contract specifies and this service serves, with the method it uses, and it
 publishes no tool that decides a change (world_model/docs/design/core-mcp-auth.md: approval is human-only)."""
 

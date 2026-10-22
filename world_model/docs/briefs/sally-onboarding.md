@@ -31,7 +31,7 @@ team reviewed the export, we added business construction: compositions, operatin
 and uncalibrated links that are represented but carry no size.
 
 The world model stays a separate service from core. Core and its agents reach it over HTTP with a per-caller key,
-and a ready patch puts its tools into core's own MCP catalog (`integrations/core/`). The briefs below say, for each
+and a ready patch puts its tools into core's own MCP catalog (`world_model/integrations/core/`). The briefs below say, for each
 person, what was built, how it reaches core, and how to use it. Section 5 is the full list of what core consumes, and
 section 7 the decisions still open.
 
@@ -53,7 +53,7 @@ section 7 the decisions still open.
 - The world model is an MCP server of its own: `/mcp` on the service, built on the official `mcp` 2.x SDK the way
   core's is, with 27 `world_model_*` tools over the v1 API (Oct 18: [../api/](../api/README.md), contract
   [api/openapi.yaml](../api/openapi.yaml)). None decides a change.
-- A patch for core, [`integrations/core/0001-world-model-service-mcp-tools.patch`](../../../integrations/core/README.md),
+- A patch for core, [`world_model/integrations/core/0001-world-model-service-mcp-tools.patch`](../../integrations/core/README.md),
   made against core `main` after #67 and #72. It extends #67's seam, `register_mcp_world_model_tools`, with 20
   `world_model_*` tools on `/v1/world-models/{id}` (`search_canonical` is unchanged):
   - reads: world models, a world model, graph, entities, entity, attribute, concepts, search, construction (JSON or a
@@ -257,7 +257,7 @@ In priority order. P0 is needed for core to use the world model at all.
   process, so answers, auth and errors are the same.
 - Read-only tools carry `readOnlyHint`, and writes (ingest, propose changes, simulate) do not. No tool decides a
   change.
-- **In core's own catalog:** the patch in [integrations/core](../../../integrations/core/README.md) re-publishes the tools
+- **In core's own catalog:** the patch in [world_model/integrations/core](../../integrations/core/README.md) re-publishes the tools
   from core's `/mcp`, under core's sign-in, for each org user (Zsolt's brief). This is the recommended route.
 - Alternatively, core can mount our `/mcp` the way it mounts EODHD (`MCPServerStreamableHttp` with the key in
   core's settings). The snippet is in [../api/](../api/README.md#mounting-it-from-core).
@@ -311,7 +311,7 @@ them into an immutable snapshot whose id is a content hash. To bind the canvas t
 ## 6. Asks, by person
 
 **Zsolt (MCP)**
-1. Review and apply the patch in `integrations/core/`: re-export through core's catalog, under core's sign-in.
+1. Review and apply the patch in `world_model/integrations/core/`: re-export through core's catalog, under core's sign-in.
 2. Add the world-model tools to the MCP Server Phase 2 catalog in Notion.
 3. Confirm the auth design in [../design/core-mcp-auth.md](../design/core-mcp-auth.md): core mints a short-lived service token per call (decision 7.3).
 

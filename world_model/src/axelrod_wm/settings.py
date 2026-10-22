@@ -4,7 +4,7 @@
   say which core stages' tokens are trusted, which organizations own which logins and compartments, and which
   organizations are internal.
 - Secrets live in one place per stage: the gitignored `.creds.<stage>` file (dotenv), read only when running locally.
-  On Railway the same names arrive as process variables, pushed from that file by `scripts/railway-sync-creds.sh`.
+  On Railway the same names arrive as process variables, pushed from that file by `.railway/railway-sync-creds.sh`.
 - A process variable always wins, then the creds file, then the checked-in profile. The readers (`api/auth.py`,
   `api/keys.py`, `api/tokens.py`, `api/v1/compartments.py`) keep reading the process environment.
 

@@ -1,7 +1,7 @@
 """An original bed for the trailer: soft pads throughout, a low pulse that enters with Import and builds, a sparse
 arpeggio from Transmission on, and a stop on the logo with only a reverb tail left.
 
-    python scripts/video/trailer/music.py OUT.wav
+    python world_model/scripts/video/trailer/music.py OUT.wav
 """
 import sys
 import wave

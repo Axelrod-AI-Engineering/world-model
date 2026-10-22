@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 _spec = importlib.util.spec_from_file_location(
-    "railway_drift", Path(__file__).resolve().parents[1] / "scripts/verify-railway-drift.py"
+    "railway_drift", Path(__file__).resolve().parents[1] / ".railway/verify-railway-drift.py"
 )
 _module = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_module)

@@ -20,9 +20,9 @@ The full demo is hosted on Railway's `dev` environment at **https://world-model-
 | Piece | Where | What it does |
 |---|---|---|
 | Image | `Dockerfile` | Python 3.12 slim, built from the repository root. Installs the frozen dependencies of the world model member, with ingestion beside it as its workspace dependency (`uv sync --frozen --no-dev --no-editable --package axelrod-world-model --extra semantic`; the extra forwards to `axelrod-ingest[semantic]` and adds the embedding model's runtime), then copies `configs/` (the stage settings), `world_model/{examples,taxonomy,configs,web}`, and the start script. `AXELROD_ROOT=/app` tells the installed package where they are (`world_model/src/axelrod_wm/paths.py`). |
-| Start | `scripts/start-railway.sh` | Runs `axelrod demo --scenario $WORLD_MODEL_SCENARIO --host 0.0.0.0 --port $PORT`: on dev, the production demo for the main login, and Emily's demo for hers ([demos.md](../world_model/docs/guides/demos.md), [A login per scenario](#a-login-per-scenario)) |
+| Start | `.railway/start-railway.sh` | Runs `axelrod demo --scenario $WORLD_MODEL_SCENARIO --host 0.0.0.0 --port $PORT`: on dev, the production demo for the main login, and Emily's demo for hers ([demos.md](../world_model/docs/guides/demos.md), [A login per scenario](#a-login-per-scenario)) |
 | Infrastructure | `.railway/railway.ts` | The service, its volume, and its settings, as code |
-| Release checks | `scripts/persist-railway-fields.sh`, `scripts/verify-railway-drift.py` | Set the two fields Railway's IaC does not store, then reject any drift except known leftovers |
+| Release checks | `.railway/persist-railway-fields.sh`, `.railway/verify-railway-drift.py` | Set the two fields Railway's IaC does not store, then reject any drift except known leftovers |
 | Auth | `world_model/src/axelrod_wm/api/auth.py` | A signed-in session on every request except the health check; service tokens or scoped keys for `/v1` and `/mcp` |
 
 ![The hosted deployment](../world_model/docs/design/diagrams/deployment.svg)
@@ -50,18 +50,18 @@ Railway requires every IaC repository that targets an environment with named par
 **Changing the infrastructure** (`.railway/railway.ts`: the service's settings, variables, volume, domain, or source) needs a Railway Admin on the Axelrod project. Apply it by hand, after review:
 
 ```bash
-npm ci
+npm --prefix .railway ci
 npx --yes -p node@22 -p @railway/cli@5.64.2 railway link \
   --project ee19a1df-2ce5-4193-932a-6139f034bbce --environment dev --service world-model
 npx --yes -p node@22 -p @railway/cli@5.64.2 railway config plan
 # Review the plan: only world-model may change, nothing may be destroyed, and source.repo must stay linked.
 npx --yes -p node@22 -p @railway/cli@5.64.2 railway config apply --yes
-bash scripts/persist-railway-fields.sh
+bash .railway/persist-railway-fields.sh
 npx --yes -p node@22 -p @railway/cli@5.64.2 railway config plan --json > /tmp/world-model-drift.json
-python3 scripts/verify-railway-drift.py /tmp/world-model-drift.json
+python3 .railway/verify-railway-drift.py /tmp/world-model-drift.json
 ```
 
-The toolchain is pinned: the IaC SDK `railway@3.13.1` in `package-lock.json`, the Railway CLI `5.64.2`, and Node 22. Named partials and native TypeScript evaluation need newer tooling than Core's CLI 5.33.0 and Node 20.
+The toolchain is pinned: the IaC SDK `railway@3.13.1` in `.railway/package-lock.json`, the Railway CLI `5.64.2`, and Node 22. Named partials and native TypeScript evaluation need newer tooling than Core's CLI 5.33.0 and Node 20.
 
 **Known leftovers.** Railway does not store `restartPolicyType` or `sleepApplication` in the environment config, so every plan shows them. `persist-railway-fields.sh` sets them directly, and the drift verifier admits only these two. The source is declared, so a plan that would unlink the repository (`source.repo → null`) is drift, and the verifier rejects it.
 
@@ -128,7 +128,7 @@ and how core authenticates is in [design/core-mcp-auth.md](../world_model/docs/d
   the profile's `[auth.owners]` maps it.
 - **Where settings live.** Non-secret settings (trusted core issuers, owners, internal organizations, compartments)
   are checked in at `configs/world_model.dev.toml`. Secrets (the logins, the session secret, static keys) live only in
-  the gitignored `.creds.dev`, and reach Railway with `scripts/railway-sync-creds.sh dev` (values through stdin, no
+  the gitignored `.creds.dev`, and reach Railway with `.railway/railway-sync-creds.sh dev` (values through stdin, no
   deploy). Core is not a static-key caller: it signs a token per call, which this service checks against core's
   public JWKS, so no core secret is kept here.
 - To add a non-core caller: generate a key (`python -c "import secrets; print(secrets.token_urlsafe(32))"`), append

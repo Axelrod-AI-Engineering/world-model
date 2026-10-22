@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Push a stage's secrets from the gitignored .creds.<stage> to the world-model service on Railway (core's
 # `make sync-<stage>-env` convention). Values go through stdin, are never printed, and no deploy is triggered.
-# Usage: scripts/railway-sync-creds.sh [stage] [creds file]   (stage defaults to dev, the only hosted stage)
+# Usage: .railway/railway-sync-creds.sh [stage] [creds file]   (stage defaults to dev, the only hosted stage)
 set -euo pipefail
 
 STAGE="${1:-dev}"
@@ -14,7 +14,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 while IFS= read -r -d '' key && IFS= read -r -d '' value; do
   printf '%s' "${value}" | railway variables set --service "${SERVICE}" --environment "${STAGE}" --skip-deploys --set-from-stdin "${key}" >/dev/null
   echo "synced ${key} to ${SERVICE}/${STAGE}"
-done < <(PYTHONPATH="${ROOT}/src" CREDS="${CREDS}" python3 -I -c '
+done < <(PYTHONPATH="${ROOT}/world_model/src" CREDS="${CREDS}" python3 -I -c '
 import os, sys
 from pathlib import Path
 from axelrod_wm.settings import read_creds

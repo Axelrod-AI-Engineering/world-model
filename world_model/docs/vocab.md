@@ -258,7 +258,7 @@ Reference: [api/README.md](api/README.md).
 | Term | Meaning |
 |---|---|
 | **Core** | `Axelrod-AI-Engineering/core`, the product's main service. Never written to from this repo. |
-| **Core patch** | `integrations/core/`: a patch that adds the `world_model_*` tools to core's MCP catalog under core's sign-in. |
+| **Core patch** | `world_model/integrations/core/`: a patch that adds the `world_model_*` tools to core's MCP catalog under core's sign-in. |
 | **Canonical identity** | A node in core's own store (`world_model_state_nodes`) that the scenario canvas binds and pins. |
 | **Expert writeback** | Core's design for human-reviewed world model changes; no agent approves its own change. |
 | **Service keys (core side)** | `AXELROD_WORLD_MODEL_SERVICE_KEYS`: `org_id=key` entries, one per organization. |

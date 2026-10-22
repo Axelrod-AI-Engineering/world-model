@@ -139,7 +139,7 @@ new flow should stay under 20 s; one that needs longer is marked `slow` as well.
 | I7 | Concurrent updates (`test_concurrency.py`) | Two proposals at the same moment: one runs and waits for review, the other is `409 update_in_progress` (the check and the claim are one step under the engine's lock); reads still answer; the refused one goes through after review | Implemented |
 | I8 | Late items | A bundle item dated before the model's last closed day is listed under `late_item_ids` and folds into the next day | Planned |
 | I9 | Re-extraction after the model changes | `POST .../documents/{id}/bundles` after a change gives a new bundle against the new model, and the old bundle stays as history | Planned |
-| I10 | Core's catalog against a live service | The patched core MCP tools (integrations/core) against this app over HTTP, not a stand-in | Planned |
+| I10 | Core's catalog against a live service | The patched core MCP tools (world_model/integrations/core) against this app over HTTP, not a stand-in | Planned |
 | I11 | Large uploads | Twenty files of mixed formats in one request, near the size limit, within the time budget | Planned |
 | I12 | Deletion | Deleting a document removes its text, chunks, indexes, and mentions from search, and keeps its bundles and imports as history | Planned |
 
