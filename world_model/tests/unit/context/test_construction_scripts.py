@@ -37,19 +37,22 @@ def test_the_input_search_writes_a_local_report_and_never_edits_the_world(tmp_pa
     d = world(tmp_path, acme_construction())
     before = (d / "construction" / "acme.yaml").read_text()
     c = corpus(tmp_path)
-    assert inputs.main([str(d), "--entities", "acme", "--corpus", str(c),
+    work = tmp_path / "work"
+    assert inputs.main([str(d), "--entities", "acme", "--corpus", str(c), "--out", str(work),
                         "--extra-terms", "eligible import volume=FY25 imports"]) == 0
     out = capsys.readouterr().out
     assert "skipped broken.pdf" in out and "parsed 2 of 3 file(s)" in out
     assert "eligible import volume: now not_yet_reviewed; suggested found_not_connected (1 candidate(s) in research/note.md)" in out
-    rows = json.loads((c / "construction" / "acme" / "input_search.json").read_text())
+    rows = json.loads((work / "acme" / "input_search.json").read_text())
     assert rows[0]["candidates"][0]["file"] == "research/note.md" and rows[0]["queries"][1] == "corpus: fy25 imports"
     assert "bench/blind.md" not in rows[0]["searched_files"]                        # an excluded folder is skipped
-    assert (c / "construction" / "acme" / "input_search.md").read_text().startswith("# acme: input search")
+    assert (work / "acme" / "input_search.md").read_text().startswith("# acme: input search")
+    assert not (c / "construction").exists()                                          # the corpus is only read
     assert (d / "construction" / "acme.yaml").read_text() == before
-    assert inputs.main([str(d), "--entities", "acme", "--corpus", str(c), "--files", "research/other.txt"]) == 0
+    assert inputs.main([str(d), "--entities", "acme", "--corpus", str(c), "--out", str(work),
+                        "--files", "research/other.txt"]) == 0
     assert "suggested not_disclosed_in_reviewed_sources (nothing in 1 file(s))" in capsys.readouterr().out
-    assert inputs.main([str(d), "--entities", "ghost", "--corpus", str(c)]) == 1
+    assert inputs.main([str(d), "--entities", "ghost", "--corpus", str(c), "--out", str(work)]) == 1
     assert "ghost: no such entity" in capsys.readouterr().out
 
 
@@ -69,8 +72,22 @@ def test_the_input_search_helpers(tmp_path):
 def test_the_input_search_refuses_to_write_where_git_tracks(tmp_path, capsys, monkeypatch):
     d = world(tmp_path, acme_construction())
     monkeypatch.setattr(inputs, "tracked", lambda p: True)
-    assert inputs.main([str(d), "--entities", "acme", "--corpus", str(corpus(tmp_path))]) == 1
+    assert inputs.main([str(d), "--entities", "acme", "--corpus", str(corpus(tmp_path)), "--out", str(tmp_path / "w")]) == 1
     assert "REFUSED" in capsys.readouterr().out
+
+
+def test_the_input_search_report_defaults_to_the_work_folder_not_the_corpus(tmp_path):
+    from axelrod_wm.clients import DATA_DIR
+
+    c = corpus(tmp_path)
+    assert inputs.default_out(c) == DATA_DIR / "work" / "corpus" / "construction"
+    assert not inputs.default_out(c).is_relative_to(c)
+
+
+def test_the_link_summary_keeps_sized_causal_apart_from_fixed_links():
+    lk = {"total": 10, "sized_causal": 3, "uncalibrated_causal": 2, "fixed": 5, "accounting": 3, "identity": 1, "stock_flow": 1}
+    assert check.link_summary(lk) == ("10 link(s): 3 sized causal, 2 uncalibrated causal, 5 fixed (accounting 3, identity 1, "
+                                      "stock-flow 1)")
 
 
 def test_the_reconciliation_table(capsys):

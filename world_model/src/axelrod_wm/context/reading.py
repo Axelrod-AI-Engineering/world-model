@@ -110,9 +110,12 @@ def kb(n: int) -> str:
     return f"{n / 1024:.1f} KB"
 
 
-def flatten(pack: dict) -> tuple[dict, list[tuple[str, Any]]]:
+def flatten(pack: dict, split_over: int | None = None) -> tuple[dict, list[tuple[str, Any]]]:
     """The pack as (header scalars, [(section, object)]): lists give their elements, a dict one object, and the
-    support objects each of their parts, under `domain_specific_support_objects.<part>`."""
+    support objects each of their parts, under `domain_specific_support_objects.<part>`. A part that is one dict larger
+    than `split_over` bytes (the citation gaps of an export whose sources the pack does not hold) is cut at its keys,
+    and each key's list into its elements, as `<part>.<key>`: no shard is ever larger than the budget, and the
+    elements together are the dict's content."""
     header, items = {}, []
 
     def add(section: str, v: Any) -> None:
@@ -121,7 +124,11 @@ def flatten(pack: dict) -> tuple[dict, list[tuple[str, Any]]]:
     for k, v in pack.items():
         if k == "domain_specific_support_objects":
             for part, pv in v.items():
-                add(SUP + part, pv)
+                if split_over is not None and isinstance(pv, dict) and size_of(pv) > split_over:
+                    for key, sub in pv.items():
+                        add(f"{SUP}{part}.{key}", sub)
+                else:
+                    add(SUP + part, pv)
         elif isinstance(v, (list, dict)):
             add(k, v)
         else:
@@ -170,9 +177,9 @@ def render(meta: dict, its: list[tuple[str, Any]]) -> str:
     return '{\n"reading_shard": ' + line(meta) + ',\n"sections": {\n' + body + "\n}\n}\n"
 
 
-def route(pack: dict, slug_of: dict[str, str]) -> list[tuple[str, int, str, Any, str]]:
+def route(pack: dict, slug_of: dict[str, str], split_over: int | None = None) -> list[tuple[str, int, str, Any, str]]:
     """(family, order, section, object, group) for every object: which family of files holds it."""
-    header, items = flatten(pack)
+    header, items = flatten(pack, split_over)
     out = []
     for s, o in items:
         if s == "company_edge_relationships":
@@ -224,9 +231,9 @@ def scope_text(scope: dict) -> str:
     return f"edges {', '.join(e)}; targets {scope['target_metrics_from']} to {scope['target_metrics_to']}"
 
 
-def verify_coverage(pack: dict, docs: list[dict]) -> dict:
+def verify_coverage(pack: dict, docs: list[dict], split_over: int | None = None) -> dict:
     """Does the union of the shards equal the pack's objects? Compared by canonical content, with multiplicity."""
-    header, items = flatten(pack)
+    header, items = flatten(pack, split_over)
     want = Counter((s, canon(o)) for s, o in items)
     got: Counter = Counter()
     got_header: dict = {}
@@ -384,12 +391,13 @@ def build_reading_set(out: Path, ctx: dict, manifest: dict, *, cap_kb: int = 100
             "as_of": ev["as_of"], "state_version": ev["state_version"], "pack_file": pack_file}
     cos = [{**c, "slug": c.get("axelrod_entity_id") or c["company_id"].lower()} for c in pack["companies"]]
     slug_of = {c["company_id"]: c["slug"] for c in cos}
+    budget = int(cap * 0.88)
     header, _ = flatten(pack)
     folder = out / FOLDER
     folder.mkdir(parents=True, exist_ok=True)
 
     fam: dict[tuple[int, str], list[tuple[str, Any, str]]] = {}
-    for family, order, s, o, g in route(pack, slug_of):
+    for family, order, s, o, g in route(pack, slug_of, budget):
         fam.setdefault((order, family), []).append((s, o, g))
     entries = [{"file": "00_START_HERE.md", "holds": "This guide", "when": "First, always"}]
     for c in cos:
@@ -404,7 +412,7 @@ def build_reading_set(out: Path, ctx: dict, manifest: dict, *, cap_kb: int = 100
             its.sort(key=lambda t: RANK.get(t[0].removeprefix(SUP), 5))
         else:
             its.sort(key=lambda t: t[2] if order == 20 else "")
-        shards = pack_groups(its, int(cap * 0.88))
+        shards = pack_groups(its, budget)
         for n, sh in enumerate(shards, 1):
             name = f"{order}_{family}_{n:02d}.json"
             counts, scope = describe(sh)
@@ -422,12 +430,12 @@ def build_reading_set(out: Path, ctx: dict, manifest: dict, *, cap_kb: int = 100
             holds = ", ".join(f"{k} {s.removeprefix(SUP)}" for s, k in counts.items())
             entries.append({"file": name, "holds": f"{family.replace('_', ' ')} {n} of {len(shards)}: {holds}"
                             + (f"; {scope_text(scope)}" if scope else ""), "when": WHEN_ORDER[order]})
-    check = verify_coverage(pack, docs)
+    check = verify_coverage(pack, docs, budget)
     if not check["ok"]:
         raise ValueError(f"the shards do not cover the pack: {check}")
     for c in cos:
         (folder / f"01_overview_{c['slug']}.md").write_text(company_overview(c, pack, where, meta))
-    for name, text, n_ids in index_files(where, int(cap * 0.88)):
+    for name, text, n_ids in index_files(where, budget):
         (folder / name).write_text(text)
         entries.append({"file": name, "holds": f"{n_ids} ids -> file code", "when": WHEN_ORDER[90]})
 

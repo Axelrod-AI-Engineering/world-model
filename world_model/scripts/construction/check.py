@@ -37,6 +37,7 @@ from axelrod_wm.context.construction import (
 from axelrod_wm.intake.overlap import overlapping_views
 from axelrod_wm.model.construction import (
     TOLERANCE,
+    bundle_availability,
     bundle_levels,
     bundle_series,
     model_levels,
@@ -108,8 +109,16 @@ def print_stock_flows(rows: list[dict], label: str) -> int:
     for r in rows:
         print(f"  {r['stock_flow_id']:<28} {r['opening_at']} -> {r['closing_at']}  opening {_num(r['opening'])}, closing "
               f"{_num(r['closing'])}, implied {_num(r['implied_closing'])} ({_num(r['relative_difference'], pct=True)})"
-              f"  {r['status'].upper()}" + (f"  no flow: {', '.join(r['missing_flows'])}" if r["missing_flows"] else ""))
+              + (f"  published {r['opening_published_at']} and {r['closing_published_at']}" if "opening_published_at" in r else "")
+              + f"  {r['status'].upper()}" + (f"  no flow: {', '.join(r['missing_flows'])}" if r["missing_flows"] else ""))
     return sum(1 for r in rows if r["status"] == "flag")
+
+
+def link_summary(lk: dict) -> str:
+    """The links that touch a company's values: sized causal and uncalibrated causal links are the estimated part; accounting,
+    identity and stock-flow links are fixed by construction (their weights are derived), so they are not counted as sized."""
+    return (f"{lk['total']} link(s): {lk['sized_causal']} sized causal, {lk['uncalibrated_causal']} uncalibrated causal, "
+            f"{lk['fixed']} fixed (accounting {lk['accounting']}, identity {lk['identity']}, stock-flow {lk['stock_flow']})")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -147,14 +156,15 @@ def main(argv: list[str] | None = None) -> int:
         print(f"SOURCES {p}")
     for eid in a.entities:
         view = construction_view(g, eid)
-        print(f"{eid}: {len(view['compositions'])} composition(s), {len(view['paths'])} path(s), links {view['links']}")
+        print(f"{eid}: {len(view['compositions'])} composition(s), {len(view['paths'])} path(s), {link_summary(view['links'])}")
         ins = inputs_by_status(g, eid)
         print(f"  inputs by status: {ins['counts']}")
         for name in ins["not_yet_reviewed"]:
             print(f"  NOT YET REVIEWED {name}")
         for k in keyword_risks(g, eid):
-            print(f"  KEYWORD {k['value_id']}: the extraction gazetteer would match the common word(s) "
-                  f"{', '.join(k['keywords'])} anywhere; rename the value or give its id a specific last word")
+            print(f"  KEYWORD {k['value_id']}: the extraction gazetteer reads the common word(s) {', '.join(k['keywords'])} as the "
+                  f"keyword of this one value, so it matches right after {eid}'s name or as a short key-data label; "
+                  f"rename the value or give its id a specific last word")
         if sources is not None:
             cc = company_citations(g, eid, sources)
             print(f"  sources: {len(cc['resolved'])} id(s) resolve, {len(cc['unresolved'])} do not; "
@@ -188,7 +198,7 @@ def main(argv: list[str] | None = None) -> int:
                 flags += print_reconciliation(mine(reconcile(g, lv, a.tolerance)), label, a.suggest_residual)
                 flags += print_identities(mine(reconcile_identities(g, lv, a.tolerance)), label)
                 flags += print_matrices(mine(reconcile_matrices(g, lv, a.tolerance)), label)
-                flags += print_stock_flows(mine(reconcile_stock_flows(g, bundle_series(bundle), a.tolerance)), label)
+                flags += print_stock_flows(mine(reconcile_stock_flows(g, bundle_series(bundle), a.tolerance, bundle_availability(bundle))), label)
         else:
             lv, label = model_levels(g, a.statistic), f"the model's levels (posterior {a.statistic}s)"
             flags += print_reconciliation(mine(reconcile(g, lv, a.tolerance)), label, a.suggest_residual)

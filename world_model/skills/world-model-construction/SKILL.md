@@ -26,7 +26,7 @@ only after a search. A forecast says what it could not calculate.
 
 ## Inputs
 
-- The world: `world_model/examples/worlds/<world>/`, or `worlds/<world>/` in the client root for a client's (`WORLD_MODEL_CLIENT_DIR`, default `data/clients`: entities, interactions, taxonomy, `construction/`).
+- The world: `world_model/examples/worlds/<world>/`, or `worlds/<world>/` in the client root for a client's (`WORLD_MODEL_CLIENT_DIR`, default `data/clients`: entities, interactions, taxonomy, `construction/`). A private client root needs `scenarios/<id>/scenario.yaml` and `configs/<name>.yaml` beside `worlds/`: the scripts load a world through a scenario, and a root without one stops with "no scenario ...". In a construction file, a company's own `entities:` are read before its top-level `subentities:`, so the values may name an entity the same file defines.
 - The client's material for the company, local and gitignored: workbooks, research, filings, transcripts and
   presentations.
 - The reviewer's feedback, if any.
@@ -52,7 +52,7 @@ Build in this order: composition → operating paths → mapping into the accoun
 3. **Define the values (R2).** Give every new value its view, accounting basis, unit and period. Add currency and
    geography where they matter. Keep statutory, adjusted and segment-profit definitions as separate values, and make
    every link's label match its target. Use synthetic, round priors that add up. Check that no name or alias makes a common
-   word an extraction keyword (`check.py` warns `KEYWORD`).
+   word an extraction keyword (`check.py` warns `KEYWORD` for a value whose last word is a common word and the only one of the company's values to end in it).
 4. **Compositions (R5).** Build each view the company reports (segments, regions, customer location, production
    location, products, business lines, investment assets, capital):
    - one basis per view;
@@ -107,7 +107,7 @@ Build in this order: composition → operating paths → mapping into the accoun
     - `citations.json`: link or value id → source id, location (sheet!cell, table/row, page and paragraph), and passage.
 
     Tracked files hold **neutral ids only**: never a firm, broker, vendor or file name, and never a client figure.
-12. **Inputs (R7).** Run `world_model/scripts/construction/inputs.py <world> --entities <company> --corpus <client folder>`. Read
+12. **Inputs (R7).** Run `world_model/scripts/construction/inputs.py <world> --entities <company> --corpus <client folder> [--out <folder>]` (the report goes to `data/work/<client>/construction` by default, never into the corpus). Read
     the candidates, then set each input's status:
     - found and connected;
     - found but not connected;

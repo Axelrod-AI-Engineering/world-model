@@ -16,6 +16,7 @@ from axelrod_wm.model.construction import (
     ResponseState,
     StockFlow,
     Threshold,
+    bundle_availability,
     bundle_series,
     composition_role,
     identity_weights,
@@ -496,3 +497,24 @@ def test_a_copy_of_the_spec_round_trips(tmp_path):
     spec = load(tmp_path, bank())
     again = ConstructionSpec.model_validate(copy.deepcopy(spec.model_dump(mode="json")))
     assert again.spec_hash() == spec.spec_hash()
+
+
+def test_a_roll_forward_dates_each_level_by_the_period_it_describes(g):
+    """A flow reported in a later notice belongs to its own period: levels are dated by occurred_at, and the notice's
+    publication day is kept apart as availability."""
+    def item(published, occurred, **vals):
+        it = {"published_at": published, "signals": [{"type": "observe", "value_of": v, "value": x} for v, x in vals.items()]}
+        return {**it, "occurred_at": occurred} if occurred else it
+
+    b = {"items": [item("2025-04-10T00:00:00Z", "2025-03-31T00:00:00Z", **{"acme.capital": 12.0}),
+                   item("2025-08-20T00:00:00Z", "2025-06-30T00:00:00Z", **{"acme.capital": 12.6, "acme.income": 1.0, "acme.dividends": 0.4}),
+                   item("2025-08-20T00:00:00Z", None, **{"acme.other": 5.0})]}          # no period given: its publication day
+    s = bundle_series(b)
+    assert s["acme.capital"] == [("2025-03-31", 12.0), ("2025-06-30", 12.6)]
+    assert s["acme.income"] == [("2025-06-30", 1.0)] and s["acme.other"] == [("2025-08-20", 5.0)]
+    av = bundle_availability(b)
+    assert av["acme.capital"] == {"2025-03-31": "2025-04-10", "2025-06-30": "2025-08-20"}
+    (row,) = reconcile_stock_flows(g, s, available=av)
+    assert row["status"] == "ok" and row["opening"] == 12.0 and row["inflows"] == {"acme.income": 1.0}
+    assert (row["opening_published_at"], row["closing_published_at"]) == ("2025-04-10", "2025-08-20")
+    assert "opening_published_at" not in reconcile_stock_flows(g, s)[0]

@@ -5021,8 +5021,9 @@ components:
       additionalProperties: false
       properties:
         total: *id020
-        calibrated: *id020
-        uncalibrated: *id020
+        sized_causal: *id020
+        uncalibrated_causal: *id020
+        fixed: *id020
         accounting: *id020
         identity: *id020
         stock_flow: *id020
@@ -5030,14 +5031,15 @@ components:
         with_transition: *id020
       required:
       - total
-      - calibrated
-      - uncalibrated
+      - sized_causal
+      - uncalibrated_causal
+      - fixed
       - accounting
       - identity
       - stock_flow
       - state_dependent
       - with_transition
-      description: Counts of the relationships touching a company's attributes.
+      description: Counts of the relationships touching a company's attributes. Sized and uncalibrated causal links are the estimated part; fixed links (accounting, identity, stock-flow) carry derived weights and are counted by type.
     Construction:
       type: object
       additionalProperties: false
