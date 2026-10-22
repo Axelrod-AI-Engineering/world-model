@@ -94,9 +94,9 @@ NAV = "\n".join(["Home", "Company", "Investors", "Notices", "Careers", "Contact"
     ("001_1_2025-CEO-Investor-Day-official-English.pdf", "", {"judge": False}, "presentation", False, "name"),
     # the source address
     ("a.pdf", PROSE, {"url": "https://www.hkexnews.hk/listedco/x.pdf"}, "filing", False, "url"),
-    ("a.html", PROSE, {"url": "https://www.hyundai.com/worldwide/en/company/ir/notices/view-1"}, "filing", False, "url"),
+    ("a.html", PROSE, {"url": "https://www.example-motors.com/en/company/ir/notices/view-1"}, "filing", False, "url"),
     ("a.html", PROSE, {"url": "https://www.calls.example.com/quote/X/transcripts/2026"}, "transcript", False, "url"),
-    ("a.html", PROSE, {"url": "https://www.hyundai.com/worldwide/en/newsroom/detail/1"}, "news", False, "url"),
+    ("a.html", PROSE, {"url": "https://www.example-motors.com/en/newsroom/detail/1"}, "news", False, "url"),
     ("a.html", PROSE, {"url": "https://sneresearch.com/en/insight/release"}, "data_aggregate", False, "url"),
     # the file name
     ("001_1_29-Jan-2026_Q4-2025-call-transcript-third-party.html", PROSE, {}, "transcript", False, "name"),
