@@ -359,6 +359,26 @@ def test_a_company_outside_the_statement_profile_gets_the_generic_core():
     assert rels["bo_fuel"]["axelrod"]["timing_basis"].startswith("model assumption") and "timing_basis" not in rels["bo_tourism"]["axelrod"]
 
 
+def test_two_companies_bind_to_one_export_without_replacing_each_other():
+    """A combined focus attaches each company's repair data to one pack: every list keeps both companies' objects."""
+    ctx, repair = generic()
+    attach_repair(ctx, repair)
+    ctx["domain_pack"]["companies"].append({"company_id": "C_CA", "company_name": "Cascade Rail", "primary_sector_pack_id": "SP9"})
+    ctx["evidence"]["values"].append({**value("cascade.revenue", refs=["ca.pdf"]), "node_id": "C_CA"})
+    second = {"company_id": "C_CA", "entity": "cascade", "repair_version": "C1", "observations": [mkobs("CA_REV", 7.0, metric="cascade.revenue", selected=True)],
+              "selected_baseline": {"baseline_id": "CBASE", "period": FY, "available_at": "2026-05-01"},
+              "business_records": [{"record_id": "REC_CA_1", "record_kind": "relationship", "stage": "signed"}]}
+    attach_repair(ctx, second)
+    sup, ev, m = ctx["domain_pack"]["domain_specific_support_objects"], ctx["evidence"], ctx["manifest"]
+    assert [r["record_id"] for r in sup["business_records"]] == ["PRJ_BO_1", "REC_CA_1"]
+    assert {o["company_id"] for o in sup["earnings_observations"]} == {BO, "C_CA"} and len(sup["earnings_observations"]) == 4
+    assert [r["baseline_id"] for r in sup["baseline_reconciliations"]] and {p["metric_id"] for p in sup["observation_estimate_pairs"]} >= {"borealis.profit", "cascade.revenue"}
+    assert [b["baseline_id"] for b in ev["baseline_selections"]] == ["BBASE", "CBASE"] and ev["baseline_selection"]["baseline_id"] == "CBASE"
+    assert [r["company_id"] for r in m["repairs"]] == [BO, "C_CA"] and m["repair"]["company_id"] == "C_CA"
+    assert len(sup["schema_gaps"]) == len({g["concept"] for g in sup["schema_gaps"]})
+    assert len(ctx["domain_pack"]["required_search_scopes"]) == 2
+
+
 def test_repair_data_that_has_no_observations_or_baseline_is_attached_as_it_is():
     ctx, repair = generic()
     bare = {k: repair[k] for k in ("company_id", "entity", "repair_version")} | {"business_records": repair["business_records"]}
