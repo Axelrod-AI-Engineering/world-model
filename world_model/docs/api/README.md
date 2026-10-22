@@ -657,7 +657,7 @@ Codes: `invalid_request`, `invalid_json`, `invalid_cursor`, `authentication_requ
 | `Composition` | One view of a business split into parts that add to a total. |
 | `PathStep` | One step of a named path: a relationship. |
 | `Path` | A named chain of relationships from a starting change to a company's financial endpoint. |
-| `LinkCounts` | Counts of the relationships touching a company's attributes. |
+| `LinkCounts` | Counts of the relationships touching a company's attributes. Sized and uncalibrated causal links are the estimated part; fixed links (accounting, identity, stock-flow) carry derived weights and are counted by type. |
 | `Construction` | A company's business construction in one read (workflow read). |
 | `TraceStep` | One step of a traced route. |
 | `TraceRoute` | One route of a trace. |
