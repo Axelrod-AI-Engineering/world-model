@@ -15,55 +15,96 @@ is searched is in [lake.md](lake.md), and what it exchanges with the world model
 
 ## Where it stands
 
-Ingestion takes a file (PDF, DOCX, XLSX, HTML, CSV, Markdown, text, or a scan) and does the following:
+Ingestion turns a file into proposed changes to the world model. It never changes the model itself: a person or agent
+reviews each proposed change before it is applied. The table below gives each step that exists, how it works and where
+it lives. Ingestion paths are under `ingestion/src/axelrod_ingest/`, and world-model paths are under
+`world_model/src/axelrod_wm/`.
 
-1. Stores the file in the lakehouse, under its organization.
-2. Parses and types it.
-3. Splits it into passages.
-4. Finds the model's own names in the passages.
-5. Proposes graph updates as an import bundle, `axelrod.import/v1`.
+| Step | How it works | Where |
+|---|---|---|
+| Store | Each file's bytes are kept once per content hash, under its organization (tenant), in `<lake>/<org>/raw/`. A catalog row records the hash, name, source, event time and ingestion time. | `pipeline.py` (`Ingestor.store_file`), `lake/sqlite.py` |
+| Parse | PDF, DOCX, XLSX, HTML, CSV, Markdown and text become plain text plus table cells. The charset is detected from the BOM, the declared encoding, UTF-8, or a fallback. A scan with no text layer is read by tesseract where it is installed; results are cached by content. | `parse.py`, `tables.py`, `encoding.py`, `ocr.py` |
+| Type and date | Classifies the document (filing, report, transcript, or an excluded index or shell page) and checks it against the pack's manifest. Its event time is resolved by a fixed order of evidence, and the period it reports on is kept beside it. | `sources.py`, `dates.py` |
+| Languages and units | Chinese, Japanese and Korean text is split into tokens. Currencies and scales are normalized, and a bare ¥ is read as yen or yuan from evidence in the document. | `cjk.py`, `units.py`, `text.py` |
+| Duplicates | Copies of one disclosure across language or accounting basis are grouped (`shared_origin`), with one primary, so a fact is counted once. | `dedupe.py` |
+| Split and index | The text is split into passages with their offsets and pages. Each passage goes into two SQLite FTS5 indexes (one stemmed for keyword search, one unstemmed for prefix search) and gets one embedding. | `chunk.py`, `lake/sqlite.py`, `lake/embed.py` |
+| Recognize | A gazetteer built from the model's own entity and value names and aliases is matched over tokens: longest match first, never overlapping, with case rules for acronyms. Generic phrases ("share price") are resolved to the entity that owns them. Mentions are stored per passage. | `gazetteer.py`, `contract/world_view.py` (the model's names, produced by `intake/world_view.py`) |
+| Extract | Rules read levels, moves and table figures, with the exact quote and its offsets. Where a passage names the model's entities but the rules find nothing, an optional LLM step (Anthropic or OpenAI) proposes signals. These are validated against the text and the model's ids and cached by digest, so a rerun replays byte-for-byte. | `extract.py`, `llm.py` |
+| Bundle | The signals become an `axelrod.import/v1` bundle: dated items, each with signals and quotes. It is validated and stored with its source documents and extractor version. | `pipeline.py`, `contract/bundle.py` |
+| Packs | A folder with a manifest is ingested into a lake. This produces a report on each file and a determinism digest that must match on a rerun. | `pack.py`, `ingestion/scripts/ingest_pack.py` |
+| Measure | Speed and extraction precision and recall are scored against a gold set, with a blind half. | `bench.py`, `ingestion/scripts/ingest_bench.py`, [bench.md](bench.md) |
 
-Every step is deterministic. The same file and model give the same bundle, and a hashseed regression test guards this.
+How the world model uses it:
+- **Contract and boundary.** The two sides share only the contract: the bundle schema and the read-only world view
+  (`contract/`). Ingestion never imports the world model, and `ingestion/tests/test_boundary.py` enforces it.
+- **Setup.** The service creates one lake (`SQLiteLake`, at `WORLD_MODEL_LAKE_DIR`, which is the volume on Railway) and
+  one `Ingestor` at startup, in `api/app.py`.
+- **Swappable storage.** All storage goes through the `LakeStore` interface in `lake/store.py`.
 
-| Area | State |
-|---|---|
-| Formats | PDF, DOCX, XLSX, HTML, CSV, Markdown and text are all read. Scans are read by OCR (tesseract) where it is installed, English by default. |
-| Languages | English in full. Chinese and Korean are read for levels and table figures, not for moves. Japanese yen and Chinese yuan are told apart by evidence. |
-| Document metadata | Type and exclusion reason, the manifest entry and hash check, published date and reporting period, and duplicate groups across language and accounting basis (`shared_origin`). |
-| Extraction | Rules first. An optional, cached LLM step runs only where the rules find nothing. Recognition is against the model's own names and aliases, and new entities are never proposed. |
-| Packs | A folder with a manifest becomes a lake, a report on each file, and a determinism digest (`ingestion/scripts/ingest_pack.py`). |
-| Boundary | Ingestion never imports the world model; `tests/test_boundary.py` enforces it. CI requires 100% line and branch coverage of the member. |
+**Determinism.** Every query has an explicit `ORDER BY`, and every set is sorted before it is iterated. Embeddings are
+run single-threaded and rounded to 6 decimals, and LLM answers are cached by digest. The hashseed regression test is
+`world_model/tests/integration/test_hashseed_determinism.py`.
 
 ## What is built downstream
 
+### Upload and review: built
+
+The `/v1` routes are in `api/v1/routes_ingest.py`, and the MCP tools are in `api/mcp.py`.
+
+| What | Route | How |
+|---|---|---|
+| Upload | `POST /v1/world-models/{id}/documents` | Returns 202 and runs `Ingestor.ingest_many` as a background job, with an idempotency key. Results come back in event-time order, the order they fold into the model. |
+| Read documents | `GET …/documents`, `…/{doc}`, `…/{doc}/chunks`, `…/{doc}/content` | Returns the catalog, passages and text straight from the lake. |
+| Read again | `POST …/documents/{doc}/bundles` | Extracts a stored document again against the model as it is now, because the model's names and links change as it learns. |
+| Agent bundles | `POST …/bundles`, `GET …/bundles`, `…/{bundle}/items` | Stores and reads bundles that an agent wrote by hand, under the same schema. |
+| Import | `POST …/changes` (one proposed change per bundle item), then `…/changes/{change}/approvals` or `/rejections` (`api/v1/routes_work.py`) | Each item of a bundle becomes a market event on its own date. The `structured` translator turns its signals into a proposed graph update. Signals whose ends are not in the graph are dropped and reported. Per-share values are converted across splits, and overlapping additive views are kept from double counting. A person approves each change. |
+| Preview | the Import dialog | Draws the graph update a document would make, before anything changes. |
+
+The import code is in `sim/imports.py` and `intake/structured.py` (the translator), with `intake/overlap.py` and
+`model/corporate_actions.py`. The preview is `api/ingest_view.py`.
+
 ### Retrieval: built and in use
 
-Search over the lake has five modes:
+`lake/search.py` (`Searcher`) has five modes:
 
 | Mode | How it ranks |
 |---|---|
-| `keyword` | BM25 |
-| `prefix` | prefix matching |
-| `semantic` | bge-small embeddings, run on the CPU inside the service, so no text leaves the deploy |
-| `graph` | the nodes the query names and their neighbours, then the passages that mention them |
-| `hybrid` | the default: reciprocal-rank fusion of keyword, semantic and graph |
+| `keyword` | FTS5 with Porter stemming, ranked by BM25: every word first, then any word if that finds nothing |
+| `prefix` | the unstemmed FTS5 index, with the last word as a prefix, plus the model's entities and values whose names start that way |
+| `semantic` | cosine similarity between the query's embedding and every passage's, computed in Python |
+| `graph` | the entities and values the query names, their neighbours through the model's relationships, then the passages that mention them |
+| `hybrid` | the default: reciprocal-rank fusion (k = 60) of keyword, semantic and graph |
+
+Embeddings (`lake/embed.py`), chosen by `WORLD_MODEL_EMBEDDER`:
+- **`fastembed`:** BAAI/bge-small-en-v1.5, 384 dimensions, ONNX on the CPU inside the service, so no text leaves the
+  deploy.
+- **`hashing`:** an exact 256-bucket hash of words and word pairs, with no model. The tests use it, and it is the
+  fallback when fastembed is not installed.
 
 Where it is served:
 - **HTTP:** `GET /v1/world-models/{id}/search?q=…&mode=…&limit=…`
-- **MCP:** the `world_model_search` tool.
+- **MCP:** the `world_model_search` tool, which calls that route.
 
 What a result carries and who sees it:
-- Each hit gives its document, passage, text and event time, and says why it matched.
-- Results are deterministic.
+- Each hit gives its document, passage ordinal, text, event time and any entity it names, and says why it matched.
+- Lists are ordered by score, then by document and position, so the same query always returns the same results.
 - Organizations are tenants: a credential sees only its own documents.
 
-Construction agents already use search to find the passages a construction cites.
+Construction agents already use search to find the passages a construction cites. They follow the construction skill in
+`world_model/skills/world-model-construction/` and check their work with `world_model/scripts/construction/check.py`.
 
-### Extraction into the model: built, with low recall
+### Superentity labels: built
 
-Bundles are imported as graph updates through `/v1`. The rules are precise, but their recall is low. In particular, they
-read causal claims in prose (one value moving another) at 0 of 7 on the blind half of the gold set. Signals are pointers
-for a person or an agent to follow, not a finished model.
+Superentities are the nested groups the UI draws. Each is named by its top keywords under class-based TF-IDF over its
+members' names, kinds and sectors, with its sibling groups as the classes. An optional temperature-0 LLM relabel
+(`ClusterLabels`, `POST /api/clusters/relabel`) is cached in the lake by a hash of the members' ids, so a label never
+changes between runs. Building the view only reads that cache. The code is `api/hierarchy.py`.
+
+### Extraction recall: low
+
+The rules are precise, but their recall is low. In particular, they read causal claims in prose (one value moving
+another) at 0 of 7 on the blind half of the gold set. Signals are pointers for a person or an agent to follow, not a
+finished model.
 
 ### Not built
 
@@ -71,8 +112,9 @@ for a person or an agent to follow, not a finished model.
   answer that cites both. Search is the "R" of RAG; the generation step does not exist yet.
 - **A context or memory layer for agents.** The architecture keeps it separate from the causal model, but it is still a
   design only. See [the architecture](../../docs/architecture.md).
-- **A link from the lake to the evaluation suite.** The inner-loop tests answer from frozen excerpts, not from the lake,
-  so they barely measure the model. In the last round, only 5 of 100 answers cited a model object.
+- **A link from the lake to the evaluation suite.** The inner-loop tests (`evaluation/inner_loop*.py`, with tools in
+  `evaluation/inner_loop_tools.py`) answer from frozen excerpts, not from the lake, so they barely measure the model.
+  In the last round, only 5 of 100 answers cited a model object.
 
 ## Next steps, in priority order
 
