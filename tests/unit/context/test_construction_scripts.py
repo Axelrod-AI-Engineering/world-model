@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[3]
 
 
 def _load(name: str):
-    spec = importlib.util.spec_from_file_location(f"{name}_script", ROOT / "scripts" / "construction" / f"{name}.py")
+    spec = importlib.util.spec_from_file_location(f"{name}_script", ROOT / "world_model" / "scripts" / "construction" / f"{name}.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
@@ -62,7 +62,7 @@ def test_the_input_search_helpers(tmp_path):
     assert [f.name for f in got] == ["broken.pdf", "note.md", "other.txt", "blind.md"]   # a named folder is read
     assert inputs.corpus_files(c, [str(c / "x.md")], [], []) == [c / "x.md"]
     assert inputs.tracked(c / "report.json") is False                                    # not in a repository
-    assert inputs.tracked(ROOT / "src" / "report.json") is True
+    assert inputs.tracked(ROOT / "world_model" / "src" / "report.json") is True
     assert inputs.tracked(ROOT / "data" / "work" / "sally" / "report.json") is False         # ignored: client data
     assert inputs.world_dir("small_demo").resolve() == (ROOT / "world_model" / "examples" / "worlds" / "small_demo").resolve()
     assert inputs.world_dir("acme_demo").resolve() == (ROOT / "tests" / "fixtures" / "clients" / "worlds" / "acme_demo").resolve()      # a client world, by name

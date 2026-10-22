@@ -32,7 +32,6 @@ from axelrod_wm.control.updates import UpdateRequest, UpdateState
 from axelrod_wm.engine.config import EngineConfig, load_config
 from axelrod_wm.engine.engine import build_engine, make_storage
 from axelrod_wm.engine.initialize import (
-    REPO_ROOT,
     ConstructionSpec,
     Initializer,
     SeedFile,
@@ -46,6 +45,7 @@ from axelrod_wm.intake.scrapers import MockWebScraper
 from axelrod_wm.intake.sources import HistoryReplaySource, JsonlReplaySource
 from axelrod_wm.model.hypothesis import Hypothesis
 from axelrod_wm.model.serialization import canonical_json, sha256_text
+from axelrod_wm.paths import REPO_ROOT
 from axelrod_wm.repo.snapshots import FilesBackend, StateVersion, StorageBackend, load_state
 from axelrod_wm.sim.scenario import (
     ScenarioScript,

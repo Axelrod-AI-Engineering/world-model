@@ -13,7 +13,7 @@ from axelrod_wm.flows.overview import render_overview_svg
 from axelrod_wm.flows.render import flow_markdown, render_svg
 from axelrod_wm.sim.examples.small import SMALL
 
-SRC = Path(__file__).resolve().parents[3] / "src" / "axelrod_wm"
+SRC = Path(__file__).resolve().parents[3] / "world_model" / "src" / "axelrod_wm"
 
 
 def _source_text() -> str:
@@ -107,7 +107,7 @@ def test_render_marks_every_node_and_the_text_lists_every_stage():
 
 
 def test_docs_flowchart_is_current():
-    path = SRC.parents[1] / "docs" / "flowchart.svg"
+    path = SRC.parents[2] / "docs" / "flowchart.svg"
     assert path.exists(), "run `axelrod flows --svg docs/flowchart.svg`"
     assert path.read_text() == render_overview_svg(), "docs/flowchart.svg is stale: run `axelrod flows --svg docs/flowchart.svg`"
 

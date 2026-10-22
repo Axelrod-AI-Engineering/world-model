@@ -24,7 +24,7 @@ from tests.service.helpers import (
 )
 
 SIGNER = Signer()
-SPEC = yaml.safe_load((ROOT / "docs/api/openapi.yaml").read_text())
+SPEC = yaml.safe_load((ROOT / "world_model/docs/api/openapi.yaml").read_text())
 A, B, R, ADM = "a" * 32, "b" * 32, "r" * 32, "m" * 32
 TWO_ORGS = dict(
     WORLD_MODEL_BASIC_AUTH_USERNAME="admin", WORLD_MODEL_BASIC_AUTH_PASSWORD="pw-admin",

@@ -35,7 +35,7 @@ from tests.unit.engine.test_cov_initialize import _taxonomy, _write
 from tests.unit.model.test_business_construction import ATTRS, TRANSITION, _s, acme_construction, world
 
 ROOT = Path(__file__).resolve().parents[3]
-_spec = importlib.util.spec_from_file_location("calibrate_script", ROOT / "scripts" / "construction" / "calibrate.py")
+_spec = importlib.util.spec_from_file_location("calibrate_script", ROOT / "world_model" / "scripts" / "construction" / "calibrate.py")
 script = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(script)
 

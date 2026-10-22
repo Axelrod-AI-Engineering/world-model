@@ -13,7 +13,7 @@ from axelrod_wm.api.v1.routes_model import router as model_router
 from axelrod_wm.api.v1.routes_work import router as work_router
 
 PATCH = Path("integrations/core/0001-world-model-service-mcp-tools.patch").read_text()
-SPEC = yaml.safe_load(Path("docs/api/openapi.yaml").read_text())
+SPEC = yaml.safe_load(Path("world_model/docs/api/openapi.yaml").read_text())
 W = "/world-models/{}"
 
 

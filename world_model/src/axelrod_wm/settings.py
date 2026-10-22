@@ -19,7 +19,8 @@ import tomllib
 from collections.abc import MutableMapping
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
+from axelrod_wm.paths import REPO_ROOT as ROOT
+
 CONFIGS = ROOT / "configs"
 STAGES = ("local", "dev", "staging", "production")
 ALIASES = {"development": "dev", "prod": "production"}

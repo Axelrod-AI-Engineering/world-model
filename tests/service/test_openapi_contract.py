@@ -16,7 +16,7 @@ from openapi_spec_validator import validate
 from axelrod_wm.api.v1.problems import CODES
 from tests.service.helpers import NOTE, ROOT, V1, WM, Signer, data, decide_all, propose, service, upload
 
-SPEC = yaml.safe_load((ROOT / "docs/api/openapi.yaml").read_text())
+SPEC = yaml.safe_load((ROOT / "world_model/docs/api/openapi.yaml").read_text())
 METHODS = ("get", "post", "put", "patch", "delete")
 SIGNER = Signer()
 
@@ -44,7 +44,7 @@ def test_the_problem_codes_are_the_specs():
 
 
 def test_the_reference_in_docs_api_readme_is_current():
-    spec = importlib.util.spec_from_file_location("reference", ROOT / "scripts/api/reference.py")
+    spec = importlib.util.spec_from_file_location("reference", ROOT / "world_model/scripts/api/reference.py")
     ref = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(ref)
     assert ref.main(["--check"]) == 0

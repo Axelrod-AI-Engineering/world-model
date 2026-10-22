@@ -70,7 +70,7 @@ def update(text: str) -> str:
 
 
 def files() -> list[Path]:
-    return [ROOT / "README.md", *sorted((ROOT / "docs").rglob("*.md"))]
+    return [ROOT / "README.md", *sorted((ROOT / "docs").rglob("*.md")), *sorted((ROOT / "world_model" / "docs").rglob("*.md"))]
 
 
 def main() -> int:

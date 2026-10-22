@@ -211,7 +211,7 @@ def test_an_identity_reference_to_a_missing_object(eng):
 
 
 def _check():
-    spec = importlib.util.spec_from_file_location("check_script", ROOT / "scripts" / "construction" / "check.py")
+    spec = importlib.util.spec_from_file_location("check_script", ROOT / "world_model" / "scripts" / "construction" / "check.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
@@ -246,7 +246,7 @@ def test_the_check_scripts_identity_matrix_and_roll_forward_tables(eng, capsys):
 
 
 def test_the_bundle_check_names_totals_with_two_driving_views(eng):
-    spec = importlib.util.spec_from_file_location("bundles_script", ROOT / "scripts" / "imports" / "bundles.py")
+    spec = importlib.util.spec_from_file_location("bundles_script", ROOT / "world_model" / "scripts" / "imports" / "bundles.py")
     bundles = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(bundles)
     g = eng.wm.graph

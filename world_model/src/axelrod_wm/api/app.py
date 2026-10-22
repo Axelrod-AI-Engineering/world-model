@@ -19,11 +19,12 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
 
-from axelrod_wm.clients import REPO_ROOT, find_scenario, load_scenario_yaml, scenario_dirs
+from axelrod_wm.clients import find_scenario, load_scenario_yaml, scenario_dirs
 from axelrod_wm.control.controller import ControllerError
 from axelrod_wm.events.graph_update import EventValidationError
 from axelrod_wm.inference.decisions import DecisionError
 from axelrod_wm.inference.task import UnboundThesis
+from axelrod_wm.paths import REPO_ROOT, WM_ROOT
 from axelrod_wm.intake.translators import LLMNotConfigured
 from axelrod_wm.repo.snapshots import RestoreError, StorageBackend
 from axelrod_wm.sim.runner import ScenarioRunner, build_runner
@@ -33,7 +34,7 @@ logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
 
-WEB_DIR = REPO_ROOT / "web"
+WEB_DIR = WM_ROOT / "web"
 
 
 # The demos the top bar's menu switches between (docs/guides/demos.md), in menu order: (scenario id, label, note).

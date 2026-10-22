@@ -10,6 +10,7 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from axelrod_wm.model.serialization import canonical_json, sha256_text
+from axelrod_wm.paths import REPO_ROOT, WM_ROOT
 
 
 class _Section(BaseModel):
@@ -316,8 +317,7 @@ def deep_merge(base: dict, override: dict) -> dict:
     return out
 
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
-DEFAULT_CONFIG_PATH = REPO_ROOT / "configs" / "default.yaml"
+DEFAULT_CONFIG_PATH = WM_ROOT / "configs" / "default.yaml"
 
 
 def load_config(path: str | Path | None = None, overrides: list[str | Path | dict] | None = None,

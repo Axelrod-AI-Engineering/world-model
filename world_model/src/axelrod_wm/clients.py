@@ -23,12 +23,13 @@ from typing import Any
 
 import yaml
 
+from axelrod_wm.paths import REPO_ROOT, WM_ROOT
+
 CLIENT_DIR_ENV = "WORLD_MODEL_CLIENT_DIR"
 DATA_DIR_ENV = "WORLD_MODEL_DATA_DIR"
-REPO_ROOT = Path(__file__).resolve().parents[2]
 DATA_DIR = Path(os.environ.get(DATA_DIR_ENV) or REPO_ROOT / "data")      # local and gitignored
-EXAMPLES_DIR = REPO_ROOT / "world_model" / "examples"                    # tracked: scenarios/<id>/, worlds/<name>/
-TAXONOMY_DIR = REPO_ROOT / "world_model" / "taxonomy"                    # tracked: the shared taxonomy
+EXAMPLES_DIR = WM_ROOT / "examples"                    # tracked: scenarios/<id>/, worlds/<name>/
+TAXONOMY_DIR = WM_ROOT / "taxonomy"                    # tracked: the shared taxonomy
 
 
 def client_roots() -> list[Path]:

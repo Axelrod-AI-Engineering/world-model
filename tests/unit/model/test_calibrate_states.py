@@ -25,7 +25,7 @@ from tests.unit.model.test_business_construction import ATTRS, TRANSITION, _s, w
 from tests.unit.model.test_identities import bank
 
 ROOT = Path(__file__).resolve().parents[3]
-_spec = importlib.util.spec_from_file_location("calibrate_script2", ROOT / "scripts" / "construction" / "calibrate.py")
+_spec = importlib.util.spec_from_file_location("calibrate_script2", ROOT / "world_model" / "scripts" / "construction" / "calibrate.py")
 script = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(script)
 

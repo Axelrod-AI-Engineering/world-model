@@ -13,7 +13,7 @@ import yaml
 from axelrod_wm.api.v1 import routes_erid, routes_model, routes_work
 from tests.service.helpers import ROOT, V1, Signer, service
 
-SPEC = yaml.safe_load((ROOT / "docs/api/openapi.yaml").read_text())
+SPEC = yaml.safe_load((ROOT / "world_model/docs/api/openapi.yaml").read_text())
 CODES = set(SPEC["components"]["schemas"]["ProblemCode"]["enum"])
 ROUTES = sorted((m, r.path) for router in (routes_model.router, routes_work.router, routes_erid.router) for r in router.routes
                 for m in r.methods if m != "HEAD")

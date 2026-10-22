@@ -16,7 +16,7 @@ initialization:
     regimes: world_model/examples/scenarios/oil_shock_demo/history_regimes.yaml
 world:
   truth: world_model/examples/scenarios/oil_shock_demo/truth.yaml
-config_overrides: configs/demo.yaml
+config_overrides: world_model/configs/demo.yaml
 checklist: true
 steps:
   - at: 2026-01-26T00:00:00Z

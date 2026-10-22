@@ -65,13 +65,12 @@ from axelrod_wm.model.taxonomy import (
     TaxonomyKind,
 )
 from axelrod_wm.model.temporal import parse_kernel
+from axelrod_wm.paths import REPO_ROOT
 from axelrod_wm.repo.ledger import LedgerKind
 
 if TYPE_CHECKING:
     from axelrod_wm.engine.engine import Engine
     from axelrod_wm.repo.mutator import MutationTxn
-
-REPO_ROOT = Path(__file__).resolve().parents[3]
 
 DEFAULT_PALETTES: dict[str, dict[str, str]] = {
     "h1": {"fill": "#F3E1A6", "line": "#B08F2E"},
