@@ -239,3 +239,16 @@ def test_main_fails_when_two_runs_differ(pack, wv, tmp_path, monkeypatch, capsys
     monkeypatch.setattr(pack_module, "run", drift)
     assert main([str(pack), "--world-view", str(wv), "--lake-dir", str(tmp_path / "a"), "--twice", str(tmp_path / "b")]) == 1
     assert json.loads(capsys.readouterr().out)["determinism"]["differing"] == ["all", "texts"]
+
+
+def test_a_file_that_cannot_be_read_is_a_row_with_its_error_and_the_run_goes_on(tmp_path):
+    root = tmp_path / "pack"
+    root.mkdir()
+    (root / "broken.pdf").write_bytes(b"this is not a pdf")
+    (root / "fine.txt").write_bytes(b"Acme EV net profit for the year: CNY 8.5bn.")
+    report, _ = run_pack(root, tmp_path / "lake", None)
+    bad = next(r for r in report.rows if r.path == "broken.pdf")
+    assert bad.status == "failed" and "not a readable PDF" in bad.error and bad.chunks == 0 and bad.bundle_id == ""
+    assert next(r for r in report.rows if r.path == "fine.txt").status == "extracted"
+    s = report.summary()
+    assert (s["failed"], s["extracted"], s["files"], s["not_in_manifest"]) == (1, 1, 2, 2) and s["types"] == {"other": 1}

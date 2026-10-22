@@ -193,3 +193,6 @@ def test_a_company_named_a_moment_ago_is_not_the_subjects_to_claim():
     assert read("Next is Acme Capital. It grew. It grew again. It grew once more. Net profit for the year: CNY 8.5bn.") == [
         ("acme_ev.net_profit", 8.5)]
     assert read("Net profit for the year: CNY 8.5bn.") == [("acme_ev.net_profit", 8.5)]
+    # the subject was named earlier, then another company: the later one's context is not the subject's
+    assert read("Acme EV is the group. Next is Acme Capital. Net profit for the year: CNY 8.5bn.") == []
+    assert read("Next is Acme Capital. Acme EV is the group. Net profit for the year: CNY 8.5bn.") == [("acme_ev.net_profit", 8.5)]

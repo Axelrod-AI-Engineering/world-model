@@ -296,7 +296,9 @@ class Gazetteer:
                     # the entity before, else after; the previous sentence's only when this one names no value itself
                     # ("core CPI fell to 2.4% y/y; the rate ..." is not the Fed's rate because the Fed came up earlier)
                     # the most recent owner named in the context
-                    ctx = next((e for e in reversed(recent) if e in owners), None)
+                    # (not when a company that is no owner was named after it: "Next is Acme Capital. Sales rose ..." is not Acme's)
+                    elsewhere = bool(recent) and recent[-1] in self.companies and recent[-1] != subject and recent[-1] not in owners
+                    ctx = None if elsewhere else next((e for e in reversed(recent) if e in owners), None)
                     # the nearest company named before it must be an owner ("BAC guided to NII up 6-8%; JPM guided
                     # to ..." leaves the first NII to BAC, "JPM guided ...; PNC guided to NII up 15%" the second)
                     rival_at = [p for p, _t in ticker_at if lo < p < a] + [
@@ -304,8 +306,6 @@ class Gazetteer:
                     owner_at = [pos for pos, e in named if lo < pos < a and e in owners]
                     if rival_at and max(rival_at) > max(owner_at, default=-1):
                         before, after = [], []           # the nearest company before it is another's
-                    # a company the last sentences named (another's subsidiary, say) is not the subject's own to claim
-                    elsewhere = bool(recent) and recent[-1] in self.companies and recent[-1] != subject and recent[-1] not in owners
                     ent, via = ((before[-1], "sentence") if before else (after[0], "sentence") if after else
                                 (ctx, "context") if ctx and not has_value and not (rivals - {ctx}) and (
                                     subject in (None, ctx) or ctx not in self.companies) else
