@@ -65,7 +65,7 @@ from axelrod_wm.model.taxonomy import (
     TaxonomyKind,
 )
 from axelrod_wm.model.temporal import parse_kernel
-from axelrod_wm.paths import REPO_ROOT
+from axelrod_wm.paths import REPO_ROOT, yaml_files
 from axelrod_wm.repo.ledger import LedgerKind
 
 if TYPE_CHECKING:
@@ -189,7 +189,7 @@ def read_construction(d: Path) -> tuple[dict, dict[str, str]]:
     origin: dict[str, str] = {}
     # Oct 17: a world's business construction, one file per company (construction/*.yaml): values added to its
     # entities, new entities, interactions, readable paths, and compositions
-    for f in sorted((d / "construction").glob("*.yaml")) if (d / "construction").is_dir() else []:
+    for f in yaml_files(d / "construction") if (d / "construction").is_dir() else []:
         doc = yaml.safe_load(f.read_text()) or {}
         # a file's own entities first, so its top-level `subentities:` may name them (and an earlier file's)
         for e in doc.get("entities", []) or []:

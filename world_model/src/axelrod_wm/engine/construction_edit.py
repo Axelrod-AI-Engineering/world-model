@@ -19,6 +19,7 @@ from pathlib import Path
 import yaml
 
 from axelrod_wm.model.calibrate import LinkCalibration, calibrated_entry, new_state
+from axelrod_wm.paths import yaml_files
 
 
 class EditError(ValueError):
@@ -348,7 +349,7 @@ def edit_calibration(text: str, cal: LinkCalibration) -> str:
 
 def interaction_file(world: Path, interaction_id: str) -> Path:
     """The construction file that defines `interaction_id`: construction/*.yaml, else interactions.yaml."""
-    for f in [*sorted((world / "construction").glob("*.yaml")), world / "interactions.yaml"]:
+    for f in [*yaml_files(world / "construction"), world / "interactions.yaml"]:
         if f.is_file():
             doc = yaml.safe_load(f.read_text()) or {}
             if any(x.get("id") == interaction_id for x in doc.get("interactions", []) or []):

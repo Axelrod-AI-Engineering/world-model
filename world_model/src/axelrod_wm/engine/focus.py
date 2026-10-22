@@ -37,6 +37,7 @@ from pydantic import BaseModel, ConfigDict
 
 from axelrod_wm.clients import EXAMPLES_DIR, find_scenario, load_scenario_yaml
 from axelrod_wm.engine.initialize import ConstructionError, read_construction, resolve_path
+from axelrod_wm.paths import yaml_files
 
 SCENARIOS_DIR = EXAMPLES_DIR / "scenarios"      # the repository's own; client scenarios: axelrod_wm/clients.py
 TEXT_FIELDS = ("name", "short", "description", "question", "note", "label", "caption")
@@ -101,7 +102,7 @@ class FocusResult:
         self.seeds_path = resolve_path(ini["seeds"]) if ini.get("seeds") else None
         data, origin = read_construction(self.world_dir)
         self._base = data
-        files = sorted(p.stem for p in (self.world_dir / "construction").glob("*.yaml"))
+        files = sorted(p.stem for p in yaml_files(self.world_dir / "construction"))
         ent_ids = {e["id"] for e in data["entities"]}
         self.covered = [f for f in files if f in ent_ids]
         unknown = [c for c in spec.companies if c not in self.covered]
@@ -403,8 +404,8 @@ def _versions(spec: FocusSpec) -> tuple:
     raw = load_scenario_yaml(d / "scenario.yaml")
     ini = raw.get("initialization") or {}
     world = resolve_path(ini.get("construction_dir", ""))
-    files = [d / "scenario.yaml", *sorted(d.glob("*.yaml")), *sorted(world.glob("*.yaml")),
-             *sorted((world / "construction").glob("*.yaml"))]
+    files = [d / "scenario.yaml", *yaml_files(d), *yaml_files(world),
+             *yaml_files(world / "construction")]
     if ini.get("seeds"):
         files.append(resolve_path(ini["seeds"]))
     return tuple((str(f), f.stat().st_mtime_ns) for f in files if Path(f).exists())
