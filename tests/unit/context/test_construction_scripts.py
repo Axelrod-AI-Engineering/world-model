@@ -63,8 +63,8 @@ def test_the_input_search_helpers(tmp_path):
     assert inputs.corpus_files(c, [str(c / "x.md")], [], []) == [c / "x.md"]
     assert inputs.tracked(c / "report.json") is False                                    # not in a repository
     assert inputs.tracked(ROOT / "src" / "report.json") is True
-    assert inputs.tracked(ROOT / "data" / "sally_data" / "report.json") is False         # ignored: client data
-    assert inputs.world_dir("small_demo").resolve() == (ROOT / "data" / "worlds" / "small_demo").resolve()
+    assert inputs.tracked(ROOT / "data" / "work" / "sally" / "report.json") is False         # ignored: client data
+    assert inputs.world_dir("small_demo").resolve() == (ROOT / "world_model" / "examples" / "worlds" / "small_demo").resolve()
     assert inputs.world_dir("acme_demo").resolve() == (ROOT / "tests" / "fixtures" / "clients" / "worlds" / "acme_demo").resolve()      # a client world, by name
 
 

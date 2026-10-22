@@ -1,7 +1,7 @@
 """Client content in the tests (Oct 21).
 
 Client scenarios, worlds, and construction files are never tracked: they live in a client root (`WORLD_MODEL_CLIENT_DIR`,
-default data/clients; src/axelrod_wm/clients.py). CI has none. The suite therefore runs in two ways:
+default <data>/clients, data/ being local and gitignored; src/axelrod_wm/clients.py). CI has none. The suite therefore runs in two ways:
 
 - Against `tests/fixtures/clients`, a small synthetic client (the invented "acme" names: scenarios `acme_demo` and
   `acme_focus`, world `acme_demo`). tests/conftest.py puts it first on the client roots, so every test can use it.
@@ -15,8 +15,9 @@ from pathlib import Path
 
 import pytest
 
-from axelrod_wm.clients import client_roots, find_scenario
+from axelrod_wm.clients import DATA_DIR, client_roots, find_scenario
 
+SALLY_WORK = DATA_DIR / "work" / "sally"      # the client's local working data (construction pages, days, bundles)
 FIXTURE_CLIENTS = Path(__file__).resolve().parent / "fixtures" / "clients"
 
 
@@ -28,7 +29,7 @@ def skip_without_client(*scenario_ids: str) -> None:
     """Skip the rest of a test module (at import, before it reads client files) when a client scenario is absent."""
     missing = ", ".join(s for s in scenario_ids if find_scenario(s) is None)
     if missing:
-        pytest.skip(f"client content is absent: {missing} (WORLD_MODEL_CLIENT_DIR; data/clients is gitignored)",
+        pytest.skip(f"client content is absent: {missing} (WORLD_MODEL_CLIENT_DIR; data/ is gitignored)",
                     allow_module_level=True)
 
 

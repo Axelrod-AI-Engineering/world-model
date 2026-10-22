@@ -9,8 +9,8 @@ examples: small
 start: 2026-01-05
 seed: 7
 initialization:
-  construction_dir: data/worlds/small_demo
-  taxonomy_dir: data/worlds/small_demo/taxonomy
-  layout: data/scenarios/small_demo/layout.yaml
+  construction_dir: world_model/examples/worlds/small_demo
+  taxonomy_dir: world_model/examples/worlds/small_demo/taxonomy
+  layout: world_model/examples/scenarios/small_demo/layout.yaml
 config_overrides: configs/small_demo.yaml
 steps: []

@@ -111,7 +111,7 @@ def _two_entities(**sub_kw):
      "moderator 'a.q' is not a known subentity"),
 ])
 def test_validate_spec_names_the_offending_item(spec, msg):
-    vocab = load_vocabulary("data/taxonomy")
+    vocab = load_vocabulary("world_model/taxonomy")
     with pytest.raises(ConstructionError, match=msg):
         spec().validate_spec(vocab)
 

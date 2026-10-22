@@ -8,21 +8,22 @@ from pathlib import Path
 
 import pytest
 
+from axelrod_wm.clients import DATA_DIR
 from axelrod_wm.engine.config import load_config
 from axelrod_wm.engine.engine import Engine
 from axelrod_wm.engine.initialize import ConstructionSpec, Initializer, SeedFile, load_vocabulary
 from axelrod_wm.repo.snapshots import MemoryBackend
 from axelrod_wm.trace import NullTracer
 
-# the synthetic client first, then whatever client root the run names (or data/clients): tests/clients.py
-_REAL_CLIENTS = os.environ.get("WORLD_MODEL_CLIENT_DIR") or str(Path(__file__).resolve().parents[1] / "data" / "clients")
+# the synthetic client first, then whatever client root the run names (or <data>/clients): tests/clients.py
+_REAL_CLIENTS = os.environ.get("WORLD_MODEL_CLIENT_DIR") or str(DATA_DIR / "clients")
 os.environ["WORLD_MODEL_CLIENT_DIR"] = os.pathsep.join([str(Path(__file__).resolve().parent / "fixtures" / "clients"),
                                                         _REAL_CLIENTS])
 
 START_DATE = date(2023, 1, 2)                   # day 0 of the constructed engine
 START = datetime(2023, 1, 2, tzinfo=timezone.utc)
-SEEDS = "data/scenarios/oil_shock_demo/superentity_seeds.yaml"
-VOCAB = load_vocabulary("data/taxonomy")
+SEEDS = "world_model/examples/scenarios/oil_shock_demo/superentity_seeds.yaml"
+VOCAB = load_vocabulary("world_model/taxonomy")
 # tests never read a stage profile or a developer's .creds file (src/axelrod_wm/settings.py)
 os.environ.setdefault("WORLD_MODEL_PROFILE", "none")
 
@@ -89,7 +90,7 @@ def constructed_engine(build: bool = False, config=None) -> Engine:
     else:
         eng = Engine(cfg, MemoryBackend(), NullTracer(), vocab=VOCAB)
     init = Initializer(eng)
-    init.construct(ConstructionSpec.load("data/worlds/economy"), "data/taxonomy", start=START_DATE, vocab=VOCAB)
+    init.construct(ConstructionSpec.load("world_model/examples/worlds/economy"), "world_model/taxonomy", start=START_DATE, vocab=VOCAB)
     init.load_seeds(SeedFile.load(SEEDS), now=eng.wm.clock)
     return eng
 
@@ -162,7 +163,7 @@ def oil_thesis(now, thesis_id="T-01", delta=1.0, days_ahead=86, horizon_days=270
                   "occurred_at": at.isoformat(), "recorded_at": now.isoformat(), "produced_by": "human", "ops": ops}})
 
 
-SCENARIO_DIR = "data/scenarios/oil_shock_demo"
+SCENARIO_DIR = "world_model/examples/scenarios/oil_shock_demo"
 
 
 def make_controller(engine=None, policy: str | None = None):

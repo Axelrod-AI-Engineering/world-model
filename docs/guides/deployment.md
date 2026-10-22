@@ -19,7 +19,7 @@ The full demo is hosted on Railway's `dev` environment at **https://world-model-
 
 | Piece | Where | What it does |
 |---|---|---|
-| Image | `Dockerfile` | Python 3.12 slim. Installs the frozen dependencies with uv (`uv sync --frozen --no-dev --extra semantic`, which adds the embedding model's runtime) and copies `configs/`, `data/`, `web/`, and the start script. |
+| Image | `Dockerfile` | Python 3.12 slim. Installs the frozen dependencies with uv (`uv sync --frozen --no-dev --extra semantic`, which adds the embedding model's runtime) and copies `configs/`, `world_model/` (the examples and the taxonomy), `web/`, and the start script. |
 | Start | `scripts/start-railway.sh` | Runs `axelrod demo --scenario $WORLD_MODEL_SCENARIO --host 0.0.0.0 --port $PORT`: on dev, the production demo for the main login, and Emily's demo for hers ([demos.md](demos.md), [A login per scenario](#a-login-per-scenario)) |
 | Infrastructure | `.railway/railway.ts` | The service, its volume, and its settings, as code |
 | Release checks | `scripts/persist-railway-fields.sh`, `scripts/verify-railway-drift.py` | Set the two fields Railway's IaC does not store, then reject any drift except known leftovers |
@@ -95,7 +95,7 @@ The top bar's demo menu ([demos.md](demos.md#switching-demos)) switches only the
 
 To switch logins, **Sign out** (☰ menu, or `/logout`) and sign in again, or use a private window.
 
-Emily's and Sally's research (`data/emily_data/`, `data/sally_data/`) is never uploaded (`.gitignore`, `.dockerignore`). On the hosted demo, import it with the file picker; Sally's daily files can be chosen several at a time.
+Emily's and Sally's research (everything under `data/`) is never uploaded (`.gitignore`, `.dockerignore`). On the hosted demo, import it with the file picker; Sally's daily files can be chosen several at a time.
 
 ### Client content
 
@@ -108,9 +108,9 @@ Client scenarios, worlds, configs, and construction pages are not in the reposit
 <client root>/docs/construction/<company>.md   (gap registers and completion reports)
 ```
 
-The root is `WORLD_MODEL_CLIENT_DIR`. It defaults to `data/clients` (gitignored) in a checkout; on dev, `.railway/railway.ts` sets it to `/app/var/clients`, on the volume. The service finds scenarios in `data/scenarios` first, then in the client root's `scenarios/`, so the demo menu lists a client demo only when its folder is there. The variable may name several roots separated by `:`, searched in order.
+The root is `WORLD_MODEL_CLIENT_DIR`. It defaults to `data/clients` (gitignored) in a checkout; on dev, `.railway/railway.ts` sets it to `/app/var/clients`, on the volume. The service finds scenarios in `world_model/examples/scenarios` first, then in the client root's `scenarios/`, so the demo menu lists a client demo only when its folder is there. The variable may name several roots separated by `:`, searched in order.
 
-A path in a client `scenario.yaml` (`construction_dir`, `taxonomy_dir`, `seeds`, `layout`, `config_overrides`, `imports_dir`) is read against the root that holds the scenario, then against the repository, so a client scenario writes `worlds/<name>` for its own world and `data/taxonomy` for the shared one (`src/axelrod_wm/clients.py`).
+A path in a client `scenario.yaml` (`construction_dir`, `taxonomy_dir`, `seeds`, `layout`, `config_overrides`, `imports_dir`) is read against the root that holds the scenario, then against the repository, so a client scenario writes `worlds/<name>` for its own world and `world_model/taxonomy` for the shared one (`src/axelrod_wm/clients.py`).
 
 A login in `WORLD_MODEL_LOGINS` whose scenario is not under any client root opens the main engine, with a warning in the log, instead of stopping the server. To put a client's content on dev, copy its folders to `/app/var/clients` on the volume (for example `tar cz -C data/clients . | railway ssh -s world-model -e dev -- tar xz -C /app/var/clients`, after `railway ssh keys add`), then redeploy.
 

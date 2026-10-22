@@ -6,7 +6,7 @@ The app shots drive Emily's demo on port 8777 (start it fresh: `uv run axelrod d
 the others are graphics.html and Emily's Oil-to-Portfolio Canvas (CANVAS, a local copy). Every shot opens with a
 magenta flash that edit.py syncs on, and its actions are scheduled in voiceover seconds. Pages run SLOW times slower
 (timers, animation frames, CSS animations) so the recorder keeps every frame; edit.py speeds them back up.
-Emily's data is read from data/emily_data at record time and never written into the repository.
+Emily's data is read from data/work/emily at record time and never written into the repository.
 """
 import json
 import math

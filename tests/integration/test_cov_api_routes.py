@@ -100,7 +100,7 @@ def test_repo_processes_and_a_missing_commit(built):
 
 def test_layout_missing(built, monkeypatch):
     init = built.app_state.runner.script.initialization
-    monkeypatch.setattr(init, "layout", "data/scenarios/small_demo/no_such_layout.yaml")
+    monkeypatch.setattr(init, "layout", "world_model/examples/scenarios/small_demo/no_such_layout.yaml")
     r = built.get("/api/layouts/figure1")
     assert r.status_code == 200 and r.json() == {}       # the canvas lays the graph out itself
 

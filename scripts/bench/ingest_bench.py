@@ -4,9 +4,9 @@ Each file is ingested the way an upload is: its bytes and its file name, nothing
 The report, the scores, and every prediction (for labelling) are written to --out, which for a client's corpus must
 stay inside that client's gitignored folder.
 
-    uv run python scripts/bench/ingest_bench.py --corpus data/sally_data --scenario sally_demo \
-        --items data/sally_data/_bundle_parts --gold data/sally_data/bench/gold.json \
-        --labels data/sally_data/bench/labels.json --out data/sally_data/bench
+    uv run python scripts/bench/ingest_bench.py --corpus data/sources/sally --scenario sally_demo \
+        --items data/work/sally/_bundle_parts --gold data/work/sally/bench/gold.json \
+        --labels data/work/sally/bench/labels.json --out data/work/sally/bench
 
 Files are found under --corpus (recursively, or only under --dirs; zips and the bench folder itself are skipped)
 unless --files lists them. For Sally's corpus: --dirs unpacked/sell_side spreadsheets.

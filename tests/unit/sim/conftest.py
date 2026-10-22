@@ -11,7 +11,7 @@ from axelrod_wm.sim.runner import ScenarioRunner
 from axelrod_wm.sim.scenario import ScenarioScript
 from axelrod_wm.trace import RecordingTracer
 
-OIL_YAML = "data/scenarios/oil_shock_demo/scenario.yaml"
+OIL_YAML = "world_model/examples/scenarios/oil_shock_demo/scenario.yaml"
 
 
 @pytest.fixture(scope="session")

@@ -17,7 +17,7 @@ from axelrod_wm.sim.runner import build_runner
 from axelrod_wm.trace import RecordingTracer
 
 AT = datetime(2026, 2, 2, 15, 0, tzinfo=UTC)
-OWN = {"S21", "S22", "S23", "S24"}          # data/scenarios/prod_demo/superentity_seeds.yaml
+OWN = {"S21", "S22", "S23", "S24"}          # world_model/examples/scenarios/prod_demo/superentity_seeds.yaml
 OPS = {"add_entity", "add_subentity", "add_interaction", "change_value", "observe_value", "reweight_interaction"}
 
 

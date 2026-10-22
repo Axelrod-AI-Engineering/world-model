@@ -180,8 +180,8 @@ def test_the_frozen_history_reads_the_same_values():
 
 # -- the world's randomness is keyed --------------------------------------------------------------------------------
 def test_adding_an_actor_does_not_redeal_the_other_series():
-    spec = ConstructionSpec.load("data/worlds/economy")
-    truth = TruthSpec.load("data/scenarios/oil_shock_demo/truth.yaml")
+    spec = ConstructionSpec.load("world_model/examples/worlds/economy")
+    truth = TruthSpec.load("world_model/examples/scenarios/oil_shock_demo/truth.yaml")
     drop = "united_airlines"
     fewer = spec.model_copy(update={
         "entities": [e for e in spec.entities if e.id != drop],

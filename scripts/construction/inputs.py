@@ -1,6 +1,6 @@
 """Search the supplied material for each input a company's transitions still need, before declaring it missing.
 
-    uv run python scripts/construction/inputs.py sally_demo --entities toyota --corpus data/sally_data \\
+    uv run python scripts/construction/inputs.py sally_demo --entities toyota --corpus data/sources/sally \\
         [--files <file> ... | --dirs <folder> ...] [--extra-terms "eligible import volume=import units,CBU imports"] \\
         [--exclude construction bench] [--top 5]
 
@@ -32,7 +32,7 @@ from axelrod_wm.ingest.parse import ParseError, parse, supported
 
 def world_dir(world: str) -> Path:
     p = resolve_path(world)
-    return p if p.is_dir() else find_world(world) or resolve_path(f"data/worlds/{world}")
+    return p if p.is_dir() else find_world(world) or resolve_path(f"world_model/examples/worlds/{world}")
 
 
 def extra_terms(pairs: list[str]) -> dict[str, list[str]]:
@@ -70,7 +70,7 @@ def tracked(path: Path) -> bool:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("world", help="a world name (data/worlds/<name>) or folder")
+    ap.add_argument("world", help="a world name (world_model/examples/worlds/<name>) or folder")
     ap.add_argument("--entities", nargs="+", required=True)
     ap.add_argument("--corpus", type=Path, required=True, help="the client's material; the report is written under it")
     src = ap.add_mutually_exclusive_group()

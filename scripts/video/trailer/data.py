@@ -1,11 +1,11 @@
-"""The trailer's scene data, built at record time from Emily's bundle (data/emily_data, never committed) and the
+"""The trailer's scene data, built at record time from Emily's bundle (data/work/emily, never committed) and the
 voiceover's word timings. Cue times are seconds from each scene's start."""
 import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-BUNDLE = ROOT / "data/emily_data/emily_import.json"
-SCENES = ROOT / "data/emily_data/trailer_scenes.json"      # the meta and stack scenes' content (client figures)
+BUNDLE = ROOT / "data/work/emily/emily_import.json"
+SCENES = ROOT / "data/work/emily/trailer_scenes.json"      # the meta and stack scenes' content (client figures)
 
 # where each scene starts in the voiceover (seconds), from the word timings of docs/media/EmilyVideo.m4a
 VO = {"open": 0.0, "title": 12.75, "old": 18.65, "import": 32.6, "trans": 43.0, "ask": 83.7, "meta": 90.2,

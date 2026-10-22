@@ -9,7 +9,7 @@ import { names, qualified, qualifiedHtml } from "../names.js";
 import { emit, on, store } from "../store.js";
 import { errorText, esc } from "../util.js";
 
-// examples the world's template translator (data/worlds/<world>/templates.yaml) understands
+// examples the world's template translator (world_model/examples/worlds/<world>/templates.yaml) understands
 const ECONOMY_EXAMPLES = ["What if oil prices doubled next quarter?", "What if NVIDIA's China sales fall by 30%?",
   "What if OPEC cuts output by 10%?", "What if the Fed raises rates by 100bp?", "What if jet fuel spikes next month?"];
 const TUTORIAL_EXAMPLES = ["What if oil rose by 30% next quarter?", "What if oil prices doubled next quarter?",

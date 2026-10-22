@@ -310,7 +310,7 @@ def test_the_file_that_defines_a_link(acme, tmp_path):
 # -- the script -------------------------------------------------------------------------------------------------------
 def scenarios(tmp_path, d):
     s = tmp_path / "scenarios"
-    for name, cdir, theses in [("on_it", str(d), True), ("elsewhere", "data/worlds/small_demo", True),
+    for name, cdir, theses in [("on_it", str(d), True), ("elsewhere", "world_model/examples/worlds/small_demo", True),
                                ("bare", str(d), False), ("blank", None, False)]:
         (s / name).mkdir(parents=True)
         _write(s / name / "scenario.yaml", {"initialization": {"construction_dir": cdir}} if cdir else {})
@@ -346,5 +346,5 @@ def test_the_script_prints_and_writes(acme, tmp_path, capsys):
     assert "no forecast of this world's scenarios" in capsys.readouterr().out
     assert script.main([str(d), "a0", "--source-change", "1", "--target-change", "1", "--evidence", "x"]) == 1
     assert "REFUSED" in capsys.readouterr().out
-    assert script.world_dir("small_demo").resolve() == ROOT / "data" / "worlds" / "small_demo"
+    assert script.world_dir("small_demo").resolve() == ROOT / "world_model" / "examples" / "worlds" / "small_demo"
     assert script.world_dir("acme_demo").resolve() == (ROOT / "tests" / "fixtures" / "clients" / "worlds" / "acme_demo").resolve()      # a client world, by name

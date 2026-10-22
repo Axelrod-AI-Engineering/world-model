@@ -75,7 +75,7 @@ Counts are from `uv run pytest --collect-only -q <folder>` on Oct 18 and include
 | `integration` | `tests/integration/service/` | Selects the service's end-to-end flows: `-m integration`, or `-m "not integration"` to leave them out. Registered in `pyproject.toml` |
 | Playwright | `tests/ui/` | Skipped without it (`pytest.importorskip`) or without Chromium; run with `uv run --with playwright==1.58.0 pytest tests/ui --runslow` |
 | `data/clients/` (the client root, `WORLD_MODEL_CLIENT_DIR`; gitignored) | the client-specific scenario tests (`tests/scenario/test_construction_*.py`, `test_sally_*.py`) and `tests/unit/context/test_construction_scripts.py` | Skipped, with the reason, where the client scenarios are absent, as on CI. Everything else runs against a synthetic client, `tests/fixtures/clients` (invented `acme` names), which `tests/conftest.py` puts first on the client roots (`tests/clients.py`) |
-| `data/sally_data/` (local client data, gitignored) | the Tokio Marine and Toyota construction checks that read the client's own files, and `tests/unit/context/test_construction_scripts.py` | Skipped where it is absent, as on CI. `SALLY_CONSTRUCTION` points the Tokio Marine checks at another folder. Never commit that data |
+| `data/work/sally/` (local client data, gitignored) | the Tokio Marine and Toyota construction checks that read the client's own files, and `tests/unit/context/test_construction_scripts.py` | Skipped where it is absent, as on CI. `SALLY_CONSTRUCTION` points the Tokio Marine checks at another folder. Never commit that data |
 
 ## Coverage policy
 

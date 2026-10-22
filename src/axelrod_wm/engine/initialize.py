@@ -234,7 +234,7 @@ class ConstructionSpec(_Spec):
     def load(cls, construction_dir: str | Path, taxonomy_dir: str | Path | None = None,
              focus: Any = None) -> ConstructionSpec:
         """The spec, with each kind's default subentities and links filled in from the object taxonomy
-        (`taxonomy_dir`; else the world's own `taxonomy/` folder if it has one; else the shared data/taxonomy).
+        (`taxonomy_dir`; else the world's own `taxonomy/` folder if it has one; else the shared world_model/taxonomy).
         With `focus` (engine/focus.FocusSpec), the world is first narrowed to its focus companies and the players
         they connect to (engine/focus.py); `spec.focus` then lists the ids it dropped."""
         d = resolve_path(construction_dir)
@@ -612,9 +612,9 @@ def compile_construction(spec: ConstructionSpec, vocab: AttributeVocabulary) -> 
 
 
 def world_taxonomy_dir(world_dir: str | Path) -> Path:
-    """A world (data/worlds/<name>) may carry its own taxonomy; otherwise it uses the shared one."""
+    """A world (world_model/examples/worlds/<name>) may carry its own taxonomy; otherwise it uses the shared one."""
     own = resolve_path(world_dir) / "taxonomy"
-    return own if (own / "objects.yaml").exists() else resolve_path("data/taxonomy")
+    return own if (own / "objects.yaml").exists() else resolve_path("world_model/taxonomy")
 
 
 def load_vocabulary(taxonomy_dir: str | Path) -> AttributeVocabulary:

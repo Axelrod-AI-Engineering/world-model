@@ -7,7 +7,5 @@ __pycache__
 .ruff_cache
 .railway
 tests
-data/emily_data
-data/sally_data
 .creds.*
-data/clients
+data

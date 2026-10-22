@@ -24,15 +24,15 @@ from axelrod_wm.context.construction import (
 )
 from axelrod_wm.model.construction import bundle_levels, model_levels, reconcile, validate_construction
 from axelrod_wm.repo.snapshots import MemoryBackend
-from tests.clients import skip_without_client
+from tests.clients import SALLY_WORK, skip_without_client
 from tests.scenario import v1_reads as v1
 
 skip_without_client('sally_demo')
 
 TM = "tokio_marine"
 ANI = "tokio_marine.operating_profit"
-# the client's local folder (gitignored; absent on CI): <repo>/data/sally_data/construction, or $SALLY_CONSTRUCTION
-LOCAL = Path(os.environ.get("SALLY_CONSTRUCTION") or Path(__file__).resolve().parents[2] / "data" / "sally_data" / "construction")
+# the client's local folder (gitignored; absent on CI): <data>/work/sally/construction, or $SALLY_CONSTRUCTION
+LOCAL = Path(os.environ.get("SALLY_CONSTRUCTION") or SALLY_WORK / "construction")
 local_only = pytest.mark.skipif(not (LOCAL / TM / "citations.json").exists(),
                                 reason="the client's local construction folder is absent (as on CI)")
 

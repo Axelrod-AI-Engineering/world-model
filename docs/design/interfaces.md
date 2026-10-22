@@ -164,5 +164,5 @@ To restore a version: load the newest snapshot at or before it, replay the chang
 |---|---|
 | `configs/default.yaml` | Every section: seed, time, thresholds, propagation, learning, frontier, abduction, refinement, hypotheses, evaluation, review, update, translators, `components:` (one implementation per slot), storage |
 | `configs/<demo>.yaml` | A demo's overrides |
-| `data/worlds/<world>/` | Construction: entities, interactions, templates, the series map |
-| `data/scenarios/<scenario>/` | A script, seeds, theses, a watchlist, decisions, market events |
+| `world_model/examples/worlds/<world>/` | Construction: entities, interactions, templates, the series map |
+| `world_model/examples/scenarios/<scenario>/` | A script, seeds, theses, a watchlist, decisions, market events |

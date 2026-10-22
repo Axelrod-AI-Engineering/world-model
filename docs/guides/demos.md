@@ -45,7 +45,7 @@ What an ordinary week with the product looks like for a cross-asset PM. The mode
 3. **Predict** opens on a blank canvas. Ask a question, or pick one of her four ready-made scenarios (from her Fed-versus-BoJ table and her yen simulator). The forecast brings forward only what it reaches, with the forecast's effect on each value; **Show the whole model** shows everything, as of the version the forecast used. Its transmission path opens first, as the grid; the brief is one click away, and takes notes, an **Edit**, and a **Re-run** ([gui.md](gui.md#panels)).
 4. **Tutorial** opens the small demo in place of the model, and **Back to your model** returns.
 
-The bundle format (`axelrod.import/v1`) is in `src/axelrod_wm/intake/bundle.py`; a synthetic sample is `tests/fixtures/import_bundle_sample.json`. Emily's own bundle is built from client research and lives in `data/emily_data/`, which is never committed or uploaded: on the hosted demo, import it with the file picker.
+The bundle format (`axelrod.import/v1`) is in `src/axelrod_wm/intake/bundle.py`; a synthetic sample is `tests/fixtures/import_bundle_sample.json`. Emily's own bundle is built from client research and lives in `data/work/emily/`, which is never committed or uploaded: on the hosted demo, import it with the file picker.
 
 ## Sally's demo
 
@@ -73,7 +73,7 @@ Policy divergence and oil and inflation sit above all three. Other names in the 
 
 JPY/USD is the inverse of USD/JPY; USD/EUR follows the Fed-ECB gap; JPY/EUR crosses through the dollar and translates Tokio Marine's European profit. China government bonds follow the PBoC and feed CCB's margin. Each capital market answers to its central bank, curve, or currency and to growth, and carries its banks', insurers', and SoftBank's shares. The world has 32 entities, 71 values, and 114 interactions; the export maps companies to sector and industry and every other node to its class (`taxonomy.sector`, `taxonomy.subsectors`).
 
-1. **Import** (`I`). The research is sorted into **one bundle per day** (`data/sally_data/days/YYYY-MM-DD.json`). The dialog offers **Next day** (the first day after the model's date) and **Any day…**; on the hosted demo, choose one or several days' files with the file picker, and they are merged. Each item is reviewed on its date, as in Emily's demo.
+1. **Import** (`I`). The research is sorted into **one bundle per day** (`data/work/sally/days/YYYY-MM-DD.json`). The dialog offers **Next day** (the first day after the model's date) and **Any day…**; on the hosted demo, choose one or several days' files with the file picker, and they are merged. Each item is reviewed on its date, as in Emily's demo.
 2. **Predict.** Five ready-made theses: the BoJ to 1.5%, the Fed cutting 100 bp, a carry unwind (USD/JPY −8%), the PBoC cutting the LPR with property recovering, and the ECB cutting 50 bp. Or ask your own ("What if deal activity fell by 20% next quarter?").
 3. **Scenarios for the book.** Each forecast's panel opens with its scenario table, the form of the client's Decision Engine card "Scenarios & conviction". The forecast's joint draws are sorted by how the book moves (the average effect on the eleven names' share prices, or their earnings line where a name has no price). **Bear** is the worst quarter of the draws, **Base** the middle half, **Bull** the best quarter. For each band: the names it favors and hurts (median moves, in percent), the drivers that differ most between bear and bull (the mechanism), and what would change the read (the open hypothesis on the book worth most to learn). The chances of the book ending up or down at all are the model's own, and sit above the table. Nothing in it is learned or written by a language model (`inference/scenario_table.py`).
 4. **Agent context.** **Agent context** on a forecast opens the context beside the card it fills. It follows the client's numbered load order: their **000** (core contract), **010** (relationship schema), and **020** (registry), unchanged, then our **036 domain pack**, then **evidence**. The export has five parts: the **load order** (and which of their agents' cards reads which part), the **domain pack**, the **registry entry** to append to their 020 (so the harness activates the pack by `domain_pack_id` or file index), the **evidence pack** (every value at the committed version, what has been observed, and the open questions), and the forecast's **evidence pack** (targets, transmission, key interactions, the scenario table). Live state is evidence, never part of a pack, as their contract asks. **Download** saves everything as one file; **As files** saves each part under the file name the load order gives it. It grounds the agent's judgment and never concludes it: no ratings, no sizing, no funding sources.
@@ -95,17 +95,17 @@ How it maps onto the client's format (their packs' sections and the contract's I
 | 020 registry entry | The row to append: `domain_pack_id`, name, file name, activation terms, `never_merge_into_base`, file index |
 | evidence | The current state, and each forecast, as evidence packs loaded after the domain pack |
 
-The research is client material and stays local, like Emily's: `data/sally_data/` is gitignored and never in the Docker image. Research agents write dated items into `data/sally_data/_bundle_parts/`, and `scripts/imports/bundles.py` gives them the model's ids, checks each part against the model, and writes the daily bundles:
+The research is client material and stays local, like Emily's: `data/` is gitignored and never in the Docker image. Research agents write dated items into `data/work/sally/_bundle_parts/`, and `scripts/imports/bundles.py` gives them the model's ids, checks each part against the model, and writes the daily bundles:
 
 ```bash
-uv run python scripts/imports/bundles.py ids sally_demo > data/sally_data/_bundle_parts/model_ids.txt
-uv run python scripts/imports/bundles.py check sally_demo data/sally_data/_bundle_parts/<group>.json
-uv run python scripts/imports/bundles.py days sally_demo data/sally_data/_bundle_parts data/sally_data/days --title "Sally's research"
+uv run python scripts/imports/bundles.py ids sally_demo > data/work/sally/_bundle_parts/model_ids.txt
+uv run python scripts/imports/bundles.py check sally_demo data/work/sally/_bundle_parts/<group>.json
+uv run python scripts/imports/bundles.py days sally_demo data/work/sally/_bundle_parts data/work/sally/days --title "Sally's research"
 ```
 
 5. **Export the world model** (☰, Learn) exports the model as it stands after the research approved so far, without a forecast: the 036 domain pack, its 020 registry entry, and the current state as an evidence pack, as one file or as the separate files the agents' load order names. Export again after each day's research, and the agents read the updated model.
 
-To write the whole upload set to a folder (after folding in a folder of daily bundles, with an evidence pack per ready thesis, and the client's 000, 010, and 020 beside it, 020 with our row appended): `uv run python scripts/imports/export_context.py sally_demo data/sally_data/exports/<name> --days data/sally_data/days --theses --client-core <their folder>`. Point it at a gitignored folder: the set holds client files.
+To write the whole upload set to a folder (after folding in a folder of daily bundles, with an evidence pack per ready thesis, and the client's 000, 010, and 020 beside it, 020 with our row appended): `uv run python scripts/imports/export_context.py sally_demo data/exports/sally/<name> --days data/work/sally/days --theses --client-core <their folder>`. Point it at a gitignored folder: the set holds client files.
 
 The API: `GET /api/context/v4` returns the export (load order, domain pack, registry entry, evidence); `?forecast=<id>` adds that forecast's evidence pack. The exporter is `src/axelrod_wm/context/v4.py`. The script also writes `reading/`, the pack split into files of at most 100 KB with a `00_START_HERE.md` (`--max-file-kb`), because the whole pack can be too large for an agent's file reader; see [focus.md](../construction/focus.md#the-reading-set-reading).
 
