@@ -1,0 +1,74 @@
+{
+ "suite_version": "test",
+ "sources": {
+  "T": {
+   "title": "Synthetic report",
+   "original_pdf_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+   "availability_date": "2030-04-10",
+   "version": "synthetic v1",
+   "original_file": "synthetic.pdf"
+  }
+ },
+ "excerpts": [
+  {
+   "excerpt_id": "T-001",
+   "source_id": "T",
+   "source_version": "synthetic v1",
+   "original_pdf_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+   "pdf_pages": [
+    1
+   ],
+   "printed_page": "1",
+   "pdf_file": "evidence/T-001.pdf",
+   "text_file": "evidence/T-001.txt",
+   "pdf_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+   "text_sha256": "dd15f93160d84a8b9b1261d136708ec2da8614f6cf4184ccb41c7844b811a753",
+   "scope": "synthetic page"
+  },
+  {
+   "excerpt_id": "T-002",
+   "source_id": "T",
+   "source_version": "synthetic v1",
+   "original_pdf_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+   "pdf_pages": [
+    1
+   ],
+   "printed_page": "1",
+   "pdf_file": "evidence/T-002.pdf",
+   "text_file": "evidence/T-002.txt",
+   "pdf_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+   "text_sha256": "ce929ee4940ea08f0f484b2f73141236e0ee00ffb1979d12d7ba6cf751745ed6",
+   "scope": "synthetic page"
+  },
+  {
+   "excerpt_id": "T-003",
+   "source_id": "T",
+   "source_version": "synthetic v1",
+   "original_pdf_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+   "pdf_pages": [
+    1
+   ],
+   "printed_page": "1",
+   "pdf_file": "evidence/T-003.pdf",
+   "text_file": "evidence/T-003.txt",
+   "pdf_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+   "text_sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+   "scope": "synthetic page"
+  },
+  {
+   "excerpt_id": "T-004",
+   "source_id": "T",
+   "source_version": "synthetic v1",
+   "original_pdf_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+   "pdf_pages": [
+    1
+   ],
+   "printed_page": "1",
+   "pdf_file": "evidence/T-004.pdf",
+   "text_file": "evidence/T-004.txt",
+   "pdf_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+   "text_sha256": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+   "scope": "synthetic page"
+  }
+ ]
+}

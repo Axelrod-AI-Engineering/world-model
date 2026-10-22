@@ -1,0 +1,314 @@
+{
+ "suite_id": "SYNTHETIC-1",
+ "version": "test",
+ "cases": [
+  {
+   "test_id": "G-01-01",
+   "family_id": 1,
+   "failure_family": "Family 1",
+   "development_split": "development",
+   "scorecard_group": "main_model_tests",
+   "numeric_oracle": {
+    "unit": "JPY",
+    "expected_values": {
+     "revenue": 200000000,
+     "ratio": 0.375
+    },
+    "calculations": [],
+    "absolute_tolerance": 0
+   },
+   "acceptance_check": "Assert revenue=200000000.",
+   "precise_answer": ""
+  },
+  {
+   "test_id": "G-01-02",
+   "family_id": 1,
+   "failure_family": "Family 1",
+   "development_split": "development",
+   "scorecard_group": "main_model_tests",
+   "numeric_oracle": {
+    "unit": "JPY",
+    "expected_values": {
+     "revenue": 200000000
+    },
+    "calculations": [],
+    "absolute_tolerance": 0
+   },
+   "acceptance_check": "",
+   "precise_answer": ""
+  },
+  {
+   "test_id": "G-01-03",
+   "family_id": 1,
+   "failure_family": "Family 1",
+   "development_split": "development",
+   "scorecard_group": "main_model_tests",
+   "numeric_oracle": {
+    "unit": "JPY million",
+    "expected_values": {
+     "total": 10
+    },
+    "calculations": [],
+    "absolute_tolerance": 1
+   },
+   "acceptance_check": "",
+   "precise_answer": ""
+  },
+  {
+   "test_id": "G-01-04",
+   "family_id": 1,
+   "failure_family": "Family 1",
+   "development_split": "development",
+   "scorecard_group": "main_model_tests",
+   "numeric_oracle": {
+    "unit": "percent",
+    "expected_values": {
+     "margin": 5.993
+    },
+    "calculations": [],
+    "absolute_tolerance": 0.5
+   },
+   "acceptance_check": "",
+   "precise_answer": ""
+  },
+  {
+   "test_id": "G-01-05",
+   "family_id": 1,
+   "failure_family": "Family 1",
+   "development_split": "development",
+   "scorecard_group": "main_model_tests",
+   "numeric_oracle": {
+    "unit": "JPY",
+    "expected_values": {
+     "missing_one": 1
+    },
+    "calculations": [],
+    "absolute_tolerance": 0
+   },
+   "acceptance_check": "",
+   "precise_answer": ""
+  },
+  {
+   "test_id": "G-01-06",
+   "family_id": 1,
+   "failure_family": "Family 1",
+   "development_split": "development",
+   "scorecard_group": "main_model_tests",
+   "numeric_oracle": null,
+   "acceptance_check": "Assert delivered=min(110,105); income=140*0.10=14; coefficient=null; flag=true; mode=simple; bounds=[180,220]; net=gross-allowance.",
+   "precise_answer": ""
+  },
+  {
+   "test_id": "G-01-07",
+   "family_id": 1,
+   "failure_family": "Family 1",
+   "development_split": "development",
+   "scorecard_group": "main_model_tests",
+   "numeric_oracle": {
+    "unit": "JPY",
+    "expected_values": {
+     "economic_net": 40
+    },
+    "calculations": [],
+    "absolute_tolerance": 0,
+    "expected_unknowns": [
+     "reported_profit_delta"
+    ]
+   },
+   "acceptance_check": "",
+   "precise_answer": ""
+  },
+  {
+   "test_id": "G-01-08",
+   "family_id": 1,
+   "failure_family": "Family 1",
+   "development_split": "development",
+   "scorecard_group": "main_model_tests",
+   "numeric_oracle": {
+    "unit": "JPY",
+    "expected_values": {
+     "economic_net": 40
+    },
+    "calculations": [],
+    "absolute_tolerance": 0,
+    "expected_unknowns": [
+     "reported_profit_delta"
+    ]
+   },
+   "acceptance_check": "",
+   "precise_answer": ""
+  },
+  {
+   "test_id": "G-01-09",
+   "family_id": 1,
+   "failure_family": "Family 1",
+   "development_split": "development",
+   "scorecard_group": "main_model_tests",
+   "numeric_oracle": null,
+   "acceptance_check": "Require dated readiness states; no invented margin. Reject revenue recognition and require order flags.",
+   "precise_answer": ""
+  },
+  {
+   "test_id": "G-01-10",
+   "family_id": 1,
+   "failure_family": "Family 1",
+   "development_split": "development",
+   "scorecard_group": "main_model_tests",
+   "numeric_oracle": null,
+   "acceptance_check": "Require dated readiness states; no invented margin.",
+   "precise_answer": ""
+  },
+  {
+   "test_id": "G-01-11",
+   "family_id": 1,
+   "failure_family": "Family 1",
+   "development_split": "development",
+   "scorecard_group": "main_model_tests",
+   "numeric_oracle": null,
+   "acceptance_check": "Nothing a machine can check here.",
+   "precise_answer": ""
+  },
+  {
+   "test_id": "G-02-01",
+   "family_id": 2,
+   "failure_family": "Family 2",
+   "development_split": "development",
+   "scorecard_group": "main_model_tests",
+   "numeric_oracle": null,
+   "acceptance_check": "Require unit_scale; Preserve the audit trail.",
+   "precise_answer": ""
+  },
+  {
+   "test_id": "G-02-02",
+   "family_id": 2,
+   "failure_family": "Family 2",
+   "development_split": "development",
+   "scorecard_group": "main_model_tests",
+   "numeric_oracle": null,
+   "acceptance_check": "",
+   "precise_answer": ""
+  },
+  {
+   "test_id": "G-02-03",
+   "family_id": 2,
+   "failure_family": "Family 2",
+   "development_split": "development",
+   "scorecard_group": "main_model_tests",
+   "numeric_oracle": {
+    "unit": "JPY",
+    "expected_values": {
+     "x": 1
+    },
+    "calculations": [],
+    "absolute_tolerance": 0
+   },
+   "acceptance_check": "",
+   "precise_answer": ""
+  },
+  {
+   "test_id": "G-02-04",
+   "family_id": 2,
+   "failure_family": "Family 2",
+   "development_split": "development",
+   "scorecard_group": "main_model_tests",
+   "numeric_oracle": {
+    "unit": "JPY",
+    "expected_values": {
+     "x": 1
+    },
+    "calculations": [],
+    "absolute_tolerance": 0
+   },
+   "acceptance_check": "",
+   "precise_answer": ""
+  },
+  {
+   "test_id": "G-02-08",
+   "family_id": 2,
+   "failure_family": "Family 2",
+   "development_split": "development",
+   "scorecard_group": "main_model_tests",
+   "numeric_oracle": {
+    "unit": "percent",
+    "expected_values": {
+     "margin": 5.993
+    },
+    "calculations": [],
+    "absolute_tolerance": 0.5
+   },
+   "acceptance_check": "",
+   "precise_answer": ""
+  },
+  {
+   "test_id": "G-02-09",
+   "family_id": 2,
+   "failure_family": "Family 2",
+   "development_split": "development",
+   "scorecard_group": "main_model_tests",
+   "numeric_oracle": null,
+   "acceptance_check": "Assert flag=true. Require stated words.",
+   "precise_answer": ""
+  },
+  {
+   "test_id": "G-03-09",
+   "family_id": 3,
+   "failure_family": "Family 3",
+   "development_split": "validation_candidate",
+   "scorecard_group": "main_model_tests",
+   "numeric_oracle": {
+    "unit": "JPY",
+    "expected_values": {
+     "revenue": 120
+    },
+    "calculations": [],
+    "absolute_tolerance": 0
+   },
+   "acceptance_check": "",
+   "precise_answer": ""
+  },
+  {
+   "test_id": "G-03-08",
+   "family_id": 3,
+   "failure_family": "Family 3",
+   "development_split": "validation_candidate",
+   "scorecard_group": "main_model_tests",
+   "numeric_oracle": {
+    "unit": "JPY",
+    "expected_values": {
+     "revenue": 120
+    },
+    "calculations": [],
+    "absolute_tolerance": 0
+   },
+   "acceptance_check": "",
+   "precise_answer": ""
+  },
+  {
+   "test_id": "G-03-10",
+   "family_id": 3,
+   "failure_family": "Family 3",
+   "development_split": "validation_candidate",
+   "scorecard_group": "review_gate",
+   "numeric_oracle": {
+    "unit": "JPY",
+    "expected_values": {
+     "revenue": 120
+    },
+    "calculations": [],
+    "absolute_tolerance": 0
+   },
+   "acceptance_check": "",
+   "precise_answer": ""
+  },
+  {
+   "test_id": "G-03-11",
+   "family_id": 3,
+   "failure_family": "Family 3",
+   "development_split": "validation_candidate",
+   "scorecard_group": "review_gate",
+   "numeric_oracle": null,
+   "acceptance_check": "",
+   "precise_answer": ""
+  }
+ ]
+}

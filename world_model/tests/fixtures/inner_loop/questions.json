@@ -1,0 +1,438 @@
+{
+ "suite_id": "SYNTHETIC-1",
+ "version": "test",
+ "adapter_field_policy": "Labels are semantic targets.",
+ "source_index": "source_index.json",
+ "cases": [
+  {
+   "test_id": "TST-01-01",
+   "family_id": 1,
+   "failure_family": "Family 1",
+   "title": "t",
+   "answer_type": "Fixture",
+   "question": "Cumulative profit is 100 for Q1 and 230 for the half-year. What is Q2 profit?",
+   "frozen_excerpt_ids": [],
+   "scorecard_group": "main_model_tests"
+  },
+  {
+   "test_id": "TST-01-02",
+   "family_id": 1,
+   "failure_family": "Family 1",
+   "title": "t",
+   "answer_type": "Fixture",
+   "question": "A fixture says price is 12 and units are 10. What is revenue?",
+   "frozen_excerpt_ids": [],
+   "scorecard_group": "main_model_tests"
+  },
+  {
+   "test_id": "TST-01-03",
+   "family_id": 1,
+   "failure_family": "Family 1",
+   "title": "t",
+   "answer_type": "Fixture",
+   "question": "What does the page report for revenue, costs and the totals?",
+   "frozen_excerpt_ids": [
+    "T-001"
+   ],
+   "scorecard_group": "main_model_tests"
+  },
+  {
+   "test_id": "TST-01-04",
+   "family_id": 1,
+   "failure_family": "Family 1",
+   "title": "t",
+   "answer_type": "Fixture",
+   "question": "Which period does the page cover, and what is its dividend?",
+   "frozen_excerpt_ids": [
+    "T-001"
+   ],
+   "scorecard_group": "main_model_tests"
+  },
+  {
+   "test_id": "TST-01-05",
+   "family_id": 1,
+   "failure_family": "Family 1",
+   "title": "t",
+   "answer_type": "Fixture",
+   "question": "Was the report available by April 1, 2030?",
+   "frozen_excerpt_ids": [
+    "T-001"
+   ],
+   "scorecard_group": "main_model_tests"
+  },
+  {
+   "test_id": "TST-01-06",
+   "family_id": 1,
+   "failure_family": "Family 1",
+   "title": "t",
+   "answer_type": "Fixture",
+   "question": "Do the segments reconcile to the total?",
+   "frozen_excerpt_ids": [
+    "T-001"
+   ],
+   "scorecard_group": "main_model_tests"
+  },
+  {
+   "test_id": "TST-01-07",
+   "family_id": 1,
+   "failure_family": "Family 1",
+   "title": "t",
+   "answer_type": "Fixture",
+   "question": "Ten and nothing: what is ten over zero?",
+   "frozen_excerpt_ids": [],
+   "scorecard_group": "main_model_tests"
+  },
+  {
+   "test_id": "TST-01-08",
+   "family_id": 1,
+   "failure_family": "Family 1",
+   "title": "t",
+   "answer_type": "Fixture",
+   "question": "Is a different page usable here?",
+   "frozen_excerpt_ids": [
+    "T-001"
+   ],
+   "scorecard_group": "main_model_tests"
+  },
+  {
+   "test_id": "TST-01-09",
+   "family_id": 1,
+   "failure_family": "Family 1",
+   "title": "t",
+   "answer_type": "Fixture",
+   "question": "A question without a recipe.",
+   "frozen_excerpt_ids": [],
+   "scorecard_group": "main_model_tests"
+  },
+  {
+   "test_id": "TST-01-10",
+   "family_id": 1,
+   "failure_family": "Family 1",
+   "title": "t",
+   "answer_type": "Fixture",
+   "question": "A question the runner is told to skip.",
+   "frozen_excerpt_ids": [],
+   "scorecard_group": "main_model_tests"
+  },
+  {
+   "test_id": "TST-02-01",
+   "family_id": 2,
+   "failure_family": "Family 2",
+   "title": "t",
+   "answer_type": "Fixture",
+   "question": "Segments do not match the model's composition.",
+   "frozen_excerpt_ids": [],
+   "scorecard_group": "main_model_tests"
+  },
+  {
+   "test_id": "TST-02-02",
+   "family_id": 2,
+   "failure_family": "Family 2",
+   "title": "t",
+   "answer_type": "Fixture",
+   "question": "The composition has an extra segment in the model.",
+   "frozen_excerpt_ids": [],
+   "scorecard_group": "main_model_tests"
+  },
+  {
+   "test_id": "TST-02-03",
+   "family_id": 2,
+   "failure_family": "Family 2",
+   "title": "t",
+   "answer_type": "Fixture",
+   "question": "Objects named in the recipe exist in the model.",
+   "frozen_excerpt_ids": [],
+   "scorecard_group": "main_model_tests"
+  },
+  {
+   "test_id": "TST-02-04",
+   "family_id": 2,
+   "failure_family": "Family 2",
+   "title": "t",
+   "answer_type": "Fixture",
+   "question": "An object named in the recipe is not in the model.",
+   "frozen_excerpt_ids": [],
+   "scorecard_group": "main_model_tests"
+  },
+  {
+   "test_id": "TST-02-05",
+   "family_id": 2,
+   "failure_family": "Family 2",
+   "title": "t",
+   "answer_type": "Fixture",
+   "question": "Update x to 7 and undo it.",
+   "frozen_excerpt_ids": [],
+   "scorecard_group": "main_model_tests"
+  },
+  {
+   "test_id": "TST-02-06",
+   "family_id": 2,
+   "failure_family": "Family 2",
+   "title": "t",
+   "answer_type": "Fixture",
+   "question": "Import the same source twice.",
+   "frozen_excerpt_ids": [],
+   "scorecard_group": "main_model_tests"
+  },
+  {
+   "test_id": "TST-02-07",
+   "family_id": 2,
+   "failure_family": "Family 2",
+   "title": "t",
+   "answer_type": "Fixture",
+   "question": "Ingest in two orders.",
+   "frozen_excerpt_ids": [],
+   "scorecard_group": "main_model_tests"
+  },
+  {
+   "test_id": "TST-02-08",
+   "family_id": 2,
+   "failure_family": "Family 2",
+   "title": "t",
+   "answer_type": "Fixture",
+   "question": "Ingest in two orders into a store that cannot state supersession.",
+   "frozen_excerpt_ids": [],
+   "scorecard_group": "main_model_tests"
+  },
+  {
+   "test_id": "TST-02-09",
+   "family_id": 2,
+   "failure_family": "Family 2",
+   "title": "t",
+   "answer_type": "Fixture",
+   "question": "Review two mapping candidates.",
+   "frozen_excerpt_ids": [],
+   "scorecard_group": "main_model_tests"
+  },
+  {
+   "test_id": "TST-02-10",
+   "family_id": 2,
+   "failure_family": "Family 2",
+   "title": "t",
+   "answer_type": "Fixture",
+   "question": "Review two golden candidates.",
+   "frozen_excerpt_ids": [],
+   "scorecard_group": "main_model_tests"
+  },
+  {
+   "test_id": "TST-03-01",
+   "family_id": 3,
+   "failure_family": "Family 3",
+   "title": "t",
+   "answer_type": "Fixture",
+   "question": "Review fixture RV-1: candidate A is copied from another business.",
+   "frozen_excerpt_ids": [],
+   "scorecard_group": "review_gate"
+  },
+  {
+   "test_id": "TST-03-02",
+   "family_id": 3,
+   "failure_family": "Family 3",
+   "title": "t",
+   "answer_type": "Fixture",
+   "question": "Review fixture RV-2: golden candidates.",
+   "frozen_excerpt_ids": [],
+   "scorecard_group": "review_gate"
+  },
+  {
+   "test_id": "TST-03-03",
+   "family_id": 3,
+   "failure_family": "Family 3",
+   "title": "t",
+   "answer_type": "Fixture",
+   "question": "Expression errors: one over nothing.",
+   "frozen_excerpt_ids": [],
+   "scorecard_group": "main_model_tests"
+  },
+  {
+   "test_id": "TST-03-04",
+   "family_id": 3,
+   "failure_family": "Family 3",
+   "title": "t",
+   "answer_type": "Fixture",
+   "question": "Expression the calculator does not allow.",
+   "frozen_excerpt_ids": [],
+   "scorecard_group": "main_model_tests"
+  },
+  {
+   "test_id": "TST-03-05",
+   "family_id": 3,
+   "failure_family": "Family 3",
+   "title": "t",
+   "answer_type": "Fixture",
+   "question": "Expression with a name nobody gave.",
+   "frozen_excerpt_ids": [],
+   "scorecard_group": "main_model_tests"
+  },
+  {
+   "test_id": "TST-03-06",
+   "family_id": 3,
+   "failure_family": "Family 3",
+   "title": "t",
+   "answer_type": "Fixture",
+   "question": "Unreadable expression.",
+   "frozen_excerpt_ids": [],
+   "scorecard_group": "main_model_tests"
+  },
+  {
+   "test_id": "TST-03-07",
+   "family_id": 3,
+   "failure_family": "Family 3",
+   "title": "t",
+   "answer_type": "Fixture",
+   "question": "A locator the runner does not know.",
+   "frozen_excerpt_ids": [],
+   "scorecard_group": "main_model_tests"
+  },
+  {
+   "test_id": "TST-03-08",
+   "family_id": 3,
+   "failure_family": "Family 3",
+   "title": "t",
+   "answer_type": "Fixture",
+   "question": "A fixture path the fixture lacks.",
+   "frozen_excerpt_ids": [],
+   "scorecard_group": "main_model_tests"
+  },
+  {
+   "test_id": "TST-03-09",
+   "family_id": 3,
+   "failure_family": "Family 3",
+   "title": "t",
+   "answer_type": "Fixture",
+   "question": "A pattern with no group.",
+   "frozen_excerpt_ids": [],
+   "scorecard_group": "main_model_tests"
+  },
+  {
+   "test_id": "TST-03-10",
+   "family_id": 3,
+   "failure_family": "Family 3",
+   "title": "t",
+   "answer_type": "Fixture",
+   "question": "An excerpt the index does not know.",
+   "frozen_excerpt_ids": [
+    "T-009"
+   ],
+   "scorecard_group": "main_model_tests"
+  },
+  {
+   "test_id": "TST-04-01",
+   "family_id": 4,
+   "failure_family": "Family 4",
+   "title": "t",
+   "answer_type": "Fixture",
+   "question": "A page whose hash differs.",
+   "frozen_excerpt_ids": [
+    "T-003"
+   ],
+   "scorecard_group": "main_model_tests"
+  },
+  {
+   "test_id": "TST-04-02",
+   "family_id": 4,
+   "failure_family": "Family 4",
+   "title": "t",
+   "answer_type": "Fixture",
+   "question": "A page whose file is absent.",
+   "frozen_excerpt_ids": [
+    "T-004"
+   ],
+   "scorecard_group": "main_model_tests"
+  },
+  {
+   "test_id": "TST-04-03",
+   "family_id": 4,
+   "failure_family": "Family 4",
+   "title": "t",
+   "answer_type": "Fixture",
+   "question": "A date that is not a date.",
+   "frozen_excerpt_ids": [
+    "T-001"
+   ],
+   "scorecard_group": "main_model_tests"
+  },
+  {
+   "test_id": "TST-04-04",
+   "family_id": 4,
+   "failure_family": "Family 4",
+   "title": "t",
+   "answer_type": "Fixture",
+   "question": "A match that is not there: 5 of nothing.",
+   "frozen_excerpt_ids": [],
+   "scorecard_group": "main_model_tests"
+  },
+  {
+   "test_id": "TST-04-05",
+   "family_id": 4,
+   "failure_family": "Family 4",
+   "title": "t",
+   "answer_type": "Fixture",
+   "question": "A recipe blocked on purpose.",
+   "frozen_excerpt_ids": [],
+   "scorecard_group": "main_model_tests"
+  },
+  {
+   "test_id": "TST-04-07",
+   "family_id": 4,
+   "failure_family": "Family 4",
+   "title": "t",
+   "answer_type": "Fixture",
+   "question": "A source_of for an excerpt not in the index.",
+   "frozen_excerpt_ids": [
+    "T-001"
+   ],
+   "scorecard_group": "main_model_tests"
+  },
+  {
+   "test_id": "TST-04-08",
+   "family_id": 4,
+   "failure_family": "Family 4",
+   "title": "t",
+   "answer_type": "Fixture",
+   "question": "A reconciliation without a reader.",
+   "frozen_excerpt_ids": [],
+   "scorecard_group": "main_model_tests"
+  },
+  {
+   "test_id": "TST-04-09",
+   "family_id": 4,
+   "failure_family": "Family 4",
+   "title": "t",
+   "answer_type": "Fixture",
+   "question": "Ingest repeatedly without a service.",
+   "frozen_excerpt_ids": [],
+   "scorecard_group": "main_model_tests"
+  },
+  {
+   "test_id": "TST-04-10",
+   "family_id": 4,
+   "failure_family": "Family 4",
+   "title": "t",
+   "answer_type": "Fixture",
+   "question": "Ingest in orders without a store.",
+   "frozen_excerpt_ids": [],
+   "scorecard_group": "main_model_tests"
+  },
+  {
+   "test_id": "TST-05-01",
+   "family_id": 5,
+   "failure_family": "Family 5",
+   "title": "t",
+   "answer_type": "Fixture",
+   "question": "Show, hide and the expression functions: values 3.5 and -2 and 9.",
+   "frozen_excerpt_ids": [],
+   "scorecard_group": "main_model_tests"
+  },
+  {
+   "test_id": "TST-05-02",
+   "family_id": 5,
+   "failure_family": "Family 5",
+   "title": "t",
+   "answer_type": "Fixture",
+   "question": "Composition missing from the model.",
+   "frozen_excerpt_ids": [],
+   "scorecard_group": "main_model_tests"
+  }
+ ]
+}
