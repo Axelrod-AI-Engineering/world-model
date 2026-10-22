@@ -1,4 +1,4 @@
-"""Keep a table of contents at the top of every document in docs/ (and the README).
+"""Keep a table of contents at the top of every document in docs/, world_model/docs/, ingestion/docs/ (and the README).
 
 The contents go between `<!-- toc -->` and `<!-- /toc -->`, right after the title and its opening paragraph; a
 document without the markers gets them there. Entries link to the document's sections (## headings, and ###
@@ -70,7 +70,8 @@ def update(text: str) -> str:
 
 
 def files() -> list[Path]:
-    return [ROOT / "README.md", *sorted((ROOT / "docs").rglob("*.md"))]
+    return [ROOT / "README.md", *(p for folder in ("docs", "world_model/docs", "ingestion/docs")
+                                  for p in sorted((ROOT / folder).rglob("*.md")))]
 
 
 def main() -> int:

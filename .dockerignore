@@ -2,10 +2,12 @@
 .venv
 node_modules
 var
+data
+feedback
 __pycache__
 .pytest_cache
 .ruff_cache
 .railway
-tests
+**/tests
+**/docs
 .creds.*
-data

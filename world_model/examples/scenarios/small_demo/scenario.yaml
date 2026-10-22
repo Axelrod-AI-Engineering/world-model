@@ -12,5 +12,5 @@ initialization:
   construction_dir: world_model/examples/worlds/small_demo
   taxonomy_dir: world_model/examples/worlds/small_demo/taxonomy
   layout: world_model/examples/scenarios/small_demo/layout.yaml
-config_overrides: configs/small_demo.yaml
+config_overrides: world_model/configs/small_demo.yaml
 steps: []

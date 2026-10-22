@@ -1,6 +1,6 @@
 """Render the design's diagrams to SVG, in the look of the app's flowcharts (docs/flowchart.svg).
 
-Each diagram is a Mermaid source in docs/design/diagrams/*.mmd, and the docs show the rendered SVG beside it.
+Each diagram is a Mermaid source in world_model/docs/design/diagrams/*.mmd, and the docs show the rendered SVG beside it.
 Write a source in plain Mermaid with three kinds of markup; this script adds the rest when it renders:
 
 - Node classes, as `A["..."]:::step`:
@@ -29,7 +29,7 @@ import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-SOURCES = ROOT / "docs" / "design" / "diagrams"
+SOURCES = ROOT / "world_model" / "docs" / "design" / "diagrams"
 MERMAID = "11.4.1"
 MERMAID_URL = f"https://cdn.jsdelivr.net/npm/mermaid@{MERMAID}/dist/mermaid.min.js"
 CACHE = Path.home() / ".cache" / "axelrod" / f"mermaid-{MERMAID}.min.js"

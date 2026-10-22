@@ -1,0 +1,2598 @@
+{
+ "inverted": [
+  "(?:the )?euro"
+ ],
+ "world_view": {
+  "entities": [
+   {
+    "aliases": [
+     "ACBK",
+     "Acme Bank"
+    ],
+    "id": "acme_bank",
+    "kind": "company",
+    "name": "Acme Bank Corp",
+    "region": "US",
+    "sector": "banking",
+    "subentity_ids": [
+     "acme_bank.share_price",
+     "acme_bank.net_interest_income",
+     "acme_bank.ib_fees",
+     "acme_bank.markets_revenue",
+     "acme_bank.cet1_ratio",
+     "acme_bank.net_revenue",
+     "acme_bank.equity_markets",
+     "acme_bank.markets_nii",
+     "acme_bank.nii_ex_markets",
+     "acme_bank.other_revenue",
+     "acme_bank.avg_loans",
+     "acme_bank.loan_coupon",
+     "acme_bank.interest_income",
+     "acme_bank.interest_expense",
+     "acme_bank.deposit_cost",
+     "acme_bank.cet1_capital",
+     "acme_bank.rwa",
+     "acme_bank.net_income",
+     "acme_bank.dividends",
+     "acme_bank.buybacks",
+     "acme_bank.consumer_revenue",
+     "acme_bank.wholesale_revenue",
+     "acme_bank.corporate_revenue"
+    ]
+   },
+   {
+    "aliases": [
+     "Acme Motors",
+     "ACMO"
+    ],
+    "id": "acme_motors",
+    "kind": "company",
+    "name": "Acme Motors",
+    "region": "US",
+    "sector": "autos",
+    "subentity_ids": [
+     "acme_motors.share_price",
+     "acme_motors.operating_profit",
+     "acme_motors.vehicle_sales",
+     "acme_motors.automotive_operating_income",
+     "acme_motors.financial_services_operating_income",
+     "acme_motors.other_operating_income",
+     "acme_motors.segment_eliminations",
+     "acme_motors.north_america_operating_income",
+     "acme_motors.home_operating_income",
+     "acme_motors.other_regions_operating_income",
+     "acme_motors.net_revenue",
+     "acme_motors.revenue_per_unit",
+     "acme_motors.home_production",
+     "acme_motors.inventory_days",
+     "acme_motors.incentive_spend",
+     "acme_motors.price_recovery",
+     "acme_motors.material_cost",
+     "acme_motors.warranty_cost",
+     "acme_motors.rd_spend",
+     "acme_motors.hybrid_share",
+     "acme_motors.fx_translation",
+     "acme_motors.dealer_stock"
+    ]
+   },
+   {
+    "aliases": [
+     "Acme Re Holdings",
+     "ACRE"
+    ],
+    "id": "acme_re",
+    "kind": "company",
+    "name": "Acme Re",
+    "region": "US",
+    "sector": "insurance",
+    "subentity_ids": [
+     "acme_re.share_price",
+     "acme_re.international_profit",
+     "acme_re.domestic_pc_profit",
+     "acme_re.operating_profit",
+     "acme_re.domestic_life_profit",
+     "acme_re.solution_profit",
+     "acme_re.cross_holding_book",
+     "acme_re.cross_holding_sales",
+     "acme_re.sale_rate",
+     "acme_re.new_money_coupon",
+     "acme_re.book_coupon",
+     "acme_re.new_minus_book_coupon",
+     "acme_re.reserve_adequacy",
+     "acme_re.hedge_cost",
+     "acme_re.overseas_capital",
+     "acme_re.overseas_share"
+    ]
+   },
+   {
+    "aliases": [
+     "Blue",
+     "BLFR"
+    ],
+    "id": "blue_freight",
+    "kind": "company",
+    "name": "Blue Freight",
+    "region": "US",
+    "sector": "shipping",
+    "subentity_ids": [
+     "blue_freight.share_price",
+     "blue_freight.operating_profit",
+     "blue_freight.freight_revenue",
+     "blue_freight.fuel_cost"
+    ]
+   },
+   {
+    "aliases": [
+     "equity markets",
+     "stock market",
+     "deal activity"
+    ],
+    "id": "capital_markets",
+    "kind": "market",
+    "name": "Capital markets",
+    "region": null,
+    "sector": null,
+    "subentity_ids": [
+     "capital_markets.deal_activity",
+     "capital_markets.market_volatility",
+     "capital_markets.equity_index"
+    ]
+   },
+   {
+    "aliases": [
+     "the central bank",
+     "monetary authority",
+     "Acme central bank",
+     "ACB"
+    ],
+    "id": "central_bank",
+    "kind": "agency",
+    "name": "Central bank",
+    "region": "US",
+    "sector": null,
+    "subentity_ids": [
+     "central_bank.policy_rate"
+    ]
+   },
+   {
+    "aliases": [
+     "credit",
+     "credit spreads"
+    ],
+    "id": "credit_markets",
+    "kind": "market",
+    "name": "Credit markets",
+    "region": null,
+    "sector": null,
+    "subentity_ids": [
+     "credit_markets.credit_spread"
+    ]
+   },
+   {
+    "aliases": [
+     "oil",
+     "crude",
+     "oil prices"
+    ],
+    "id": "crude_oil",
+    "kind": "market",
+    "name": "Crude oil",
+    "region": null,
+    "sector": null,
+    "subentity_ids": [
+     "crude_oil.price",
+     "crude_oil.supply"
+    ]
+   },
+   {
+    "aliases": [
+     "Delta",
+     "DLTB",
+     "D"
+    ],
+    "id": "delta_bank",
+    "kind": "company",
+    "name": "Delta Bank",
+    "region": "US",
+    "sector": "banking",
+    "subentity_ids": [
+     "delta_bank.share_price",
+     "delta_bank.net_interest_income",
+     "delta_bank.services_revenue",
+     "delta_bank.markets_revenue",
+     "delta_bank.cet1_ratio"
+    ]
+   },
+   {
+    "aliases": [
+     "US dollar",
+     "the dollar",
+     "dollar basket"
+    ],
+    "id": "dollar",
+    "kind": "market",
+    "name": "Dollar",
+    "region": null,
+    "sector": null,
+    "subentity_ids": [
+     "dollar.index",
+     "dollar.eur_rate"
+    ]
+   },
+   {
+    "aliases": [
+     "the economy",
+     "economy"
+    ],
+    "id": "economy",
+    "kind": "macro_factor",
+    "name": "Acme economy",
+    "region": "US",
+    "sector": null,
+    "subentity_ids": [
+     "economy.headline_inflation",
+     "economy.core_inflation",
+     "economy.gdp_growth",
+     "economy.industrial_output"
+    ]
+   },
+   {
+    "aliases": [
+     "government bonds",
+     "sovereign bonds",
+     "bond market",
+     "Acme bonds"
+    ],
+    "id": "gov_bonds",
+    "kind": "market",
+    "name": "Government bonds",
+    "region": "US",
+    "sector": null,
+    "subentity_ids": [
+     "gov_bonds.yield_2y",
+     "gov_bonds.yield_10y"
+    ]
+   },
+   {
+    "aliases": [
+     "HVBK"
+    ],
+    "id": "harvest_bank",
+    "kind": "company",
+    "name": "Harvest Bank",
+    "region": "EU",
+    "sector": "banking",
+    "subentity_ids": [
+     "harvest_bank.net_interest_income",
+     "harvest_bank.cet1_ratio"
+    ]
+   },
+   {
+    "aliases": [
+     "Ridge",
+     "RDGE"
+    ],
+    "id": "ridge_energy",
+    "kind": "company",
+    "name": "Ridge Energy",
+    "region": "US",
+    "sector": "energy",
+    "subentity_ids": [
+     "ridge_energy.share_price",
+     "ridge_energy.operating_profit",
+     "ridge_energy.oil_output"
+    ]
+   },
+   {
+    "aliases": [
+     "freight",
+     "freight market"
+    ],
+    "id": "shipping",
+    "kind": "market",
+    "name": "Shipping",
+    "region": null,
+    "sector": null,
+    "subentity_ids": [
+     "shipping.freight_cost"
+    ]
+   },
+   {
+    "aliases": [
+     "the union bank",
+     "UCB"
+    ],
+    "id": "union_bank",
+    "kind": "agency",
+    "name": "Union central bank",
+    "region": "EU",
+    "sector": null,
+    "subentity_ids": [
+     "union_bank.policy_rate"
+    ]
+   },
+   {
+    "aliases": [
+     "union bonds"
+    ],
+    "id": "union_bonds",
+    "kind": "market",
+    "name": "Union government bonds",
+    "region": "EU",
+    "sector": null,
+    "subentity_ids": [
+     "union_bonds.yield_10y"
+    ]
+   },
+   {
+    "aliases": [
+     "union equities"
+    ],
+    "id": "union_capital_markets",
+    "kind": "market",
+    "name": "Union capital markets",
+    "region": "EU",
+    "sector": null,
+    "subentity_ids": [
+     "union_capital_markets.equity_index"
+    ]
+   },
+   {
+    "aliases": [
+     "the union"
+    ],
+    "id": "union_economy",
+    "kind": "macro_factor",
+    "name": "Union economy",
+    "region": "EU",
+    "sector": null,
+    "subentity_ids": [
+     "union_economy.headline_inflation",
+     "union_economy.core_inflation",
+     "union_economy.gdp_growth"
+    ]
+   },
+   {
+    "aliases": [],
+    "id": "us_vehicle_tariffs",
+    "kind": "external_factor",
+    "name": "US vehicle tariffs",
+    "region": "US",
+    "sector": null,
+    "subentity_ids": [
+     "us_vehicle_tariffs.effective_rate"
+    ]
+   }
+  ],
+  "links": [
+   {
+    "effect_mean": 0.101,
+    "fixed": true,
+    "id": "ab-a-ib",
+    "label": "adds to net revenue",
+    "polarity": 1,
+    "source_id": "acme_bank.ib_fees",
+    "target_id": "acme_bank.net_revenue"
+   },
+   {
+    "effect_mean": 0.298,
+    "fixed": true,
+    "id": "ab-a-mkts",
+    "label": "adds to net revenue",
+    "polarity": 1,
+    "source_id": "acme_bank.markets_revenue",
+    "target_id": "acme_bank.net_revenue"
+   },
+   {
+    "effect_mean": 0.688,
+    "fixed": true,
+    "id": "ab-a-nii",
+    "label": "adds to net revenue",
+    "polarity": 1,
+    "source_id": "acme_bank.nii_ex_markets",
+    "target_id": "acme_bank.net_revenue"
+   },
+   {
+    "effect_mean": 0.784,
+    "fixed": true,
+    "id": "ab-a-nii-expense",
+    "label": "adds to net interest income",
+    "polarity": 1,
+    "source_id": "acme_bank.interest_expense",
+    "target_id": "acme_bank.net_interest_income"
+   },
+   {
+    "effect_mean": 1.451,
+    "fixed": true,
+    "id": "ab-a-nii-income",
+    "label": "adds to net interest income",
+    "polarity": 1,
+    "source_id": "acme_bank.interest_income",
+    "target_id": "acme_bank.net_interest_income"
+   },
+   {
+    "effect_mean": 0.266,
+    "fixed": true,
+    "id": "ab-a-other",
+    "label": "adds to net revenue",
+    "polarity": 1,
+    "source_id": "acme_bank.other_revenue",
+    "target_id": "acme_bank.net_revenue"
+   },
+   {
+    "effect_mean": 0.4,
+    "fixed": false,
+    "id": "ab-c-cap-buyback",
+    "label": "releases buybacks above the requirement",
+    "polarity": 1,
+    "source_id": "acme_bank.cet1_ratio",
+    "target_id": "acme_bank.buybacks"
+   },
+   {
+    "effect_mean": 0.5,
+    "fixed": false,
+    "id": "ab-c-deals-ib",
+    "label": "lifts underwriting and advisory fees",
+    "polarity": 1,
+    "source_id": "capital_markets.deal_activity",
+    "target_id": "acme_bank.ib_fees"
+   },
+   {
+    "effect_mean": 0.87,
+    "fixed": false,
+    "id": "ab-c-rate-depcost",
+    "label": "passes a share of a rate move to deposit rates",
+    "polarity": 1,
+    "source_id": "central_bank.policy_rate",
+    "target_id": "acme_bank.deposit_cost"
+   },
+   {
+    "effect_mean": 0.6,
+    "fixed": false,
+    "id": "ab-c-rate-loanyield",
+    "label": "reprices floating loans",
+    "polarity": 1,
+    "source_id": "central_bank.policy_rate",
+    "target_id": "acme_bank.loan_coupon"
+   },
+   {
+    "effect_mean": 0.4,
+    "fixed": false,
+    "id": "ab-c-ust-nii",
+    "label": "lifts interest income",
+    "polarity": 1,
+    "source_id": "gov_bonds.yield_10y",
+    "target_id": "acme_bank.net_interest_income"
+   },
+   {
+    "effect_mean": 0.3,
+    "fixed": false,
+    "id": "ab-c-vol-mkts",
+    "label": "lifts trading revenue",
+    "polarity": 1,
+    "source_id": "capital_markets.market_volatility",
+    "target_id": "acme_bank.markets_revenue"
+   },
+   {
+    "effect_mean": 1.55,
+    "fixed": true,
+    "id": "ab.id.cet1_ratio:acme_bank.cet1_capital",
+    "label": "numerator in ab.id.cet1_ratio",
+    "polarity": 1,
+    "source_id": "acme_bank.cet1_capital",
+    "target_id": "acme_bank.cet1_ratio"
+   },
+   {
+    "effect_mean": -1.55,
+    "fixed": true,
+    "id": "ab.id.cet1_ratio:acme_bank.rwa",
+    "label": "denominator in ab.id.cet1_ratio",
+    "polarity": -1,
+    "source_id": "acme_bank.rwa",
+    "target_id": "acme_bank.cet1_ratio"
+   },
+   {
+    "effect_mean": 0.6,
+    "fixed": true,
+    "id": "ab.id.loan_income:acme_bank.avg_loans",
+    "label": "factor in ab.id.loan_income",
+    "polarity": 1,
+    "source_id": "acme_bank.avg_loans",
+    "target_id": "acme_bank.interest_income"
+   },
+   {
+    "effect_mean": 1.081081,
+    "fixed": true,
+    "id": "ab.id.loan_income:acme_bank.loan_coupon",
+    "label": "factor in ab.id.loan_income",
+    "polarity": 1,
+    "source_id": "acme_bank.loan_coupon",
+    "target_id": "acme_bank.interest_income"
+   },
+   {
+    "effect_mean": -0.309478,
+    "fixed": true,
+    "id": "ab.id.nii_ex_markets:acme_bank.markets_nii",
+    "label": "deduction in ab.id.nii_ex_markets",
+    "polarity": -1,
+    "source_id": "acme_bank.markets_nii",
+    "target_id": "acme_bank.nii_ex_markets"
+   },
+   {
+    "effect_mean": 0.98646,
+    "fixed": true,
+    "id": "ab.id.nii_ex_markets:acme_bank.net_interest_income",
+    "label": "total in ab.id.nii_ex_markets",
+    "polarity": 1,
+    "source_id": "acme_bank.net_interest_income",
+    "target_id": "acme_bank.nii_ex_markets"
+   },
+   {
+    "effect_mean": -0.526316,
+    "fixed": true,
+    "id": "ab.sf.cet1:acme_bank.buybacks",
+    "label": "flows out of",
+    "polarity": -1,
+    "source_id": "acme_bank.buybacks",
+    "target_id": "acme_bank.cet1_capital"
+   },
+   {
+    "effect_mean": -0.093567,
+    "fixed": true,
+    "id": "ab.sf.cet1:acme_bank.dividends",
+    "label": "flows out of",
+    "polarity": -1,
+    "source_id": "acme_bank.dividends",
+    "target_id": "acme_bank.cet1_capital"
+   },
+   {
+    "effect_mean": 0.491228,
+    "fixed": true,
+    "id": "ab.sf.cet1:acme_bank.net_income",
+    "label": "flows into",
+    "polarity": 1,
+    "source_id": "acme_bank.net_income",
+    "target_id": "acme_bank.cet1_capital"
+   },
+   {
+    "effect_mean": 0.975,
+    "fixed": true,
+    "id": "am-a-seg-auto",
+    "label": "adds to operating profit",
+    "polarity": 1,
+    "source_id": "acme_motors.automotive_operating_income",
+    "target_id": "acme_motors.operating_profit"
+   },
+   {
+    "effect_mean": 0.056,
+    "fixed": true,
+    "id": "am-a-seg-elim",
+    "label": "adds to operating profit",
+    "polarity": 1,
+    "source_id": "acme_motors.segment_eliminations",
+    "target_id": "acme_motors.operating_profit"
+   },
+   {
+    "effect_mean": 0.144,
+    "fixed": true,
+    "id": "am-a-seg-fs",
+    "label": "adds to operating profit",
+    "polarity": 1,
+    "source_id": "acme_motors.financial_services_operating_income",
+    "target_id": "acme_motors.operating_profit"
+   },
+   {
+    "effect_mean": 0.111,
+    "fixed": true,
+    "id": "am-a-seg-other",
+    "label": "adds to operating profit",
+    "polarity": 1,
+    "source_id": "acme_motors.other_operating_income",
+    "target_id": "acme_motors.operating_profit"
+   },
+   {
+    "effect_mean": 0.0,
+    "fixed": false,
+    "id": "am-c-incentive-na",
+    "label": "raises incentives as inventory builds",
+    "polarity": 1,
+    "source_id": "acme_motors.inventory_days",
+    "target_id": "acme_motors.incentive_spend"
+   },
+   {
+    "effect_mean": 0.3,
+    "fixed": false,
+    "id": "am-c-prod-sales",
+    "label": "supplies units",
+    "polarity": 1,
+    "source_id": "acme_motors.home_production",
+    "target_id": "acme_motors.vehicle_sales"
+   },
+   {
+    "effect_mean": 0.5,
+    "fixed": false,
+    "id": "am-c-sales-profit",
+    "label": "lifts automotive profit",
+    "polarity": 1,
+    "source_id": "acme_motors.vehicle_sales",
+    "target_id": "acme_motors.automotive_operating_income"
+   },
+   {
+    "effect_mean": -0.3,
+    "fixed": false,
+    "id": "am-c-tariff-na",
+    "label": "weighs on North America profit above a tariff rate",
+    "polarity": -1,
+    "source_id": "us_vehicle_tariffs.effective_rate",
+    "target_id": "acme_motors.north_america_operating_income"
+   },
+   {
+    "effect_mean": 0.75,
+    "fixed": true,
+    "id": "am.id.revenue:acme_motors.revenue_per_unit",
+    "label": "factor in am.id.revenue",
+    "polarity": 1,
+    "source_id": "acme_motors.revenue_per_unit",
+    "target_id": "acme_motors.net_revenue"
+   },
+   {
+    "effect_mean": 1.0,
+    "fixed": true,
+    "id": "am.id.revenue:acme_motors.vehicle_sales",
+    "label": "factor in am.id.revenue",
+    "polarity": 1,
+    "source_id": "acme_motors.vehicle_sales",
+    "target_id": "acme_motors.net_revenue"
+   },
+   {
+    "effect_mean": 0.125,
+    "fixed": true,
+    "id": "ar-a-life",
+    "label": "adds to adjusted net income",
+    "polarity": 1,
+    "source_id": "acme_re.domestic_life_profit",
+    "target_id": "acme_re.operating_profit"
+   },
+   {
+    "effect_mean": 0.208,
+    "fixed": true,
+    "id": "ar-a-sol",
+    "label": "adds to adjusted net income",
+    "polarity": 1,
+    "source_id": "acme_re.solution_profit",
+    "target_id": "acme_re.operating_profit"
+   },
+   {
+    "effect_mean": 0.0,
+    "fixed": false,
+    "id": "ar-c-fx-hedge",
+    "label": "raises hedging cost",
+    "polarity": -1,
+    "source_id": "dollar.index",
+    "target_id": "acme_re.hedge_cost"
+   },
+   {
+    "effect_mean": 0.0,
+    "fixed": false,
+    "id": "ar-c-hedge-profit",
+    "label": "weighs on international profit",
+    "polarity": 1,
+    "source_id": "acme_re.hedge_cost",
+    "target_id": "acme_re.international_profit"
+   },
+   {
+    "effect_mean": 0.2,
+    "fixed": false,
+    "id": "ar-c-rate-sales",
+    "label": "speeds cross-holding sales",
+    "polarity": 1,
+    "source_id": "central_bank.policy_rate",
+    "target_id": "acme_re.sale_rate"
+   },
+   {
+    "effect_mean": 0.2,
+    "fixed": false,
+    "id": "ar-c-reinvest",
+    "label": "adds to income while new money beats the book",
+    "polarity": 1,
+    "source_id": "acme_re.new_minus_book_coupon",
+    "target_id": "acme_re.domestic_pc_profit"
+   },
+   {
+    "effect_mean": 0.0,
+    "fixed": false,
+    "id": "ar-c-sales-book",
+    "label": "reduces the book",
+    "polarity": -1,
+    "source_id": "acme_re.cross_holding_sales",
+    "target_id": "acme_re.cross_holding_book"
+   },
+   {
+    "effect_mean": 0.0,
+    "fixed": false,
+    "id": "ar-c-yield-equity",
+    "label": "weighs on equity valuations",
+    "polarity": -1,
+    "source_id": "gov_bonds.yield_10y",
+    "target_id": "capital_markets.equity_index"
+   },
+   {
+    "effect_mean": -0.1,
+    "fixed": false,
+    "id": "ar-c-yield-life",
+    "label": "marks down bond holdings",
+    "polarity": -1,
+    "source_id": "gov_bonds.yield_10y",
+    "target_id": "acme_re.domestic_life_profit"
+   },
+   {
+    "effect_mean": 0.6,
+    "fixed": true,
+    "id": "ar.id.sales:acme_re.cross_holding_book",
+    "label": "factor in ar.id.sales",
+    "polarity": 1,
+    "source_id": "acme_re.cross_holding_book",
+    "target_id": "acme_re.cross_holding_sales"
+   },
+   {
+    "effect_mean": 0.833333,
+    "fixed": true,
+    "id": "ar.id.sales:acme_re.sale_rate",
+    "label": "factor in ar.id.sales",
+    "polarity": 1,
+    "source_id": "acme_re.sale_rate",
+    "target_id": "acme_re.cross_holding_sales"
+   },
+   {
+    "effect_mean": -0.666667,
+    "fixed": true,
+    "id": "ar.id.spread:acme_re.book_coupon",
+    "label": "deduction in ar.id.spread",
+    "polarity": -1,
+    "source_id": "acme_re.book_coupon",
+    "target_id": "acme_re.new_minus_book_coupon"
+   },
+   {
+    "effect_mean": 1.0,
+    "fixed": true,
+    "id": "ar.id.spread:acme_re.new_money_coupon",
+    "label": "total in ar.id.spread",
+    "polarity": 1,
+    "source_id": "acme_re.new_money_coupon",
+    "target_id": "acme_re.new_minus_book_coupon"
+   },
+   {
+    "effect_mean": 0.5,
+    "fixed": false,
+    "id": "d-acme_bank-net_interest_income-share_price",
+    "label": "drives",
+    "polarity": 1,
+    "source_id": "acme_bank.net_interest_income",
+    "target_id": "acme_bank.share_price"
+   },
+   {
+    "effect_mean": 0.5,
+    "fixed": false,
+    "id": "d-acme_motors-operating_profit-share_price",
+    "label": "drives",
+    "polarity": 1,
+    "source_id": "acme_motors.operating_profit",
+    "target_id": "acme_motors.share_price"
+   },
+   {
+    "effect_mean": 0.5,
+    "fixed": false,
+    "id": "d-acme_re-operating_profit-share_price",
+    "label": "drives",
+    "polarity": 1,
+    "source_id": "acme_re.operating_profit",
+    "target_id": "acme_re.share_price"
+   },
+   {
+    "effect_mean": 0.5,
+    "fixed": false,
+    "id": "d-blue_freight-operating_profit-share_price",
+    "label": "drives",
+    "polarity": 1,
+    "source_id": "blue_freight.operating_profit",
+    "target_id": "blue_freight.share_price"
+   },
+   {
+    "effect_mean": 0.5,
+    "fixed": false,
+    "id": "d-delta_bank-net_interest_income-share_price",
+    "label": "drives",
+    "polarity": 1,
+    "source_id": "delta_bank.net_interest_income",
+    "target_id": "delta_bank.share_price"
+   },
+   {
+    "effect_mean": 0.5,
+    "fixed": false,
+    "id": "d-ridge_energy-operating_profit-share_price",
+    "label": "drives",
+    "polarity": 1,
+    "source_id": "ridge_energy.operating_profit",
+    "target_id": "ridge_energy.share_price"
+   },
+   {
+    "effect_mean": -0.6,
+    "fixed": false,
+    "id": "m01",
+    "label": "tightens",
+    "polarity": -1,
+    "source_id": "crude_oil.supply",
+    "target_id": "crude_oil.price"
+   },
+   {
+    "effect_mean": 0.45,
+    "fixed": false,
+    "id": "m02",
+    "label": "raises",
+    "polarity": 1,
+    "source_id": "crude_oil.price",
+    "target_id": "economy.headline_inflation"
+   },
+   {
+    "effect_mean": 0.4,
+    "fixed": false,
+    "id": "m03",
+    "label": "raises",
+    "polarity": 1,
+    "source_id": "crude_oil.price",
+    "target_id": "shipping.freight_cost"
+   },
+   {
+    "effect_mean": -0.02,
+    "fixed": false,
+    "id": "m04",
+    "label": "weighs on",
+    "polarity": -1,
+    "source_id": "crude_oil.price",
+    "target_id": "economy.gdp_growth"
+   },
+   {
+    "effect_mean": 0.35,
+    "fixed": false,
+    "id": "m05",
+    "label": "spreads to",
+    "polarity": 1,
+    "source_id": "economy.headline_inflation",
+    "target_id": "economy.core_inflation"
+   },
+   {
+    "effect_mean": 0.5,
+    "fixed": false,
+    "id": "m06",
+    "label": "keeps the bank tight",
+    "polarity": 1,
+    "source_id": "economy.core_inflation",
+    "target_id": "central_bank.policy_rate"
+   },
+   {
+    "effect_mean": 0.35,
+    "fixed": false,
+    "id": "m07",
+    "label": "lets the bank hold",
+    "polarity": 1,
+    "source_id": "economy.gdp_growth",
+    "target_id": "central_bank.policy_rate"
+   },
+   {
+    "effect_mean": 0.85,
+    "fixed": false,
+    "id": "m08",
+    "label": "anchors",
+    "polarity": 1,
+    "source_id": "central_bank.policy_rate",
+    "target_id": "gov_bonds.yield_2y"
+   },
+   {
+    "effect_mean": 0.5,
+    "fixed": false,
+    "id": "m09",
+    "label": "lifts",
+    "polarity": 1,
+    "source_id": "gov_bonds.yield_2y",
+    "target_id": "gov_bonds.yield_10y"
+   },
+   {
+    "effect_mean": 0.6,
+    "fixed": false,
+    "id": "m10",
+    "label": "strengthens",
+    "polarity": 1,
+    "source_id": "central_bank.policy_rate",
+    "target_id": "dollar.index"
+   },
+   {
+    "effect_mean": 0.2,
+    "fixed": false,
+    "id": "m11",
+    "label": "widens",
+    "polarity": 1,
+    "source_id": "central_bank.policy_rate",
+    "target_id": "credit_markets.credit_spread"
+   },
+   {
+    "effect_mean": -0.3,
+    "fixed": false,
+    "id": "m12",
+    "label": "narrows",
+    "polarity": -1,
+    "source_id": "economy.gdp_growth",
+    "target_id": "credit_markets.credit_spread"
+   },
+   {
+    "effect_mean": 0.4,
+    "fixed": false,
+    "id": "m13",
+    "label": "lifts",
+    "polarity": 1,
+    "source_id": "credit_markets.credit_spread",
+    "target_id": "capital_markets.market_volatility"
+   },
+   {
+    "effect_mean": -0.4,
+    "fixed": false,
+    "id": "m14",
+    "label": "cools",
+    "polarity": -1,
+    "source_id": "credit_markets.credit_spread",
+    "target_id": "capital_markets.deal_activity"
+   },
+   {
+    "effect_mean": -0.15,
+    "fixed": false,
+    "id": "m15",
+    "label": "weighs on",
+    "polarity": -1,
+    "source_id": "shipping.freight_cost",
+    "target_id": "economy.industrial_output"
+   },
+   {
+    "effect_mean": 0.5,
+    "fixed": false,
+    "id": "m16",
+    "label": "lifts",
+    "polarity": 1,
+    "source_id": "economy.gdp_growth",
+    "target_id": "economy.industrial_output"
+   },
+   {
+    "effect_mean": 0.36,
+    "fixed": false,
+    "id": "m17",
+    "label": "widens margins",
+    "polarity": 1,
+    "source_id": "central_bank.policy_rate",
+    "target_id": "acme_bank.net_interest_income"
+   },
+   {
+    "effect_mean": 0.3,
+    "fixed": false,
+    "id": "m18",
+    "label": "widens margins",
+    "polarity": 1,
+    "source_id": "central_bank.policy_rate",
+    "target_id": "delta_bank.net_interest_income"
+   },
+   {
+    "effect_mean": 0.3,
+    "fixed": false,
+    "id": "m19",
+    "label": "lifts trading revenue",
+    "polarity": 1,
+    "source_id": "capital_markets.market_volatility",
+    "target_id": "delta_bank.markets_revenue"
+   },
+   {
+    "effect_mean": 0.3,
+    "fixed": false,
+    "id": "m20",
+    "label": "lifts reinvestment income",
+    "polarity": 1,
+    "source_id": "gov_bonds.yield_10y",
+    "target_id": "acme_re.domestic_pc_profit"
+   },
+   {
+    "effect_mean": 0.8,
+    "fixed": true,
+    "id": "m21",
+    "label": "adds to",
+    "polarity": 1,
+    "source_id": "acme_re.international_profit",
+    "target_id": "acme_re.operating_profit"
+   },
+   {
+    "effect_mean": 0.28,
+    "fixed": true,
+    "id": "m22",
+    "label": "adds to",
+    "polarity": 1,
+    "source_id": "acme_re.domestic_pc_profit",
+    "target_id": "acme_re.operating_profit"
+   },
+   {
+    "effect_mean": 0.4,
+    "fixed": false,
+    "id": "m23",
+    "label": "lifts translated profit",
+    "polarity": 1,
+    "source_id": "dollar.index",
+    "target_id": "acme_re.international_profit"
+   },
+   {
+    "effect_mean": -0.5,
+    "fixed": false,
+    "id": "m24",
+    "label": "a stronger dollar trims",
+    "polarity": -1,
+    "source_id": "dollar.index",
+    "target_id": "acme_motors.operating_profit"
+   },
+   {
+    "effect_mean": -0.5,
+    "fixed": false,
+    "id": "m25",
+    "label": "weighs on",
+    "polarity": -1,
+    "source_id": "crude_oil.price",
+    "target_id": "acme_motors.vehicle_sales"
+   },
+   {
+    "effect_mean": 0.4,
+    "fixed": false,
+    "id": "m26",
+    "label": "lifts",
+    "polarity": 1,
+    "source_id": "economy.gdp_growth",
+    "target_id": "acme_motors.vehicle_sales"
+   },
+   {
+    "effect_mean": 0.6,
+    "fixed": false,
+    "id": "m27",
+    "label": "lifts",
+    "polarity": 1,
+    "source_id": "crude_oil.price",
+    "target_id": "ridge_energy.operating_profit"
+   },
+   {
+    "effect_mean": 0.5,
+    "fixed": false,
+    "id": "m28",
+    "label": "lifts",
+    "polarity": 1,
+    "source_id": "ridge_energy.oil_output",
+    "target_id": "ridge_energy.operating_profit"
+   },
+   {
+    "effect_mean": 0.5,
+    "fixed": false,
+    "id": "m29",
+    "label": "raises",
+    "polarity": 1,
+    "source_id": "crude_oil.price",
+    "target_id": "blue_freight.fuel_cost"
+   },
+   {
+    "effect_mean": 0.4,
+    "fixed": false,
+    "id": "m30",
+    "label": "lifts",
+    "polarity": 1,
+    "source_id": "shipping.freight_cost",
+    "target_id": "blue_freight.freight_revenue"
+   },
+   {
+    "effect_mean": 0.7,
+    "fixed": true,
+    "id": "m31",
+    "label": "adds to",
+    "polarity": 1,
+    "source_id": "blue_freight.freight_revenue",
+    "target_id": "blue_freight.operating_profit"
+   },
+   {
+    "effect_mean": -0.45,
+    "fixed": true,
+    "id": "m32",
+    "label": "weighs on",
+    "polarity": -1,
+    "source_id": "blue_freight.fuel_cost",
+    "target_id": "blue_freight.operating_profit"
+   },
+   {
+    "effect_mean": -0.15,
+    "fixed": false,
+    "id": "m33",
+    "label": "weighs on",
+    "polarity": -1,
+    "source_id": "credit_markets.credit_spread",
+    "target_id": "acme_bank.ib_fees"
+   },
+   {
+    "effect_mean": 0.6,
+    "fixed": false,
+    "id": "m34",
+    "label": "anchors",
+    "polarity": 1,
+    "source_id": "union_bank.policy_rate",
+    "target_id": "union_bonds.yield_10y"
+   },
+   {
+    "effect_mean": 0.4,
+    "fixed": false,
+    "id": "m35",
+    "label": "widens margins",
+    "polarity": 1,
+    "source_id": "union_bank.policy_rate",
+    "target_id": "harvest_bank.net_interest_income"
+   },
+   {
+    "effect_mean": -0.2,
+    "fixed": false,
+    "id": "m36",
+    "label": "weighs on",
+    "polarity": -1,
+    "source_id": "union_bonds.yield_10y",
+    "target_id": "union_capital_markets.equity_index"
+   },
+   {
+    "effect_mean": 0.45,
+    "fixed": false,
+    "id": "m37",
+    "label": "keeps the union bank tight",
+    "polarity": 1,
+    "source_id": "union_economy.headline_inflation",
+    "target_id": "union_bank.policy_rate"
+   },
+   {
+    "effect_mean": 0.35,
+    "fixed": false,
+    "id": "m38",
+    "label": "lifts",
+    "polarity": 1,
+    "source_id": "union_bonds.yield_10y",
+    "target_id": "harvest_bank.net_interest_income"
+   },
+   {
+    "effect_mean": -0.2,
+    "fixed": false,
+    "id": "m39",
+    "label": "weighs on",
+    "polarity": -1,
+    "source_id": "dollar.index",
+    "target_id": "capital_markets.equity_index"
+   },
+   {
+    "effect_mean": 0.5,
+    "fixed": false,
+    "id": "m40",
+    "label": "keeps the union bank tight",
+    "polarity": 1,
+    "source_id": "union_economy.core_inflation",
+    "target_id": "union_bank.policy_rate"
+   },
+   {
+    "effect_mean": 0.3,
+    "fixed": false,
+    "id": "m41",
+    "label": "tightens conditions",
+    "polarity": 1,
+    "source_id": "dollar.index",
+    "target_id": "credit_markets.credit_spread"
+   }
+  ],
+  "values": [
+   {
+    "aliases": [],
+    "attribute_kind": "balance",
+    "entity_id": "acme_bank",
+    "family": "lognormal",
+    "id": "acme_bank.avg_loans",
+    "mean": 2000.9002025303778,
+    "name": "Acme Bank average loans",
+    "scale": 0.03,
+    "sd": 60.04051468500945,
+    "unit": "$bn"
+   },
+   {
+    "aliases": [],
+    "attribute_kind": "revenue_flow",
+    "entity_id": "acme_bank",
+    "family": "lognormal",
+    "id": "acme_bank.buybacks",
+    "mean": 30.339405576708344,
+    "name": "Acme Bank buybacks",
+    "scale": 0.15,
+    "sd": 4.576630110664834,
+    "unit": "$bn/yr"
+   },
+   {
+    "aliases": [],
+    "attribute_kind": "balance",
+    "entity_id": "acme_bank",
+    "family": "lognormal",
+    "id": "acme_bank.cet1_capital",
+    "mean": 285.128278860579,
+    "name": "Acme Bank CET1 capital",
+    "scale": 0.03,
+    "sd": 8.55577334261385,
+    "unit": "$bn"
+   },
+   {
+    "aliases": [
+     "capital",
+     "CET1",
+     "CET1 ratio",
+     "CET-1",
+     "CET-1 ratio",
+     "Common Equity Tier 1 ratio",
+     "Common Equity Tier 1 Capital Ratio"
+    ],
+    "attribute_kind": "structural_level",
+    "entity_id": "acme_bank",
+    "family": "gaussian",
+    "id": "acme_bank.cet1_ratio",
+    "mean": 15.5,
+    "name": "Acme Bank CET1 ratio",
+    "scale": 0.3,
+    "sd": 0.3,
+    "unit": "pct"
+   },
+   {
+    "aliases": [],
+    "attribute_kind": "revenue_flow",
+    "entity_id": "acme_bank",
+    "family": "lognormal",
+    "id": "acme_bank.consumer_revenue",
+    "mean": 80.064025606828,
+    "name": "Acme Bank consumer revenue",
+    "scale": 0.04,
+    "sd": 3.2038424757933877,
+    "unit": "$bn/yr"
+   },
+   {
+    "aliases": [],
+    "attribute_kind": "revenue_flow",
+    "entity_id": "acme_bank",
+    "family": "gaussian",
+    "id": "acme_bank.corporate_revenue",
+    "mean": 8.0,
+    "name": "Acme Bank corporate revenue",
+    "scale": 3.0,
+    "sd": 3.0,
+    "unit": "$bn/yr"
+   },
+   {
+    "aliases": [],
+    "attribute_kind": "bank_funding_cost",
+    "entity_id": "acme_bank",
+    "family": "gaussian",
+    "id": "acme_bank.deposit_cost",
+    "mean": 2.1,
+    "name": "Acme Bank deposit cost",
+    "scale": 0.3,
+    "sd": 0.3,
+    "unit": "pct"
+   },
+   {
+    "aliases": [],
+    "attribute_kind": "revenue_flow",
+    "entity_id": "acme_bank",
+    "family": "lognormal",
+    "id": "acme_bank.dividends",
+    "mean": 16.020012505209962,
+    "name": "Acme Bank dividends",
+    "scale": 0.05,
+    "sd": 0.8015015114914983,
+    "unit": "$bn/yr"
+   },
+   {
+    "aliases": [],
+    "attribute_kind": "revenue_flow",
+    "entity_id": "acme_bank",
+    "family": "lognormal",
+    "id": "acme_bank.equity_markets",
+    "mean": 11.055137729453412,
+    "name": "Acme Bank Equity Markets revenue",
+    "scale": 0.1,
+    "sd": 1.1082833239082437,
+    "unit": "$bn/yr"
+   },
+   {
+    "aliases": [
+     "advisory and underwriting",
+     "banking fees"
+    ],
+    "attribute_kind": "revenue_flow",
+    "entity_id": "acme_bank",
+    "family": "lognormal",
+    "id": "acme_bank.ib_fees",
+    "mean": 9.530448691924201,
+    "name": "Acme Bank investment banking fees",
+    "scale": 0.08,
+    "sd": 0.7636574208789826,
+    "unit": "$bn/yr"
+   },
+   {
+    "aliases": [],
+    "attribute_kind": "revenue_flow",
+    "entity_id": "acme_bank",
+    "family": "gaussian",
+    "id": "acme_bank.interest_expense",
+    "mean": -46.0,
+    "name": "Acme Bank interest expense",
+    "scale": 4.0,
+    "sd": 4.0,
+    "unit": "$bn/yr"
+   },
+   {
+    "aliases": [],
+    "attribute_kind": "revenue_flow",
+    "entity_id": "acme_bank",
+    "family": "lognormal",
+    "id": "acme_bank.interest_income",
+    "mean": 148.18511567319206,
+    "name": "Acme Bank interest income",
+    "scale": 0.05,
+    "sd": 7.413888981296354,
+    "unit": "$bn/yr"
+   },
+   {
+    "aliases": [],
+    "attribute_kind": "bond_yield",
+    "entity_id": "acme_bank",
+    "family": "gaussian",
+    "id": "acme_bank.loan_coupon",
+    "mean": 7.4,
+    "name": "Acme Bank loan coupon",
+    "scale": 0.4,
+    "sd": 0.4,
+    "unit": "pct"
+   },
+   {
+    "aliases": [],
+    "attribute_kind": "revenue_flow",
+    "entity_id": "acme_bank",
+    "family": "lognormal",
+    "id": "acme_bank.markets_nii",
+    "mean": 8.161610720214044,
+    "name": "Acme Bank Markets net interest income",
+    "scale": 0.2,
+    "sd": 1.648782212083967,
+    "unit": "$bn/yr"
+   },
+   {
+    "aliases": [
+     "trading",
+     "markets"
+    ],
+    "attribute_kind": "revenue_flow",
+    "entity_id": "acme_bank",
+    "family": "lognormal",
+    "id": "acme_bank.markets_revenue",
+    "mean": 32.07849611848073,
+    "name": "Acme Bank markets revenue",
+    "scale": 0.07,
+    "sd": 2.2482482694387835,
+    "unit": "$bn/yr"
+   },
+   {
+    "aliases": [],
+    "attribute_kind": "revenue_flow",
+    "entity_id": "acme_bank",
+    "family": "lognormal",
+    "id": "acme_bank.net_income",
+    "mean": 60.14718022215133,
+    "name": "Acme Bank net income",
+    "scale": 0.07,
+    "sd": 4.215465505197717,
+    "unit": "$bn/yr"
+   },
+   {
+    "aliases": [
+     "NII",
+     "net interest income",
+     "net II"
+    ],
+    "attribute_kind": "revenue_flow",
+    "entity_id": "acme_bank",
+    "family": "lognormal",
+    "id": "acme_bank.net_interest_income",
+    "mean": 102.12757972071344,
+    "name": "Acme Bank net interest income",
+    "scale": 0.05,
+    "sd": 5.109572135758298,
+    "unit": "$bn/yr"
+   },
+   {
+    "aliases": [],
+    "attribute_kind": "revenue_flow",
+    "entity_id": "acme_bank",
+    "family": "lognormal",
+    "id": "acme_bank.net_revenue",
+    "mean": 188.15046017604587,
+    "name": "Acme Bank net revenue",
+    "scale": 0.04,
+    "sd": 7.529029818114465,
+    "unit": "$bn/yr"
+   },
+   {
+    "aliases": [],
+    "attribute_kind": "revenue_flow",
+    "entity_id": "acme_bank",
+    "family": "lognormal",
+    "id": "acme_bank.nii_ex_markets",
+    "mean": 94.14228257407213,
+    "name": "Acme Bank NII ex Markets",
+    "scale": 0.055,
+    "sd": 5.181743740985886,
+    "unit": "$bn/yr"
+   },
+   {
+    "aliases": [],
+    "attribute_kind": "revenue_flow",
+    "entity_id": "acme_bank",
+    "family": "gaussian",
+    "id": "acme_bank.other_revenue",
+    "mean": 52.5,
+    "name": "Acme Bank other revenue",
+    "scale": 2.0,
+    "sd": 2.0,
+    "unit": "$bn/yr"
+   },
+   {
+    "aliases": [],
+    "attribute_kind": "balance",
+    "entity_id": "acme_bank",
+    "family": "lognormal",
+    "id": "acme_bank.rwa",
+    "mean": 1840.8281863279472,
+    "name": "Acme Bank risk-weighted assets",
+    "scale": 0.03,
+    "sd": 55.23727351020868,
+    "unit": "$bn"
+   },
+   {
+    "aliases": [],
+    "attribute_kind": "asset_price",
+    "entity_id": "acme_bank",
+    "family": "lognormal",
+    "id": "acme_bank.share_price",
+    "mean": 300.9615376397114,
+    "name": "Acme Bank share price",
+    "scale": 0.08,
+    "sd": 24.115497501441535,
+    "unit": "local ccy"
+   },
+   {
+    "aliases": [],
+    "attribute_kind": "revenue_flow",
+    "entity_id": "acme_bank",
+    "family": "lognormal",
+    "id": "acme_bank.wholesale_revenue",
+    "mean": 100.18016209724382,
+    "name": "Acme Bank wholesale revenue",
+    "scale": 0.06,
+    "sd": 6.016223514076335,
+    "unit": "$bn/yr"
+   },
+   {
+    "aliases": [],
+    "attribute_kind": "revenue_flow",
+    "entity_id": "acme_motors",
+    "family": "lognormal",
+    "id": "acme_motors.automotive_operating_income",
+    "mean": 3915.8270280983315,
+    "name": "Acme Motors automotive operating income",
+    "scale": 0.09,
+    "sd": 353.1392977696149,
+    "unit": "$m/yr"
+   },
+   {
+    "aliases": [],
+    "attribute_kind": "revenue_flow",
+    "entity_id": "acme_motors",
+    "family": "lognormal",
+    "id": "acme_motors.dealer_stock",
+    "mean": 802.5641003725638,
+    "name": "Acme Motors dealer stock",
+    "scale": 0.08,
+    "sd": 64.30799333717742,
+    "unit": "$m/yr"
+   },
+   {
+    "aliases": [],
+    "attribute_kind": "revenue_flow",
+    "entity_id": "acme_motors",
+    "family": "lognormal",
+    "id": "acme_motors.financial_services_operating_income",
+    "mean": 522.6065108468885,
+    "name": "Acme Motors financial services operating income",
+    "scale": 0.1,
+    "sd": 52.391575312026056,
+    "unit": "$m/yr"
+   },
+   {
+    "aliases": [],
+    "attribute_kind": "revenue_flow",
+    "entity_id": "acme_motors",
+    "family": "lognormal",
+    "id": "acme_motors.fx_translation",
+    "mean": 153.03020100401326,
+    "name": "Acme Motors FX translation effect",
+    "scale": 0.2,
+    "sd": 30.914666476574364,
+    "unit": "$m/yr"
+   },
+   {
+    "aliases": [],
+    "attribute_kind": "revenue_flow",
+    "entity_id": "acme_motors",
+    "family": "lognormal",
+    "id": "acme_motors.home_operating_income",
+    "mean": 2006.4102509314093,
+    "name": "Acme Motors home-market operating income",
+    "scale": 0.08,
+    "sd": 160.7699833429436,
+    "unit": "$m/yr"
+   },
+   {
+    "aliases": [
+     "domestic production"
+    ],
+    "attribute_kind": "production_flow",
+    "entity_id": "acme_motors",
+    "family": "lognormal",
+    "id": "acme_motors.home_production",
+    "mean": 3304.1275791995567,
+    "name": "Acme Motors home-market production",
+    "scale": 0.05,
+    "sd": 165.3096867451216,
+    "unit": "k units/yr"
+   },
+   {
+    "aliases": [],
+    "attribute_kind": "revenue_flow",
+    "entity_id": "acme_motors",
+    "family": "lognormal",
+    "id": "acme_motors.hybrid_share",
+    "mean": 40.20050083437604,
+    "name": "Acme Motors hybrid share of sales",
+    "scale": 0.1,
+    "sd": 4.030121177848158,
+    "unit": "$m/yr"
+   },
+   {
+    "aliases": [],
+    "attribute_kind": "revenue_flow",
+    "entity_id": "acme_motors",
+    "family": "lognormal",
+    "id": "acme_motors.incentive_spend",
+    "mean": 301.50375625782027,
+    "name": "Acme Motors US incentive spend",
+    "scale": 0.1,
+    "sd": 30.225908833861183,
+    "unit": "$m/yr"
+   },
+   {
+    "aliases": [
+     "US inventory"
+    ],
+    "attribute_kind": "condition_index",
+    "entity_id": "acme_motors",
+    "family": "gaussian",
+    "id": "acme_motors.inventory_days",
+    "mean": 55.0,
+    "name": "Acme Motors US inventory days",
+    "scale": 8.0,
+    "sd": 8.0,
+    "unit": "days"
+   },
+   {
+    "aliases": [],
+    "attribute_kind": "revenue_flow",
+    "entity_id": "acme_motors",
+    "family": "lognormal",
+    "id": "acme_motors.material_cost",
+    "mean": 904.511268773461,
+    "name": "Acme Motors material cost",
+    "scale": 0.1,
+    "sd": 90.67772650158358,
+    "unit": "$m/yr"
+   },
+   {
+    "aliases": [
+     "revenue",
+     "sales revenue"
+    ],
+    "attribute_kind": "revenue_flow",
+    "entity_id": "acme_motors",
+    "family": "lognormal",
+    "id": "acme_motors.net_revenue",
+    "mean": 45036.014403840745,
+    "name": "Acme Motors net revenue",
+    "scale": 0.04,
+    "sd": 1802.1613926337807,
+    "unit": "$m/yr"
+   },
+   {
+    "aliases": [],
+    "attribute_kind": "revenue_flow",
+    "entity_id": "acme_motors",
+    "family": "lognormal",
+    "id": "acme_motors.north_america_operating_income",
+    "mean": 1608.0200333750413,
+    "name": "Acme Motors North America operating income",
+    "scale": 0.1,
+    "sd": 161.20484711392632,
+    "unit": "$m/yr"
+   },
+   {
+    "aliases": [
+     "Acme Motors earnings",
+     "OP",
+     "Op. profit",
+     "operating profit",
+     "operating income",
+     "EBIT"
+    ],
+    "attribute_kind": "revenue_flow",
+    "entity_id": "acme_motors",
+    "family": "lognormal",
+    "id": "acme_motors.operating_profit",
+    "mean": 3.410897426583398,
+    "name": "Acme Motors operating profit",
+    "scale": 0.08,
+    "sd": 0.2733089716830042,
+    "unit": "$bn/yr"
+   },
+   {
+    "aliases": [],
+    "attribute_kind": "revenue_flow",
+    "entity_id": "acme_motors",
+    "family": "gaussian",
+    "id": "acme_motors.other_operating_income",
+    "mean": 200.0,
+    "name": "Acme Motors other operating income",
+    "scale": 40.0,
+    "sd": 40.0,
+    "unit": "$m/yr"
+   },
+   {
+    "aliases": [],
+    "attribute_kind": "revenue_flow",
+    "entity_id": "acme_motors",
+    "family": "gaussian",
+    "id": "acme_motors.other_regions_operating_income",
+    "mean": 900.0,
+    "name": "Acme Motors other regions operating income",
+    "scale": 120.0,
+    "sd": 120.0,
+    "unit": "$m/yr"
+   },
+   {
+    "aliases": [],
+    "attribute_kind": "revenue_flow",
+    "entity_id": "acme_motors",
+    "family": "lognormal",
+    "id": "acme_motors.price_recovery",
+    "mean": 121.3576223068334,
+    "name": "Acme Motors price recovery",
+    "scale": 0.15,
+    "sd": 18.30652044265934,
+    "unit": "$m/yr"
+   },
+   {
+    "aliases": [],
+    "attribute_kind": "revenue_flow",
+    "entity_id": "acme_motors",
+    "family": "lognormal",
+    "id": "acme_motors.rd_spend",
+    "mean": 1201.5009378907469,
+    "name": "Acme Motors research and development spend",
+    "scale": 0.05,
+    "sd": 60.11261336186236,
+    "unit": "$m/yr"
+   },
+   {
+    "aliases": [
+     "revenue per unit"
+    ],
+    "attribute_kind": "revenue_flow",
+    "entity_id": "acme_motors",
+    "family": "lognormal",
+    "id": "acme_motors.revenue_per_unit",
+    "mean": 4.502025455693352,
+    "name": "Acme Motors revenue per vehicle",
+    "scale": 0.03,
+    "sd": 0.13509115804127134,
+    "unit": "$k"
+   },
+   {
+    "aliases": [],
+    "attribute_kind": "revenue_flow",
+    "entity_id": "acme_motors",
+    "family": "gaussian",
+    "id": "acme_motors.segment_eliminations",
+    "mean": -120.0,
+    "name": "Acme Motors segment eliminations",
+    "scale": 20.0,
+    "sd": 20.0,
+    "unit": "$m/yr"
+   },
+   {
+    "aliases": [],
+    "attribute_kind": "asset_price",
+    "entity_id": "acme_motors",
+    "family": "lognormal",
+    "id": "acme_motors.share_price",
+    "mean": 2808.974351303973,
+    "name": "Acme Motors share price",
+    "scale": 0.08,
+    "sd": 225.077976680121,
+    "unit": "local ccy"
+   },
+   {
+    "aliases": [
+     "Acme Motors volumes",
+     "unit sales",
+     "vehicle sales",
+     "global vehicle sales"
+    ],
+    "attribute_kind": "production_flow",
+    "entity_id": "acme_motors",
+    "family": "lognormal",
+    "id": "acme_motors.vehicle_sales",
+    "mean": 10.508403360896178,
+    "name": "Acme Motors global vehicle sales",
+    "scale": 0.04,
+    "sd": 0.42050432494788226,
+    "unit": "m units/yr"
+   },
+   {
+    "aliases": [],
+    "attribute_kind": "revenue_flow",
+    "entity_id": "acme_motors",
+    "family": "lognormal",
+    "id": "acme_motors.warranty_cost",
+    "mean": 251.80649558003387,
+    "name": "Acme Motors warranty cost",
+    "scale": 0.12,
+    "sd": 30.325886922925005,
+    "unit": "$m/yr"
+   },
+   {
+    "aliases": [],
+    "attribute_kind": "bond_yield",
+    "entity_id": "acme_re",
+    "family": "gaussian",
+    "id": "acme_re.book_coupon",
+    "mean": 2.6,
+    "name": "Acme Re book coupon",
+    "scale": 0.2,
+    "sd": 0.2,
+    "unit": "pct"
+   },
+   {
+    "aliases": [
+     "business-related equities",
+     "cross-holdings"
+    ],
+    "attribute_kind": "balance",
+    "entity_id": "acme_re",
+    "family": "lognormal",
+    "id": "acme_re.cross_holding_book",
+    "mean": 1510.8389734802038,
+    "name": "Acme Re cross-holding book value",
+    "scale": 0.12,
+    "sd": 181.9553215375501,
+    "unit": "$bn"
+   },
+   {
+    "aliases": [
+     "equity sales"
+    ],
+    "attribute_kind": "revenue_flow",
+    "entity_id": "acme_re",
+    "family": "lognormal",
+    "id": "acme_re.cross_holding_sales",
+    "mean": 91.81812060240797,
+    "name": "Acme Re cross-holding sales",
+    "scale": 0.2,
+    "sd": 18.54879988594462,
+    "unit": "$bn/yr"
+   },
+   {
+    "aliases": [
+     "domestic life segment",
+     "domestic life"
+    ],
+    "attribute_kind": "revenue_flow",
+    "entity_id": "acme_re",
+    "family": "lognormal",
+    "id": "acme_re.domestic_life_profit",
+    "mean": 60.300751251564044,
+    "name": "Acme Re domestic life adjusted net income",
+    "scale": 0.1,
+    "sd": 6.045181766772235,
+    "unit": "$bn/yr"
+   },
+   {
+    "aliases": [
+     "domestic P&C",
+     "home P&C",
+     "domestic property and casualty",
+     "ACRE domestic profit"
+    ],
+    "attribute_kind": "revenue_flow",
+    "entity_id": "acme_re",
+    "family": "lognormal",
+    "id": "acme_re.domestic_pc_profit",
+    "mean": 225.4053647187985,
+    "name": "Acme Re domestic P&C profit",
+    "scale": 0.06,
+    "sd": 13.536502906671748,
+    "unit": "$bn/yr"
+   },
+   {
+    "aliases": [],
+    "attribute_kind": "revenue_flow",
+    "entity_id": "acme_re",
+    "family": "gaussian",
+    "id": "acme_re.hedge_cost",
+    "mean": -30.0,
+    "name": "Acme Re FX hedge cost",
+    "scale": 10.0,
+    "sd": 10.0,
+    "unit": "$bn/yr"
+   },
+   {
+    "aliases": [
+     "international segment",
+     "overseas profit",
+     "international business"
+    ],
+    "attribute_kind": "revenue_flow",
+    "entity_id": "acme_re",
+    "family": "lognormal",
+    "id": "acme_re.international_profit",
+    "mean": 641.1530374223601,
+    "name": "Acme Re international business profit",
+    "scale": 0.06,
+    "sd": 38.503830490088525,
+    "unit": "$bn/yr"
+   },
+   {
+    "aliases": [],
+    "attribute_kind": "bond_yield",
+    "entity_id": "acme_re",
+    "family": "gaussian",
+    "id": "acme_re.new_minus_book_coupon",
+    "mean": 0.4,
+    "name": "Acme Re new-money coupon over book",
+    "scale": 0.3,
+    "sd": 0.3,
+    "unit": "pct"
+   },
+   {
+    "aliases": [],
+    "attribute_kind": "bond_yield",
+    "entity_id": "acme_re",
+    "family": "gaussian",
+    "id": "acme_re.new_money_coupon",
+    "mean": 3.0,
+    "name": "Acme Re new-money coupon",
+    "scale": 0.3,
+    "sd": 0.3,
+    "unit": "pct"
+   },
+   {
+    "aliases": [
+     "adjusted profit",
+     "adjusted net profit"
+    ],
+    "attribute_kind": "revenue_flow",
+    "entity_id": "acme_re",
+    "family": "lognormal",
+    "id": "acme_re.operating_profit",
+    "mean": 961.2007503125975,
+    "name": "Acme Re adjusted net income",
+    "scale": 0.05,
+    "sd": 48.09009068948989,
+    "unit": "$bn/yr"
+   },
+   {
+    "aliases": [],
+    "attribute_kind": "balance",
+    "entity_id": "acme_re",
+    "family": "lognormal",
+    "id": "acme_re.overseas_capital",
+    "mean": 4005.0031263024925,
+    "name": "Acme Re overseas capital",
+    "scale": 0.05,
+    "sd": 200.37537787287468,
+    "unit": "$bn"
+   },
+   {
+    "aliases": [],
+    "attribute_kind": "share",
+    "entity_id": "acme_re",
+    "family": "lognormal",
+    "id": "acme_re.overseas_share",
+    "mean": 0.6030075125156407,
+    "name": "Acme Re overseas profit share",
+    "scale": 0.1,
+    "sd": 0.060451817667722375,
+    "unit": "pct"
+   },
+   {
+    "aliases": [],
+    "attribute_kind": "structural_level",
+    "entity_id": "acme_re",
+    "family": "gaussian",
+    "id": "acme_re.reserve_adequacy",
+    "mean": 105.0,
+    "name": "Acme Re reserve adequacy",
+    "scale": 4.0,
+    "sd": 4.0,
+    "unit": "pct"
+   },
+   {
+    "aliases": [],
+    "attribute_kind": "rate",
+    "entity_id": "acme_re",
+    "family": "gaussian",
+    "id": "acme_re.sale_rate",
+    "mean": 6.0,
+    "name": "Acme Re cross-holding sale rate",
+    "scale": 1.0,
+    "sd": 1.0,
+    "unit": "pct"
+   },
+   {
+    "aliases": [],
+    "attribute_kind": "asset_price",
+    "entity_id": "acme_re",
+    "family": "lognormal",
+    "id": "acme_re.share_price",
+    "mean": 6019.230752794225,
+    "name": "Acme Re share price",
+    "scale": 0.08,
+    "sd": 482.3099500288305,
+    "unit": "local ccy"
+   },
+   {
+    "aliases": [],
+    "attribute_kind": "revenue_flow",
+    "entity_id": "acme_re",
+    "family": "gaussian",
+    "id": "acme_re.solution_profit",
+    "mean": 35.0,
+    "name": "Acme Re solutions profit",
+    "scale": 10.0,
+    "sd": 10.0,
+    "unit": "$bn/yr"
+   },
+   {
+    "aliases": [
+     "freight revenue",
+     "shipping revenue"
+    ],
+    "attribute_kind": "revenue_flow",
+    "entity_id": "blue_freight",
+    "family": "lognormal",
+    "id": "blue_freight.freight_revenue",
+    "mean": 18.032429177503868,
+    "name": "Blue Freight freight revenue",
+    "scale": 0.06,
+    "sd": 1.0829202325337393,
+    "unit": "$bn/yr"
+   },
+   {
+    "aliases": [
+     "fuel bill",
+     "bunker cost",
+     "fuel cost"
+    ],
+    "attribute_kind": "revenue_flow",
+    "entity_id": "blue_freight",
+    "family": "lognormal",
+    "id": "blue_freight.fuel_cost",
+    "mean": 4.514423064595674,
+    "name": "Blue Freight fuel cost",
+    "scale": 0.08,
+    "sd": 0.3617324625216233,
+    "unit": "$bn/yr"
+   },
+   {
+    "aliases": [
+     "Blue profit",
+     "operating profit",
+     "earnings"
+    ],
+    "attribute_kind": "revenue_flow",
+    "entity_id": "blue_freight",
+    "family": "lognormal",
+    "id": "blue_freight.operating_profit",
+    "mean": 2.2158971611042992,
+    "name": "Blue Freight operating profit",
+    "scale": 0.12,
+    "sd": 0.26686780492174017,
+    "unit": "$bn/yr"
+   },
+   {
+    "aliases": [],
+    "attribute_kind": "asset_price",
+    "entity_id": "blue_freight",
+    "family": "lognormal",
+    "id": "blue_freight.share_price",
+    "mean": 22.07051276024552,
+    "name": "Blue share price",
+    "scale": 0.08,
+    "sd": 1.7684698167723807,
+    "unit": "local ccy"
+   },
+   {
+    "aliases": [
+     "M&A",
+     "issuance",
+     "dealmaking",
+     "IPOs",
+     "deal activity"
+    ],
+    "attribute_kind": "production_flow",
+    "entity_id": "capital_markets",
+    "family": "lognormal",
+    "id": "capital_markets.deal_activity",
+    "mean": 100.32051254657053,
+    "name": "Deal and issuance activity",
+    "scale": 0.08,
+    "sd": 8.038499167147183,
+    "unit": "index"
+   },
+   {
+    "aliases": [
+     "S&P 500",
+     "US stocks",
+     "US equities"
+    ],
+    "attribute_kind": "asset_price",
+    "entity_id": "capital_markets",
+    "family": "lognormal",
+    "id": "capital_markets.equity_index",
+    "mean": 6520.833315527077,
+    "name": "US equity market level",
+    "scale": 0.08,
+    "sd": 522.5024458645663,
+    "unit": "index"
+   },
+   {
+    "aliases": [
+     "volatility",
+     "VIX",
+     "MOVE",
+     "OVX",
+     "market volatility"
+    ],
+    "attribute_kind": "volatility",
+    "entity_id": "capital_markets",
+    "family": "lognormal",
+    "id": "capital_markets.market_volatility",
+    "mean": 100.50125208594014,
+    "name": "Market volatility",
+    "scale": 0.1,
+    "sd": 10.0753029446204,
+    "unit": "index"
+   },
+   {
+    "aliases": [
+     "policy rates",
+     "the policy rate",
+     "benchmark rate",
+     "base rate",
+     "interest rates",
+     "short-term rates",
+     "Acme policy rate"
+    ],
+    "attribute_kind": "policy_rate",
+    "entity_id": "central_bank",
+    "family": "gaussian",
+    "id": "central_bank.policy_rate",
+    "mean": 4.0,
+    "name": "Policy rate",
+    "scale": 0.25,
+    "sd": 0.25,
+    "unit": "pct"
+   },
+   {
+    "aliases": [
+     "credit spreads",
+     "spreads",
+     "corporate spreads",
+     "high-grade spreads"
+    ],
+    "attribute_kind": "stress_index",
+    "entity_id": "credit_markets",
+    "family": "gaussian",
+    "id": "credit_markets.credit_spread",
+    "mean": 120.0,
+    "name": "Credit spread",
+    "scale": 25.0,
+    "sd": 25.0,
+    "unit": "bp"
+   },
+   {
+    "aliases": [
+     "oil price",
+     "crude price",
+     "price of crude",
+     "crude oil"
+    ],
+    "attribute_kind": "commodity_price",
+    "entity_id": "crude_oil",
+    "family": "lognormal",
+    "id": "crude_oil.price",
+    "mean": 85.27243566458493,
+    "name": "Crude oil price",
+    "scale": 0.08,
+    "sd": 6.832724292075105,
+    "unit": "$/bbl"
+   },
+   {
+    "aliases": [
+     "oil supply",
+     "oil output",
+     "crude supply",
+     "supply outage"
+    ],
+    "attribute_kind": "production_flow",
+    "entity_id": "crude_oil",
+    "family": "lognormal",
+    "id": "crude_oil.supply",
+    "mean": 100.08003200853507,
+    "name": "Crude oil supply",
+    "scale": 0.04,
+    "sd": 4.004803094741738,
+    "unit": "index"
+   },
+   {
+    "aliases": [
+     "Delta capital",
+     "CET1",
+     "CET1 ratio"
+    ],
+    "attribute_kind": "structural_level",
+    "entity_id": "delta_bank",
+    "family": "gaussian",
+    "id": "delta_bank.cet1_ratio",
+    "mean": 13.5,
+    "name": "Delta Bank CET1 ratio",
+    "scale": 0.3,
+    "sd": 0.3,
+    "unit": "pct"
+   },
+   {
+    "aliases": [
+     "Delta trading"
+    ],
+    "attribute_kind": "revenue_flow",
+    "entity_id": "delta_bank",
+    "family": "lognormal",
+    "id": "delta_bank.markets_revenue",
+    "mean": 21.051513077752983,
+    "name": "Delta markets revenue",
+    "scale": 0.07,
+    "sd": 1.4754129268192018,
+    "unit": "$bn/yr"
+   },
+   {
+    "aliases": [
+     "Delta NII",
+     "NII",
+     "net interest income",
+     "net II"
+    ],
+    "attribute_kind": "revenue_flow",
+    "entity_id": "delta_bank",
+    "family": "lognormal",
+    "id": "delta_bank.net_interest_income",
+    "mean": 64.0800500208398,
+    "name": "Delta net interest income",
+    "scale": 0.05,
+    "sd": 3.206006045965991,
+    "unit": "$bn/yr"
+   },
+   {
+    "aliases": [
+     "treasury and trade solutions",
+     "Delta services"
+    ],
+    "attribute_kind": "revenue_flow",
+    "entity_id": "delta_bank",
+    "family": "lognormal",
+    "id": "delta_bank.services_revenue",
+    "mean": 20.025015631512453,
+    "name": "Delta services revenue",
+    "scale": 0.05,
+    "sd": 1.0018768893643728,
+    "unit": "$bn/yr"
+   },
+   {
+    "aliases": [],
+    "attribute_kind": "asset_price",
+    "entity_id": "delta_bank",
+    "family": "lognormal",
+    "id": "delta_bank.share_price",
+    "mean": 125.40064068321315,
+    "name": "Delta share price",
+    "scale": 0.08,
+    "sd": 10.048123958933978,
+    "unit": "local ccy"
+   },
+   {
+    "aliases": [
+     "dollar-euro",
+     "euros per dollar",
+     "EUR"
+    ],
+    "attribute_kind": "fx_rate",
+    "entity_id": "dollar",
+    "family": "lognormal",
+    "id": "dollar.eur_rate",
+    "mean": 0.8703915881007146,
+    "name": "Dollar in euros",
+    "scale": 0.03,
+    "sd": 0.02611762388797912,
+    "unit": "€ per $"
+   },
+   {
+    "aliases": [
+     "DXY",
+     "dollar index",
+     "trade-weighted dollar",
+     "the dollar",
+     "dollar strength",
+     "the euro",
+     "euro"
+    ],
+    "attribute_kind": "fx_rate",
+    "entity_id": "dollar",
+    "family": "lognormal",
+    "id": "dollar.index",
+    "mean": 100.04501012651895,
+    "name": "Dollar index",
+    "scale": 0.03,
+    "sd": 3.0020257342504744,
+    "unit": "index"
+   },
+   {
+    "aliases": [
+     "core CPI",
+     "underlying inflation",
+     "Acme core CPI"
+    ],
+    "attribute_kind": "inflation_rate",
+    "entity_id": "economy",
+    "family": "gaussian",
+    "id": "economy.core_inflation",
+    "mean": 2.7,
+    "name": "Core inflation",
+    "scale": 0.2,
+    "sd": 0.2,
+    "unit": "pct y/y"
+   },
+   {
+    "aliases": [
+     "growth",
+     "GDP",
+     "GDP growth",
+     "Acme GDP growth"
+    ],
+    "attribute_kind": "growth_rate",
+    "entity_id": "economy",
+    "family": "gaussian",
+    "id": "economy.gdp_growth",
+    "mean": 1.8,
+    "name": "Real GDP growth",
+    "scale": 0.4,
+    "sd": 0.4,
+    "unit": "pct y/y"
+   },
+   {
+    "aliases": [
+     "inflation",
+     "headline CPI",
+     "consumer prices",
+     "CPI",
+     "Acme CPI"
+    ],
+    "attribute_kind": "inflation_rate",
+    "entity_id": "economy",
+    "family": "gaussian",
+    "id": "economy.headline_inflation",
+    "mean": 3.0,
+    "name": "Headline inflation",
+    "scale": 0.3,
+    "sd": 0.3,
+    "unit": "pct y/y"
+   },
+   {
+    "aliases": [
+     "industrial production",
+     "factory output"
+    ],
+    "attribute_kind": "production_flow",
+    "entity_id": "economy",
+    "family": "lognormal",
+    "id": "economy.industrial_output",
+    "mean": 100.04501012651895,
+    "name": "Industrial output",
+    "scale": 0.03,
+    "sd": 3.0020257342504744,
+    "unit": "index"
+   },
+   {
+    "aliases": [
+     "ten-year yield",
+     "10-year yield",
+     "10Y yield",
+     "10yr yield",
+     "bond yields",
+     "government yields",
+     "the ten-year",
+     "the 10-year",
+     "Acme 10Y yield"
+    ],
+    "attribute_kind": "bond_yield",
+    "entity_id": "gov_bonds",
+    "family": "gaussian",
+    "id": "gov_bonds.yield_10y",
+    "mean": 4.6,
+    "name": "Ten-year yield",
+    "scale": 0.2,
+    "sd": 0.2,
+    "unit": "pct"
+   },
+   {
+    "aliases": [
+     "two-year yield",
+     "2-year yield",
+     "2Y yield",
+     "2yr yield",
+     "two-year government yield",
+     "Acme 2Y yield"
+    ],
+    "attribute_kind": "bond_yield",
+    "entity_id": "gov_bonds",
+    "family": "gaussian",
+    "id": "gov_bonds.yield_2y",
+    "mean": 4.1,
+    "name": "Two-year yield",
+    "scale": 0.2,
+    "sd": 0.2,
+    "unit": "pct"
+   },
+   {
+    "aliases": [
+     "Harvest capital",
+     "CET1",
+     "CET1 ratio",
+     "CET-1",
+     "CET-1 ratio",
+     "Common Equity Tier 1 ratio"
+    ],
+    "attribute_kind": "structural_level",
+    "entity_id": "harvest_bank",
+    "family": "gaussian",
+    "id": "harvest_bank.cet1_ratio",
+    "mean": 15.9,
+    "name": "Harvest Bank CET1 ratio",
+    "scale": 0.3,
+    "sd": 0.3,
+    "unit": "pct"
+   },
+   {
+    "aliases": [
+     "Harvest NII",
+     "NII",
+     "net interest income",
+     "net II"
+    ],
+    "attribute_kind": "revenue_flow",
+    "entity_id": "harvest_bank",
+    "family": "lognormal",
+    "id": "harvest_bank.net_interest_income",
+    "mean": 14.51160464123758,
+    "name": "Harvest Bank net interest income",
+    "scale": 0.04,
+    "sd": 0.5806964487375518,
+    "unit": "€bn/yr"
+   },
+   {
+    "aliases": [
+     "production",
+     "barrels pumped",
+     "oil production"
+    ],
+    "attribute_kind": "production_flow",
+    "entity_id": "ridge_energy",
+    "family": "lognormal",
+    "id": "ridge_energy.oil_output",
+    "mean": 1.8022514068361206,
+    "name": "Ridge Energy oil output",
+    "scale": 0.05,
+    "sd": 0.09016892004279356,
+    "unit": "mb/d"
+   },
+   {
+    "aliases": [
+     "Ridge profit",
+     "operating profit",
+     "earnings"
+    ],
+    "attribute_kind": "revenue_flow",
+    "entity_id": "ridge_energy",
+    "family": "lognormal",
+    "id": "ridge_energy.operating_profit",
+    "mean": 6.030075125156405,
+    "name": "Ridge Energy operating profit",
+    "scale": 0.1,
+    "sd": 0.6045181766772237,
+    "unit": "$bn/yr"
+   },
+   {
+    "aliases": [],
+    "attribute_kind": "asset_price",
+    "entity_id": "ridge_energy",
+    "family": "lognormal",
+    "id": "ridge_energy.share_price",
+    "mean": 48.15384602235387,
+    "name": "Ridge share price",
+    "scale": 0.08,
+    "sd": 3.858479600230649,
+    "unit": "local ccy"
+   },
+   {
+    "aliases": [
+     "freight rates",
+     "freight costs",
+     "shipping costs",
+     "shipping rates",
+     "container rates"
+    ],
+    "attribute_kind": "cost_index",
+    "entity_id": "shipping",
+    "family": "lognormal",
+    "id": "shipping.freight_cost",
+    "mean": 100.50125208594014,
+    "name": "Freight cost index",
+    "scale": 0.1,
+    "sd": 10.0753029446204,
+    "unit": "index"
+   },
+   {
+    "aliases": [
+     "policy rates",
+     "the policy rate",
+     "benchmark rate",
+     "base rate",
+     "interest rates",
+     "short-term rates"
+    ],
+    "attribute_kind": "policy_rate",
+    "entity_id": "union_bank",
+    "family": "gaussian",
+    "id": "union_bank.policy_rate",
+    "mean": 2.5,
+    "name": "Union policy rate",
+    "scale": 0.25,
+    "sd": 0.25,
+    "unit": "pct"
+   },
+   {
+    "aliases": [
+     "ten-year yield",
+     "10-year yield",
+     "10Y yield",
+     "10yr yield",
+     "bond yields",
+     "government yields",
+     "the ten-year",
+     "the 10-year"
+    ],
+    "attribute_kind": "bond_yield",
+    "entity_id": "union_bonds",
+    "family": "gaussian",
+    "id": "union_bonds.yield_10y",
+    "mean": 2.9,
+    "name": "Union ten-year yield",
+    "scale": 0.2,
+    "sd": 0.2,
+    "unit": "pct"
+   },
+   {
+    "aliases": [
+     "union stocks",
+     "union equities"
+    ],
+    "attribute_kind": "asset_price",
+    "entity_id": "union_capital_markets",
+    "family": "lognormal",
+    "id": "union_capital_markets.equity_index",
+    "mean": 5417.307677514809,
+    "name": "Union equity market level",
+    "scale": 0.08,
+    "sd": 434.07895502594795,
+    "unit": "index"
+   },
+   {
+    "aliases": [
+     "core CPI",
+     "Union core CPI",
+     "underlying inflation"
+    ],
+    "attribute_kind": "inflation_rate",
+    "entity_id": "union_economy",
+    "family": "gaussian",
+    "id": "union_economy.core_inflation",
+    "mean": 2.2,
+    "name": "Union core inflation",
+    "scale": 0.2,
+    "sd": 0.2,
+    "unit": "pct y/y"
+   },
+   {
+    "aliases": [
+     "growth",
+     "GDP",
+     "GDP growth"
+    ],
+    "attribute_kind": "growth_rate",
+    "entity_id": "union_economy",
+    "family": "gaussian",
+    "id": "union_economy.gdp_growth",
+    "mean": 0.9,
+    "name": "Union real GDP growth",
+    "scale": 0.4,
+    "sd": 0.4,
+    "unit": "pct y/y"
+   },
+   {
+    "aliases": [
+     "inflation",
+     "headline CPI",
+     "consumer prices",
+     "CPI"
+    ],
+    "attribute_kind": "inflation_rate",
+    "entity_id": "union_economy",
+    "family": "gaussian",
+    "id": "union_economy.headline_inflation",
+    "mean": 2.6,
+    "name": "Union headline inflation",
+    "scale": 0.3,
+    "sd": 0.3,
+    "unit": "pct y/y"
+   },
+   {
+    "aliases": [
+     "vehicle tariffs",
+     "auto tariffs"
+    ],
+    "attribute_kind": "rate",
+    "entity_id": "us_vehicle_tariffs",
+    "family": "gaussian",
+    "id": "us_vehicle_tariffs.effective_rate",
+    "mean": 12.0,
+    "name": "US effective vehicle tariff rate",
+    "scale": 4.0,
+    "sd": 4.0,
+    "unit": "pct"
+   }
+  ]
+ }
+}
