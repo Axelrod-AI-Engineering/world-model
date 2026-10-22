@@ -1,6 +1,6 @@
 """Citigroup's business construction (Oct 18): the compositions, operating and financial paths, and their transitions in
 <client root>/worlds/sally_demo/construction/citigroup.yaml, checked in the loaded model, in the v4.1.4 export, and through the
-service API (world_model/docs/construction/citigroup.md has the gap register these tests close). The second bank after JPMorgan:
+service API (the client root's docs/construction/citigroup.md has the gap register these tests close). The second bank after JPMorgan:
 the same bank skeleton on Citi's own reporting (five businesses plus All Other, NII and non-interest revenue per
 segment, a mostly non-USD rate sensitivity, an international footprint, card credit, the expense program, capital and
 the Banamex exit). Sally's world loads once for the module; no client data is read."""

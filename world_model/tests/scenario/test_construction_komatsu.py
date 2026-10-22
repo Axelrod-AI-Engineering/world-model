@@ -1,6 +1,6 @@
 """Komatsu's business construction (Oct 18): the compositions, operating and financial paths, and their transitions in
 <client root>/worlds/sally_demo/construction/komatsu.yaml, checked in the loaded model, in the v4.1.4 export, and through the
-service API (world_model/docs/construction/komatsu.md has the gap register these tests close). An industrial after Toyota, with
+service API (the client root's docs/construction/komatsu.md has the gap register these tests close). An industrial after Toyota, with
 its own economics: construction, mining and utility equipment sold as new machines and a large aftermarket in eight
 regions, a captive finance arm, industrial machinery, disclosed yen sensitivities, mining capex and fleet hours,
 construction activity and dealer stock, price realization, steel and tariffs. Sally's world loads once for the module;

@@ -1,0 +1,5 @@
+flowchart LR
+  A["File bytes"]:::start ==> B["Store once<br/>id = SHA-256"]:::store ==> C["Parse and chunk<br/>(versioned parser)"]:::step ==> D["Recognize names<br/>(gazetteer of the<br/>model's values)"]:::step ==> E["Extract by rules<br/>observe · move · link"]:::step ==> V{"Validate<br/>ids · quote in text ·<br/>schema"}:::check ==> F["Bundle<br/>axelrod.import/v1<br/>id = content hash"]:::done
+  C --> S["Index<br/>keyword · embeddings<br/>(search only)"]:::opt
+  E -->|chunks the rules missed| M["LLM step<br/>off by default · temp 0 ·<br/>cached by prompt and chunk"]:::opt
+  M --> V

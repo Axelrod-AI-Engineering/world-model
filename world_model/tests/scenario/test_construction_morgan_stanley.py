@@ -1,6 +1,6 @@
 """Morgan Stanley's business construction (Oct 18): the compositions, operating and financial paths, and their transitions
 in <client root>/worlds/sally_demo/construction/morgan_stanley.yaml, checked in the loaded model, in the v4.1.4 export, and
-through the service API (world_model/docs/construction/morgan_stanley.md has the gap register these tests close). An investment bank
+through the service API (the client root's docs/construction/morgan_stanley.md has the gap register these tests close). An investment bank
 and wealth manager: its segments follow its drivers (markets and deals in Institutional Securities, client assets and
 rates in Wealth Management, AUM in Investment Management), so the segment view is the driven one. Sally's world loads
 once for the module; no client data is read."""

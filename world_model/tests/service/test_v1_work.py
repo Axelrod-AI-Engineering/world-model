@@ -68,6 +68,8 @@ def test_upload_answers_202_with_a_location_to_poll(c):
 
 def test_documents_list_by_cursor_one_chunks_content(c, note):
     did = note["document_id"]
+    # a second document, so the first page has a next cursor when this test runs alone (a repeat is the same document)
+    c.post(f"{WM}/documents", files=[("files", ("x.txt", SPREAD_NOTE, "text/plain"))])
     first = c.get(f"{WM}/documents", params={"order": "ingested_at", "limit": 1}).json()
     assert len(first["data"]) == 1 and first["meta"]["next_cursor"]
     rest = data(c.get(f"{WM}/documents", params={"order": "ingested_at", "limit": 200,

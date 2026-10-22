@@ -140,7 +140,7 @@ section 7 the decisions still open.
 
 **How to use it.**
 - `world_model/scripts/imports/export_context.py` writes a fresh export.
-- `world_model/docs/construction/<company>.md` holds each company's gap register and its completion report.
+- `docs/construction/<company>.md` (client root) holds each company's gap register and its completion report.
 
 ## 3. What the onboarding built
 

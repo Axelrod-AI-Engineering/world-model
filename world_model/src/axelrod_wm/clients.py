@@ -1,7 +1,7 @@
 """Client content lives outside the tracked tree (Oct 21).
 
 A client's scenarios, worlds, configs, and construction pages are kept in a client root, never committed. It mirrors the
-repository: `scenarios/<id>/scenario.yaml`, `worlds/<name>/`, `configs/<name>.yaml`, `world_model/docs/construction/<company>.md`.
+repository: `scenarios/<id>/scenario.yaml`, `worlds/<name>/`, `configs/<name>.yaml`, `docs/construction/<company>.md`.
 The root is `WORLD_MODEL_CLIENT_DIR` (default `<data>/clients`; the hosted service mounts a volume there). The
 variable may name several roots separated by `os.pathsep`, searched in order.
 

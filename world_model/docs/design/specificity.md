@@ -8,6 +8,13 @@
 - [Ingestion](#ingestion)
 - [Learning and review](#learning-and-review)
 - [Prediction](#prediction)
+- [How it is implemented](#how-it-is-implemented)
+  - [Construction](#construction)
+  - [Ingestion](#ingestion-1)
+  - [The learning model](#the-learning-model)
+  - [Prediction](#prediction-1)
+  - [Export](#export)
+  - [Determinism](#determinism)
 - [What is not yet enforced](#what-is-not-yet-enforced)
 - [Decisions](#decisions)
 <!-- /toc -->
@@ -316,6 +323,128 @@ What a document may contribute, in order:
 - **Coverage counts the company's own steps apart from summary links (R9).** A target sized only through a reduced
   form says so.
 - **The brief cites (R6),** and says which part of a target's movement is calculated and which is direction only.
+
+## How it is implemented
+
+A technical overview of the machinery behind the rules: what each stage computes, where it lives, and why it gives
+the same result every time. The full mathematical specification, with its known weaknesses, is
+[ml/stack.md](../ml/stack.md). Paths are relative to `src/axelrod_wm/`.
+
+![The system: construction, ingestion, review, fold, learners, forecast and export](diagrams/specificity-system.svg)
+
+**Two ways into the graph.**
+- *Construction* sets the structure by hand. It is checked, cited and tested (R1–R17).
+- *Ingestion* proposes changes from documents. Nothing reaches the graph without a person approving each item. The
+  learners only propose structure; they change sizes only inside the bounds the rules allow.
+
+### Construction
+
+The construction file (`worlds/<world>/construction/<company>.yaml` under the client root) loads into the world
+graph (`model/construction.py`). Values, compositions, identities, stock-flows and links are typed objects.
+`validate_construction` enforces the structural rules: transitions on causal links, one driving view per total, and
+terms that exist. `check.py` adds sources, input statuses and reconciliation at medians and at dated baselines;
+reconciliation also flags parts whose units differ from the total's. Identity and stock-flow weights are derived from
+the levels of their terms (`identity_weights`, `stock_flow_weights`) and are never stored as free parameters.
+
+### Ingestion
+
+![Ingestion: bytes to a validated import bundle](diagrams/specificity-ingest.svg)
+
+`ingest/pipeline.py` turns a file into an `axelrod.import/v1` bundle:
+- **Store, parse, chunk.** The bytes are stored once under their SHA-256, then parsed and chunked by versioned
+  parsers.
+- **Recognize names.** A gazetteer built from the model's own values recognizes the names in the text.
+- **Extract by rules.** Rules (`ingest/extract.py`) turn sentences and table rows into signals: an observed level, a
+  reported move, or a proposed link. Each signal carries its document, chunk and quote (R6), and its kind of
+  statement (R8).
+- **Validate and identify.** Unknown ids, quotes not found in the text, and malformed signals are dropped. A
+  bundle's id is the hash of its content.
+- **Embeddings feed search only.** They never feed extraction.
+- **The LLM step is optional** (`ingest/llm.py`). It is off unless a provider is configured, sees only chunks that
+  name the model's values but gave the rules nothing, and is validated the same way as the rules. Its signals are
+  tagged `llm:<model>`.
+
+### The learning model
+
+The world model is a **linear-Gaussian state-space model** over standardized values. Each value $`j`$ is measured in
+standardized units $`z_j = (\ell_j(x_j) - m_j)/s_j`$, where $`\ell_j`$ is its link (identity, log or logit). For a value
+$`b`$ with in-channels $`c = (a \to b)`$:
+
+$$
+z_b(t) = a_b(t) + \sum_c m_c(t)\,\varphi_c(t)\,\beta_c + \epsilon_t, \qquad \epsilon_t \sim \mathcal{N}(0, r_b^2)
+$$
+
+- $`a_b`$ is a local level (a random walk);
+- $`\beta_c`$ is the channel's effect, in standard deviations of $`b`$ per standard deviation of $`a`$;
+- $`\varphi_c`$ is the source's past moves passed through the channel's timing kernel (delay, ramp, decay);
+- $`m_c`$ is an optional moderator.
+
+Each channel also has an existence probability $`p_c`$. The state $`[a_b, \beta_{c_1}, \dots]`$ has a Gaussian
+posterior.
+
+![Learning: the fold, the weekly learners, and the frontier](diagrams/specificity-learning.svg)
+
+- **The fold** (`learning/fold.py`). An approved observation or reported move is a measurement. A joint Kalman update
+  moves the value's level and its in-channels' effects together:
+
+  $$
+  k = Ph/s, \qquad \theta^+ = \theta + k\,(y - h^\top\theta), \qquad P^+ = P - k\,(Ph)^\top
+  $$
+
+  Existence moves by a likelihood-ratio pseudo-count. This is a heuristic, documented as such in stack.md §4.2.
+- **Weekly learners.** The timing kernel is rescaled on a three-point grid behind a likelihood gate
+  (`learning/kernel_learning.py`). Level noise is re-estimated from weekly level changes (`learning/consolidate.py`).
+- **Structure is proposed, never applied.**
+  - The correlation frontier (`learning/frontier_test.py`) proposes a new edge from repeated, sign-consistent lagged
+    co-movement between a source and another value's innovations.
+  - Co-activation (`learning/abduction.py`) proposes groups.
+  - Both wait for review.
+- **Concepts give priors** (`learning/generalize.py`). A new value or link starts from the statistics of the concept
+  it classifies into.
+- **Exact structure never learns (R4, R12).** Accounting, identity and stock-flow links stay in the fold's joint
+  state with a near-zero prior spread, so they carry the exact relation while the other links are updated around
+  them. Their weight and existence are never written back (`learning/fold.py`, `inter.fixed`). Their weights stay
+  derived, and they still record time states and feed the concept statistics and co-activation.
+
+### Prediction
+
+![Prediction: seeded Monte Carlo on common random numbers](diagrams/specificity-forecast.svg)
+
+`dynamics/propagation.py` simulates $`S`$ samples over $`H`$ days:
+- **Per-sample draws.** Each sample draws existence, effects and kernels once and steps the state-space model forward.
+- **Effects from paired runs.** An effect is the per-sample difference between a shocked run and a base run on the
+  same draws (common random numbers), so it carries no Monte Carlo noise from unshared channels.
+- **Orders and paths.** `inference/transmission.py` assigns each value its order and path.
+- **Coverage** lists what was sized, what was excluded, and the inputs that block it (R9). Uncalibrated links add
+  nothing.
+
+### Export
+
+`world_model/scripts/imports/export_context.py` writes:
+- the client's v4.1.4 domain pack and evidence pack from the graph, the forecasts and the local repair data
+  (`context/v4.py`, `context/earnings.py`);
+- the bounded `reading/` set (`context/reading.py`).
+
+The export reads the state; it writes nothing back.
+
+### Determinism
+
+Every automated step is a deterministic function of its inputs. A person's review is the one input that is not
+automated, and each decision through the API is kept in the audit log, which is never deleted.
+
+| Step | Why it repeats exactly | Checked by |
+|---|---|---|
+| Construction | Checked-in files; derived weights, no fitted parameters | `check.py`; company scenario tests |
+| Ingestion | Pure functions of the bytes and the model's names. Versioned parser and extractor, content-hash ids, set-order independent. A document's event time is its stated date; only an undated document falls back to the ingest clock. | `tests/ingest/test_determinism.py`: byte-identical across lakes, file orders, processes and hash seeds |
+| LLM step | Off unless configured. Temperature 0, and each answer is cached by provider, model, prompt version, chunk text and gazetteer digest, so a rerun replays. A first answer can vary by model version, so it is tagged and reviewed. | `tests/ingest/test_llm.py` |
+| Embeddings | Fixed weights, used for search only | `tests/ingest/test_determinism.py` (hashing embedder) |
+| Fold and learners | Closed-form updates (Kalman algebra, a grid search, windowed statistics) with no sampling. The same approved items in the same order give the same state. | `tests/scenario/test_oil_shock_demo.py`: same seed, identical ledgers |
+| Forecast | Every draw comes from a NumPy `Generator` built from `SeedSequence(seed, spawn key = state version + stable keys)` (`engine/rng.py`). A forecast is reproducible from (seed, state version). | `tests/unit/engine/test_cov_rng.py`; `tests/unit/inference/test_performance.py` (posing twice) |
+| Export | A function of the state and the local repair data, independent of set order. Only the manifest's `generated_at` moves. | `tests/integration/test_export_determinism.py`; the Oct 20 re-export matched the sent export byte for byte |
+
+What is *not* claimed: that the learners are statistically sound. [ml/stack.md §13](../ml/stack.md#13-adversarial-review)
+lists where they double-count or confirm themselves. Determinism makes those weaknesses reproducible and testable; it
+does not remove them.
 
 ## What is not yet enforced
 

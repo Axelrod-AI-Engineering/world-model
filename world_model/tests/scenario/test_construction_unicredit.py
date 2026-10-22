@@ -1,7 +1,7 @@
 """UniCredit's business construction (Oct 18, converted to the method's new forms): the compositions (one driving view
 per total, a division x line matrix), identities, a stock-flow, operating and financial paths and their transitions in
 <client root>/worlds/sally_demo/construction/unicredit.yaml, checked in the loaded model, in the v4.1.4 export, and through the
-service API (world_model/docs/construction/unicredit.md has the gap register these tests close). The second bank after JPMorgan:
+service API (the client root's docs/construction/unicredit.md has the gap register these tests close). The second bank after JPMorgan:
 a European bank on IFRS, by geographic division, with a structural hedge, an Italian sovereign book, stakes and a
 Russia wind-down. Sally's world loads once for the module; no client data is read."""
 

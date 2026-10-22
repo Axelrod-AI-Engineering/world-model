@@ -1,6 +1,6 @@
 """JPMorgan's business construction (Oct 18): the compositions, operating and financial paths, and their transitions in
 <client root>/worlds/sally_demo/construction/jpmorgan.yaml, checked in the loaded model, in the v4.1.4 export, and through the
-service API (world_model/docs/construction/jpmorgan.md has the gap register these tests close). The test of whether the method
+service API (the client root's docs/construction/jpmorgan.md has the gap register these tests close). The test of whether the method
 built for an automaker and an insurer carries over to a bank. Converted (Oct 18) to one driving view per total, product,
 ratio and difference identities, a CET1 stock-flow, a lines x segments matrix and state-dependent responses. Sally's
 world loads once for the module; no client data is read."""

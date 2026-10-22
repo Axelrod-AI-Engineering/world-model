@@ -39,7 +39,7 @@ Build in this order: composition → operating paths → mapping into the accoun
    missing from the export may still exist internally. Classify each existing requirement as already owned, missing,
    modify lightly, or do not touch (existing ids, valid statistical records, shared governance). Flag concepts the
    schema cannot represent.
-2. **Gap register first** (`world_model/docs/construction/<company>.md`, in the client root for a client's company: local, not tracked). Write one entry per gap:
+2. **Gap register first** (`docs/construction/<company>.md` in the client root for a client's company: local, not tracked). Write one entry per gap:
    - what is missing or wrong, and what exists now, with object ids;
    - what to add;
    - the evidence needed;
@@ -174,4 +174,4 @@ Build in this order: composition → operating paths → mapping into the accoun
 
 `check.py` is clean with `--sources --reconcile` (and with baselines). The company test and the world's
 expected-paths test pass. The gap register, the readable view and the completion report are in
-`world_model/docs/construction/<company>.md`.
+`docs/construction/<company>.md` (client root).

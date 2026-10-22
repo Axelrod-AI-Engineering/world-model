@@ -23,9 +23,10 @@ This page holds the method; the rules it serves are in [design/specificity.md](.
 company's page holds its gap register and completion report (AIB Group, China Construction Bank, Citigroup, JPMorgan,
 Komatsu, Morgan Stanley, MS&AD, SoftBank Corp, Tokio Marine, Toyota with its before-and-after of the review, and
 UniCredit). Those pages are client content: they are local, not tracked, and live in the client root as
-`world_model/docs/construction/<company>.md` (`WORLD_MODEL_CLIENT_DIR`, default `data/clients`; see
+`docs/construction/<company>.md` (`WORLD_MODEL_CLIENT_DIR`, default `data/clients`; see
 [the deployment guide](../../../docs/deployment.md#client-content)). A narrowed world of some covered companies and the
-players they connect to is in [focus.md](focus.md) (Oct 18).
+players they connect to is in [focus.md](focus.md) (Oct 18). The pipeline as a whole, stage by stage, is in
+[pipeline.md](pipeline.md).
 
 The company registers (Toyota's and Tokio Marine's, local) list gaps blocked by a named input. The
 first three methods are what turns such an input into model structure when it arrives. They do not close a gap on their

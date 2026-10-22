@@ -1,6 +1,6 @@
 """Tokio Marine's business construction (Oct 17): the compositions, operating and financial paths, and their
 transitions in <client root>/worlds/sally_demo/construction/tokio_marine.yaml, checked in the loaded model, in the v4.1.4
-export, and through the service API (world_model/docs/construction/tokio_marine.md has the gap register these tests close).
+export, and through the service API (the client root's docs/construction/tokio_marine.md has the gap register these tests close).
 Sally's world loads once for the module. The second review round (Oct 18) adds: every input searched before it is
 declared missing, the additive views reconciling at the model's medians, a forecast's calculation coverage, and, only
 where the client's local folder exists (never on CI), sources and citations that resolve and baselines that reconcile."""
