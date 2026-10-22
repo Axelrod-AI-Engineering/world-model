@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from axelrod_ingest.chunk import CHUNK_CHARS, _is_abbrev, chunk, sentences
+from axelrod_ingest.chunk import CHUNK_CHARS, _is_abbrev, chunk, sentences, split_long
+from axelrod_ingest.cjk import weight
 from axelrod_ingest.parse import Parsed, Segment
 
 
@@ -170,3 +171,77 @@ def test_symbol_bullets_and_whole_sheet_rows():
     row = "Label | " + " | ".join(str(k) for k in range(400))
     chunks = chunk(Parsed("xlsx", (Segment(row),)), "t", "d")
     assert [c.text for c in chunks] == [row]                      # a spreadsheet row longer than a chunk stays whole
+
+
+# -- Chinese and Korean -----------------------------------------------------------------------------------------------
+def test_chinese_sentences_end_at_the_ideographic_stop_with_no_space():
+    text = "本季度营收增长。净利润保持稳定！费用是否上升？管理层预计全年改善。"
+    assert split(text) == ["本季度营收增长。", "净利润保持稳定！", "费用是否上升？", "管理层预计全年改善。"]
+
+
+def test_a_closing_quote_stays_with_its_chinese_sentence():
+    assert split("公司表示“销量创新高。”随后发布公告。") == ["公司表示“销量创新高。”", "随后发布公告。"]
+
+
+def test_korean_sentences_end_at_a_period_before_hangul_or_an_ending_at_a_line_end():
+    text = "매출이 증가했다. 영업이익도 늘었습니다. 다음 분기도 같다\n비용은 줄었다\n끝"
+    assert split(text) == ["매출이 증가했다.", "영업이익도 늘었습니다.", "다음 분기도 같다", "비용은 줄었다", "끝"]
+
+
+def test_a_period_before_an_ideograph_or_hangul_is_an_end_but_a_decimal_is_not():
+    assert split("Revenue rose 5.2% in 2026. 营收增长。") == ["Revenue rose 5.2% in 2026.", "营收增长。"]
+    assert split("매출 5.2% 증가. 영업이익") == ["매출 5.2% 증가.", "영업이익"]
+
+
+def test_a_table_row_of_chinese_cells_stays_whole():
+    row = "营业收入 | 344,815 | 371,286 | -7.13%"
+    assert split(f"前言。\n{row}\n后文。") == ["前言。", row, "后文。"]
+
+
+def doc(text: str) -> Parsed:
+    return Parsed("text", (Segment(text),))
+
+
+def test_a_chinese_chunk_holds_about_350_characters_not_700():
+    text = "".join(f"第{k:03d}句话的内容比较长一些，讲述业务进展情况。" for k in range(60))       # 60 sentences of 21 characters
+    chunks = chunk(doc(text), "t", "d")
+    assert all(weight(c.text) <= CHUNK_CHARS and len(c.text) < 0.55 * CHUNK_CHARS for c in chunks) and len(chunks) > 3
+    assert all(text[c.start:c.end] == c.text for c in chunks)
+    assert max(len(c.text) for c in chunks) >= 300                       # and they are filled, not minced
+
+
+def test_english_chunks_keep_their_old_size():
+    text = " ".join(f"Sentence number {k:03d} is here." for k in range(100))
+    assert max(len(c.text) for c in chunk(doc(text), "t", "d")) > CHUNK_CHARS - 40
+
+
+def test_a_long_chinese_sentence_is_cut_at_a_clause_mark_never_inside_a_word_or_number():
+    clause = "新能源汽车销量约1,234,567辆，"
+    text = clause * 30 + "结束。"
+    pieces = split_long(text, (0, len(text)), 200)
+    assert len(pieces) > 3 and all(weight(text[a:b]) <= 200 for a, b in pieces)
+    assert all(text[a:b].endswith("，") or b == len(text) for a, b in pieces)
+    assert "".join(text[a:b] for a, b in pieces).replace(" ", "") == text.replace(" ", "")
+
+
+def test_a_long_run_with_no_clause_mark_is_cut_outside_latin_words_and_numbers():
+    text = "营业收入" * 3 + "AEVCOMPANY" + "同比增长" * 3 + "1234567890" + "元" * 30
+    for a, b in split_long(text, (0, len(text)), 24):
+        assert text[a:b].strip() and weight(text[a:b]) <= 24
+    pieces = [text[a:b] for a, b in split_long(text, (0, len(text)), 24)]
+    assert not any(p.endswith(("AEVCOMPAN", "AEVCOMP")) or p.startswith(("ANY", "Y同")) for p in pieces)
+    assert not any(p.endswith("12345") or p.startswith("67890") for p in pieces)
+    assert "".join(pieces) == text
+
+
+def test_korean_text_is_cut_at_spaces():
+    text = " ".join(["영업이익은", "전년", "대비", "증가했으며", "순이익도", "개선되었습니다"] * 12)
+    pieces = [text[a:b] for a, b in split_long(text, (0, len(text)), 60)]
+    assert all(weight(p) <= 60 for p in pieces) and all(not p.startswith(" ") for p in pieces)
+    assert all(p.split()[-1] in text.split() for p in pieces)           # every piece ends on a whole word
+
+
+def test_a_piece_never_ends_before_a_combining_mark():
+    text = "请" * 4 + "e\u0301" + "请" * 20
+    pieces = [text[a:b] for a, b in split_long(text, (0, len(text)), 9)]
+    assert pieces[0] == "请" * 4 and pieces[1].startswith("e\u0301") and "".join(pieces) == text

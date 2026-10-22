@@ -12,6 +12,7 @@ Formats: PDF (PDFium, through pypdfium2: fast, and it reads PDFs whose fonts pyp
 from __future__ import annotations
 
 import csv
+import hashlib
 import io
 import json
 import re
@@ -21,7 +22,11 @@ from dataclasses import dataclass, field
 from html.parser import HTMLParser
 from pathlib import PurePath
 
-PARSER_VERSION = "parse-1.0"
+from axelrod_ingest.cjk import width
+from axelrod_ingest.encoding import Decoded, decode
+from axelrod_ingest.ocr import DPI, Ocr, OcrError, pgm_of
+
+PARSER_VERSION = "parse-1.1"
 
 
 class ParseError(ValueError):
@@ -62,26 +67,66 @@ _BLANKS = re.compile(r"\n{3,}")
 
 
 def normalize(text: str) -> str:
-    text = unicodedata.normalize("NFC", text).replace("\r\n", "\n").replace("\r", "\n").replace("\f", "\n")
+    text = width(unicodedata.normalize("NFC", text)).replace("\r\n", "\n").replace("\r", "\n").replace("\f", "\n")
     lines = [_SPACES.sub(" ", ln).strip() for ln in text.split("\n")]
     return _BLANKS.sub("\n\n", "\n".join(lines)).strip()
 
 
 # -- formats ----------------------------------------------------------------------------------------------------
-def _pdf(data: bytes) -> Parsed:
+MIN_TEXT = 20                    # fewer letters and digits than this on a page that is a picture: it has no text layer
+IMAGE_SHARE = 0.25               # a page is a picture when one image covers at least this share of it
+
+
+def _is_picture(page) -> bool:
+    """Whether a page is a scan: a large image on it (the text layer, if any, is a footer or a watermark)."""
+    import pypdfium2.raw as pdfium_c
+
+    width, height = page.get_size()
+    return any((r - left) * (top - b) >= IMAGE_SHARE * width * height for left, b, r, top in (
+        obj.get_bounds() for obj in page.get_objects(filter=[pdfium_c.FPDF_PAGEOBJ_IMAGE])))
+
+
+def _pgm(page) -> bytes:
+    """The page drawn as a grayscale PGM at the OCR's resolution."""
+    bitmap = page.render(scale=DPI / 72, grayscale=True)
+    return pgm_of(bitmap.width, bitmap.height, bitmap.stride, bytes(bitmap.buffer))
+
+
+def _pdf(data: bytes, ocr: Ocr | None = None) -> Parsed:
+    """PDF, page by page. A page that is a picture with no text layer is read by `ocr` when there is one; otherwise (or
+    where the engine fails) its number goes in `meta["needs_ocr"]`, so a scan never parses to nothing without a word."""
     import pypdfium2 as pdfium
 
     try:
         doc = pdfium.PdfDocument(data)
     except pdfium.PdfiumError as err:
         raise ParseError(f"not a readable PDF: {err}") from err
+    sha = hashlib.sha256(data).hexdigest()
+    pages: list[str] = []
+    needs: list[int] = []
+    done: list[int] = []
     try:
-        pages = [normalize(doc[k].get_textpage().get_text_range()) for k in range(len(doc))]
+        for k in range(len(doc)):
+            page = doc[k]
+            text = normalize(page.get_textpage().get_text_range())
+            if sum(c.isalnum() for c in text) < MIN_TEXT and _is_picture(page):
+                try:
+                    if ocr is None:
+                        raise OcrError("no OCR engine")
+                    text = normalize(ocr.page_text(sha, k + 1, lambda page=page: _pgm(page)))
+                    done.append(k + 1)
+                except OcrError:
+                    needs.append(k + 1)
+            pages.append(text)
         title = normalize(str(doc.get_metadata_dict().get("Title") or ""))
     finally:
         doc.close()
-    return Parsed("pdf", tuple(Segment(t, page=k + 1) for k, t in enumerate(pages)), title=title,
-                  meta={"pages": len(pages)})
+    meta: dict = {"pages": len(pages)}
+    if done:
+        meta["ocr"] = {**(ocr.meta if ocr else {}), "pages": done}
+    if needs:
+        meta["needs_ocr"] = needs
+    return Parsed("pdf", tuple(Segment(t, page=k + 1) for k, t in enumerate(pages)), title=title, meta=meta)
 
 
 _W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
@@ -209,45 +254,46 @@ class _Text(HTMLParser):
             self.out.append(data)
 
 
+def _encoding(d: Decoded) -> dict[str, str]:
+    """How the bytes were read, for the document's metadata: a fallback to Latin-1 is visible there, never silent."""
+    return {"name": d.encoding, "how": d.how}
+
+
 def _html(data: bytes) -> Parsed:
     p = _Text()
-    p.feed(_decode(data))
+    d = decode(data, html=True)
+    p.feed(d.text)
     p.close()
     text = normalize(re.sub(r"(\n *\| *)", "\n", "".join(p.out)))
-    return Parsed("html", (Segment(text),), title=normalize("".join(p.title))[:160])
-
-
-def _decode(data: bytes) -> str:
-    """UTF-16 when the bytes say so (a byte-order mark), else UTF-8, else Latin-1 (which never fails)."""
-    if data[:2] in (b"\xff\xfe", b"\xfe\xff"):
-        return data.decode("utf-16")
-    try:
-        return data.decode("utf-8-sig")
-    except UnicodeDecodeError:
-        return data.decode("latin-1")
+    return Parsed("html", (Segment(text),), title=normalize("".join(p.title))[:160], meta={"encoding": _encoding(d)})
 
 
 def _csv(data: bytes) -> Parsed:
-    rows = [" | ".join(r).strip() for r in csv.reader(io.StringIO(_decode(data)))]
-    return Parsed("csv", (Segment(normalize("\n".join(r for r in rows if r.strip("| ")))),))
+    d = decode(data)
+    rows = [" | ".join(r).strip() for r in csv.reader(io.StringIO(d.text))]
+    return Parsed("csv", (Segment(normalize("\n".join(r for r in rows if r.strip("| ")))),), meta={"encoding": _encoding(d)})
 
 
 def _text(data: bytes, fmt: str = "text") -> Parsed:
-    text = normalize(_decode(data))
+    d = decode(data)
+    text = normalize(d.text)
     first = next((ln.lstrip("# ").strip() for ln in text.split("\n") if ln.strip()), "")
-    return Parsed(fmt, (Segment(text),), title=first[:160])
+    return Parsed(fmt, (Segment(text),), title=first[:160], meta={"encoding": _encoding(d)})
 
 
 def _json(data: bytes) -> Parsed:
+    d = decode(data)
     try:
-        obj = json.loads(_decode(data))
+        obj = json.loads(d.text)
     except json.JSONDecodeError as err:
         raise ParseError(f"not valid JSON: {err}") from err
     if isinstance(obj, dict) and obj.get("format") == "axelrod.import/v1":
         items = obj.get("items") or []
         text = "\n\n".join(normalize(f"{i.get('headline', '')}\n{i.get('summary', '')}") for i in items if isinstance(i, dict))
-        return Parsed("bundle", (Segment(text),), title=str(obj.get("title", ""))[:160], meta={"bundle": obj})
-    return Parsed("json", (Segment(normalize(json.dumps(obj, indent=1, sort_keys=True, ensure_ascii=False))),))
+        return Parsed("bundle", (Segment(text),), title=str(obj.get("title", ""))[:160],
+                      meta={"bundle": obj, "encoding": _encoding(d)})
+    return Parsed("json", (Segment(normalize(json.dumps(obj, indent=1, sort_keys=True, ensure_ascii=False))),),
+                  meta={"encoding": _encoding(d)})
 
 
 PARSERS = {".pdf": _pdf, ".docx": _docx, ".pptx": _pptx, ".xlsx": _xlsx, ".xlsm": _xlsx, ".html": _html, ".htm": _html,
@@ -269,10 +315,11 @@ def supported(filename: str, mime: str = "") -> bool:
     return PurePath(filename).suffix.lower() in PARSERS or mime in MIMES
 
 
-def parse(data: bytes, filename: str, mime: str = "") -> Parsed:
-    """The document's text. Raises ParseError for an unsupported format or a file that is not what it claims."""
+def parse(data: bytes, filename: str, mime: str = "", *, ocr: Ocr | None = None) -> Parsed:
+    """The document's text. Raises ParseError for an unsupported format or a file that is not what it claims. `ocr`
+    reads the pages of a PDF that are pictures (see ocr.py); without it they are listed in `meta["needs_ocr"]`."""
     ext = PurePath(filename).suffix.lower()
     fn = PARSERS.get(ext) or PARSERS.get(MIMES.get(mime, ""))
     if fn is None:
         raise ParseError(f"unsupported file type: {ext or mime or 'unknown'}")
-    return fn(data)
+    return fn(data, ocr) if fn is _pdf else fn(data)

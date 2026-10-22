@@ -7,22 +7,28 @@ full-width line of prose it is the same sentence wrapped) also ends one, and so 
 CSV, and HTML parsers write them, or a line that ends in two or more figures, as a PDF's tables read). A sentence longer than a chunk (a run-on line from a PDF) is cut at a line break,
 else at a space. Chunks group whole sentences up to a size, within one paragraph of one page or sheet, so a search hit
 (and an imported item) never straddles two, and every chunk's span indexes the document's text exactly.
+
+Chinese and Korean (cjk.py): a sentence also ends after 。！？ and after a Korean ending (다, 요, 죠, 까) at a line's end, and a
+period before a space and a Hangul syllable or ideograph. Sizes are weights, not character counts: an ideograph or a
+Hangul syllable weighs two, so a chunk of 700 units holds about 350 Chinese characters. A piece cut from a sentence
+that is too long never ends inside a word, a number, or a character.
 """
 
 from __future__ import annotations
 
 import re
 
+from axelrod_ingest.cjk import HANGUL, HAN, KANA, cut_at, limit, sentence_cuts, weight
 from axelrod_ingest.lake.store import Chunk
 from axelrod_ingest.parse import Parsed
 
-CHUNK_CHARS = 700
+CHUNK_CHARS = 700        # units, not characters: an ideograph or a Hangul syllable weighs two (cjk.weight)
 ROW_CHARS = 12000        # a table row longer than a chunk stays one sentence and one chunk, up to this
 ABBREV = {"u.s", "u.k", "e.g", "i.e", "inc", "corp", "co", "ltd", "plc", "vs", "no", "nos", "mr", "mrs", "ms", "dr",
           "st", "jr", "sr", "fig", "est", "approx", "jan", "feb", "mar", "apr", "jun", "jul", "aug", "sep", "sept",
           "oct", "nov", "dec", "etc", "al", "bn", "mn", "tn", "yr", "yrs", "q1", "q2", "q3", "q4", "h1", "h2", "fy",
           "p", "pp", "vol", "ed", "e.u", "u.n", "s.a", "n.v", "a.g", "s.p.a"}
-_END = re.compile(r"[.!?]+[\"'”’)\]]*(?=\s+[\"'“‘(\[]?[A-Z0-9])")
+_END = re.compile(r"[.!?]+[\"'”’)\]]*(?=\s+[\"'“‘(\[]?[A-Z0-9" + HAN + KANA + HANGUL + "])")
 _BREAK = re.compile(r"\n(?=\s*(?:[-•*·▪●◦‣]\s|[◆◇■□►▶➢➤✓✔\uf0a7\uf0b7\uf0d8\uf076]|\*\S|\d+[.)]\s))|\n{2,}")
 _CAPITAL_LINE = re.compile(r"\n(?=\s*[A-Z])")
 SHORT_LINE = 50          # a line this short before a capitalized one is a heading or a label, not wrapped prose
@@ -59,6 +65,7 @@ def sentences(text: str, base: int = 0) -> list[tuple[int, int]]:
         if text[m.start()] == "." and _is_abbrev(text, m.start()):
             continue
         cuts.add(m.end())
+    cuts |= sentence_cuts(text)                   # 。！？ and a Korean ending at a line's end, with no space after
     for m in _BREAK.finditer(text):
         cuts.add(m.start())
     for m in _CAPITAL_LINE.finditer(text):
@@ -90,17 +97,13 @@ def sentences(text: str, base: int = 0) -> list[tuple[int, int]]:
 
 
 def split_long(text: str, span: tuple[int, int], max_chars: int) -> list[tuple[int, int]]:
-    """A span cut into pieces of at most `max_chars`: at the last line break before the limit, else the last space,
-    else at the limit; whitespace is trimmed off each piece."""
+    """A span cut into pieces of at most `max_chars` units (see cjk.weight): at the last line break before the limit, else
+    the last space, else the last clause mark, else at the limit backed off so that no word, number, or character is
+    split; whitespace is trimmed off each piece."""
     a, b = span
     out = []
-    while b - a > max_chars:
-        window = text[a:a + max_chars + 1]
-        cut = window.rfind("\n")
-        if cut <= 0:
-            cut = window.rfind(" ")
-        if cut <= 0:
-            cut = max_chars
+    while weight(text[a:b]) > max_chars:
+        cut = cut_at(text, a, limit(text, a, b, max_chars))
         out.append((a, a + len(text[a:a + cut].rstrip())))      # a piece starts on a non-space, so it is never empty
         a += cut
         while text[a].isspace():                                # the span ends on a non-space, so this stops in it
@@ -120,7 +123,7 @@ def chunk(parsed: Parsed, tenant: str, doc_id: str, max_chars: int = CHUNK_CHARS
                  for p in split_long(text, sp, ROW_CHARS if CELL in text[sp[0]:sp[1]] else max_chars)]
         for s in spans:
             # a chunk never crosses a paragraph break (a blank line) and stays under max_chars
-            if cur and (s[1] - cur[0][0] > max_chars or "\n\n" in text[cur[-1][1]:s[0]]):
+            if cur and (weight(text[cur[0][0]:s[1]]) > max_chars or "\n\n" in text[cur[-1][1]:s[0]]):
                 out.append(Chunk(tenant=tenant, doc_id=doc_id, ord=len(out), start=cur[0][0], end=cur[-1][1],
                                  text=text[cur[0][0]:cur[-1][1]], page=seg.page, section=seg.label))
                 cur = []

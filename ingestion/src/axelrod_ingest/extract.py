@@ -57,6 +57,7 @@ from typing import Any
 
 from axelrod_ingest.chunk import CELL, sentences, tabular
 from axelrod_ingest.contract.world_view import WorldView
+from axelrod_ingest.dates import resolve as resolve_dates
 from axelrod_ingest.gazetteer import METRICS, Gazetteer, Match
 from axelrod_ingest.tables import (
     FIGURE,
@@ -74,15 +75,32 @@ from axelrod_ingest.tables import (
     revise,
 )
 from axelrod_ingest.text import norm
+from axelrod_ingest.units import (
+    ARTICLE,
+    CJK_SCALE_RUN,
+    CJK_TAIL,
+    CODE_AFTER,
+    CODES,
+    CURRENCY,
+    CURRENCY_PREFIX,
+    CURRENCY_SUFFIX,
+    CURRENCY_WORD,
+    SCALE,
+    scale_hint,
+    scale_value,
+    tail_value,
+)
+from axelrod_ingest.cjk import CJK_CHAR
 
 # -- numbers ------------------------------------------------------------------------------------------------------
-CODES = {"usd": "$", "us$": "$", "jpy": "¥", "yen": "¥", "eur": "€", "gbp": "£", "cny": "CNY", "rmb": "CNY"}
 NUMBER = re.compile(
-    r"(?P<sign>[+\-−–])?\s?(?P<cur>US\$|[$¥€£]|(?<![/\w])(?:USD|JPY|EUR|GBP|CNY|RMB)(?=\s?\d))?\s?"
-    r"(?P<num>\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?)"
-    r"(?:\s?(?P<scale>trillion|tn|tr|billion|bn|b|million|mn|mm|m|k)\b)?"
-    r"(?:[\s-]?(?P<unit>%|percentage[\s-]points?|pct pts?|ppts?|pp|per ?cent|percent|pct|basis[\s-]points?|bps?|x\b))?"
-    r"(?:\s?(?P<code>USD|JPY|EUR|GBP|CNY|RMB)\b)?", re.I)
+    rf"(?P<sign>[+\-−–])?\s?(?P<cur>{CURRENCY_PREFIX})?\s?"
+    r"(?P<num>\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?)(?![\d年月日년월일위])"        # 2026年 is a date, not a figure
+    rf"(?:\s?(?P<scale>trillion|tn|tr|billion|bn|b|million|mn|mm|m|k)\b|\s?(?P<cscale>{CJK_SCALE_RUN})(?P<tail>{CJK_TAIL}))?"
+    rf"(?:\s?(?P<cursuf>{CURRENCY_WORD}))?"
+    r"(?:[\s-]?(?P<unit>个百分点|個百分點|百分[点點]|퍼센트|%p(?![a-z])|%|percentage[\s-]points?|pct pts?|ppts?|pp|per ?cent|percent|"
+    r"pct|basis[\s-]points?|bps?|x\b))?"
+    rf"(?:\s?(?P<code>{CODE_AFTER})\b)?", re.I)
 CURRENCY_ONLY_SCALES = ("m", "b", "tr")     # "$5m", "$6.4b": a scale only with a currency ("5 m" is not five million)
 RANGE_JOIN = re.compile(r"^\s?(?:[-–]|to)\s?$")
 DIRECTION_UP = (r"(?:rais|hik|lift|increas(?!ingly)|ris(?:e|es|en|ing)\b|rose|climb|jump|gain|surg|beat|upgrad|improv|widen|"
@@ -97,7 +115,7 @@ DOWN = re.compile(r"\b" + DIRECTION_DOWN + r"\w*", re.I)
 BY = re.compile(r"\bby\s+(?:about\s+|around\s+|roughly\s+|c\.\s?|~)?$", re.I)
 LEVEL = re.compile(r"\b(?:at|to|of|is|was|were|are|be|stands? at|stood at|reached|reach|hit|near|around|towards?|"
                    r"close to|(?:ended|ending|closed|closing|trading|traded) (?:at|near|around)|=)\s*(?:about\s+|around\s+|roughly\s+|c\.\s?|~|just\s+|(?:just\s+)?(?:above|below|over|"
-                   r"under)\s+)?$|[=:]\s*$",
+                   r"under)\s+)?$|[=:]\s*$|(?:为|是|达到|达|至|约为|约|共计|合计|录得|实现|으로|로|[은는이가])\s*(?:约|약)?\s*$",
                    re.I)
 KEY_VALUE = re.compile(r"^[\s,:]*(?:close|closing)?[\s,:]*$", re.I)   # "Price (31 Jul 2026) ¥6,994", parentheticals dropped
 PARENS = re.compile(r"\([^()]*\)")
@@ -333,10 +351,6 @@ BOILERPLATE = re.compile(
     r"|without (?:the )?(?:prior )?(?:written )?(?:consent|permission)|price target (?:methodology|risks?)"
     r"|ratings? (?:system|definitions?|distribution)|this (?:report|document|publication|material|research) "
     r"(?:is|has been|was|may|does|should|must|contains)|independent (?:investment )?decisions?|investment advice)\b", re.I)
-SCALE = {"k": 1e3, "m": 1e6, "mn": 1e6, "mm": 1e6, "million": 1e6, "b": 1e9, "bn": 1e9, "billion": 1e9, "tn": 1e12,
-         "tr": 1e12, "trillion": 1e12}
-CURRENCY = {"$": ("$", "usd", "dollar"), "¥": ("¥", "jpy", "yen"), "€": ("€", "eur", "euro"), "£": ("£", "gbp"),
-            "CNY": ("cny", "rmb", "yuan")}
 MIN_LOG_BAND = 0.15                    # at least ±16% around a lognormal value's mean is plausible
 MAX_POINTS = 2.0                       # a rate rarely moves more than two points in one claim
 UNDIRECTED_SD = 0.5                    # a direction without a size: half a standard unit, as a weak move
@@ -350,7 +364,6 @@ DATE_PATTERNS = [
     re.compile(r"\b(?P<mon>Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\.?\s+(?P<d>\d{1,2}),?\s+(?P<y>20\d{2})\b"),
     re.compile(r"\b(?P<d>\d{1,2})[\s-]+(?P<mon>Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\.?,?[\s-]+(?P<y>20\d{2})\b"),
 ]
-FILENAME_DATE = re.compile(r"(?<!\d)(?P<y>20\d{2})[-_]?(?P<m>[01]\d)[-_]?(?P<d>[0-3]\d)(?!\d)")
 
 
 def _date(y: str, m: str | None, d: str, mon: str | None = None) -> datetime | None:
@@ -362,19 +375,8 @@ def _date(y: str, m: str | None, d: str, mon: str | None = None) -> datetime | N
 
 
 def find_date(text: str, filename: str = "") -> datetime | None:
-    """The document's date: the first date in its opening text, else one in its file name."""
-    head = text[:3000]
-    found = []
-    for pat in DATE_PATTERNS:
-        for m in pat.finditer(head):
-            g = m.groupdict()
-            dt = _date(g["y"], g.get("m"), g["d"], g.get("mon"))
-            if dt is not None:
-                found.append((m.start(), dt))
-    if found:
-        return sorted(found)[0][1]
-    m = FILENAME_DATE.search(filename)
-    return _date(m.group("y"), m.group("m"), m.group("d")) if m else None
+    """The document's date: the first full date in its opening text, else one in its file name (dates.py)."""
+    return resolve_dates(text, filename).published
 
 
 # -- numbers ------------------------------------------------------------------------------------------------------
@@ -394,27 +396,37 @@ class Num:
 
 def _unit(u: str) -> str:
     u = u.replace("-", "")
-    if u == "pp" or u.startswith(("percentagepoint", "pctpt", "ppt")):
+    if u in ("pp", "%p") or u.startswith(("percentagepoint", "pctpt", "ppt")) or "百分" in u:
         return "pp"
-    if u in ("%", "pct") or u.startswith("perc"):
+    if u in ("%", "pct", "퍼센트") or u.startswith("perc"):
         return "%"
     if u.startswith(("basispoint", "bp")):
         return "bp"
     return "x" if u == "x" else ""
 
 
-def numbers(text: str) -> list[Num]:
+def numbers(text: str, yen: str = "¥") -> list[Num]:
+    """The figures in `text`. A bare ¥ is the currency `yen` names ("¥" for the Japanese yen, "CNY" for the yuan:
+    units.resolve_yen decides from the document); a sign that names its currency ("JP¥", "CN¥", 円, 元) keeps it."""
     out: list[Num] = []
     for m in NUMBER.finditer(text):
-        if not (m.group("sign") or m.group("cur")) and m.start("num") and (
-                text[m.start("num") - 1].isalnum() or text[m.start("num") - 1] in "*^"):
+        prev_char = text[m.start("num") - 1] if m.start("num") else ""
+        if not (m.group("sign") or m.group("cur")) and prev_char and (
+                (prev_char.isalnum() and not CJK_CHAR.match(prev_char)) or prev_char in "*^"):
             continue                                     # figures inside a word ("FY26", "3Q26") or footnotes ("*1")
         v = float(m.group("num").replace(",", ""))
         unit = _unit((m.group("unit") or "").lower().replace(" ", ""))
-        cur = m.group("cur") or m.group("code") or ""
-        cur = CODES.get(cur.lower(), cur)
+        sign_cur = m.group("cur") or ""
+        cur = CODES.get(sign_cur.lower(), sign_cur) if sign_cur else ""
+        cur = cur or CODES.get((m.group("code") or "").lower(), "") or CURRENCY_SUFFIX.get(m.group("cursuf") or "", "")
+        if sign_cur == "¥":
+            cur = yen                                    # the one sign that names no currency by itself
         scale_word = (m.group("scale") or "").lower()
         scale = SCALE.get(scale_word, 1.0) if scale_word not in CURRENCY_ONLY_SCALES or cur else 1.0
+        cscale = m.group("cscale")
+        if cscale and not ("조" in cscale and ARTICLE.search(text[:m.start("num")])):
+            scale = scale_value(cscale)
+            v += tail_value(m.group("tail") or "") / scale    # "3억 5천만": 3 and 5천만 (5e7) of 1e8 is 3.5
         sign = m.group("sign") or ""
         at = m.start("sign")
         if sign and text[at + 1].isspace() and (at == 0 or text[at - 1].isspace()):
@@ -519,8 +531,6 @@ LABEL_WORDS = re.compile(r"\b(?:at|to|of|is|was|were|are|by|from|in|for|on|and|t
 LABEL_CHARS = 40
 BLANK = re.compile(r"--?|—|–|n\.?a\.?|n/a|NM|nm")       # an empty cell
 FOOTNOTE = re.compile(r"\*\d*")
-SCALE_HINT = re.compile(r"(?:\(|,\s|\b)(?:[$¥€£]|USD|JPY|EUR|CNY)?\s?(?P<s>bn|billions?|mn|mm|m|millions?|MM|000s|'000|"
-                        r"k|tn|tr)\b\)?", re.I)
 PERCENT_HINT = re.compile(r"\(%\)|,\s?%|%\s*$|\bratio\b", re.I)
 # a row of old figures, of consensus, or of changes and sensitivities is not the value's level
 OLD_LABEL = re.compile(r"\b(?:Old|Prior|Previous|consensus|cons\.?|per|sensitivity|impact|changes?|chg|growth|y/y|high|"
@@ -537,8 +547,10 @@ CUMULATIVE = re.compile(r"\b(?:cumulative|YTD|year[- ]to[- ]date)\b", re.I)
 
 
 class Rules:
-    def __init__(self, graph: WorldView, gazetteer: Gazetteer, inverted: frozenset[str] | set[str] = frozenset()) -> None:
+    def __init__(self, graph: WorldView, gazetteer: Gazetteer, inverted: frozenset[str] | set[str] = frozenset(),
+                 yen: str = "¥") -> None:
         self.graph = graph
+        self.yen = yen                  # what a bare ¥ is in this document (units.resolve_yen): "¥" or "CNY"
         self.gz = gazetteer
         # patterns for surfaces that name a value's reciprocal ("the yen" for USD/JPY), from the world's templates
         self.inverted = [re.compile(p, re.I) for p in sorted(inverted)]
@@ -926,7 +938,7 @@ class Rules:
             # "Net income (incl. equity gains)" is not the equity book
 
         def figure(j: int) -> Num | None:
-            ns = numbers(cells[j])
+            ns = numbers(cells[j], self.yen)
             return ns[0] if len(ns) == 1 and ns[0].end - ns[0].start == len(cells[j]) else None
 
         rest = [(j, c) for j, c in enumerate(cells) if j > k and c]
@@ -1036,7 +1048,7 @@ class Rules:
         head_row, groups = reading.columns[-1], reading.columns[:-1]
         out: list[Found] = []
         for j, c in enumerate(cells):
-            ns = numbers(c)
+            ns = numbers(c, self.yen)
             head = head_row[j].strip() if j < len(head_row) else ""
             if not head or len(ns) != 1 or ns[0].end - ns[0].start != len(c) or CONVERTED.search(head):
                 continue
@@ -1142,11 +1154,9 @@ class Rules:
             return self._level(sid, n)
         if PERCENT_HINT.search(label):
             return None                  # a share or a ratio of the value ("Operating income mix, %") is not it
-        hint = SCALE_HINT.search(label)
-        if hint and n.scale == 1.0:
-            word = hint.group("s").lower().rstrip("s")
-            scale = 1e3 if word in ("000", "'000", "k") else SCALE.get(word, SCALE.get(word[:2], 1e6))
-            return self._level(sid, Num(n.value, n.unit, n.currency, scale, n.start, n.end, n.negative))
+        hint = scale_hint(label)
+        if hint is not None and n.scale == 1.0:
+            return self._level(sid, Num(n.value, n.unit, n.currency, hint, n.start, n.end, n.negative))
         if n.scale != 1.0 or n.currency or not self.graph.values[sid].unit.endswith("/yr"):
             return self._level(sid, n)                   # a price or a rate is never rescaled to fit
         fits = {v for k in (1.0, 1e3, 1e6, 1e9, 1e12) if (v := self._level(sid, Num(
@@ -1540,7 +1550,7 @@ def claims_of_chunk(rules: Rules, ord_: int, text: str, reading: Reading | None,
             reading.header = (revise(reading.header, header) if marks else None) or header
             continue
         told = _told(sent, reading)                  # a scenario's bullet or an earlier episode: no news of now
-        nums = numbers(sent)
+        nums = numbers(sent, rules.yen)
         # "NTT's share price lagged. However, its share price rebounded": "its" is the stranger's, not the subject's
         stranger, reading.stranger = reading.stranger, any(
             t.lower() not in rules.gz.surface_words for t in POSSESSOR.findall(sent))

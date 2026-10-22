@@ -3,7 +3,9 @@
 The gazetteer is built from the world view (contract/world_view.py): every entity's name and aliases, and every value's name and
 aliases, plus each value's own phrase without its entity ("net interest income" for "JPMorgan net interest income").
 Matching runs over word tokens, longest match first, left to right, never overlapping; a surface written in capitals
-(BoJ, ECB, MS) matches only in that case, others match in any case; one-letter surfaces never match.
+(BoJ, ECB, MS) matches only in that case, others match in any case; one-letter surfaces never match. A Chinese or Korean
+text is matched by its characters (one token each, text.py), so a surface of one or two characters ("收入", revenue) matches only
+at the start of a run of them or after a particle such as 的, never inside a longer word ("利息收入", interest income).
 
 **Shared and generic phrases.** A value's own phrase is shared by many entities ("share price", "NII", "10-year
 yield"), so it is a *slot*, resolved to an entity that owns it, in this order:
@@ -37,6 +39,7 @@ import re
 from collections import Counter
 from dataclasses import dataclass
 
+from axelrod_ingest.cjk import CJK_CHAR
 from axelrod_ingest.contract.world_view import WorldView
 from axelrod_ingest.text import norm, tokens
 
@@ -73,6 +76,10 @@ FIGURE_NEAR = re.compile(r"\d")
 # a ticker in the possessive ("BAMI's"), heading a table row ("WFC 1.88 1.84 2%"), or reporting ("BAC guided to")
 OTHER_COMPANY = re.compile(r"\b([A-Z]{2,5})['’]s\b|^\s*([A-Z]{2,5})\s+(?=[\d$(+-])|\b([A-Z]{2,5})\s+(?=(?:guided|reported|"
                            r"posted|expects|expected|raised|lowered|reiterated|sees|said|beat|missed)\b)")
+
+
+# a Chinese character that is a word of its own between nouns ("公司的收入": the company's revenue)
+FUNCTION_CHARS = frozenset("的之及和与或于对将有是为在从至其该本等")
 
 
 @dataclass(frozen=True)
@@ -214,6 +221,11 @@ class Gazetteer:
                 i += 1
                 continue
             j, hits = best
+            first = toks[i][1]
+            if j - i <= 2 and i and toks[i - 1][2] == first and CJK_CHAR.match(text[first]) and CJK_CHAR.match(
+                    text[first - 1]) and text[first - 1] not in FUNCTION_CHARS:
+                i += 1                                   # "收入" inside "利息收入" (interest income) names nothing
+                continue
             if CODE.match(text[toks[i][1]:toks[j - 1][2]]) and FIGURE_NEAR.search(
                     text[max(0, toks[i][1] - 2):toks[i][1]] + text[toks[j - 1][2]:toks[j - 1][2] + 2]):
                 i = j                                    # "240 JPY", "EUR 84.47": a currency code, not the currency

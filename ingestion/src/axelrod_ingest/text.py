@@ -5,7 +5,11 @@ from __future__ import annotations
 
 import re
 
-TOKEN = re.compile(r"[A-Za-z0-9]+(?:[&./-][A-Za-z0-9]+)*|[&$¥€£%]")
+from axelrod_ingest.cjk import HAN, HANGUL, KANA
+
+# A word, a sign, or one ideograph, kana, or Hangul syllable: those scripts are matched by their characters (a name is a
+# run of tokens, found longest first), because Chinese has no spaces and a Korean word carries its particle ("영업이익은").
+TOKEN = re.compile(rf"[A-Za-z0-9]+(?:[&./-][A-Za-z0-9]+)*|[&$¥€£₩%]|[{HAN}{KANA}{HANGUL}]")
 POSSESSIVE = re.compile(r"^(?:s|S)$")
 
 

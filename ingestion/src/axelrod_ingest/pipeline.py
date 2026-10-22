@@ -7,9 +7,13 @@
                   links change as it learns, so a document can be read again)
     ingest_many   several files; their results come back in event-time order, the order they fold into the model
 
-A document's event time is the date given with it, else the first date in its opening text, else a date in its file
-name, else when it was ingested. Folding the bundle into the model is a separate step (the import, reviewed item by
-item), so storing and processing stay decoupled from learning.
+A document's event time is the date given with it, else (for a file a manifest lists) the date in its file name, else the
+first date in its opening text, else a date in its file name, else when it was ingested (dates.py); the period it reports on
+(a month, a quarter, a year) is kept beside it, as the item's `occurred_at`. A document is also typed (sources.py: filing,
+report, transcript, ...), one that holds no content (an index, a gated page, a script shell) is excluded from extraction with its
+reason, a scan with no text layer is read by OCR when there is an engine and marked `needs_ocr` when there is not (ocr.py),
+and a bare ¥ is resolved to yen or yuan from the document, with the evidence (units.py). Folding the bundle into the model is
+a separate step (the import, reviewed item by item), so storing and processing stay decoupled from learning.
 """
 
 from __future__ import annotations
@@ -25,19 +29,30 @@ from pydantic import ValidationError
 
 from axelrod_ingest import EXTRACTOR_VERSION
 from axelrod_ingest.chunk import chunk
+from axelrod_ingest.dates import Dates
+from axelrod_ingest.dates import resolve as resolve_dates
 from axelrod_ingest.contract.bundle import FORMAT, ImportBundle
 from axelrod_ingest.contract.world_view import WorldView
-from axelrod_ingest.extract import Reading, Rules, claims_of_chunk, find_date, item_of, keep_best
+from axelrod_ingest.extract import Reading, Rules, claims_of_chunk, item_of, keep_best
 from axelrod_ingest.gazetteer import Gazetteer
 from axelrod_ingest.lake.embed import Embedder
 from axelrod_ingest.lake.store import BundleRecord, Document, LakeStore, Mention, content_id, digest
 from axelrod_ingest.llm import Provider, propose
+from axelrod_ingest.ocr import Ocr
 from axelrod_ingest.parse import PARSER_VERSION, Parsed, ParseError, mime_of, parse
+from axelrod_ingest.sources import SOURCE_OF, Kind, classify
+from axelrod_ingest.units import language_of, resolve_yen
 
 KIND_OF = {"data": "data", "filing": "filing", "broker_research": "analyst", "expert_call": "analyst",
            "client_model": "analyst"}
 PROFILE_CHARS = 3000          # the opening text that says what a document is about (its subject and region)
 SOURCE_TYPES = ("broker_research", "expert_call", "news", "central_bank", "data", "filing", "client_model", "other")
+SCREENED = ("html", "pdf")      # the formats whose pages can hold no content (a menu, a shell, a scan): checked unless typed
+
+
+# what process() derives and writes again each time (a key the caller gave, "manifest" or "hints", is kept)
+DERIVED_META = {"format", "pages", "slides", "sheets", "encoding", "needs_ocr", "ocr", "language", "dates", "currency",
+                "doc_type", "shared_origin"}
 
 
 def bundle_id(bundle: dict) -> str:
@@ -80,8 +95,11 @@ def _utc(t: datetime) -> datetime:
 class Ingestor:
     def __init__(self, store: LakeStore, embedder: Embedder, *, provider: Provider | None = None,
                  clock: Callable[[], datetime] = lambda: datetime.now(UTC),
-                 inverted: frozenset[str] = frozenset(),
+                 inverted: frozenset[str] = frozenset(), ocr: Ocr | None = None, screen: bool = False,
                  timer: Callable[[], float] = time.perf_counter) -> None:
+        self.ocr = ocr                          # reads the pages of a scanned PDF (ocr.ocr_from_env); None: they are needs_ocr
+        self.screen = screen                    # exclude an untyped web page or PDF that holds no content (sources.classify);
+        # off by default: an upload of a short note is a document, a pack's index page is not
         self.store = store
         self.timer = timer
         self.embedder = embedder
@@ -92,7 +110,7 @@ class Ingestor:
     # -- storing ------------------------------------------------------------------------------------------------
     def store_file(self, tenant: str, data: bytes, filename: str, *, mime: str = "", source: str = "",
                    source_type: str = "other", published_at: datetime | None = None,
-                   uploaded_by: str = "") -> tuple[Document, bool]:
+                   uploaded_by: str = "", meta: dict[str, Any] | None = None) -> tuple[Document, bool]:
         if source_type not in SOURCE_TYPES:
             raise ValueError(f"source_type must be one of {', '.join(SOURCE_TYPES)}")
         now = _utc(self.clock())
@@ -100,7 +118,7 @@ class Ingestor:
         doc = Document(tenant=tenant, id=content_id(data), sha256=hashlib.sha256(data).hexdigest(),
                        filename=filename, mime=mime or mime_of(filename), size=len(data), source=source,
                        source_type=source_type, published_at=pub, event_time=pub or now, ingested_at=now,
-                       uploaded_by=uploaded_by)
+                       uploaded_by=uploaded_by, meta=dict(meta or {}))
         return self.store.put_document(doc, data)
 
     # -- processing ---------------------------------------------------------------------------------------------
@@ -112,27 +130,56 @@ class Ingestor:
         sw = Stopwatch(self.timer)
         data = self.store.raw_bytes(tenant, doc_id)
         try:
-            parsed = parse(data or b"", doc.filename, doc.mime)
+            parsed = parse(data or b"", doc.filename, doc.mime, ocr=self.ocr)
         except ParseError as err:
             doc = self.store.update_document(tenant, doc_id, status="failed", error=str(err))
             sw.lap("parse")
             return IngestResult(doc, False, None, warnings=[str(err)], timings=sw.laps)
         sw.lap("parse")
+        manifest = doc.meta.get("manifest") or {}
+        # a date the upload gave stays the upload's on a second reading; one this pipeline derived is derived again
+        given = doc.published_at if doc.meta.get("dates", {}).get("published_source", "upload") == "upload" else None
+        dates = resolve_dates(parsed.text, doc.filename, upload=given, manifest=bool(manifest), not_after=doc.ingested_at)
+        language = language_of(parsed.text)
+        yen = resolve_yen(parsed.text, language=language, issuer=(doc.meta.get("hints") or {}).get("issuer_country"))
+        needs_ocr = parsed.meta.get("needs_ocr", [])
+        screened = self.screen and parsed.format in SCREENED and doc.source_type == "other"
+        kind = classify(doc.filename, parsed.text, url=manifest.get("url", ""), section=manifest.get("section", ""),
+                        judge=screened and not needs_ocr, fmt=parsed.format)
+        meta = {k: v for k, v in doc.meta.items() if k not in DERIVED_META}
+        meta.update({"format": parsed.format, **{k: v for k, v in parsed.meta.items() if k != "bundle"},
+                     "language": language, "dates": dates.meta(), "currency": {"yen": yen.meta()}, "doc_type": kind.meta()})
+        if manifest.get("sha256"):
+            meta["manifest"] = {**manifest, "sha256_matches": manifest["sha256"] == doc.sha256}
+        source_type = doc.source_type if doc.source_type != "other" else SOURCE_OF[kind.type]
+        published = dates.published
+        fields = {"title": doc.title or parsed.title or doc.filename, "published_at": published, "source_type": source_type,
+                  "event_time": published or doc.ingested_at, "meta": meta}
         self.store.put_text(tenant, doc_id, parsed.text, f"{parsed.format}/{PARSER_VERSION}")
+        if kind.excluded:
+            self.store.put_chunks(tenant, doc_id, [])
+            self.store.put_embeddings(tenant, doc_id, self.embedder.name, [])
+            doc = self.store.update_document(tenant, doc_id, **{**fields, "source_type": "other"}, status="excluded",
+                                             error=kind.reason)
+            return IngestResult(doc, False, None, warnings=[f"excluded from extraction: {kind.reason}"], timings=sw.laps)
+        if needs_ocr and not parsed.text.strip():
+            why = f"{len(needs_ocr)} page(s) have no text layer and no OCR engine read them: needs_ocr"
+            self.store.put_chunks(tenant, doc_id, [])
+            self.store.put_embeddings(tenant, doc_id, self.embedder.name, [])
+            doc = self.store.update_document(tenant, doc_id, **fields, status="needs_ocr", error=why)
+            return IngestResult(doc, False, None, warnings=[why], timings=sw.laps)
         chunks = chunk(parsed, tenant, doc_id)
         sw.lap("chunk")
         self.store.put_chunks(tenant, doc_id, chunks)
         sw.lap("index")
         self.store.put_embeddings(tenant, doc_id, self.embedder.name, self.embedder.embed([c.text for c in chunks]))
         sw.lap("embed")
-        published = doc.published_at or find_date(parsed.text, doc.filename)
-        event_time = published or doc.ingested_at
-        title = doc.title or parsed.title or doc.filename
-        doc = self.store.update_document(tenant, doc_id, title=title, published_at=published, event_time=event_time,
-                                         status="parsed", meta={**doc.meta, "format": parsed.format, **{
-                                             k: v for k, v in parsed.meta.items() if k != "bundle"}})
+        doc = self.store.update_document(tenant, doc_id, **fields, status="parsed", error="")
+        warnings = ([f"page(s) {needs_ocr} have no text layer and no OCR engine read them: needs_ocr"] if needs_ocr else []) + (
+            [] if parsed.text.strip() or parsed.format == "bundle" else ["no text could be read from the document"])
         res = (self._passthrough(doc, parsed, graph, len(chunks)) if parsed.format == "bundle"
-               else self._extract(doc, chunks, graph, sw))
+               else self._extract(doc, chunks, graph, sw, dates=dates, kind=kind, language=language, yen=yen.currency))
+        res.warnings = warnings + res.warnings
         sw.lap("bundle")
         res.timings = sw.laps
         return res
@@ -150,9 +197,11 @@ class Ingestor:
         doc = self.store.update_document(doc.tenant, doc.id, status="extracted")
         return IngestResult(doc, False, rec, chunks=n_chunks, signals=rec.signals)
 
-    def _extract(self, doc: Document, chunks: list, graph: WorldView, sw: Stopwatch) -> IngestResult:
+    def _extract(self, doc: Document, chunks: list, graph: WorldView, sw: Stopwatch, *, dates: Dates, kind: Kind,
+                 language: str, yen: str) -> IngestResult:
         gz = Gazetteer(graph)
-        rules = Rules(graph, gz, self.inverted)
+        rules = Rules(graph, gz, self.inverted, yen=yen)
+        tags = [f"doc_type:{kind.type}", f"lang:{language}", *([f"period:{dates.period.label}"] if dates.period else [])]
         items, mentions, warnings = [], [], []
         head = " ".join(c.text for c in chunks)[:PROFILE_CHARS]
         subject, region = gz.profile(f"{doc.title} {doc.filename}", head)
@@ -179,6 +228,9 @@ class Ingestor:
                            source_type=doc.source_type, kind=KIND_OF.get(doc.source_type, "news"), title=doc.title,
                            extra=sigs)
             if item is not None:
+                item["tags"] = [*item["tags"], *tags]
+                if dates.period is not None and not dates.forward:   # the period the figures are about, beside when they were published
+                    item["occurred_at"] = datetime(*dates.period.end.timetuple()[:3], tzinfo=UTC).isoformat()
                 items.append(item)
         sw.lap("extract")
         self.store.put_mentions(doc.tenant, doc.id, mentions)

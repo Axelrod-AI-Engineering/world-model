@@ -201,7 +201,7 @@ def test_empty_text_file_parses_empty():
 # -- JSON -------------------------------------------------------------------------------------------------------------
 def test_plain_json_is_pretty_printed_with_sorted_keys():
     p = parse(json.dumps({"b": [1, "€"], "a": {"c": None}}).encode(), "data.json")
-    assert p.format == "json" and p.meta == {}
+    assert p.format == "json" and p.meta == {"encoding": {"name": "utf-8", "how": "utf-8"}}
     assert p.text == '{\n"a": {\n"c": null\n},\n"b": [\n1,\n"€"\n]\n}'  # lines stripped
 
 
@@ -210,7 +210,7 @@ def test_import_bundle_json_is_passed_through_whole():
         {"id": "A", "headline": "Bank hikes", "summary": "The Bank raised rates."}, "not an item",
         {"id": "B", "headline": "Dollar up"}]}
     p = parse(json.dumps(bundle).encode(), "bundle.json")
-    assert p.format == "bundle" and p.title == "Desk notes" and p.meta == {"bundle": bundle}
+    assert p.format == "bundle" and p.title == "Desk notes" and p.meta == {"bundle": bundle, "encoding": {"name": "utf-8", "how": "utf-8"}}
     assert p.text == "Bank hikes\nThe Bank raised rates.\n\nDollar up"
 
 
@@ -256,3 +256,27 @@ def test_mime_of_and_supported():
 def test_parse_is_deterministic():
     data = docx(para("The Bank raised rates.") + para("Bond yields rose 10bp."))
     assert parse(data, "a.docx") == parse(data, "a.docx")
+
+
+# -- charsets, width, and spaced Chinese ---------------------------------------------------------------------------------
+@pytest.mark.parametrize("label,codec", [("gb2312", "gbk"), ("gbk", "gbk"), ("gb18030", "gb18030"), ("euc-kr", "euc-kr"),
+                                         ("cp949", "cp949")])
+def test_an_html_page_in_a_legacy_charset_is_decoded_by_its_declaration(label, codec):
+    body = "净利润同比增长" if "gb" in label else "영업이익은 증가했습니다"
+    html = (f'<html><head><meta http-equiv="Content-Type" content="text/html; charset={label}">'
+            f"<title>{body}</title></head><body><p>{body}</p></body></html>")
+    p = parse(html.encode(codec), "page.html")
+    assert p.text == body and p.title == body
+    assert p.meta["encoding"] == {"name": {"gb2312": "gb18030", "gbk": "gb18030", "euc-kr": "cp949"}.get(label, label),
+                                  "how": "declared"}
+
+
+def test_an_undeclared_non_utf8_page_is_a_reported_fallback():
+    p = parse("<html><body>café</body></html>".encode("latin-1"), "a.html")
+    assert p.text == "café" and p.meta["encoding"] == {"name": "latin-1", "how": "fallback"}
+
+
+def test_text_is_width_normalized_and_a_spaced_chinese_name_rejoined():
+    p = parse("艾 克 米 股 份 有 限 公 司\n２０２６年，营收１，２３４．５亿元（同比＋７．１％）".encode(), "a.txt")
+    assert p.text == "艾克米股份有限公司\n2026年,营收1,234.5亿元(同比+7.1%)"
+    assert normalize("好！　真的？") == "好！ 真的？"
