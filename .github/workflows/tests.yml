@@ -75,8 +75,8 @@ jobs:
         with:
           version: "0.9.2"
       - run: uv sync --frozen
-      # scripts/video has errors from before the restructure; nothing else may add one
-      - run: uv run --frozen ruff check . --extend-exclude scripts/video
+      # world_model/scripts/video has errors from before the restructure; nothing else may add one
+      - run: uv run --frozen ruff check . --extend-exclude world_model/scripts/video
       - run: uv run --frozen pytest -p no:cacheprovider tests
       - run: uv run --frozen python scripts/docs/toc.py --check
       - run: uv run --frozen python scripts/docs/diagrams.py --check

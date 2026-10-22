@@ -322,7 +322,7 @@ claude mcp add --transport http world-model https://world-model-dev.up.railway.a
 ## Mounting it from core
 
 Core re-publishes the **read** tools in its own MCP catalog, under its own sign-in. The proposal is
-[integrations/core](../../../integrations/core/README.md): 17 read tools and no write tool, since core's backend MCP reads
+[world_model/integrations/core](../../integrations/core/README.md): 17 read tools and no write tool, since core's backend MCP reads
 only, to start. For each call, core mints a service token for the signed-in org user (`azp: core-mcp`, `act` naming
 the MCP host) and calls `/v1/world-models/{id}/…`; the service caps such a token at `world_model:read`.
 
@@ -335,7 +335,7 @@ Settings live in two places, following core's convention (`world_model/src/axelr
   turns them into the variables below.
 - **Secrets are in one gitignored file per stage**, `.creds.<stage>` (dotenv): the logins, the session secret, static
   API keys and model-provider keys. Locally the service reads it at start; for Railway,
-  `scripts/railway-sync-creds.sh <stage>` pushes it to the service's variables without printing a value or deploying.
+  `.railway/railway-sync-creds.sh <stage>` pushes it to the service's variables without printing a value or deploying.
   A creds file holding a non-secret name, or a profile holding a secret, stops the server.
 - The stage is `WORLD_MODEL_PROFILE`, else Railway's environment name, else `local`. A process variable always wins,
   then the creds file, then the profile.

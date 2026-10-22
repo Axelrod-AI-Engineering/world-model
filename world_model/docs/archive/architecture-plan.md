@@ -2,8 +2,7 @@
 
 This page turns the API and interface review with Manav (Oct 18) into a plan. It has four parts: what was decided,
 what still needs analysis, the order of work, and the analysis of one world model against several. The decisions are
-also recorded in [decisions.md](../design/decisions.md) as D-20 to D-24. Open questions stay on
-[questions-for-manav-and-zsolt.md](../design/questions-for-manav-and-zsolt.md).
+also recorded in [decisions.md](../design/decisions.md) as D-20 to D-24.
 
 <!-- toc -->
 **Contents**
@@ -49,7 +48,7 @@ also recorded in [decisions.md](../design/decisions.md) as D-20 to D-24. Open qu
    two open code PRs: first the construction standard, then API v1 and the docs.
 2. **Next: the API review fixes.** Scope names, the access boundary, permanent idempotency, the audit retention, the
    definitions, and the unified endpoint once its name is confirmed. The work is on a branch and goes in its own PR.
-3. **Then: core integration.** Manav's basic integration PR first. Our patch in `integrations/core/` is then
+3. **Then: core integration.** Manav's basic integration PR first. Our patch in `world_model/integrations/core/` is then
    regenerated against the agreed scopes.
 4. **When the team is ready: the architecture changes.**
    - one unified world model, with compartments (section 4);

@@ -37,7 +37,7 @@ cd world_model && uv run pytest tests/unit               # the fast part, for a 
 cd world_model && uv run pytest -m integration           # the service's end-to-end flows
 cd world_model && uv run pytest --runslow                # also the full checklist run, every slot alternative, the browser test
 uv run pytest                                            # from the root: the repository's own tests
-uv run ruff check . --extend-exclude scripts/video       # lint the workspace
+uv run ruff check . --extend-exclude world_model/scripts/video       # lint the workspace
 ```
 
 [world_model/tests/README.md](../world_model/tests/README.md) describes every world model suite: its count, markers, the
@@ -50,7 +50,7 @@ data and extras it needs, the coverage policy, and the design of the service's i
 | `world_model/tests/unit` and `integration` | The model, its memory, repository, intake, learning, inference, control, flows, the engine; the demo's API and `/ws` |
 | `world_model/tests/service`, `integration/service` | The outward API (`/v1`) and MCP: every route against the OpenAPI schema, every error code, tenancy, idempotency; the end-to-end flows |
 | `world_model/tests/scenario`, `ui` | Initialization, determinism, restore, the demos example by example; a Playwright smoke test (slow) |
-| `tests/` (the root) | The Railway drift verifier, the coverage gate, and that every link in the Markdown resolves |
+| `tests/` (the root) | The Railway drift verifier (`.railway/`), the coverage gate, and that every link in the Markdown resolves |
 
 **Client data.** Only the world model's tests read it, and only through `skip_without_client(...)`, which skips a test
 module with its reason when the client's content is absent. Ingestion's tests never read `data/`.
@@ -83,13 +83,12 @@ Without client data the world model reaches 100% too: point `WORLD_MODEL_DATA_DI
 ```text
 pyproject.toml, uv.lock   the workspace root (virtual): members, shared lint settings
 ingestion/                axelrod-ingest: src/axelrod_ingest, tests, scripts, docs
-world_model/              axelrod-world-model: src/axelrod_wm, tests, examples, taxonomy, configs, web, skills, scripts, docs
+world_model/              axelrod-world-model: src/axelrod_wm, tests, examples, taxonomy, configs, web, skills, scripts (video/), integrations/core, docs
 docs/                     this front door: architecture, reading order, decisions, the ML stack, deployment, development
 configs/                  stage settings (world_model*.toml), read by axelrod_wm/settings.py
-tests/, scripts/          the repository's own tests; the coverage gate, the docs tools, the Railway checks, video/
+tests/, scripts/          the repository's own tests; the coverage gate and the docs tools
 data/, feedback/, var/    local and gitignored: client content, meeting notes, runtime data
-integrations/core/        the proposed patch to core's MCP server
-.railway/, Dockerfile     the hosted deployment
+.railway/, Dockerfile     the hosted deployment: IaC, start and release scripts, the Railway CLI's package.json
 ```
 
 [../world_model/docs/design/](../world_model/docs/design/README.md) maps each module to its package; each [module spec](../world_model/docs/design/modules/README.md) lists the files it holds today.
@@ -112,4 +111,4 @@ integrations/core/        the proposed patch to core's MCP server
 
 ## Demo videos
 
-`docs/media/` holds the videos and their voiceovers locally; it is gitignored, so ask the team for the files. [scripts/video/README.md](../scripts/video/README.md) explains how they were recorded and edited.
+`docs/media/` holds the videos and their voiceovers locally; it is gitignored, so ask the team for the files. [world_model/scripts/video/README.md](../world_model/scripts/video/README.md) explains how they were recorded and edited.

@@ -112,7 +112,7 @@ and what the caller may do.
 ## 2. Current state
 
 This section is the state the design started from (Oct 17). Our side has since been built (§7), and the patch no
-longer sends the on-behalf-of header ([integrations/core](../../../integrations/core/README.md)).
+longer sends the on-behalf-of header ([world_model/integrations/core](../../integrations/core/README.md)).
 
 ### Core (`Axelrod-AI-Engineering/core`, `main` at `01886b5`, Oct 17)
 
@@ -127,7 +127,7 @@ longer sends the on-behalf-of header ([integrations/core](../../../integrations/
 | Writeback rules | The expert writeback design keeps the "expert" as a person, not a role. Simulation agents have no write path. Every authoritative change needs explicit human approval of the exact revision, with the reviewer drawn from **trusted auth**. In the MVP an author may approve their own change. Mapping permissions to writeback actions is left **unresolved** | `docs/world-model/EXPERT_WRITEBACK_INTERFACES.md` |
 | Calling other services | Static shared bearers held in env vars: `AXELROD_HARNESS_RPC_TOKEN` between web and the dsh harness (open PR #63, a private Railway service). Vendor API keys go out the same way. No JWT is signed anywhere, though `pyjwt[crypto]` is already in `uv.lock` as a dependency of the `mcp` SDK. Secrets live in `.creds.<stage>` locally and in env vars when hosted | PR #63; `config.py`; `docs/conventions.md` |
 
-The patch, [`integrations/core/0001-world-model-service-mcp-tools.patch`](../../../integrations/core/0001-world-model-service-mcp-tools.patch),
+The patch, [`world_model/integrations/core/0001-world-model-service-mcp-tools.patch`](../../integrations/core/0001-world-model-service-mcp-tools.patch),
 is **not yet applied in core**. It adds two settings to `config.py`: `world_model_service_url` and
 `world_model_service_keys_raw` (`AXELROD_WORLD_MODEL_SERVICE_KEYS`, with `org_id=key` entries and `*=key` as the
 fallback). In `mcp_world_model.py`, `connection()` sends `Authorization: Bearer <org key>` and
@@ -330,7 +330,7 @@ reads it (`GET /v1/world-models/{id}/audit-events`).
   mode stays: caller `local` with every scope except `changes:approve` on `/v1`. The review UI still approves.
 - **Tests on both sides.** Each test suite generates a key pair, so no key is ever committed. We test with an
   in-memory JWKS behind `httpx.MockTransport`. Core decodes what it mints against its own JWKS.
-- **Contract.** A claim schema, `integrations/core/service-token.schema.json` (to be added), runs
+- **Contract.** A claim schema, `world_model/integrations/core/service-token.schema.json` (to be added), runs
   as a consumer contract test in both repos. A test-signed token fixture checks the scope-per-route table.
 
 ### The end user's direct MCP use
@@ -377,7 +377,7 @@ Proposals only, for Zsolt. File paths are against `main` at `01886b5`.
 | world model registry (lakehouse catalog) | `world_models(id, org_id, …)`; the existing per-login scenarios migrate to one model per organization |
 | audit | an append-only `audit_events` table and an `X-Request-Id` on every response |
 | `world_model/docs/design/api.md` (was `api-v2.md`) | done: the §3 *Authentication* row points here; `world_model/docs/api/openapi.yaml` has the scopes and both security schemes. Our side differs in places (key format, open mode): see world_model/docs/design/api.md |
-| `integrations/core/` | regenerate the patch with the core changes above, and add `service-token.schema.json`. `world_model/tests/service/test_core_integration.py` also checks that each tool's minted scopes cover its route |
+| `world_model/integrations/core/` | regenerate the patch with the core changes above, and add `service-token.schema.json`. `world_model/tests/service/test_core_integration.py` also checks that each tool's minted scopes cover its route |
 | settings | `WORLD_MODEL_TRUSTED_ISSUERS` (`issuer;jwks_url;audience` entries, one per core stage), `WORLD_MODEL_DENY`. Secrets stay in Railway variables |
 
 ## 8. Rollout and migration

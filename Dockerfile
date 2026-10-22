@@ -22,7 +22,7 @@ COPY world_model/examples ./world_model/examples
 COPY world_model/taxonomy ./world_model/taxonomy
 COPY world_model/configs ./world_model/configs
 COPY world_model/web ./world_model/web
-COPY scripts/start-railway.sh ./scripts/start-railway.sh
+COPY .railway/start-railway.sh ./.railway/start-railway.sh
 ENV AXELROD_ROOT=/app
 ENV WORLD_MODEL_LAKE_DIR=/app/var/lake WORLD_MODEL_EMBED_CACHE=/app/var/models
-CMD ["sh", "scripts/start-railway.sh"]
+CMD ["sh", ".railway/start-railway.sh"]

@@ -3,7 +3,7 @@ voiceover's word timings. Cue times are seconds from each scene's start."""
 import json
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = Path(__file__).resolve().parents[4]
 BUNDLE = ROOT / "data/work/emily/emily_import.json"
 SCENES = ROOT / "data/work/emily/trailer_scenes.json"      # the meta and stack scenes' content (client figures)
 

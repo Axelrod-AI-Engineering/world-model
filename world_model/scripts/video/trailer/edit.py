@@ -1,7 +1,7 @@
 """Cut the trailer: each shot from its magenta sync flash, for its span of the voiceover, back to real speed; the
 shots joined at 1080p; the voice over the music bed, ducked under speech.
 
-    python scripts/video/trailer/edit.py TAKE_DIR VOICE.m4a MUSIC.wav OUT.mp4
+    python world_model/scripts/video/trailer/edit.py TAKE_DIR VOICE.m4a MUSIC.wav OUT.mp4
 """
 import json
 import subprocess
