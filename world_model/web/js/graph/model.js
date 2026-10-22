@@ -116,11 +116,14 @@ export function pillWidth(name) {
   return Math.max(GEOM.PILL_MIN_W, Math.min(GEOM.PILL_MAX_W, textWidth(name) + 64));
 }
 
-export function computeModel(view, ui) {
+// `shown` (semantic zoom, graph/semantic.js) is the cut through the nested superentities: {boxes, entities, owner}. An
+// entity inside a closed group has no pill; the group's box stands for it, so an interaction to it is drawn to the box
+// (and interactions between the same two boxes are drawn once). Without it every entity is drawn.
+export function computeModel(view, ui, shown = null) {
   const subsById = new Map((view?.subentities ?? []).map((s) => [s.id, s]));
-  const entities = view?.entities ?? [];
+  const entities = (view?.entities ?? []).filter((e) => !shown || shown.entities.has(e.id));
   const visible = new Set(entities.map((e) => e.id));
-  const boxOfEntity = (eid) => (visible.has(eid) ? eid : null);
+  const boxOfEntity = (eid) => (visible.has(eid) ? eid : shown?.owner.get(eid) ?? null);
 
   // boxes
   const boxes = [];
@@ -131,6 +134,12 @@ export function computeModel(view, ui) {
     const w = open ? openWidth(e, rows.map((sid) => subsById.get(sid))) : pillWidth(e.name);
     const h = open ? HEAD_H + 6 + rows.length * ROW_H + 4 : HEAD_H;
     const b = { id: e.id, kind: "entity", ref: e.id, entity: e, open, rows, w, h, oy: -HEAD_H / 2 };
+    boxes.push(b);
+    boxById.set(b.id, b);
+  }
+  for (const c of shown?.boxes ?? []) {
+    const b = { id: c.id, kind: "cluster", ref: c.cluster.id, cluster: c.cluster, open: false, rows: [], w: c.w, h: c.h,
+                oy: -c.h / 2 };
     boxes.push(b);
     boxById.set(b.id, b);
   }
@@ -180,6 +189,10 @@ export function computeModel(view, ui) {
       const el = entityLinkLabel.get(`${e.a.box}>${e.b.box}`);
       if (el) { e.label = el.label; e.sig = Math.max(e.sig, el.significance); }
     }
+    // an arrow to or from a group stands for many interactions: it says how many, not which
+    if (boxById.get(e.a.box)?.kind === "cluster" || boxById.get(e.b.box)?.kind === "cluster") {
+      e.label = `${e.ids.length} interaction${e.ids.length === 1 ? "" : "s"}`;
+    }
     e.sig = Math.max(0, e.sig);
   }
   const keys = new Set(edges.map((e) => `${e.a.box}>${e.b.box}`));
@@ -192,7 +205,7 @@ export function computeModel(view, ui) {
     .map((f) => ({ ...f, a: anchorOf(f.earlier), b: anchorOf(f.later) }))
     .filter((f) => f.a && f.b && f.a.box !== f.b.box);
 
-  return { visible, boxes, boxById, boxOfEntity, anchorOf, edges, internal, frontier };
+  return { visible, boxes, boxById, boxOfEntity, anchorOf, edges, internal, frontier, shown };
 }
 
 // Where a row sits inside an open entity, relative to the box anchor (the header's center).

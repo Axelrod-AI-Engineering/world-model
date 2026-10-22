@@ -11,6 +11,11 @@ const K_EXTENT = [0.2, 3.5];
 // would blur. Zoomed in, a frame used to repaint every value row, outline, and label.
 const REST_MS = 140;
 const SHARP = [0.67, 1.5];       // commit mid-gesture once the buffered scale leaves this range
+// Oct 22: the svg is a layer a little larger than the canvas (this share of it past each edge, clipped) instead of
+// overflow: visible. An unbounded layer made the compositor draw it again at every step of a zoom (measured: 14 s of
+// painting against 0.1 s for a bounded one of the same drawing); a bounded one is drawn once and scaled. The margin is
+// what a buffered pan or zoom out can reveal before the view is committed (a pan past three quarters of it commits).
+export const MARGIN = 0.4;
 
 export function createZoom(svg, root, { onZoom, onRest, grid } = {}) {
   const node = svg.node();
@@ -19,20 +24,29 @@ export function createZoom(svg, root, { onZoom, onRest, grid } = {}) {
   let gliding = false;
   let committed = d3.zoomIdentity;
   let restTimer = 0;
+  const offset = () => ({ x: host.clientWidth * MARGIN, y: host.clientHeight * MARGIN });
   function commit(t = d3.zoomTransform(host)) {
     clearTimeout(restTimer);
     restTimer = 0;
     committed = t;
-    root.attr("transform", t);
+    // the svg's own origin sits MARGIN of the canvas up and to the left of the canvas's
+    const o = offset();
+    root.attr("transform", `translate(${t.x + o.x},${t.y + o.y}) scale(${t.k})`);
+    node.style.transformOrigin = `${o.x}px ${o.y}px`;
     grid?.(t);
     node.style.transform = "";
     host.classList.remove("buffering");
   }
   function buffer(t) {
     const s = t.k / committed.k;
-    if (s < SHARP[0] || s > SHARP[1]) { commit(t); return; }
+    const dx = t.x - s * committed.x;
+    const dy = t.y - s * committed.y;
+    const o = offset();
+    if (s < SHARP[0] || s > SHARP[1] || Math.abs(dx) > o.x * 0.75 || Math.abs(dy) > o.y * 0.75) { commit(t); return; }
     host.classList.add("buffering");
-    node.style.transform = `translate(${t.x - s * committed.x}px,${t.y - s * committed.y}px) scale(${s})`;
+    const css = `translate(${dx}px,${dy}px) scale(${s})`;
+    node.style.transform = css;
+    grid?.slide?.(css);
   }
   const zoom = d3.zoom()
     .scaleExtent(K_EXTENT)
@@ -45,6 +59,8 @@ export function createZoom(svg, root, { onZoom, onRest, grid } = {}) {
       onZoom?.(ev.transform, !!ev.sourceEvent || gliding);      // the second argument: a person moved the view
     });
   d3.select(host).call(zoom).on("dblclick.zoom", null);
+  window.addEventListener("resize", () => commit());
+  commit();
 
   // the gliding wheel: notches (or a trackpad's stream of small deltas, or a pinch, which arrives as ctrl+wheel) move a
   // target scale; each frame the view covers a share of the remaining distance in log scale, about the cursor
@@ -125,25 +141,36 @@ export function createZoom(svg, root, { onZoom, onRest, grid } = {}) {
 }
 
 // A faint grid in screen space whose pattern follows the zoom transform, so lines stay one pixel wide.
-export function installGrid(svg, defs) {
-  const minor = defs.append("pattern").attr("id", "grid-minor").attr("patternUnits", "userSpaceOnUse")
-    .attr("width", 24).attr("height", 24);
-  const minorLine = minor.append("path").attr("d", "M24 0H0V24").attr("fill", "none").attr("class", "grid-minor-line");
-  const major = defs.append("pattern").attr("id", "grid-major").attr("patternUnits", "userSpaceOnUse")
-    .attr("width", 120).attr("height", 120);
-  const majorLine = major.append("path").attr("d", "M120 0H0V120").attr("fill", "none").attr("class", "grid-major-line");
-  const bg = svg.insert("g", ":first-child").attr("class", "grid-bg").attr("pointer-events", "none");
-  // three canvases wide and tall, so a buffered pan or zoom out never slides past its edge
-  for (const id of ["grid-minor", "grid-major"]) {
-    bg.append("rect").attr("x", "-100%").attr("y", "-100%").attr("width", "300%").attr("height", "300%").attr("fill", `url(#${id})`);
-  }
-  return (t) => {
-    const tr = `translate(${t.x},${t.y}) scale(${t.k})`;
-    minor.attr("patternTransform", tr);
-    major.attr("patternTransform", tr);
-    minorLine.attr("stroke-width", 1 / t.k);
-    majorLine.attr("stroke-width", 1 / t.k);
+// Oct 22: two CSS gradients on a layer of its own under the svg, not an svg pattern inside it. The pattern was the
+// largest single cost of re-drawing the svg while the view moved (about half of what was left to paint once the graph had
+// fewer elements); a gradient is cheap, and while the view moves the layer slides and scales with the drawing (`slide`).
+export function installGrid(svg) {
+  const host = svg.node().parentNode;
+  const el = document.createElement("div");
+  el.className = "grid-bg";
+  el.setAttribute("aria-hidden", "true");
+  el.innerHTML = '<i class="minor"></i><i class="major"></i>';
+  host.insertBefore(el, svg.node());
+  const [minor, major] = el.children;
+  let last = { x: 0, y: 0, k: 1 };
+  const mod = (a, n) => ((a % n) + n) % n;
+  const commit = (t) => {
+    last = { x: t.x, y: t.y, k: t.k };
+    // the layer is three canvases wide and tall, so a buffered pan or zoom out never slides past its edge
+    const w = host.clientWidth;
+    const h = host.clientHeight;
+    el.style.transform = "";
+    el.style.transformOrigin = `${w}px ${h}px`;
+    for (const [layer, step] of [[minor, 24], [major, 120]]) {
+      const s = step * t.k;
+      layer.style.backgroundSize = `${s}px ${s}px`;
+      layer.style.backgroundPosition = `${mod(t.x + w, s)}px ${mod(t.y + h, s)}px`;
+    }
     // very far out, the minor grid would be a gray wash; let it fade
-    minorLine.attr("stroke-opacity", Math.max(0, Math.min(1, (t.k - 0.3) / 0.4)));
+    minor.style.opacity = String(Math.max(0, Math.min(1, (t.k - 0.3) / 0.4)));
   };
+  commit.slide = (css) => { el.style.transform = css; };
+  window.addEventListener("resize", () => commit(d3.zoomIdentity.translate(last.x, last.y).scale(last.k)));
+  commit(d3.zoomIdentity);
+  return commit;
 }

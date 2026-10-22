@@ -98,10 +98,10 @@ body.offline #clock::after { content: "offline"; font-size: 10px; color: var(--d
 #stage { position: absolute; top: var(--topbar-h); bottom: var(--bottom-h); left: 0; right: 0; }
 body.strip #stage { top: calc(var(--topbar-h) + 36px); }
 #canvas { position: absolute; inset: 0; background: var(--paper); overflow: hidden; outline: none; }
-#canvas > svg { width: 100%; height: 100%; display: block; user-select: none; }
-/* buffered zoom (graph/zoom.js): the svg slides as one composited layer while the view moves; overflow shows what was
-   drawn past its edge, so a pan reveals the graph rather than blank paper */
-#canvas > svg { overflow: visible; transform-origin: 0 0; }
+#canvas > svg { position: absolute; left: -40%; top: -40%; width: 180%; height: 180%; display: block; user-select: none; }
+/* buffered zoom (graph/zoom.js): the svg slides as one composited layer while the view moves. It reaches 40% of the canvas
+   past each edge (clipped, so the layer is bounded), so a pan reveals the graph rather than blank paper */
+#canvas > svg { overflow: hidden; transform-origin: 0 0; }
 /* the canvas stays its own compositor layer (Oct 11): promoting it at the start of every zoom and dropping it at the end
    re-rasterized the whole drawing twice per gesture, which a GPU shows as a flash */
 #canvas > svg { will-change: transform; }
@@ -139,6 +139,7 @@ body.strip #stage { top: calc(var(--topbar-h) + 36px); }
 #search-box svg { width: 13px; height: 13px; flex: none; }
 #search { border: 0; background: none; width: 150px; padding: 6px 4px; }
 #search:focus { box-shadow: none; width: 220px; }
+#canvas-controls [hidden] { display: none !important; }
 #canvas-controls { right: calc(var(--inset-r) + 14px); bottom: 14px; display: flex; gap: 8px; align-items: center; }
 /* little room between open panels: search tucks away until "/" focuses it, and Draw keeps its key (D) */
 #stage.cramped #search-box:not(:focus-within) { opacity: 0; pointer-events: none; }
@@ -362,8 +363,29 @@ kbd { font-family: var(--font-mono); font-size: 10.5px; padding: 0 5px; border: 
 .run-group[open] > summary::before { content: "▾"; }
 
 /* -- SVG graph --------------------------------------------------------------------------------------- */
-.grid-minor-line { stroke: var(--grid-minor); }
-.grid-major-line { stroke: var(--grid-major); }
+/* the faint grid (Oct 22: gradients on a layer of its own; graph/zoom.js installGrid sets their size and place) */
+#canvas > .grid-bg { position: absolute; inset: -100%; pointer-events: none; will-change: transform; }
+.grid-bg i { position: absolute; inset: 0; background-repeat: repeat; }
+.grid-bg .minor { background-image: linear-gradient(to right, var(--grid-minor) 1px, transparent 1px), linear-gradient(to bottom, var(--grid-minor) 1px, transparent 1px); }
+.grid-bg .major { background-image: linear-gradient(to right, var(--grid-major) 1px, transparent 1px), linear-gradient(to bottom, var(--grid-major) 1px, transparent 1px); }
+/* superentities drawn as boxes (Oct 22, graph/semantic.js): a closed group is the region its members would fill, with a label
+   that keeps one size on the screen. Quiet: a tint of the paper and the pill's own line, so the members read as the figure. */
+.cnode { cursor: pointer; }
+.cnode rect.body { fill: var(--sheet); fill-opacity: 0.72; stroke: var(--pill-line); stroke-width: 1.4; stroke-dasharray: 7 5; vector-effect: non-scaling-stroke; }
+.cnode.deep rect.body { fill-opacity: 0.55; }
+.cnode:hover rect.body, .cnode:focus-visible rect.body { fill-opacity: 0.95; stroke: var(--ink-3); stroke-dasharray: none; }
+.cnode text.cname { font: 700 14px var(--font-ui); fill: var(--ink); text-anchor: middle; dominant-baseline: central; }
+.cnode text.csub { font: 500 11px var(--font-ui); fill: var(--ink-3); text-anchor: middle; dominant-baseline: central; }
+.cnode .ctitle.lbl-hidden { display: none; }
+.cnode:focus { outline: none; }
+.cnode:focus-visible rect.body { stroke: var(--real-line); stroke-width: 2; }
+/* a box or an arrow that appears with a change of detail fades in rather than popping */
+.tier-in { animation: tier-in 0.24s ease-out both; }
+.layer-edges.tier-dip { animation: tier-dip 0.28s ease-out both; }
+@keyframes tier-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes tier-dip { from { opacity: 0.15; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .tier-in, .layer-edges.tier-dip { animation: none; } }
+body.zooming .cnode { pointer-events: none; }
 .pill rect.body { fill: var(--sheet); stroke: var(--concept, var(--pill-line)); stroke-width: var(--concept-w, 1px); }
 .pill.loose rect.body { stroke: var(--loose-line); stroke-dasharray: 3 3; }
 .pill.fresh rect.body { stroke: var(--real-line); stroke-dasharray: 4 3; }

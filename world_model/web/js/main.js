@@ -62,7 +62,7 @@ const REDO_KEY = IS_MAC ? "⇧⌘Z" : "Ctrl-Y";
 // the keyboard sheet (?): every shortcut in one place, so none needs a button on screen
 const SHORTCUTS = [
   ["Canvas", [[`${MOD}Z`, "Undo a view change (open, close, move, layout)"], [`${REDO_KEY}`, "Redo"],
-              ["1 · 2", "Entities · subentities"], ["0", "Auto: detail follows zoom"], ["K", "Color: what pills are colored by, and the key"], ["[ · ]", "Up a concept · down into the first narrower one (the taxonomy, top left)"], ["+ · − · F", "Zoom in · zoom out · fit"],
+              ["1 · 2 · 3", "Entities · subentities · superentities"], ["0", "Auto: detail follows zoom"], ["K", "Color: what pills are colored by, and the key"], ["[ · ]", "Up a concept · down into the first narrower one (the taxonomy, top left)"], ["+ · − · F", "Zoom in · zoom out · fit"],
               [`/ · ${MOD}K`, "Find or filter: words, concepts, “moved”, “open>0.8”, “learned”; widen to neighborhoods"], ["D", "Draw a proposed edge"], ["Esc", "Close the top thing"]]],
   ["Demo", [["E", "Tutorial"], ["I", "Import research (imported models)"], ["→", "Next scripted step"], ["Space", "Play or pause"],
             ["⇧← · ⇧→", "Step through the timeline"], ["U", "Request an update"]]],
@@ -450,6 +450,17 @@ async function boot() {
           ${renderer.ui.expanded.has(e.id) ? "" : entityLens(subs, e.name, e.kind)}
           <div class="tt-f">double-click: subentities · right-click: options</div>`;
       }
+    } else if (info.kind === "cluster") {
+      const c = renderer.sem.clusters().get(info.id);
+      if (c) {
+        const byId = new Map(v.entities.map((x) => [x.id, x]));
+        const names_ = c.members.map((m) => byId.get(m)?.name ?? m).sort((a, b) => a.localeCompare(b));
+        html = `<div class="tt-h">${esc(c.label)}</div>
+          <div class="tt-s">A superentity · ${c.size} entities · ${c.subentities} subentities</div>
+          <div class="small">${esc(listNames(names_))}</div>
+          <div class="small muted">${c.source === "llm" ? "Named by a language model" : "Named by its words"}: ${esc(c.keywords.join(", "))}</div>
+          <div class="tt-f">click: open it · right-click: options</div>`;
+      }
     } else if (info.kind === "subentity") {
       const s = v?.subentities.find((x) => x.id === info.id);
       if (s) {
@@ -542,9 +553,23 @@ async function boot() {
           { sep: true },
           ...(learning() ? [{ label: "Draw an edge from here", kbd: "D", action: () => setDraw(true) }] : []),
           ...(n?.pinned ? [{ label: "Return to its place", action: () => renderer.unpin(target.id) }] : []),
+          ...renderer.sem.pathTo(target.id).slice(-1).filter(() => renderer.sem.active()).map((cid) => (
+            { label: `Fold into “${renderer.sem.clusters().get(cid).label}”`, action: () => renderer.sem.toggle(cid, false) })),
           ...(learning() ? [{ sep: true }, { group: "Structure (proposed, then vetted)" },
             { label: "Group into a superentity…", action: () => groupDialog([target.id]) },
             { label: "Retire this entity…", action: () => retireDialog({ entity_id: target.id }, e?.name ?? target.id) }] : []),
+        ],
+      });
+    } else if (target.kind === "cluster") {
+      const c = renderer.sem.clusters().get(target.id);
+      openMenu(at, {
+        title: c?.label ?? "Superentity", subtitle: c ? `${c.size} entities · ${c.subentities} subentities` : null,
+        items: [
+          { label: "Open it into its parts", kbd: "click", action: () => renderer.openCluster(target.id) },
+          { label: "Zoom to it", action: () => renderer.zoomToCluster(target.id) },
+          { label: "Isolate what drives its members and what they move", kbd: "X", action: () => isolate(c.members, "both") },
+          { sep: true },
+          { label: "Name every superentity with a language model", action: relabelClusters },
         ],
       });
     } else if (target.kind === "subentity") {
@@ -583,8 +608,10 @@ async function boot() {
           ...(renderer.undoStack.length ? [{ label: `Undo ${renderer.undoStack.at(-1).label}`, kbd: `${MOD}Z`, action: undo }] : []),
           ...(renderer.redoStack.length ? [{ label: `Redo ${renderer.redoStack.at(-1).label}`, kbd: REDO_KEY, action: redo }] : []),
           ...(renderer.undoStack.length || renderer.redoStack.length ? [{ sep: true }] : []),
+          ...(renderer.sem.clusters().size ? [{ label: "Group into superentities", kbd: "3", action: () => { setAuto(false); renderer.setDetail("super"); } }] : []),
           { label: "Close every entity", kbd: "1", action: () => renderer.setDetail("entity") },
           { label: "Show every entity's subentities", kbd: "2", action: () => renderer.setDetail("sub") },
+          ...(renderer.sem.clusters().size ? [{ label: "Name every superentity with a language model", action: relabelClusters }] : []),
           { sep: true },
           { label: document.body.classList.contains("labels") ? "Hide interaction labels" : "Show every interaction label",
             action: () => document.body.classList.toggle("labels") },
@@ -597,6 +624,16 @@ async function boot() {
         ],
       });
     }
+  }
+
+  // Oct 22: superentities are named by their words; a language model may rename them (cached, so a name never changes)
+  async function relabelClusters() {
+    try {
+      const r = await api.relabelClusters();
+      toast(r.relabelled ? `Named ${r.relabelled} superentit${r.relabelled === 1 ? "y" : "ies"} with ${r.provider}.`
+        : "Every superentity already has its name.");
+      scheduleRefresh(100);
+    } catch (err) { toast(errorText(err), "err"); }
   }
 
   // -- structure edits (restructure): collapse, expand, delete. Each is a proposal that waits for review in the
@@ -1076,8 +1113,10 @@ async function boot() {
   $("#btn-checks").addEventListener("click", () => { closeMenu(); checks.toggle(); });
 
   // canvas controls
-  const detailButtons = { entity: $("#lvl-entity"), sub: $("#lvl-sub") };
+  const detailButtons = { super: $("#lvl-super"), entity: $("#lvl-entity"), sub: $("#lvl-sub") };
   function setDetailButtons(lv) {
+    // the first level exists only for a model that has superentities
+    detailButtons.super.hidden = !renderer.sem.clusters().size;
     for (const [k, b] of Object.entries(detailButtons)) b.setAttribute("aria-pressed", String(k === lv));
   }
   // detail follows zoom (Oct 9) unless a person picks a level by hand
@@ -1492,6 +1531,7 @@ async function boot() {
     else if (ev.key === "u" || ev.key === "U") update.open();
     else if (ev.key === "1") { setAuto(false); renderer.setDetail("entity"); }
     else if (ev.key === "2") { setAuto(false); renderer.setDetail("sub"); }
+    else if (ev.key === "3" && renderer.sem.clusters().size) { setAuto(false); renderer.setDetail("super"); }
     else if (ev.key === "0") setAuto(!renderer.autoDetail);
     else if (ev.key === "f" || ev.key === "F") renderer.fit();
     else if (ev.key === "+" || ev.key === "=") renderer.zoomBy(1.25);

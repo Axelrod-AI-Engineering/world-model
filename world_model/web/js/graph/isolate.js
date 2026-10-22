@@ -54,6 +54,7 @@ export function filterView(view, keep, opts = {}) {
     hulls: opts.hulls === false ? [] : (view.hulls ?? []).map((h) => ({ ...h, members: (h.members ?? []).filter((m) => keep.has(m)) }))
       .filter((h) => h.members.length >= 2),
     super_links: [],
+    clusters: [],               // an isolated graph is small and laid out on its own: no nested superentities
     frontier: (view.frontier ?? []).filter((f) => subIds.has(f.earlier) && subIds.has(f.later)),
     fuzzy: (view.fuzzy ?? []).filter((f) => !f.subentity_id || subIds.has(f.subentity_id)),
   };
