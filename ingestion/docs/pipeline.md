@@ -242,6 +242,8 @@ The same file read against the same model gives the same bundle, byte for byte. 
 
 ## Limits and next steps
 
+The work in order of priority, and what is built downstream of ingestion, is in [next_steps.md](next_steps.md).
+
 - **Scanned PDFs** are read by OCR where an engine is installed (a picture page with no text layer, 200 dpi, English by default:
   install the Chinese and Korean language data and set `AXELROD_OCR_LANG` for scans in those). Where it is not, they are marked `needs_ocr`.
 - **Chinese and Korean prose** is read for levels and table figures, not for moves; a name must be in the model (as an alias in
