@@ -45,6 +45,8 @@ Only seeded import scenarios (`imports: true`) take a focus.
   state values), or one link downstream of it: macro and policy, markets, sectors, competitors, suppliers, regulators.
   A value that a removed company's file added to a shared entity stays only if it is itself upstream or one link
   downstream of a focus value.
+- **Identity terms.** The terms of an identity or stock-flow reach its target like links do, so a value that only an
+  identity ties to a focus company is kept, and a path may step along a generated link (`<identity id>:<term>`).
 - **Links and objects** whose every value is kept; a link that is an identity's or a stock-flow's term goes with it.
 - **Groups** keep their kept members and links. A group that held companies and keeps none, or that keeps fewer than
   two members, is dropped. **Theses** keep their kept targets and groups; one whose shock is on a removed value, or
@@ -132,3 +134,7 @@ explanations, a financing bridge, input classes). The export binds it (`context/
 company's values, the baseline reconciliations, the bridges, the assumption records and the controlled model checks. The decision date
 and the as-of date come from the instruction and the model state, not from the run; the manifest's `generated_at` is the only moving
 field, and `file_versions` gives a sha256 for every file. The reading set adds `41_` to `44_` files for these objects.
+
+A repair file needs only `repair_version`, `entity` and `company_id`; a section that is empty is left out. Several companies in one export
+(the four automakers and battery makers) each bind their own repair data: every section lists all of them, `manifest.repairs` lists
+each company's repair, `manifest.repair` is the last one's, and `evidence.baseline_selections` lists each selected baseline.

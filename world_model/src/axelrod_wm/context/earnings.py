@@ -530,23 +530,27 @@ def attach_repair(ctx: dict, repair: dict, days_dir: str | Path | None = None) -
         "search_cost_hint": "low", "freshness_window_default": "120d",
         "result_states_allowed": ["Qualified signal found", "Quiet / medium-high confidence", "No qualifying signal / low confidence", "Unavailable"]})
 
-    # 10. write the objects
-    sup["earnings_observations"] = obs_out
-    sup["earnings_evidence_records"] = evid_out
-    sup["earnings_bridges"] = bridges
-    sup["observation_estimate_pairs"] = pairs
-    sup["baseline_reconciliations"] = recons
-    sup["financing_bridges"] = fin_objs
-    sup["input_classification"] = list(cls_objs.values())
-    sup["assumption_records"] = asm
-    sup["model_checks"] = checks
-    sup["fx_boundaries"] = fxb
-    sup["business_records"] = [{**r, "company_id": cid} for r in business]
-    sup["schema_gaps"] = [*sup["schema_gaps"], *SCHEMA_GAPS]
+    # 10. write the objects. Several companies bind to one pack (a combined focus): each adds to the lists, none replaces another's.
+    def put(key: str, items: list) -> None:
+        sup[key] = [*sup.get(key, []), *items]
+
+    put("earnings_observations", obs_out)
+    put("earnings_evidence_records", evid_out)
+    put("earnings_bridges", bridges)
+    put("observation_estimate_pairs", pairs)
+    put("baseline_reconciliations", recons)
+    put("financing_bridges", fin_objs)
+    put("input_classification", list(cls_objs.values()))
+    put("assumption_records", asm)
+    put("model_checks", checks)
+    put("fx_boundaries", fxb)
+    put("business_records", [{**r, "company_id": cid} for r in business])
+    sup["schema_gaps"] = [*sup["schema_gaps"], *(g for g in SCHEMA_GAPS if g not in sup["schema_gaps"])]
     ev["evidence_count_definition"] = EVIDENCE_COUNT_DEFINITION
     ev["observed_definition"] = OBSERVED_DEFINITION
     if base:
         ev["baseline_selection"] = {**base, "rule": "A calculation names its baseline; the reported observation is the baseline, never the estimate. A zero incremental change reproduces it."}
+        ev["baseline_selections"] = [*ev.get("baseline_selections", []), {"company_id": cid, **ev["baseline_selection"]}]
     ev["repair_version"] = repair["repair_version"]
     m["repair"] = {"repair_version": repair["repair_version"], "company_id": cid, "decision_date": repair.get("decision_date"), "instruction": repair.get("instruction"),
                    "as_of": as_of, "state_version": version, "selected_baseline": base["baseline_id"] if base else None,
@@ -559,6 +563,7 @@ def attach_repair(ctx: dict, repair: dict, days_dir: str | Path | None = None) -
               "fx_boundaries": len(fxb), "business_records": len(business), "timing_labelled_relationships": n_t,
               "values_zero_count_with_refs": sum(1 for v in values.values() if v["evidence_count"] == 0 and v.get("evidence_refs"))}
     m["repair"]["counts"] = counts
+    m["repairs"] = [*m.get("repairs", []), m["repair"]]
     return counts
 
 

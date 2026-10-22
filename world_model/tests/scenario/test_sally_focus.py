@@ -1,5 +1,5 @@
 """Sally's focused world (<client root>/scenarios/sally_focus, engine/focus.py, Oct 18): Toyota and Tokio Marine and the players
-they connect to, with none of her other nine covered companies. Both worlds load once; the focused one must hold each
+they connect to, with none of her other twelve covered companies. Both worlds load once; the focused one must hold each
 focus company's construction exactly as sally_demo does, keep no trace of the removed companies, and run its theses."""
 
 from __future__ import annotations
@@ -24,7 +24,7 @@ skip_without_client('sally_demo', 'sally_focus')
 
 FOCUS = ["toyota", "tokio_marine"]
 REMOVED = {"jpmorgan", "citigroup", "morgan_stanley", "unicredit", "china_construction_bank", "aib_group",
-           "softbank_corp", "msad", "komatsu"}
+           "softbank_corp", "msad", "komatsu", "hyundai", "byd", "catl"}
 TRACES = [("dollar_yen.usd_jpy", "toyota"), ("us_vehicle_tariffs.effective_rate", "toyota"),
           ("boj.policy_rate", "tokio_marine"), ("jgbs.yield_30y", "tokio_marine"),
           ("dollar_yen.usd_jpy", "tokio_marine")]

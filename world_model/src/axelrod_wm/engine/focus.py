@@ -126,6 +126,13 @@ class FocusResult:
         parents: dict[str, set[str]] = {}
         for i in live:
             parents.setdefault(i["target"], set()).update(v for v in _value_refs(i, "interactions") if v != i["target"])
+        # an identity's or stock-flow's terms reach its target too, whether or not a link is written for each term
+        arithmetic = [(x, x["target"] if key == "identities" else x["stock"]) for key in ("identities", "stock_flows")
+                      for x in data[key] if x["entity_id"] not in gone_co
+                      and not any(_entity(v) in gone_co for v in _value_refs(x, key))]
+        for x, target in arithmetic:
+            key = "identities" if "target" in x else "stock_flows"
+            parents.setdefault(target, set()).update(v for v in _value_refs(x, key) if v != target)
         focus_values = {s["id"] for e in data["entities"] if e["id"] in self.focus for s in e.get("subentities") or []}
         focus_values |= {v for i in live for v in _value_refs(i, "interactions") if _entity(v) in self.focus}
         upstream: set[str] = set()
@@ -137,6 +144,8 @@ class FocusResult:
                     todo.append(p)
         downstream = {i["target"] for i in live if i["target"] not in focus_values
                       and any(v in focus_values for v in _value_refs(i, "interactions"))}
+        downstream |= {t for x, t in arithmetic if t not in focus_values
+                       and any(v in focus_values for v in parents[t])}
         relevant = upstream | downstream
         ents = {e["id"]: e for e in data["entities"]}
         keep_ents = set(self.focus) | {_entity(v) for v in relevant if _entity(v) in ents}
@@ -175,8 +184,11 @@ class FocusResult:
         comp_ids = {x["id"] for x in out["compositions"]}
         out["matrices"] = [x for x in data["matrices"] if x["entity_id"] in keep_ents and x["rows"] in comp_ids
                            and x["columns"] in comp_ids and all(keeps(v) for v in _value_refs(x, "matrices"))]
+        # a path may step along a link generated from a kept identity or stock-flow (`<identity id>:<term>`)
+        generated = {f"{x['id']}:{v}" for key in ("identities", "stock_flows") for x in out[key]
+                     for v in _value_refs(x, key) if v != x.get("target", x.get("stock"))}
         out["paths"] = [x for x in data["paths"] if x["entity_id"] in keep_ents and keeps(x["endpoint"])
-                        and all(st["interaction_id"] in ids for st in x.get("steps") or [])]
+                        and all(st["interaction_id"] in ids | generated for st in x.get("steps") or [])]
         out["decision_variables"] = [v for v in data["decision_variables"] if keeps(v)]
         out["entity_link_labels"] = {k: v for k, v in (data.get("entity_link_labels") or {}).items()
                                      if all(p in keep_ents for p in k.split("->"))}

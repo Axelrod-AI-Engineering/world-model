@@ -261,3 +261,28 @@ def test_a_focused_scenario_inherits_its_base_and_narrows_its_files(world):
     assert sc.scenario_focus(world.scenarios / "nowhere") is None
     listed = {x["id"]: x for x in sc.list_scenarios()}
     assert listed["focused"]["imports"] and listed["focused"]["canvas"] == "seeded"
+
+
+def test_an_identitys_terms_reach_its_target_and_a_path_may_step_along_them(world):
+    """A value that only an identity or a stock-flow ties to the company is a player of the focus (it is upstream of the
+    target), and a path stepping along the identity's generated link (`<identity id>:<term>`) is kept."""
+    ent = {**ENTITIES, "entities": [*ENTITIES["entities"], {"id": "w", "name": "Wheat", "kind": "market", "subentities": [_v("w.v")]},
+                                    {"id": "y", "name": "Yield", "kind": "market", "subentities": [_v("y.v"), _v("y.w")]},
+                                    {"id": "u", "name": "Unrelated", "kind": "market", "subentities": [_v("u.v")]}]}
+    a = {**A_FILE,
+         "identities": [*A_FILE["identities"], {"id": "a.id2", "entity_id": "a", "target": "a.sales", "form": "product",
+                                                "factors": ["a.profit", "w.v"]}],
+         "stock_flows": [*A_FILE["stock_flows"], {"id": "a.sf2", "entity_id": "a", "stock": "y.v", "period_days": 91,
+                                                  "inflows": ["a.sales"], "outflows": ["u.v"]}],
+         "paths": [*A_FILE["paths"], {"id": "a.p2", "entity_id": "a", "endpoint": "a.sales",
+                                      "steps": [{"interaction_id": "a.id2:w.v"}]},
+                   {"id": "a.p3", "entity_id": "a", "endpoint": "a.sales", "steps": [{"interaction_id": "a.id2:z.nothing"}]}]}
+    _write(world.world / "entities.yaml", ent)
+    _write(world.world / "construction" / "a.yaml", a)
+    fo._CACHE.clear()
+    fr = focus_result(world.spec)
+    rep = fr.report()
+    assert "w" in rep["entities_kept"] and "u" in rep["entities_dropped"]      # w reaches a.sales through a.id2; u only leaves via a stock-flow
+    assert "y" in rep["entities_kept"]                                         # y.v is one link past a.sales' arithmetic: a stock fed by it
+    data = fr.construction()
+    assert [x["id"] for x in data["paths"]] == ["a.p1", "a.p2"]
