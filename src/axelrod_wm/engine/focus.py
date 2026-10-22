@@ -35,10 +35,10 @@ from typing import Any
 import yaml
 from pydantic import BaseModel, ConfigDict
 
-from axelrod_wm.clients import find_scenario, load_scenario_yaml
-from axelrod_wm.engine.initialize import REPO_ROOT, ConstructionError, read_construction, resolve_path
+from axelrod_wm.clients import EXAMPLES_DIR, find_scenario, load_scenario_yaml
+from axelrod_wm.engine.initialize import ConstructionError, read_construction, resolve_path
 
-SCENARIOS_DIR = REPO_ROOT / "data" / "scenarios"      # the repository's own; client scenarios: axelrod_wm/clients.py
+SCENARIOS_DIR = EXAMPLES_DIR / "scenarios"      # the repository's own; client scenarios: axelrod_wm/clients.py
 TEXT_FIELDS = ("name", "short", "description", "question", "note", "label", "caption")
 SECTIONS = ("interactions", "paths", "compositions", "identities", "stock_flows", "matrices")
 

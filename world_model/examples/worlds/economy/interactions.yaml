@@ -186,7 +186,7 @@ interactions:
   - {id: e77, source: exxonmobil.earnings, target: exxonmobil.share_price, label: drives,
      effect: {mu: 0.5}, kernel: {delay_days: 1, lag_days: 14, duration_days: null}, tags: [demo_addition], note: internal}
   # Airlines: fuel is a big cost; confident consumers fly; rivals trade share. United's fuel path and both
-  # airlines' passenger traffic come from the Airline kind's default links (data/taxonomy/objects.yaml).
+  # airlines' passenger traffic come from the Airline kind's default links (world_model/taxonomy/objects.yaml).
   - {id: e78, source: resources_energy.oil_price, target: delta.fuel_cost, label: raises,
      effect: {mu: 0.9}, kernel: {delay_days: 7, lag_days: 30, duration_days: null}, tags: [demo_addition], note: idea to actor}
   - {id: e79, source: delta.fuel_cost, target: delta.operating_margin, label: squeezes,

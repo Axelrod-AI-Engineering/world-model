@@ -26,7 +26,7 @@ only after a search. A forecast says what it could not calculate.
 
 ## Inputs
 
-- The world: `data/worlds/<world>/`, or `worlds/<world>/` in the client root for a client's (`WORLD_MODEL_CLIENT_DIR`, default `data/clients`: entities, interactions, taxonomy, `construction/`).
+- The world: `world_model/examples/worlds/<world>/`, or `worlds/<world>/` in the client root for a client's (`WORLD_MODEL_CLIENT_DIR`, default `data/clients`: entities, interactions, taxonomy, `construction/`).
 - The client's material for the company, local and gitignored: workbooks, research, filings, transcripts and
   presentations.
 - The reviewer's feedback, if any.

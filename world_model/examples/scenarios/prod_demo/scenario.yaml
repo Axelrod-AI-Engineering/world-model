@@ -7,6 +7,6 @@ base: oil_shock_demo
 examples: prod
 start: 2026-01-26
 initialization:
-  construction_dir: data/worlds/economy
-  taxonomy_dir: data/taxonomy
+  construction_dir: world_model/examples/worlds/economy
+  taxonomy_dir: world_model/taxonomy
 steps: []

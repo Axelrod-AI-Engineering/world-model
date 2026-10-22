@@ -1,7 +1,7 @@
 """Check a world's business construction, and write each company's readable view (context/construction.py).
 
     uv run python scripts/construction/check.py sally_demo --entities toyota tokio_marine --out <folder>
-        [--trace dollar_yen.usd_jpy:toyota ...] [--sources data/sally_data/construction]
+        [--trace dollar_yen.usd_jpy:toyota ...] [--sources data/work/sally/construction]
         [--reconcile [--baselines <bundle.json> ...] [--statistic mean|median] [--suggest-residual] [--tolerance 0.005]]
 
 Prints structural problems (model/construction.validate_construction) and exits 1 if there are any, and each total

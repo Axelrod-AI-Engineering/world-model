@@ -27,7 +27,7 @@ These record the videos in `docs/media/` from the small demo with Playwright, th
 | Step | File | What it does |
 |---|---|---|
 | Scenes | `trailer/graphics.html` | The non-app scenes: the opening wall of headlines, the meta agent, the stack, the logo |
-| Data | `trailer/data.py` | Where each scene starts in the voiceover, and each scene's content. Emily's headlines and the client figures the meta-agent scene quotes are read from `data/emily_data/` (`emily_import.json`, `trailer_scenes.json`), never committed |
+| Data | `trailer/data.py` | Where each scene starts in the voiceover, and each scene's content. Emily's headlines and the client figures the meta-agent scene quotes are read from `data/work/emily/` (`emily_import.json`, `trailer_scenes.json`), never committed |
 | Footage | `trailer/record.py OUT [SLOW] [shot …]` | One recording per shot, each opening with a magenta sync flash, timed to the voiceover at SLOW× (2 by default). App shots drive Emily's demo on port 8777, started fresh; `EMILY_CANVAS` points at a local copy of her Oil-to-Portfolio Canvas |
 | Music | `trailer/music.py OUT.wav` | An original bed that builds from Import to Scale and stops on the logo |
 | Edit | `trailer/edit.py TAKE VOICE MUSIC OUT.mp4` | Syncs each shot on its flash, restores real speed, joins at 1080p, ducks the music under the voice |

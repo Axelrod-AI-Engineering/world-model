@@ -284,7 +284,7 @@ The transmission grid's "strongest paths" view already ranks paths by linear gai
 
 ### R19. Economic structure
 
-Review findings F-M2, F-M3, and F-M5 are about the demo world's economics rather than its statistics. They are fixed in `data/worlds/economy/`, with each change tested on backtests.
+Review findings F-M2, F-M3, and F-M5 are about the demo world's economics rather than its statistics. They are fixed in `world_model/examples/worlds/economy/`, with each change tested on backtests.
 
 **Airlines.**
 - Separate the jet-fuel spot price (a market price, with a crack-spread driver) from realized fuel cost per gallon (quarterly, with hedge-ratio and refinery moderators that differ by firm).

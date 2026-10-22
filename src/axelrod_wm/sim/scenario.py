@@ -9,13 +9,12 @@ from typing import Any, Literal
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from axelrod_wm.clients import find_scenario, load_scenario_yaml, scenario_dirs
+from axelrod_wm.clients import EXAMPLES_DIR, find_scenario, load_scenario_yaml, scenario_dirs
 from axelrod_wm.engine.focus import FocusSpec, focus_result
-from axelrod_wm.engine.initialize import REPO_ROOT
 from axelrod_wm.events.thesis import Thesis
 from axelrod_wm.model.hypothesis import Hypothesis
 
-SCENARIOS_DIR = REPO_ROOT / "data" / "scenarios"      # the repository's own; client scenarios: axelrod_wm/clients.py
+SCENARIOS_DIR = EXAMPLES_DIR / "scenarios"      # the repository's own; client scenarios: axelrod_wm/clients.py
 
 
 class _M(BaseModel):

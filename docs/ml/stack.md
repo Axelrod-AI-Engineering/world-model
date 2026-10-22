@@ -609,7 +609,7 @@ Each finding has a roadmap item.
 | The typed graph: entities, subentities, interactions with existence, effect sizes, and kernels | `model/`, committed versions | Our ids, concepts, units, and which values can move which |
 | Superentity patterns, with roles and rivals | long-term memory (`object_generalizations`) | Recurring configurations, by name |
 | The review ledger: each proposal, the reviewer's decision, per-operation keep and confidence, and edits (`edited_from`) | `repo/ledger.py`, `repo/review.py` | What a person accepts, and how they correct a machine reading |
-| Bundle signals with quotes (`axelrod.import/v1`) and hand-drawn translations with phrase spans | `intake/bundle.py`, `data/scenarios/*/translations/` | Text aligned to operations, span by span |
+| Bundle signals with quotes (`axelrod.import/v1`) and hand-drawn translations with phrase spans | `intake/bundle.py`, `world_model/examples/scenarios/*/translations/` | Text aligned to operations, span by span |
 | Forecasts with their outcomes and evaluations | `FORECAST`, `OUTCOME`, `EVALUATION` ledger entries | Which structure predicted well |
 | Daily state: every value's level and spread, every day | working memory, snapshots | State transitions, for P3 |
 

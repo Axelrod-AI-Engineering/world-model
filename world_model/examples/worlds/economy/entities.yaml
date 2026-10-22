@@ -368,7 +368,7 @@ entities:
          family: gaussian, prior: {family: gaussian, mu: 0.0, sigma: 1.0}, scale: 1.0}
   # -- Real actors (the user asked for concrete, tangible instances). Each firm lists only what is its own;
   # the subentities its kinds give every firm like it (revenue, margin, share price; an airline's fuel cost)
-  # come from data/taxonomy/objects.yaml, at `levels` where given. Every number in the demo is
+  # come from world_model/taxonomy/objects.yaml, at `levels` where given. Every number in the demo is
   # synthetic; the actors, their roles, and the links between them are real. DECISION: NVIDIA takes the
   # place of the plan's fictional Northwind Semiconductors (same role, same links e46-e48).
   - id: nvidia

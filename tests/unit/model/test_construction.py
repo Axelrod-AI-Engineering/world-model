@@ -20,7 +20,7 @@ from axelrod_wm.model.taxonomy import TaxonomyKind
 def test_counts(m1_engine):
     g = m1_engine.wm.graph
     assert len(g.entities) == 53          # Figure 1's 33 (NVIDIA in Northwind's place) plus 20 real actors
-    assert len(g.subentities) == 159     # 115 written out, 44 from the firms' kinds (data/taxonomy/objects.yaml)
+    assert len(g.subentities) == 159     # 115 written out, 44 from the firms' kinds (world_model/taxonomy/objects.yaml)
     written = sorted(i for i in g.interactions if not i.startswith("d-"))
     assert written == sorted(f"e{i:02d}" for i in range(1, 103) if i not in (80, 81))   # e80, e81: the Airline kind's
     assert len(g.interactions) == 100 + 65
@@ -106,8 +106,8 @@ def test_bidirectional_and_parameter(m1_engine):
 
 
 def _spec_dict():
-    ent = yaml.safe_load(open("data/worlds/economy/entities.yaml"))
-    inter = yaml.safe_load(open("data/worlds/economy/interactions.yaml"))
+    ent = yaml.safe_load(open("world_model/examples/worlds/economy/entities.yaml"))
+    inter = yaml.safe_load(open("world_model/examples/worlds/economy/interactions.yaml"))
     return {"decision_variables": ent["decision_variables"], "entities": ent["entities"],
             "interactions": inter["interactions"], "entity_link_labels": inter["entity_link_labels"]}
 

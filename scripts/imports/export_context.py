@@ -14,9 +14,9 @@ With --construction-sources (a folder of <company>/sources.json and citations.js
 manifest's load order after the evidence pack; and the domain pack's `citation_gaps` lists source ids that do not
 resolve and material claims without a citation. The script prints the counts. Passages are the client's text.
 
-    uv run python scripts/imports/export_context.py sally_demo data/sally_data/exports/<name> \\
-        --days data/sally_data/days --theses --client-core data/sally_data/unpacked/world_model_v4/<folder> \\
-        --construction-sources data/sally_data/construction
+    uv run python scripts/imports/export_context.py sally_demo data/exports/sally/<name> \\
+        --days data/work/sally/days --theses --client-core data/sources/sally/unpacked/world_model_v4/<folder> \\
+        --construction-sources data/work/sally/construction
 
 A focused scenario (engine/focus.py, docs/construction/focus.md) imports only the bundle items about its companies and
 the players they connect to (the script prints what each bundle kept and dropped), and the source catalogue keeps only

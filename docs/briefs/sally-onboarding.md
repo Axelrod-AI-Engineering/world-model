@@ -348,7 +348,7 @@ them into an immutable snapshot whose id is a content hash. To bind the canvas t
 ## 8. What never leaves this repo
 
 - The client's research, workbooks, exports, and the reviewer's feedback stay local and gitignored. That covers
-  `data/sally_data/`, `data/emily_data/`, the export folders, and the meeting and feedback PDFs. Tracked files hold
+  `data/` (client content, sources, working data, exports), and the meeting and feedback PDFs. Tracked files hold
   structure, generic business mechanisms, and synthetic, round priors, but never the client's figures, quotes or file
   names.
 - Expert calls never record individuals' names.

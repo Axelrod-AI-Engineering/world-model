@@ -8,7 +8,7 @@ import yaml
 from axelrod_wm.api.views import build_graph_view
 from axelrod_wm.engine.initialize import ConstructionError, ConstructionSpec
 
-SPEC = ConstructionSpec.load("data/worlds/economy", "data/taxonomy")
+SPEC = ConstructionSpec.load("world_model/examples/worlds/economy", "world_model/taxonomy")
 
 
 def _subs(eid: str) -> dict[str, str]:
@@ -52,7 +52,7 @@ def test_default_links_are_added_once():
 
 
 def test_entities_without_a_kind_are_unchanged():
-    raw = yaml.safe_load(open("data/worlds/economy/entities.yaml"))
+    raw = yaml.safe_load(open("world_model/examples/worlds/economy/entities.yaml"))
     written = {e["id"]: [s["id"] for s in e.get("subentities", [])] for e in raw["entities"]}
     for e in SPEC.entities:
         if str(e.kind) != "company":
@@ -60,14 +60,14 @@ def test_entities_without_a_kind_are_unchanged():
 
 
 def test_a_link_no_instance_can_have_is_an_error(tmp_path):
-    objects = yaml.safe_load(open("data/taxonomy/objects.yaml"))
+    objects = yaml.safe_load(open("world_model/taxonomy/objects.yaml"))
     for n in objects["nodes"]:
         if n["id"] == "gen:obj:airline":
             n["default_links"].append({"source": "no_such_value", "target": "revenue", "label": "x", "effect": 0.1,
                                        "kernel": {"delay_days": 1, "lag_days": 1, "duration_days": None}})
     (tmp_path / "objects.yaml").write_text(yaml.safe_dump(objects))
     with pytest.raises(ConstructionError, match="applies to no instance"):
-        ConstructionSpec.load("data/worlds/economy", tmp_path)
+        ConstructionSpec.load("world_model/examples/worlds/economy", tmp_path)
 
 
 def test_the_model_files_default_links_and_the_view_names_the_kind(m1_engine):

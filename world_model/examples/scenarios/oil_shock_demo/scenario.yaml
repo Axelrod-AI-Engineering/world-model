@@ -6,16 +6,16 @@ title: Oil shock, export controls, and a new central bank
 start: 2026-01-26
 seed: 11
 initialization:
-  construction_dir: data/worlds/economy
-  taxonomy_dir: data/taxonomy
-  seeds: data/scenarios/oil_shock_demo/superentity_seeds.yaml
-  layout: data/scenarios/oil_shock_demo/figure1_layout.yaml
+  construction_dir: world_model/examples/worlds/economy
+  taxonomy_dir: world_model/taxonomy
+  seeds: world_model/examples/scenarios/oil_shock_demo/superentity_seeds.yaml
+  layout: world_model/examples/scenarios/oil_shock_demo/figure1_layout.yaml
   history:
     from: 2023-01-02
     to: 2026-01-25
-    regimes: data/scenarios/oil_shock_demo/history_regimes.yaml
+    regimes: world_model/examples/scenarios/oil_shock_demo/history_regimes.yaml
 world:
-  truth: data/scenarios/oil_shock_demo/truth.yaml
+  truth: world_model/examples/scenarios/oil_shock_demo/truth.yaml
 config_overrides: configs/demo.yaml
 checklist: true
 steps:

@@ -10,10 +10,10 @@ COPY src ./src
 # The semantic extra (fastembed: bge-small on ONNX, CPU) serves semantic search; its model is cached on the volume.
 RUN uv sync --frozen --no-dev --no-editable --extra semantic
 COPY configs ./configs
-COPY data ./data
+COPY world_model ./world_model
 COPY web ./web
 COPY scripts/start-railway.sh ./scripts/start-railway.sh
-# Keep source available: the app resolves bundled data/web relative to src.
+# Keep source available: the app resolves bundled world_model and web files relative to src.
 ENV PYTHONPATH=/app/src
 ENV WORLD_MODEL_LAKE_DIR=/app/var/lake WORLD_MODEL_EMBED_CACHE=/app/var/models
 CMD ["sh", "scripts/start-railway.sh"]

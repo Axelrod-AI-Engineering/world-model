@@ -30,7 +30,7 @@ def ran(tmp_path_factory):
 
     root = tmp_path_factory.mktemp("ck")
     (root / "regimes.yaml").write_text("regimes: []\n")
-    raw = yaml.safe_load(open("data/scenarios/oil_shock_demo/scenario.yaml"))
+    raw = yaml.safe_load(open("world_model/examples/scenarios/oil_shock_demo/scenario.yaml"))
     raw["initialization"]["history"]["from"] = "2026-01-19"
     raw["initialization"]["history"]["regimes"] = str(root / "regimes.yaml")
     raw["steps"] = [{"at": "2026-01-26T00:00:00Z"}, {"at": "2026-01-28T20:00:00Z", "update": {}},

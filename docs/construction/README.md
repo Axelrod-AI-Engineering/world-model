@@ -133,8 +133,8 @@ A claim is **material** when any of a transition's `existence`, `direction`, `ma
 `documented`, `guidance`, `broker`, or `model`. A material claim needs a citation that gives a location.
 
 ```
-uv run python scripts/construction/check.py sally_demo --entities toyota --sources data/sally_data/construction
-uv run python scripts/imports/export_context.py sally_demo <out> --construction-sources data/sally_data/construction
+uv run python scripts/construction/check.py sally_demo --entities toyota --sources data/work/sally/construction
+uv run python scripts/imports/export_context.py sally_demo <out> --construction-sources data/work/sally/construction
 ```
 
 - **The check** prints, per company, the source ids that resolve and the ones that do not (`UNRESOLVED`, with what
@@ -162,7 +162,7 @@ A transition's `unresolved` inputs each carry a status (`model/construction.Inpu
 needs the list of what was searched, so search first:
 
 ```
-uv run python scripts/construction/inputs.py sally_demo --entities toyota --corpus data/sally_data \
+uv run python scripts/construction/inputs.py sally_demo --entities toyota --corpus data/sources/sally \
     [--files <file> ... | --dirs spreadsheets unpacked/sell_side/<company>] \
     [--extra-terms "eligible import volume=CBU imports,imported units"] [--exclude construction bench] [--top 5]
 ```
@@ -206,7 +206,7 @@ and subtracts. An elimination is held negative with a positive link, or positive
 
 ```
 uv run python scripts/construction/check.py sally_demo --entities toyota --reconcile \
-    [--baselines data/sally_data/construction/toyota/baselines.json | --statistic median] [--suggest-residual] [--tolerance 0.005]
+    [--baselines data/work/sally/construction/toyota/baselines.json | --statistic median] [--suggest-residual] [--tolerance 0.005]
 ```
 
 The check prints the table and exits 1 on any flag. Without `--baselines` it uses the model's levels; with it, each

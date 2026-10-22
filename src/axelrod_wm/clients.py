@@ -2,12 +2,17 @@
 
 A client's scenarios, worlds, configs, and construction pages are kept in a client root, never committed. It mirrors the
 repository: `scenarios/<id>/scenario.yaml`, `worlds/<name>/`, `configs/<name>.yaml`, `docs/construction/<company>.md`.
-The root is `WORLD_MODEL_CLIENT_DIR` (default `<repo>/data/clients`; the hosted service mounts a volume there). The
+The root is `WORLD_MODEL_CLIENT_DIR` (default `<data>/clients`; the hosted service mounts a volume there). The
 variable may name several roots separated by `os.pathsep`, searched in order.
+
+Every path the repository resolves comes from here. The tracked, synthetic content lives under `world_model/`: the
+examples (`world_model/examples/{scenarios,worlds}`) and the shared taxonomy (`world_model/taxonomy`). Everything under
+`data/` is local and gitignored (`WORLD_MODEL_DATA_DIR` moves it): `clients/` (the client root), `sources/<client>/` (raw
+drops), `work/<client>/` (construction pages, days, bundles, golden, bench), `exports/<client>/`.
 
 One rule for the paths a scenario.yaml names: a relative path is resolved against the root that holds the scenario (a
 client root for a client scenario, the repository otherwise), then against the repository, so a client scenario can
-still use the shared `data/taxonomy`. `load_scenario_yaml` applies it once, when the file is read.
+still use the shared `world_model/taxonomy`. `load_scenario_yaml` applies it once, when the file is read.
 """
 
 from __future__ import annotations
@@ -19,18 +24,22 @@ from typing import Any
 import yaml
 
 CLIENT_DIR_ENV = "WORLD_MODEL_CLIENT_DIR"
+DATA_DIR_ENV = "WORLD_MODEL_DATA_DIR"
 REPO_ROOT = Path(__file__).resolve().parents[2]
+DATA_DIR = Path(os.environ.get(DATA_DIR_ENV) or REPO_ROOT / "data")      # local and gitignored
+EXAMPLES_DIR = REPO_ROOT / "world_model" / "examples"                    # tracked: scenarios/<id>/, worlds/<name>/
+TAXONOMY_DIR = REPO_ROOT / "world_model" / "taxonomy"                    # tracked: the shared taxonomy
 
 
 def client_roots() -> list[Path]:
     raw = os.environ.get(CLIENT_DIR_ENV, "")
     roots = [Path(r).expanduser() for r in raw.split(os.pathsep) if r.strip()]
-    return roots or [REPO_ROOT / "data" / "clients"]
+    return roots or [DATA_DIR / "clients"]
 
 
 def scenario_dirs() -> list[Path]:
     """Where scenarios are looked for, in order: the repository's, then each client root's."""
-    return [REPO_ROOT / "data" / "scenarios", *(r / "scenarios" for r in client_roots())]
+    return [EXAMPLES_DIR / "scenarios", *(r / "scenarios" for r in client_roots())]
 
 
 def find_scenario(scenario_id: str) -> Path | None:
@@ -42,8 +51,8 @@ def find_scenario(scenario_id: str) -> Path | None:
 
 
 def find_world(name: str) -> Path | None:
-    """The folder of a world by name: the repository's data/worlds, then each client root's worlds."""
-    for d in (REPO_ROOT / "data" / "worlds", *(r / "worlds" for r in client_roots())):
+    """The folder of a world by name: the repository's examples, then each client root's worlds."""
+    for d in (EXAMPLES_DIR / "worlds", *(r / "worlds" for r in client_roots())):
         if (d / name).is_dir():
             return d / name
     return None

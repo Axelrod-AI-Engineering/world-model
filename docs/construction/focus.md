@@ -65,7 +65,7 @@ uv run python -c "import json; from axelrod_wm.sim.scenario import ScenarioScrip
 
 ```
 uv run python scripts/construction/check.py sally_focus --entities toyota tokio_marine --reconcile --statistic median \
-    --sources data/sally_data/construction --trace dollar_yen.usd_jpy:toyota boj.policy_rate:tokio_marine
+    --sources data/work/sally/construction --trace dollar_yen.usd_jpy:toyota boj.policy_rate:tokio_marine
 uv run pytest tests/scenario/test_sally_focus.py
 uv run pytest tests/scenario/test_construction_toyota.py tests/scenario/test_construction_tokio_marine.py
 ```
@@ -77,12 +77,12 @@ links match sally_demo's, that traces run as they do there, and that the remaini
 ## Export it
 
 ```
-D=data/sally_data
-uv run python scripts/imports/export_context.py sally_focus $D/exports/world_model_v4_1_4_axelrod_037_focus_toyota_tokio_marine_<date> \
+D=data/work/sally; X=data/exports/sally; S=data/sources/sally
+uv run python scripts/imports/export_context.py sally_focus $X/world_model_v4_1_4_axelrod_037_focus_toyota_tokio_marine_<date> \
     --days $D/days --theses \
-    --client-core $D/unpacked/world_model_v4/world_model_v4_1_4_numbered_modular_domain_packs_plus_035 \
+    --client-core $S/unpacked/world_model_v4/world_model_v4_1_4_numbered_modular_domain_packs_plus_035 \
     --construction-sources $D/construction
-(cd $D/exports && zip -qr world_model_v4_1_4_axelrod_037_focus_toyota_tokio_marine_<date>.zip \
+(cd $X && zip -qr world_model_v4_1_4_axelrod_037_focus_toyota_tokio_marine_<date>.zip \
     world_model_v4_1_4_axelrod_037_focus_toyota_tokio_marine_<date>)
 ```
 
@@ -90,7 +90,7 @@ The script prints, per day bundle, the items kept and those dropped as about a r
 are skipped. The source catalogue keeps only the exported companies' folders, so a removed company's documents never
 appear (a broker that is also a covered company can still appear as the author of a focus company's research). The
 export is the same file whichever process writes it, apart from the manifest's `generated_at`. Exports are client
-data: they stay in `data/sally_data` and are never committed.
+data: they stay in `data/work/sally` and are never committed.
 
 ### The reading set (`reading/`)
 
@@ -119,7 +119,7 @@ process-independence of the files.
 ## Regenerate after a new pack
 
 1. Merge the company's construction round (its `<client root>/worlds/sally_demo/construction/<company>.yaml`) and put its local
-   sources, citations, and baselines under `data/sally_data/construction/<company>/`.
+   sources, citations, and baselines under `data/work/sally/construction/<company>/`.
 2. Run the checks above. A new link into another company's values goes automatically; a new group or thesis whose text
    names a removed company needs an override in `<client root>/scenarios/sally_focus/scenario.yaml`, and the report's
    `groups_dropped`, `theses_dropped`, and `mentions` say which.

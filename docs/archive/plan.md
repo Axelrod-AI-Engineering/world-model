@@ -302,10 +302,10 @@ Every element of the main diagram appears here.
 | Working memory · The causal graph | `WorkingMemory`, which holds a `CausalGraph` and the daily state of every subentity | §6.11, §6.12 |
 | "Category tags are assigned at construction" | `Entity.category_tags`, set by construction, or by the reviewer for an event-parsed entity | §6.6 |
 | "superentities are inferred" | `SuperentityInstance` objects in WM, bound from `SuperentityPattern` objects in LTM | §8.8 |
-| The 29 entity pills with category codes | `data/worlds/economy/entities.yaml` | §14.2 |
+| The 29 entity pills with category codes | `world_model/examples/worlds/economy/entities.yaml` | §14.2 |
 | Dashed pills (Market concentration, Geography): entity in no superentity | Entities with no instance membership; the view sets `nodes[].loose = true` | §12.2 |
 | Seven tinted hulls, S1–S7 | Patterns and instances in `superentity_seeds.yaml` | §14.4 |
-| The 20 labeled causal arrows | `data/worlds/economy/interactions.yaml`; each arrow is realized by at least one subentity-level edge | §14.3 |
+| The 20 labeled causal arrows | `world_model/examples/worlds/economy/interactions.yaml`; each arrow is realized by at least one subentity-level edge | §14.3 |
 | Dashed "frontier" line between Inflation and Confidence | A `CoMovement` on the `CorrelationFrontier`, which the demo promotes | §8.7, §14.6 |
 | Arrow "daily consolidation" | `Consolidator.run(day)`, once for every day an update run covers | §8.12 |
 | Arrow "recall analogs" | `Recaller`, reading `ltm.prior_states` | §8.4.3 |
@@ -1644,7 +1644,7 @@ Translators to ship. `config.translators` gives, for each market event kind, a l
 |---|---|
 | `hand_drawn` (first for news, filings, analyst notes) | Loads `translations/<market_event_id>.json`, which holds a `TranslationResult`. If the file is missing, it returns no events and emits `translate.missing`. This is the mock-up for the first interaction. |
 | `data_feed` (default for data) | Maps each key in `MarketEvent.data` to a concrete `observe_value` op, except for decision variables: a released decision that differs from the current posterior mean becomes a `change_value` (mode absolute, the difference), so a policy move is a shock with an analysis and a non-routine episode, while a hold stays an `observe_value`. A key is either a subentity id (the synthetic world uses these) or a series id listed in `series_map.yaml` (series id → subentity id). Keys for subentities that do not exist yet are skipped, with one `translate.missing` trace event per key. The event gets the market event's `event_type` (history regimes set one) or else `"data_release"`, plus the market event's tags and mentions, `produced_by="data_feed"`, and confidence 1.0. |
-| `template` | Regex rules from `data/worlds/economy/templates.yaml`, each with an op template and slots. It handles typed theses in the UI ("what if oil doubles") and user-typed events with no fixture ("oil up 10%", "Fed cuts 25 bp"). |
+| `template` | Regex rules from `world_model/examples/worlds/economy/templates.yaml`, each with an op template and slots. It handles typed theses in the UI ("what if oil doubles") and user-typed events with no fixture ("oil up 10%", "Fed cuts 25 bp"). |
 | `llm` (stub) | Builds a prompt with the market event, the JSON schema of `TranslationResult` (from pydantic), the attribute vocabulary, the top two levels of both taxonomies, the admitted patterns with their relations, and entity names and aliases. It tells the model to use abstract targets when unsure. It calls a provider-agnostic `LLMClient` protocol (`complete(prompt: str, schema: dict) -> str`). It is not a default, and it raises a clear error if selected without a configured client. |
 
 The translator receives taxonomies and patterns on purpose. Abstractions over groups of interactions scaffold proposals: a translator that cannot name the exact edge should set `interaction_generalization_id` (the broad connection, such as "Technology diffusion") or `pattern_relation` on the `add_interaction` op, and let the refiner make it concrete.
@@ -3609,22 +3609,22 @@ All demo market events carry `synthetic: true`. They use real institution names 
 ### 11.2 Scenario scripts
 
 ```yaml
-# data/scenarios/oil_shock_demo/scenario.yaml (shape; full content in §14.6)
+# world_model/examples/scenarios/oil_shock_demo/scenario.yaml (shape; full content in §14.6)
 id: oil_shock_demo
 title: Oil shock, export controls, and a new central bank
 start: 2026-01-26
 seed: 11
 initialization:
-  construction_dir: data/worlds/economy
-  taxonomy_dir: data/taxonomy
-  seeds: data/scenarios/oil_shock_demo/superentity_seeds.yaml
-  layout: data/scenarios/oil_shock_demo/figure1_layout.yaml
+  construction_dir: world_model/examples/worlds/economy
+  taxonomy_dir: world_model/taxonomy
+  seeds: world_model/examples/scenarios/oil_shock_demo/superentity_seeds.yaml
+  layout: world_model/examples/scenarios/oil_shock_demo/figure1_layout.yaml
   history:
     from: 2023-01-02
     to: 2026-01-25
-    regimes: data/scenarios/oil_shock_demo/history_regimes.yaml
+    regimes: world_model/examples/scenarios/oil_shock_demo/history_regimes.yaml
 world:
-  truth: data/scenarios/oil_shock_demo/truth.yaml
+  truth: world_model/examples/scenarios/oil_shock_demo/truth.yaml
 config_overrides: configs/demo.yaml
 steps:
   - at: 2026-01-28T20:00:00Z
@@ -4025,7 +4025,7 @@ Everything here becomes YAML or JSON under `data/`. The graph is Figure 1's, plu
 ### 14.1 Construction spec format
 
 ```yaml
-# data/worlds/economy/entities.yaml (excerpt)
+# world_model/examples/worlds/economy/entities.yaml (excerpt)
 decision_variables: [federal_reserve.policy_stance, ecb.policy_stance]
 entities:
   - id: interest_rates
@@ -4044,7 +4044,7 @@ entities:
 ```
 
 ```yaml
-# data/worlds/economy/interactions.yaml (excerpt)
+# world_model/examples/worlds/economy/interactions.yaml (excerpt)
 interactions:
   - id: e13
     source: interest_rates.real_rate
@@ -4063,7 +4063,7 @@ interactions:
       - {source_type: human, excerpt: "Designer prior (Figure 2 example)", strength: 0.5}
 ```
 
-`ConstructionSpec` (`engine/initialize.py`) is the pydantic model for these two files plus the attribute vocabulary in `data/taxonomy/attributes.yaml` (§14.5).
+`ConstructionSpec` (`engine/initialize.py`) is the pydantic model for these two files plus the attribute vocabulary in `world_model/taxonomy/attributes.yaml` (§14.5).
 
 Conventions:
 
@@ -4177,7 +4177,7 @@ There is no edge between Inflation and Confidence. That pair is Figure 1's front
 Figure 1's arrow labels are entity-level labels, so they live in `interactions.yaml` as a map that `CausalGraph.entity_links()` uses at the Entities zoom level. Without an entry, an entity link takes the label of its most significant edge.
 
 ```yaml
-# data/worlds/economy/interactions.yaml (continued)
+# world_model/examples/worlds/economy/interactions.yaml (continued)
 entity_link_labels:
   interest_rates->credit_availability: limits                 # A1
   credit_availability->debt_cycle: feeds                      # A2
@@ -4208,7 +4208,7 @@ Seed patterns are given by their concrete members and interactions. The loader d
 Initialization follows the restrictions in §8.13, so the demo starts from Figure 1's picture and every structural change after that happens on screen. `frontier_seeds` load after the history replay, with `seeded: true`.
 
 ```yaml
-# data/scenarios/oil_shock_demo/superentity_seeds.yaml
+# world_model/examples/scenarios/oil_shock_demo/superentity_seeds.yaml
 patterns:
   - id: S1
     name: Credit tightening
@@ -4315,7 +4315,7 @@ The first four rows are Figure 4.
 The attribute vocabulary, designer-provided and not learned:
 
 ```yaml
-# data/taxonomy/attributes.yaml
+# world_model/taxonomy/attributes.yaml
 rate: {parent: null, family: gaussian}
 interest_rate: {parent: rate, family: gaussian}
 policy_rate: {parent: interest_rate, family: gaussian}
@@ -4353,7 +4353,7 @@ Signature semantics, scoring, tie-breaking, and derived signatures for nodes lis
 The object taxonomy is organized by what an object is and does. It is not the category tags; for example, Inflation is tagged MF but generalizes as a price level.
 
 ```yaml
-# data/taxonomy/objects.yaml
+# world_model/taxonomy/objects.yaml
 root: gen:obj:root
 nodes:
   - {id: gen:obj:root, name: Economic object, parent: null}
@@ -4387,7 +4387,7 @@ nodes:
 Every non-leaf node has two or more children, and leaf nodes hold instances. `currency_board` and `fiscal_authority` have no instances in the demo, matching the "children not shown" stubs in Figure 5.
 
 ```yaml
-# data/taxonomy/interactions.yaml
+# world_model/taxonomy/interactions.yaml
 root: gen:int:root
 nodes:
   - {id: gen:int:root, name: Causal relation, parent: null}
@@ -4466,7 +4466,7 @@ On a date with a scripted event for a decision variable (ME-01 on 2026-01-28), t
 The user's drawn event:
 
 ```yaml
-# data/scenarios/oil_shock_demo/user_events.yaml
+# world_model/examples/scenarios/oil_shock_demo/user_events.yaml
 graph_update_events:
   - id: UG-01
     kind: real
@@ -4587,7 +4587,7 @@ Write the other fixtures (ME-02 and ME-05 to ME-09) from the table in §14.6, in
 The loader fills `id`, `recorded_at`, and `produced_by` for the embedded events.
 
 ```yaml
-# data/scenarios/oil_shock_demo/theses.yaml
+# world_model/examples/scenarios/oil_shock_demo/theses.yaml
 theses:
   - id: T-00
     question: Where is the economy heading if nothing else happens?
@@ -4624,7 +4624,7 @@ hypotheses:
 ```
 
 ```yaml
-# data/scenarios/oil_shock_demo/decisions.yaml
+# world_model/examples/scenarios/oil_shock_demo/decisions.yaml
 decisions:
   - id: D-01
     agent_id: demo-agent
@@ -4639,7 +4639,7 @@ decisions:
 ### 14.9 The synthetic world's truth and history
 
 ```yaml
-# data/scenarios/oil_shock_demo/truth.yaml
+# world_model/examples/scenarios/oil_shock_demo/truth.yaml
 effect_multiplier_sd: 0.2
 ar_coefficient: 0.5                 # per day
 noise_sd: {}                        # empty: each series uses the model's default obs_noise for its kind (§6.3)
@@ -4702,7 +4702,7 @@ update:
 The calibration here (truth effects, noise, and these thresholds) is a first guess. If a checklist item fails because the signal is too weak or too strong, tune `truth.yaml` and `configs/demo.yaml` as §15.3 says, not the engine defaults.
 
 ```yaml
-# data/scenarios/oil_shock_demo/history_regimes.yaml
+# world_model/examples/scenarios/oil_shock_demo/history_regimes.yaml
 regimes:
   - {at: 2023-03-13, event_type: financial_stress, tags: [bank-run-like, 2023-like],
      headline: "Synthetic: mid-size bank fails after a deposit run",
@@ -4739,7 +4739,7 @@ History events are emitted as `data` market events: observations of the shocked 
 `figure1_layout.yaml` gives the canvas the architecture page's positions (§13.3). Coordinates are pill centers in Figure 1's working-memory frame (the SVG group translated by 182 px), with pills 164 × 30 px. Hull shapes are the figure's own rectangles and paths. Demo additions sit in a column at x = 1290.
 
 ```yaml
-# data/scenarios/oil_shock_demo/figure1_layout.yaml
+# world_model/examples/scenarios/oil_shock_demo/figure1_layout.yaml
 pill: {width: 164, height: 30}
 entities:
   interest_rates: [168, 251]

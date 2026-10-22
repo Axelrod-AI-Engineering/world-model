@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any, Callable, Protocol
 import yaml
 from pydantic import BaseModel, ConfigDict
 
+from axelrod_wm.clients import EXAMPLES_DIR
 from axelrod_wm.engine.registry import register, registry
 from axelrod_wm.events.graph_update import GraphUpdateEvent
 from axelrod_wm.events.market import MarketEvent
@@ -25,8 +26,6 @@ if TYPE_CHECKING:
     from axelrod_wm.model.entity import Subentity
     from axelrod_wm.model.superentity import SuperentityPattern
     from axelrod_wm.model.taxonomy import AttributeVocabulary
-
-REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 class TranslationContext:
@@ -154,7 +153,7 @@ class DataFeedTranslator(MarketEventTranslator):
         if isinstance(series_map, dict):
             self.series_map = dict(series_map)
         else:
-            p = Path(series_map) if series_map is not None else REPO_ROOT / "data" / "worlds" / "economy" / "series_map.yaml"
+            p = Path(series_map) if series_map is not None else EXAMPLES_DIR / "worlds" / "economy" / "series_map.yaml"
             self.series_map = (yaml.safe_load(p.read_text()) or {}).get("series", {}) if p.exists() else {}
 
     def translate(self, event: MarketEvent, ctx: TranslationContext) -> TranslationResult:
@@ -196,12 +195,12 @@ class TemplateRules(BaseModel):
 
 @register("translator", "template")
 class TemplateTranslator(MarketEventTranslator):
-    """Regex rules from the world's templates.yaml (data/worlds/<world>/). Handles typed theses ("what if oil
+    """Regex rules from the world's templates.yaml (world_model/examples/worlds/<world>/). Handles typed theses ("what if oil
     doubles") and is a fallback when no fixture exists."""
 
     def __init__(self, config: Any = None, templates: str | Path | None = None) -> None:
         self.config = config
-        p = Path(templates) if templates is not None else REPO_ROOT / "data" / "worlds" / "economy" / "templates.yaml"
+        p = Path(templates) if templates is not None else EXAMPLES_DIR / "worlds" / "economy" / "templates.yaml"
         self.rules = TemplateRules.model_validate(yaml.safe_load(p.read_text()) or {}) if p.exists() else TemplateRules()
 
     def parse(self, text: str, now: datetime) -> tuple[list[dict], list[tuple[int, int, int]]]:

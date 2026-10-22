@@ -10,8 +10,8 @@
   vetted by the setup, days are processed until the proposal appears, and other proposals raised on the way are
   set aside (deferred).
 
-Two runners use it: SmallDemoRunner (a blank canvas, data/scenarios/small_demo) and ProdDemoRunner (the oil-shock
-world after its history replay, data/scenarios/prod_demo). Every change still waits for a person (review_all).
+Two runners use it: SmallDemoRunner (a blank canvas, world_model/examples/scenarios/small_demo) and ProdDemoRunner (the oil-shock
+world after its history replay, world_model/examples/scenarios/prod_demo). Every change still waits for a person (review_all).
 """
 
 from __future__ import annotations
@@ -601,10 +601,10 @@ class ProdDemoRunner(ExampleSession, ScenarioRunner):
 
     def load_own_seeds(self) -> None:
         """The production demo's own superentities (Oct 11): superentities of superentities, three levels deep, added
-        on top of the oil world's seeds so the oil demo itself is unchanged (data/scenarios/prod_demo)."""
+        on top of the oil world's seeds so the oil demo itself is unchanged (world_model/examples/scenarios/prod_demo)."""
         from axelrod_wm.engine.initialize import Initializer, SeedFile, resolve_path
 
-        path = resolve_path("data/scenarios/prod_demo/superentity_seeds.yaml")
+        path = resolve_path("world_model/examples/scenarios/prod_demo/superentity_seeds.yaml")
         if path.exists():
             eng = self.controller.engine
             Initializer(eng).load_seeds(SeedFile.load(path), now=eng.wm.clock)

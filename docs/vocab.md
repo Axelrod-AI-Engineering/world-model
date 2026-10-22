@@ -335,4 +335,4 @@ The client's own schema; its field names are not ours to rename.
 | **Coverage gate** | `scripts/coverage_gate.py`: checks strict modules and the floor, and writes the README's test widget. |
 | **Slow / browser tests** | Scenario runs and Playwright checks, selected with `--runslow`. |
 | **Conventions sweep** | `tests/service/test_conventions.py`: every route documented, keyed, versioned, enveloped, strict, and in the schema. |
-| **Client data** | `data/sally_data/` and other client folders: gitignored, never committed or uploaded. |
+| **Client data** | `data/` (client content, sources, working data, exports): gitignored, never committed or uploaded. |

@@ -241,7 +241,7 @@ def test_change_sets_carry_simulated_timestamps(ctl):
 def test_mock_scraper_returns_scraper_items_and_drops_the_mirror():
     from datetime import date
 
-    src = MockWebScraper(scenario_dir="data/scenarios/oil_shock_demo")
+    src = MockWebScraper(scenario_dir="world_model/examples/scenarios/oil_shock_demo")
     evs = src.poll(datetime.combine(date(2026, 2, 8), time(0), tzinfo=UTC),
                    datetime.combine(date(2026, 2, 9), time(23, 59, 59), tzinfo=UTC))
     assert [e.id for e in evs] == ["ME-03"] and src.last_dropped == 1

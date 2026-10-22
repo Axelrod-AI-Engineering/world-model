@@ -9,7 +9,7 @@ The objects are checked in the internal graph, the v4.1.4 export, and the servic
 
 Second review round (Oct 18): every material claim resolves to a located citation, no input is left unreviewed, and
 every additive composition reconciles at the model's medians and at the local baselines. The citation and baseline
-checks read the client's local files (data/sally_data, gitignored) and skip where they are absent, as on CI."""
+checks read the client's local files (data/work/sally, gitignored) and skip where they are absent, as on CI."""
 
 from __future__ import annotations
 
@@ -37,13 +37,13 @@ from axelrod_wm.model.construction import (
     validate_construction,
 )
 from axelrod_wm.repo.snapshots import MemoryBackend
-from tests.clients import skip_without_client
+from tests.clients import SALLY_WORK, skip_without_client
 from tests.scenario import v1_reads as v1
 
 skip_without_client('sally_demo')
 
 ROOT = Path(__file__).resolve().parents[2]
-LOCAL = ROOT / "data" / "sally_data" / "construction"     # the client's data: local only, absent on CI
+LOCAL = SALLY_WORK / "construction"     # the client's data: local only, absent on CI
 OP, NI = "toyota.operating_profit", "toyota.net_income"
 COMPS = {"ty.comp.reporting_segments", "ty.comp.regional_operating_income", "ty.comp.regional_external_revenue",
          "ty.comp.revenue_by_customer_location", "ty.comp.units_by_customer_region", "ty.comp.units_by_production_region",
@@ -413,7 +413,7 @@ def test_translation_sign_follows_north_america_profit(g):
 def local(name: str) -> Path:
     p = LOCAL / "toyota" / name
     if not p.exists():
-        pytest.skip(f"the client's local {name} is absent (data/sally_data is gitignored; CI has none)")
+        pytest.skip(f"the client's local {name} is absent (data/ is gitignored; CI has none)")
     return p
 
 

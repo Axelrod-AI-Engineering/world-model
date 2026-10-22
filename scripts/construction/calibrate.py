@@ -52,7 +52,7 @@ from axelrod_wm.model.calibrate import (
 
 def world_dir(world: str) -> Path:
     p = resolve_path(world)
-    return p if p.is_dir() else find_world(world) or resolve_path(f"data/worlds/{world}")
+    return p if p.is_dir() else find_world(world) or resolve_path(f"world_model/examples/worlds/{world}")
 
 
 def thesis_shocks(world: Path, scenarios: Path | None = None) -> dict[str, list[str]]:
@@ -131,7 +131,7 @@ def scenario_main(a: argparse.Namespace, world: Path, spec: ConstructionSpec, vo
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("world", help="a world name (data/worlds/<name>) or folder")
+    ap.add_argument("world", help="a world name (world_model/examples/worlds/<name>) or folder")
     ap.add_argument("interaction_id", nargs="?")
     ap.add_argument("--source-change", type=float, help="the move in the source, native units")
     ap.add_argument("--target-change", type=float, help="the change in the target, native units")

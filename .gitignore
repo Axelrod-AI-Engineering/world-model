@@ -9,12 +9,10 @@ build/
 *.egg-info/
 node_modules/
 .DS_Store
-# Emily demo source material (broker research, expert calls, client models): never committed or uploaded
-data/emily_data/
-data/sally_data/
-# client content (scenarios, worlds, configs, construction pages): never committed; the client root, WORLD_MODEL_CLIENT_DIR
-# (src/axelrod_wm/clients.py). The hosted service loads it from a volume.
-/data/clients/
+# everything under data/ is local: client content (the client root, WORLD_MODEL_CLIENT_DIR, src/axelrod_wm/clients.py),
+# raw source drops, working data, exports. Our own synthetic content is tracked under world_model/. The hosted service
+# loads client content from a volume.
+/data/
 # videos and voiceovers: large, and the trailer carries client material; shared outside the repository
 docs/media/
 *.mp4
