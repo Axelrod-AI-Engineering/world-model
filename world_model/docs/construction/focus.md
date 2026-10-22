@@ -138,3 +138,16 @@ field, and `file_versions` gives a sha256 for every file. The reading set adds `
 A repair file needs only `repair_version`, `entity` and `company_id`; a section that is empty is left out. Several companies in one export
 (the four automakers and battery makers) each bind their own repair data: every section lists all of them, `manifest.repairs` lists
 each company's repair, `manifest.repair` is the last one's, and `evidence.baseline_selections` lists each selected baseline.
+
+**A second, later baseline.** `selected_baseline` (`baseline_id`, `period`, `available_at`) stays the primary baseline: the observation
+pairs, the model checks and `evidence.baseline_selection` read it alone. Repair data may add a `latest_period_baseline` of the same shape
+(or a list, `additional_baselines`) for a later period or another accounting basis. Each baseline reconciles on its own levels:
+
+- The selected baseline owns the observations flagged `selected_baseline`. Another baseline owns the observations that name it
+  (`baseline_id`) or, when one names none and is unflagged, those with the baseline's `available_at` and period end (a comparative
+  column or an earlier period never qualifies).
+- A composition reconciles against the first baseline, the selected one first, that has every level it reads, and otherwise against the
+  selected one, where it is `blocked` by the missing levels. Observations of two baselines never enter one reconciliation.
+- Each reconciliation reports its `baseline_id`, period and `baseline_available_at` (also on the composition's `reconciliation`).
+  `manifest.repair.additional_baselines` lists the ids of the other baselines; baseline ids must be unique and each needs `baseline_id`,
+  `period` and `available_at`.
