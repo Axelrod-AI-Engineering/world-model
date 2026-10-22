@@ -46,7 +46,7 @@ data and extras it needs, the coverage policy, and the design of the service's i
 
 | Where | Covers |
 |---|---|
-| `ingestion/tests/` | `contract/` the bundle and the world view; `ingest/` parsing, chunking, recognition, extraction, determinism, the benchmark; `lake/` the lakehouse and search; `test_boundary.py` that ingestion never imports the world model |
+| `ingestion/tests/` | `contract/` the bundle and the world view; `ingest/` parsing, chunking, recognition, extraction, determinism, the benchmark, and the pack work (OCR, charsets, Chinese and Korean text, dates, typing, duplicates, a whole pack into a lake twice); `lake/` the lakehouse and search; `test_boundary.py` that ingestion never imports the world model |
 | `world_model/tests/unit` and `integration` | The model, its memory, repository, intake, learning, inference, control, flows, the engine; the demo's API and `/ws` |
 | `world_model/tests/service`, `integration/service` | The outward API (`/v1`) and MCP: every route against the OpenAPI schema, every error code, tenancy, idempotency; the end-to-end flows |
 | `world_model/tests/scenario`, `ui` | Initialization, determinism, restore, the demos example by example; a Playwright smoke test (slow) |
