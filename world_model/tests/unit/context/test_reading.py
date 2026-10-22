@@ -239,3 +239,26 @@ def test_earnings_files_are_built_with_their_bridges_first(tmp_path, ctx):
     assert check["ok"]
     doc = json.loads(next((out / "reading").glob("41_earnings_quarterly_*_01.json")).read_text())
     assert list(doc["sections"])[0].endswith("earnings_bridges")
+
+
+def test_citation_gaps_larger_than_a_file_split_into_more_shards_and_the_coverage_stays_exact(tmp_path, ctx):
+    """An export whose sources lack another company's documents lists thousands of unresolved ids: the gaps are cut at their
+    keys and elements, as other sections are, never refused and never shortened."""
+    pack = json.loads(json.dumps(ctx["domain_pack"]))
+    gaps = {"unresolved_source_ids": [{"source_id": f"src.{k:05d}", "cited_by": [f"link_{k}_{j}" for j in range(12)]} for k in range(1500)],
+            "claims_without_citation": [], "unknown_citation_keys": ["a.b"], "catalogue_problems": ["one problem"]}
+    pack["domain_specific_support_objects"]["citation_gaps"] = gaps
+    assert reading.size_of(gaps) > 100 * 1024
+    out, m, check = export(tmp_path, {**ctx, "domain_pack": pack})
+    assert check["ok"] and check["missing"] == 0 and check["unexpected_or_duplicated"] == 0
+    shards = [json.loads(p.read_text()) for p in sorted((out / "reading").glob("60_support_*.json"))]
+    held = [o for d in shards for o in d["sections"].get(f"{reading.SUP}citation_gaps.unresolved_source_ids", [])]
+    assert len(shards) > 1 and held == gaps["unresolved_source_ids"]               # every element, in order
+    assert [o for d in shards for o in d["sections"].get(f"{reading.SUP}citation_gaps.unknown_citation_keys", [])] == ["a.b"]
+    assert all(f.stat().st_size <= 100 * 1024 for f in (out / "reading").glob("[1-9]*"))
+    # small gaps stay one object, as before
+    pack["domain_specific_support_objects"]["citation_gaps"] = {"unresolved_source_ids": [], "catalogue_problems": []}
+    out2, _m, check2 = export(tmp_path, {**ctx, "domain_pack": pack}, name="small")
+    assert check2["ok"]
+    text = "".join(p.read_text() for p in (out2 / "reading").glob("60_support_*.json"))
+    assert f'"{reading.SUP}citation_gaps"' in text
