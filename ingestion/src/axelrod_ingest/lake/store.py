@@ -97,7 +97,7 @@ class ImportRecord(_R):
 
 
 class WorldModelRecord(_R):
-    """One world model and the organization that owns it (Oct 18: the registry; docs/design/core-mcp-auth.md)."""
+    """One world model and the organization that owns it (Oct 18: the registry; world_model/docs/design/core-mcp-auth.md)."""
 
     id: str
     org_id: str

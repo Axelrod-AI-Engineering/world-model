@@ -1,4 +1,4 @@
-"""The unified world model, `/v1/erid` (Oct 19; api/v1/compartments.py, docs/design/api.md §4): the whole graph for
+"""The unified world model, `/v1/erid` (Oct 19; api/v1/compartments.py, world_model/docs/design/api.md §4): the whole graph for
 internal staff, and its compartments.
 
 Its own routes describe it and its compartments. Its reads mirror the per-world-model reads of the graph

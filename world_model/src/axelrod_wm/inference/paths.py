@@ -25,7 +25,7 @@ Which values are relevant is a choice, and there are five ways to make it (`METH
 
 DECISION: all four read the same simulated effects (common random numbers), so they differ only in what they show,
 never in the numbers. `strongest` uses analytic path gains to choose paths, as `shared/explain.top_paths` does; it is
-the cheap first step of the roadmap's path-specific effects (docs/ml/roadmap.md, R12)."""
+the cheap first step of the roadmap's path-specific effects (world_model/docs/ml/roadmap.md, R12)."""
 from __future__ import annotations
 
 from typing import Any

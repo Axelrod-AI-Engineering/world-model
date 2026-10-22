@@ -10,8 +10,15 @@ package = false
 [tool.uv.workspace]
 members = ["ingestion", "world_model"]
 
+# The members are in the dev group, so a plain `uv sync` installs both and `uv run axelrod` works from the root.
+[tool.uv.sources]
+axelrod-ingest = { workspace = true }
+axelrod-world-model = { workspace = true }
+
 [dependency-groups]
 dev = [
+    "axelrod-ingest",
+    "axelrod-world-model",
     "pytest>=8.0",
     "pytest-cov>=5.0",
     "ruff>=0.4",

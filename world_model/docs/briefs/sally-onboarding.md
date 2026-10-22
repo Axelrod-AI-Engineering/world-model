@@ -2,7 +2,7 @@
 
 Status as of 2026-10-17, with the API and auth facts brought up to v1 (Oct 18). Owner: Karthik (world model). For
 Zsolt (MCP), Kedar (LLM harness), and whoever owns core's `contracts/v1/world_model.py`. This is a dated brief: the
-living docs are the [API reference](../api/README.md), [guides/ingestion.md](../guides/ingestion.md),
+living docs are the [API reference](../api/README.md), [ingestion/docs/pipeline.md](../../../ingestion/docs/pipeline.md),
 [construction/](../construction/README.md), and [design/core-mcp-auth.md](../design/core-mcp-auth.md).
 
 <!-- toc -->
@@ -53,7 +53,7 @@ section 7 the decisions still open.
 - The world model is an MCP server of its own: `/mcp` on the service, built on the official `mcp` 2.x SDK the way
   core's is, with 27 `world_model_*` tools over the v1 API (Oct 18: [../api/](../api/README.md), contract
   [api/openapi.yaml](../api/openapi.yaml)). None decides a change.
-- A patch for core, [`integrations/core/0001-world-model-service-mcp-tools.patch`](../../integrations/core/README.md),
+- A patch for core, [`integrations/core/0001-world-model-service-mcp-tools.patch`](../../../integrations/core/README.md),
   made against core `main` after #67 and #72. It extends #67's seam, `register_mcp_world_model_tools`, with 20
   `world_model_*` tools on `/v1/world-models/{id}` (`search_canonical` is unchanged):
   - reads: world models, a world model, graph, entities, entity, attribute, concepts, search, construction (JSON or a
@@ -81,7 +81,7 @@ section 7 the decisions still open.
 - Results so far:
   - core's MCP tests pass (117, including 5 new), and the module is at 100% line and branch coverage;
   - the tools ran end to end against a live world model service.
-- `tests/service/test_core_integration.py` in our repo keeps the patch in step with our routes.
+- `world_model/tests/service/test_core_integration.py` in our repo keeps the patch in step with our routes.
 
 ### Kedar: the LLM harness
 
@@ -139,8 +139,8 @@ section 7 the decisions still open.
 **How it reaches core.** Through the same API and MCP as above. The client's agents read the v4.1.4 export.
 
 **How to use it.**
-- `scripts/imports/export_context.py` writes a fresh export.
-- `docs/construction/<company>.md` holds each company's gap register and its completion report.
+- `world_model/scripts/imports/export_context.py` writes a fresh export.
+- `world_model/docs/construction/<company>.md` holds each company's gap register and its completion report.
 
 ## 3. What the onboarding built
 
@@ -155,7 +155,7 @@ Pull requests are stacked. Merging to `main` deploys, so nothing below merges wi
 | Oct 17 | #19 `feature/ui-notes` | UI notes: values shown in their units, fuller transmission paths, no bars or superentities on the canvas |
 | Oct 17 | `feature/bench-ready` (stacked on #18, includes #19) | The ingestion benchmark, extraction tuning, coverage, Sally's expected transmission paths, business construction, the graph-update view of an ingested document, and the core MCP integration patch |
 
-### 3.1 Ingestion, lakehouse, API ([ingestion.md](../guides/ingestion.md), [../api/](../api/README.md))
+### 3.1 Ingestion, lakehouse, API ([pipeline.md](../../../ingestion/docs/pipeline.md), [../api/](../api/README.md))
 
 - **Upload → bundle → review → graph update.** A file (PDF, DOCX, PPTX, XLSX, HTML, CSV, Markdown, text, JSON) is
   stored, parsed, chunked, indexed, and read into an `axelrod.import/v1` bundle. Importing the bundle proposes one
@@ -169,9 +169,9 @@ Pull requests are stacked. Merging to `main` deploys, so nothing below merges wi
 - **The LLM step is optional.** It proposes only what the deterministic extractor misses, and it is off until a
   provider key is set. Its answers are cached, so reading a file again never calls it again.
 
-### 3.2 Ingestion benchmark ([ingestion.md#benchmarks](../guides/ingestion.md#benchmarks))
+### 3.2 Ingestion benchmark ([bench.md](../../../ingestion/docs/bench.md))
 
-- `ingest/bench.py` and `scripts/bench/ingest_bench.py` score extraction against a hand-built gold set: recall
+- `ingest/bench.py` and `ingestion/scripts/ingest_bench.py` score extraction against a hand-built gold set: recall
   overall, by signal type and by verdict; whether each match is located (the right sentence or table row); precision
   from a labels file; and the time spent in each stage.
 - Files are split into dev and test by content hash. Negative controls are files with no claims, so anything
@@ -190,7 +190,7 @@ Pull requests are stacked. Merging to `main` deploys, so nothing below merges wi
 ### 3.3 Transmission paths that match Sally's research
 
 - `<client root>/scenarios/sally_demo/expected_paths.yaml` writes down, from her research, which channels each forecast must
-  draw and with which sign, and which way each output must move. `tests/scenario/test_sally_expected_paths.py` holds
+  draw and with which sign, and which way each output must move. `world_model/tests/scenario/test_sally_expected_paths.py` holds
   the forecasts to it.
 - Outputs sit at the end of the path. An output that a chain carries past is echoed in the output column, so the
   path reads left to right.
@@ -210,7 +210,7 @@ model now carries the business in between ([model/construction.py](../../src/axe
 
 Three methods let the missing inputs slot in as they arrive ([../construction/](../construction/README.md)):
 
-- `scripts/construction/calibrate.py` turns a disclosed sensitivity into a link's size, in log space for lognormal
+- `world_model/scripts/construction/calibrate.py` turns a disclosed sensitivity into a link's size, in log space for lognormal
   values, and edits that one link in place;
 - a declared stock split converts per-share observations to the model's pre-split basis at import;
 - when an item or a day observes parts of two overlapping views of one total, imports fold only one view, so a
@@ -229,7 +229,7 @@ validation test.
 |---|---|
 | Tests | Unit, integration, service and scenario suites pass. The slow and browser tests are rerun before the PR opens |
 | Coverage | The whole repository is at 100% lines and branches (1,885 tests), and `coverage-floor.json` now holds it there. The slow scenario and browser tests pass (17) |
-| Ingestion recall | The blind half is the final number: 35% (6 of 17), up from 29%. Observed levels from tables are recalled two times in three, and causal claims not at all. The tuned splits read higher (49% dev, 44% test, 79% on the tuned blind half), and that gap is overfitting. Precision, measured by an independent labeler, rose from 62% to 90% on dev and from 58% to 77% on test, without losing a gold match. The rules: an observation is a reported current level, and a forecast is not a move. What remains is mostly whether a current-year estimate counts as a level: the gold says yes, the labeler says no. The blind half was partly exposed, so the next blind set needs fresh documents. [ingestion.md](../guides/ingestion.md#benchmarks) has the details |
+| Ingestion recall | The blind half is the final number: 35% (6 of 17), up from 29%. Observed levels from tables are recalled two times in three, and causal claims not at all. The tuned splits read higher (49% dev, 44% test, 79% on the tuned blind half), and that gap is overfitting. Precision, measured by an independent labeler, rose from 62% to 90% on dev and from 58% to 77% on test, without losing a gold match. The rules: an observation is a reported current level, and a forecast is not a move. What remains is mostly whether a current-year estimate counts as a level: the gold says yes, the labeler says no. The blind half was partly exposed, so the next blind set needs fresh documents. [pipeline.md](../../../ingestion/docs/bench.md) has the details |
 | Transmission paths | Every channel Sally's research requires is drawn with the right sign, and every output moves the expected way |
 | API | Every route and MCP tool is tested for success, auth, and each error code. Service and MCP code are at 100% |
 | Deploy | The image builds with `uv sync --frozen --no-dev --extra semantic`. Railway deploys need Karthik added as a project Admin |
@@ -257,7 +257,7 @@ In priority order. P0 is needed for core to use the world model at all.
   process, so answers, auth and errors are the same.
 - Read-only tools carry `readOnlyHint`, and writes (ingest, propose changes, simulate) do not. No tool decides a
   change.
-- **In core's own catalog:** the patch in [integrations/core](../../integrations/core/README.md) re-publishes the tools
+- **In core's own catalog:** the patch in [integrations/core](../../../integrations/core/README.md) re-publishes the tools
   from core's `/mcp`, under core's sign-in, for each org user (Zsolt's brief). This is the recommended route.
 - Alternatively, core can mount our `/mcp` the way it mounts EODHD (`MCPServerStreamableHttp` with the key in
   core's settings). The snippet is in [../api/](../api/README.md#mounting-it-from-core).

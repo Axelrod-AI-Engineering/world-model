@@ -4,9 +4,9 @@ A research agent reads sources and writes bundle *parts*: JSON files of dated, c
 the model's ids. These tools give the agents the ids to use, check a part against the model, and assemble the parts
 into one bundle per day, which the Import dialog lists in date order.
 
-    uv run python scripts/imports/bundles.py ids sally_demo > <parts>/model_ids.txt
-    uv run python scripts/imports/bundles.py check sally_demo <parts>/<group>.json
-    uv run python scripts/imports/bundles.py days sally_demo <parts> <out_dir> --title "Sally's research"
+    uv run python world_model/scripts/imports/bundles.py ids sally_demo > <parts>/model_ids.txt
+    uv run python world_model/scripts/imports/bundles.py check sally_demo <parts>/<group>.json
+    uv run python world_model/scripts/imports/bundles.py days sally_demo <parts> <out_dir> --title "Sally's research"
 
 Client research never enters the repository: point <parts> and <out_dir> at a gitignored folder (data/<client>_data).
 """

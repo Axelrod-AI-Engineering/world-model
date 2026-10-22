@@ -1,7 +1,7 @@
 """RFC 9457 problem details, the headers every v1 answer carries, and the route class that applies both.
 
 Every failure is `application/problem+json`: `type` (https://docs.axelrod.ai/problems/{code}), `title`, `status`,
-`detail`, `instance` (the path), `code` (stable, from docs/api/openapi.yaml's ProblemCode), `request_id`, and `errors`
+`detail`, `instance` (the path), `code` (stable, from world_model/docs/api/openapi.yaml's ProblemCode), `request_id`, and `errors`
 (each invalid field). Every answer carries `X-Request-Id` (the caller's, when it sent a usable one),
 `X-Axelrod-API-Version: 1`, and the caller's `traceparent`; an answer with an ETag that matches `If-None-Match` is a
 304.

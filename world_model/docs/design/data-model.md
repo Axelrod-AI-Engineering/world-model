@@ -1,6 +1,6 @@
 # Data model
 
-Everything the world model knows is one of the types below, and everything it writes is a change to one of them. Start with the five nouns; read further only for the type you are working on. Field lists match `src/axelrod_wm/model/`, `events/`, `memory/`, `inference/records.py`, and `repo/`.
+Everything the world model knows is one of the types below, and everything it writes is a change to one of them. Start with the five nouns; read further only for the type you are working on. Field lists match `world_model/src/axelrod_wm/model/`, `events/`, `memory/`, `inference/records.py`, and `repo/`.
 
 <!-- toc -->
 **Contents**

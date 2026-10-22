@@ -1,4 +1,4 @@
-# The Axelrod World Model API, v1: the contract. docs/api/README.md's reference is generated from it (scripts/api/reference.py).
+# The Axelrod World Model API, v1: the contract. world_model/docs/api/README.md's reference is generated from it (world_model/scripts/api/reference.py).
 openapi: 3.1.0
 info:
   title: Axelrod World Model API
@@ -222,7 +222,7 @@ info:
     example: '`00-4bf9…-00f0…-01`'
   - term: OpenAPI
     full_name: the OpenAPI Specification 3.1
-    meaning: The machine-readable contract of this API, docs/api/openapi.yaml.
+    meaning: The machine-readable contract of this API, world_model/docs/api/openapi.yaml.
     example: ''
   - term: CRUD
     full_name: create, read, update, delete
@@ -3831,7 +3831,7 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
-      description: 'A short-lived service token that core mints per call (docs/design/core-mcp-auth.md): a JWT (JSON Web Token,
+      description: 'A short-lived service token that core mints per call (world_model/docs/design/core-mcp-auth.md): a JWT (JSON Web Token,
         RFC 7519) signed with ES256 (ECDSA, the Elliptic Curve Digital Signature Algorithm, on the P-256 curve with SHA-256),
         header `typ: at+jwt` (an OAuth 2.0 access token, RFC 9068), verified against the issuer''s JWKS (JSON Web Key Set:
         the issuer''s public signing keys, by key id `kid`). Claims: `iss` (issuer: a trusted issuer), `aud` (audience: this

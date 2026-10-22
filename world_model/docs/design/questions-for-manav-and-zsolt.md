@@ -26,7 +26,7 @@ The API follows Manav's *Data Model and API Design Best Practices*. The decision
 
 ## Settled in the API review (Oct 18)
 
-The plan that follows from the review is in [architecture-plan.md](architecture-plan.md).
+The plan that follows from the review is in [architecture-plan.md](../archive/architecture-plan.md).
 
 - **Audit:** kept forever (D-22). Who may read it is still open.
 - **Access:** only internal staff and backend services reach the world model. Core's backend MCP reads only, to
@@ -35,7 +35,7 @@ The plan that follows from the review is in [architecture-plan.md](architecture-
 - **Idempotency:** keys are permanent and keyed on content too (D-23). This answers the first deferred item below.
 - **ETag and If-Match:** kept as built. Manav is reviewing them.
 - **One world model or several:** a structured analysis is in
-  [architecture-plan.md §4](architecture-plan.md#4-one-world-model-or-several), to decide together.
+  [architecture-plan.md §4](../archive/architecture-plan.md#4-one-world-model-or-several), to decide together.
 - **Unified endpoint:** a separate top-level resource, name to be confirmed. It is designed as a proposal in
   [api.md §4](api.md#4-resources-and-routes).
 
@@ -91,6 +91,6 @@ tokens, it calls with an organization key.
   5. retire the static keys issued to core.
 
   Is that the order you want?
-- **Core patch.** [integrations/core/](../../integrations/core/README.md) holds a patch that core can apply. It has
+- **Core patch.** [integrations/core/](../../../integrations/core/README.md) holds a patch that core can apply. It has
   20 tools on `/v1` and passes core's tests in a read-only clone. Nothing has been written to core. Should it land
   before or after the token work?

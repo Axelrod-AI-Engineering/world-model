@@ -1,4 +1,4 @@
-"""v1 work on the model (docs/api/openapi.yaml): events and what they did, changes and their review (human only),
+"""v1 work on the model (world_model/docs/api/openapi.yaml): events and what they did, changes and their review (human only),
 theses and simulations, and jobs. Documents, bundles, and search are routes_ingest.py."""
 
 from __future__ import annotations

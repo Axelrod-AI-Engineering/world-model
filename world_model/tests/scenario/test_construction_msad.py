@@ -1,6 +1,6 @@
 """MS&AD's business construction (Oct 18): the compositions, operating and financial paths, and their transitions in
 <client root>/worlds/sally_demo/construction/msad.yaml, checked in the loaded model, in the v4.1.4 export, and through the
-service API (docs/construction/msad.md has the gap register these tests close). The insurer method of the Tokio Marine
+service API (world_model/docs/construction/msad.md has the gap register these tests close). The insurer method of the Tokio Marine
 build, carried to the peer with its own reporting: domestic non-life by company, international by business, domestic
 life, adjusted profit and its bridge to net income, and strategic-equity sale gains as their own part. Sally's world
 loads once for the module; no client data is read."""

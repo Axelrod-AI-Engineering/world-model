@@ -1,6 +1,6 @@
 """AIB Group's business construction (Oct 18): the compositions, operating and financial paths, and their transitions in
 <client root>/worlds/sally_demo/construction/aib_group.yaml, checked in the loaded model, in the v4.1.4 export, and through the
-service API (docs/construction/aib_group.md has the gap register these tests close). The second bank after JPMorgan,
+service API (world_model/docs/construction/aib_group.md has the gap register these tests close). The second bank after JPMorgan,
 in its own reporting: an Irish retail and commercial bank (IFRS, EUR) whose NII follows the ECB through central bank
 cash, floating loans and low deposit betas, offset by a structural hedge. Sally's world loads once for the module; no
 client data is read."""

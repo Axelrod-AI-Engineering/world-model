@@ -1,5 +1,5 @@
 """Calibrating a link from a disclosed sensitivity (model/calibrate.py), the exact text edit that writes it
-(engine/construction_edit.py), and the script (scripts/construction/calibrate.py), on a synthetic world."""
+(engine/construction_edit.py), and the script (world_model/scripts/construction/calibrate.py), on a synthetic world."""
 
 from __future__ import annotations
 

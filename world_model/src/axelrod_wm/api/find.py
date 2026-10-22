@@ -159,7 +159,7 @@ def find(ctl: WorldModelController, q: str, limit: int = 40) -> dict:
                   ("concept", f"{s.attribute_kind.replace('_', ' ')} {' '.join(kinds)}", 1.5), ("unit", s.unit, 0.8)]
         sc, why = score(fields) if query else (1.0, [])
         if sc > 0:
-            # the screen names it with its entity ("Delta Air Lines · share price", web/js/names.js)
+            # the screen names it with its entity ("Delta Air Lines · share price", world_model/web/js/names.js)
             hits.append({"kind": "subentity", "id": s.id, "name": s.name, "entity": s.entity_id, "entity_name": e.name,
                          "score": round(sc, 3), "why": why, "detail": f"{s.z:+.1f} sd"})
     for link in view.links:

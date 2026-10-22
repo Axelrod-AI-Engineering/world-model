@@ -1,6 +1,6 @@
 """Optional browser check of a document's graph update (Oct 17): read a synthetic note in the Import dialog, see its
 update drawn on the canvas beside its operations, focus one, open its evidence, and leave the model unchanged. Runs
-only with --runslow and when Playwright and Chromium are installed locally (tests/ui/test_smoke.py's pattern)."""
+only with --runslow and when Playwright and Chromium are installed locally (world_model/tests/ui/test_smoke.py's pattern)."""
 
 from __future__ import annotations
 

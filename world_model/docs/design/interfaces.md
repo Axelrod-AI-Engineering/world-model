@@ -120,24 +120,10 @@ which already keep this rule; the verbs below are the planned layer on top.
 
 ## Import bundle
 
-`axelrod.import/v1` is the seam to any upstream research agent. The world model trusts none of it:
-- Every item becomes a market event on its own date and is reviewed like an article.
-- A signal whose ends are not in the graph is dropped and reported.
-
-| Level | Fields |
-|---|---|
-| Bundle | `format`, `title`, `collected_by`, `collected_at`, `description`, `synthetic`, `items` |
-| Item | `id`, `published_at`, `occurred_at`, `source`, `source_type` (broker_research, expert_call, news, …), `kind` (news, data, analyst, filing), `headline`, `summary`, `url`, `entities`, `tickers`, `category`, `stance`, `relevance` (0–1), `confidence` (0–1), `tags`, `signals` |
-| Signal | `observe` (`value_of`, `value`) · `move` (`value_of`, `delta`, `mode`) · `link` (`source`, `target`, `label`, `effect`, `delay_days`, `lag_days`, `duration_days`) · `support` / `contradict` (`source`, `target`, `strength`); each with the `quote` that makes it and a `note` |
-
-```json
-{"format": "axelrod.import/v1", "title": "...", "collected_by": "...", "items": [
-  {"id": "EM-001", "published_at": "2026-09-11T06:00:00Z", "source": "...", "source_type": "broker_research",
-   "kind": "analyst", "headline": "...", "entities": ["boj"], "category": "rates", "relevance": 0.9,
-   "signals": [{"type": "observe", "value_of": "boj.policy_rate", "value": 1.25, "quote": "..."}]}]}
-```
-
-The parser is `intake/bundle.py`; a synthetic sample is `tests/fixtures/import_bundle_sample.json`.
+`axelrod.import/v1` is the seam to any upstream research agent. Its fields, the example, and the rules are in
+[the contract](../../../ingestion/docs/contract.md#the-import-bundle), because ingestion owns the format. The world model's side of it is
+`intake/structured.py`: every item becomes a market event on its own date, its signals become a proposed graph
+update, and a person reviews it like any article. A signal whose ends are not in the graph is dropped and reported.
 
 ## Ledger and storage
 
@@ -162,7 +148,7 @@ To restore a version: load the newest snapshot at or before it, replay the chang
 
 | File | Sets |
 |---|---|
-| `configs/default.yaml` | Every section: seed, time, thresholds, propagation, learning, frontier, abduction, refinement, hypotheses, evaluation, review, update, translators, `components:` (one implementation per slot), storage |
-| `configs/<demo>.yaml` | A demo's overrides |
+| `world_model/configs/default.yaml` | Every section: seed, time, thresholds, propagation, learning, frontier, abduction, refinement, hypotheses, evaluation, review, update, translators, `components:` (one implementation per slot), storage |
+| `world_model/configs/<demo>.yaml` | A demo's overrides |
 | `world_model/examples/worlds/<world>/` | Construction: entities, interactions, templates, the series map |
 | `world_model/examples/scenarios/<scenario>/` | A script, seeds, theses, a watchlist, decisions, market events |

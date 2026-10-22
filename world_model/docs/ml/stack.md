@@ -1,6 +1,6 @@
 # The ML stack: a formal specification (as built)
 
-This page states, in mathematical terms, what the code computes today: every model, update, test, and constant, with the file that implements it. It describes the implementation, not the intent. Where the implementation is a heuristic, or where it is unsound, the page says so; [roadmap.md](roadmap.md) proposes what replaces it. Paths are relative to `src/axelrod_wm/`. Two sections are plans rather than descriptions: [Small models first](#small-models-first), on which model each step should use, and [§14](#14-fine-tuning-to-own-the-structure), on fine-tuning models on the structure we own.
+This page states, in mathematical terms, what the code computes today: every model, update, test, and constant, with the file that implements it. It describes the implementation, not the intent. Where the implementation is a heuristic, or where it is unsound, the page says so; [roadmap.md](roadmap.md) proposes what replaces it. Paths are relative to `world_model/src/axelrod_wm/`, except ingestion's, which are under `ingestion/src/axelrod_ingest/`. Two sections are plans rather than descriptions: [Small models first](#small-models-first), on which model each step should use, and [§14](#14-fine-tuning-to-own-the-structure), on fine-tuning models on the structure we own.
 
 <!-- toc -->
 **Contents**
@@ -61,7 +61,7 @@ This page went through an adversarial review on fidelity, statistics, and financ
 
 In dual-process terms, recognition handles the routine and deliberation only the exceptions. **Every fallback call is logged** with its input, its output, and the reviewer's decision on it, so the long tail becomes training data for steps 2–5 and shrinks over time. The ledger already records each proposal's `produced_by` and its review decision, so a fallback case is a ledger query, not a new store.
 
-**The chain is already the mechanism for translation.** `configs/default.yaml` lists translators per kind, "tried in order until one returns events" (`news: [hand_drawn, template]`). A small extractor goes before `llm`, and `llm` (a stub today) goes last. Other slots are a single choice today; giving a slot an ordered list with a confidence floor per entry is planned.
+**The chain is already the mechanism for translation.** `world_model/configs/default.yaml` lists translators per kind, "tried in order until one returns events" (`news: [hand_drawn, template]`). A small extractor goes before `llm`, and `llm` (a stub today) goes last. Other slots are a single choice today; giving a slot an ordered list with a confidence floor per entry is planned.
 
 ### Decision models (Jev-type)
 
@@ -119,7 +119,7 @@ Jev is trained by *reinforcement learning for calibrated decisions* (RLCD), whic
 |---|---|---|---|---|
 | **Market-event triage and relevance** | Deduplication by address, or site and title (`intake/scrapers.py`, `dedup_keys`). An import item's `relevance` is the upstream agent's own number. No triage model. | A decision model's Noul, "will this item yield an approved change?" (or, before there are labels, logistic regression over TF-IDF and small-embedder features). It orders the queue; it never drops an event. | Proposals approved or rejected; events logged as untranslated (`translate.missing`); item relevance against outcome | Translate everything, in arrival order |
 | **Entity and value resolution** | `alias_fuzzy`: best `SequenceMatcher` ratio + 0.3 × word Jaccard + 0.2 × constraint fraction (`intake/resolver.py`). The refiner binds only a named mention; otherwise it hedges over up to 4 candidates. | A bi-encoder (about 100M) finetuned contrastively on (mention in context → entity or subentity id) retrieves candidates; a decision model's Choice over the top 4 (plus "none of these") gives calibrated hedge weights $w_i$ (§5); binding still needs a named mention. | Approved bindings; approved resolutions of hedged ends (`REFINEMENT` proposals); reviewer edits (`Proposal.edited_from`); bundle `entities` and `value_of` ids | `alias_fuzzy`; then an LLM choosing among the candidate ids or "open" |
-| **Signal extraction** (observe, move, link, support, contradict) | Reviewed fixtures (`hand_drawn`); regular-expression templates at confidence 0.6 (`template`); signals written by the upstream agent (`structured`). The `llm` translator is a stub. | A decision model's Choice for the signal type, direction, and size bucket, and a CRF or small token tagger for the spans (subject, direction, magnitude, unit, timeframe). Spans are assembled into operations deterministically, by the code that already maps signals to operations (`intake/bundle.py`, `signal_ops`). Then P2's small seq2seq model (§14). | Hand-drawn translations (gold operations with phrase spans); template spans; bundle signals with quotes; approved and edited proposals | `llm`, constrained to the schema |
+| **Signal extraction** (observe, move, link, support, contradict) | Reviewed fixtures (`hand_drawn`); regular-expression templates at confidence 0.6 (`template`); signals written by the upstream agent (`structured`). The `llm` translator is a stub. | A decision model's Choice for the signal type, direction, and size bucket, and a CRF or small token tagger for the spans (subject, direction, magnitude, unit, timeframe). Spans are assembled into operations deterministically, by the code that already maps signals to operations (`intake/structured.py`, `signal_ops`). Then P2's small seq2seq model (§14). | Hand-drawn translations (gold operations with phrase spans); template spans; bundle signals with quotes; approved and edited proposals | `llm`, constrained to the schema |
 | **Interaction typing** | A link's label goes to a family by a keyword table (`model/taxonomy.py`, `label_family`; unmatched → "other"), then signature descent on the interaction's features (`taxonomy_descent`) | A classifier over the label's embedding and the two ends' value concepts, giving the interaction generalization | Approved `add_interaction` operations and the kinds they were sorted into | Keyword table and signature descent |
 | **Quote alignment** | Exact substring match (`text.find(quote)` in `translate_item`); an unmatched quote gets no highlight | Rules first: normalize whitespace, case, and punctuation, then fuzzy character alignment. A small embedder matches a paraphrased quote to its sentence. | Bundle quotes that matched exactly (free positives) | Flag "quote not found" in review |
 | **Conflict detection** (planned, M05) | Not built; rules are specified (opposite sign on an existing interaction, a value outside a soft bound, a retired item reused) | The rules, plus a decision model's Choice (supports, contradicts, does not bear) on the new quote against the evidence already behind the interaction | `support` and `contradict` signals; review decisions on flagged items | `llm_pairwise` (M05's planned alternative) |
@@ -153,7 +153,7 @@ Jev is trained by *reinforcement learning for calibrated decisions* (RLCD), whic
 | $`\ell_j(\cdot)`$ | the value's link: identity, log, or logit | `model/distributions.py:102-137` |
 | $`z_j(t)`$ | the standardized deviation, $`z_j = (\ell_j(x_j) - m_j)/s_j`$, with anchor $`m_j`$ and scale $`s_j`$ | |
 | $`r_j`$ | the value's observation noise, **an sd** in $`z`$ units; its variance is $`r_j^2`$ | `model/taxonomy.py:457-467` |
-| $`H`$ | the forecast horizon in days (182 by default) | `configs/default.yaml` |
+| $`H`$ | the forecast horizon in days (182 by default) | `world_model/configs/default.yaml` |
 | $`S`$ | Monte Carlo samples (400 by default) | |
 
 Everything the dynamics touch is in $`z`$ units. **The scale $`s_j`$ is set once**, when the value is created (from its concept's or its peers' mean scale, else 1.0 in link units; `shared/classify.py:194-212`), and never re-estimated from the value's own series. "One sd" is therefore a designer's unit, not a volatility: a 0.05 sd threshold is 0.4% for a share price with an 8% scale but 1.5 bp for CPI with a 0.3 pp scale. Every threshold below inherits this (review S-M9, F-C3).
@@ -530,10 +530,10 @@ These feed the canvas's open nodes; inference and learning do not read them.
 | Hedge | prior 1.0; open 0.5; mention 1.5; move 1.0; commit 0.75; soft-edge concentration 2.0 | `engine/config.py:136-142` |
 | Superentity induction | contribution ≥ 0.2; −0.05 per edge; +1 per 14 d at most; half-life 90 d; admit > 3; dissolve < 1 | `learning/abduction.py` |
 | VOI | 100 draws; recomputed weekly; half-life 14 d; branch at VOI ≥ 0.15, $`p \in [0.15, 0.85]`$ | `inference/voi.py`, `engine/config.py:96` |
-| Samples, horizon | 400, 182 d | `configs/default.yaml` |
+| Samples, horizon | 400, 182 d | `world_model/configs/default.yaml` |
 
 **Mismatches and unused settings.**
-- Two settings disagree between `configs/default.yaml` and the code defaults: `attention.top_k_superentities` is 8 vs 6, and `isolation.max_networks` is 8 vs 6. The yaml wins at run time.
+- Two settings disagree between `world_model/configs/default.yaml` and the code defaults: `attention.top_k_superentities` is 8 vs 6, and `isolation.max_networks` is 8 vs 6. The yaml wins at run time.
 - `refinement.bind_score`, `refinement.evidence_bonus`, and `time.step_days` are read nowhere. The same 0.2 as `evidence_bonus` is hard-coded in `intake/refiner.py`.
 - The `posterior_updater` slot is registered but never called.
 
@@ -609,7 +609,7 @@ Each finding has a roadmap item.
 | The typed graph: entities, subentities, interactions with existence, effect sizes, and kernels | `model/`, committed versions | Our ids, concepts, units, and which values can move which |
 | Superentity patterns, with roles and rivals | long-term memory (`object_generalizations`) | Recurring configurations, by name |
 | The review ledger: each proposal, the reviewer's decision, per-operation keep and confidence, and edits (`edited_from`) | `repo/ledger.py`, `repo/review.py` | What a person accepts, and how they correct a machine reading |
-| Bundle signals with quotes (`axelrod.import/v1`) and hand-drawn translations with phrase spans | `intake/bundle.py`, `world_model/examples/scenarios/*/translations/` | Text aligned to operations, span by span |
+| Bundle signals with quotes (`axelrod.import/v1`) and hand-drawn translations with phrase spans | `ingestion/src/axelrod_ingest/contract/bundle.py`, `world_model/examples/scenarios/*/translations/` | Text aligned to operations, span by span |
 | Forecasts with their outcomes and evaluations | `FORECAST`, `OUTCOME`, `EVALUATION` ledger entries | Which structure predicted well |
 | Daily state: every value's level and spread, every day | working memory, snapshots | State transitions, for P3 |
 

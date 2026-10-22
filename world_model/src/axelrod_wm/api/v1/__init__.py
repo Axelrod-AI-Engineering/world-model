@@ -1,4 +1,4 @@
-"""The world model API, v1 (Oct 18): the routes docs/api/openapi.yaml specifies, under /v1/world-models/{id}.
+"""The world model API, v1 (Oct 18): the routes world_model/docs/api/openapi.yaml specifies, under /v1/world-models/{id}.
 
     problems.py       RFC 9457 problems, the standard headers, the route class
     context.py        the principal, the world model registry, pinning, cursors, envelopes, idempotency, audit, jobs

@@ -15,7 +15,7 @@ from axelrod_wm.repo.snapshots import MemoryBackend
 from axelrod_wm.trace import NullTracer
 from tests.where import ECONOMY, FIXTURE_CLIENTS, OIL_DIR, TAXONOMY
 
-# the synthetic client first, then whatever client root the run names (or <data>/clients): tests/clients.py
+# the synthetic client first, then whatever client root the run names (or <data>/clients): world_model/tests/clients.py
 _REAL_CLIENTS = os.environ.get("WORLD_MODEL_CLIENT_DIR") or str(DATA_DIR / "clients")
 os.environ["WORLD_MODEL_CLIENT_DIR"] = os.pathsep.join([str(FIXTURE_CLIENTS),
                                                         _REAL_CLIENTS])
@@ -24,7 +24,7 @@ START_DATE = date(2023, 1, 2)                   # day 0 of the constructed engin
 START = datetime(2023, 1, 2, tzinfo=timezone.utc)
 SEEDS = str(OIL_DIR / "superentity_seeds.yaml")
 VOCAB = load_vocabulary(TAXONOMY)
-# tests never read a stage profile or a developer's .creds file (src/axelrod_wm/settings.py)
+# tests never read a stage profile or a developer's .creds file (world_model/src/axelrod_wm/settings.py)
 os.environ.setdefault("WORLD_MODEL_PROFILE", "none")
 
 

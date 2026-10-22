@@ -118,7 +118,7 @@ The stages are mutually exclusive and collectively exhaustive. Each answers one 
 
 ## Business construction
 
-The objects that carry a company from a macro driver to its accounts. Model: `src/axelrod_wm/model/construction.py`.
+The objects that carry a company from a macro driver to its accounts. Model: `world_model/src/axelrod_wm/model/construction.py`.
 Method: [construction/README.md](construction/README.md).
 
 | Term | Meaning |
@@ -167,11 +167,11 @@ Method: [construction/README.md](construction/README.md).
 | **evidence_refs** | In the export, a relationship's resolved citations: source id, document, location, passage. |
 | **Citation gaps** | Unresolved source ids and material claims without a citation, listed by the check and the export. |
 | **Material claim** | A claim whose existence, direction, magnitude or timing rests on documented, guidance, broker or model support, and so must be cited. |
-| **Input search** | `scripts/construction/inputs.py`: searches the supplied material for each missing input before it may be declared missing. |
+| **Input search** | `world_model/scripts/construction/inputs.py`: searches the supplied material for each missing input before it may be declared missing. |
 
 ## Ingestion
 
-Pipeline: [guides/ingestion.md](guides/ingestion.md).
+Pipeline: [ingestion/docs/pipeline.md](../../ingestion/docs/pipeline.md).
 
 | Term | Meaning |
 |---|---|
@@ -182,7 +182,7 @@ Pipeline: [guides/ingestion.md](guides/ingestion.md).
 | **Gazetteer** | The index of every name and alias the model knows, used to recognize mentions. A value name's head word can become a keyword, so names are chosen with care. |
 | **Signal** | A claim read from a chunk: *observe* (a level), *move* (a change), *support* / *contradict* (an existing link), *link* (a proposed new link). Each carries its quote and location. |
 | **Precision rules** | An observation is a reported current level of the right basis; a forecast is not a move; a revision is; history is not the present. |
-| **Bundle** | `axelrod.import/v1`: dated items, each with its source, summary, entities, and signals. What ingestion produces and import consumes. |
+| **Bundle** | `axelrod.import/v1`: dated items, each with its source, summary, entities, and signals. What ingestion produces and import consumes ([the contract](../../ingestion/docs/contract.md#the-import-bundle)). |
 | **Item** | One dated piece of research in a bundle. |
 | **LLM step** | An optional reader that proposes only what the deterministic extractor misses. Off unless a provider key is set; cached. |
 | **Determinism** | The same file gives the same document, chunks, signals and bundle; the same bundle imported into the same state gives the same version. |
@@ -237,7 +237,7 @@ Reference: [api/README.md](api/README.md).
 
 | Term | Meaning |
 |---|---|
-| **Outward API** | REST under `/v1/world-models/{id}/*` on the Railway service, for other agents and core. Its contract is `docs/api/openapi.yaml`. Its nouns differ from the code's: an *attribute* is a subentity, a *relationship* an interaction, an *event* a market event, a *change* a proposal, a *simulation* a forecast. |
+| **Outward API** | REST under `/v1/world-models/{id}/*` on the Railway service, for other agents and core. Its contract is `world_model/docs/api/openapi.yaml`. Its nouns differ from the code's: an *attribute* is a subentity, a *relationship* an interaction, an *event* a market event, a *change* a proposal, a *simulation* a forecast. |
 | **Caller** | Who is acting within an organization: the principal's `sub` (an org user, a key's caller name such as `core`, or a login), recorded with its kind, `azp`, `act` and `jti` on every write in the audit log, and as a change's `proposed_by` and `decided_by`. |
 | **Organization** (was *tenant*) | Owns world models, documents and credentials (Axelrod, a client firm), never a user; it comes from the credential (a token's `org`, a key's org, a login). The `world_models` registry names each model's organization; another organization's model answers 404. A login's organization is its username unless `WORLD_MODEL_OWNERS` maps it (`default` with no logins). |
 | **API key** | A static scoped credential: a `caller:key:org[:scope+scope]` entry in `WORLD_MODEL_API_KEYS`, sent as `Authorization: Bearer <key>`. With no scopes listed it reads only (`world_model:read`); it never carries `changes:approve`. |
@@ -265,7 +265,7 @@ Reference: [api/README.md](api/README.md).
 
 ## Ingestion benchmark
 
-[guides/ingestion.md, Benchmarks](guides/ingestion.md#benchmarks).
+[ingestion/docs/bench.md](../../ingestion/docs/bench.md).
 
 | Term | Meaning |
 |---|---|
@@ -326,13 +326,12 @@ The client's own schema; its field names are not ours to rename.
 
 ## Testing and quality
 
-[../tests/README.md](../tests/README.md), [guides/development.md](guides/development.md).
+[../tests/README.md](../tests/README.md), [docs/development.md](../../docs/development.md).
 
 | Term | Meaning |
 |---|---|
-| **Strict modules** | Code held to 100% line and branch coverage with no exclusions: ingestion, lakehouse, the outward service, MCP, keys. |
-| **Coverage floor** | `coverage-floor.json`: the repository's coverage, which a run may not fall below (now 100%). |
-| **Coverage gate** | `scripts/coverage_gate.py`: checks strict modules and the floor, and writes the README's test widget. |
+| **Coverage gate** | `scripts/coverage_gate.py --member <name>`: every source file of a workspace member at 100% lines and branches, from that member's own tests ([development](../../docs/development.md#coverage)). |
+| **World view** | What ingestion reads of a world model: entities, values, and links as frozen records with a canonical JSON form (`axelrod_ingest.contract.world_view`; [the contract](../../ingestion/docs/contract.md#the-world-view)). |
 | **Slow / browser tests** | Scenario runs and Playwright checks, selected with `--runslow`. |
-| **Conventions sweep** | `tests/service/test_conventions.py`: every route documented, keyed, versioned, enveloped, strict, and in the schema. |
+| **Conventions sweep** | `world_model/tests/service/test_conventions.py`: every route documented, keyed, versioned, enveloped, strict, and in the schema. |
 | **Client data** | `data/` (client content, sources, working data, exports): gitignored, never committed or uploaded. |

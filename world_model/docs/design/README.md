@@ -131,7 +131,7 @@ There are 17 modules in six layers. Every arrow points up, to what a module depe
 | Tests and checks | pytest (unit, integration, scenario, UI), ruff; GitHub Actions on pull requests | Same, plus nightly backtests |
 | Docs tooling | `axelrod flows --svg` (the README picture), `scripts/docs/diagrams.py` (these diagrams), `scripts/docs/toc.py` (contents) | Same |
 
-The deployment is drawn in [../guides/deployment.md](../guides/deployment.md).
+The deployment is drawn in [docs/deployment.md](../../../docs/deployment.md).
 
 ## 11. Data model and interfaces
 

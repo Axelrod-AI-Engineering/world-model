@@ -1,4 +1,4 @@
-"""Static scoped keys for the outward service (Oct 18; docs/design/core-mcp-auth.md): how non-core callers (the LLM
+"""Static scoped keys for the outward service (Oct 18; world_model/docs/design/core-mcp-auth.md): how non-core callers (the LLM
 harness, scripts, our own /mcp) call the world model.
 
 WORLD_MODEL_API_KEYS holds comma-separated `caller:key:org[:scope+scope…]` entries. A request with

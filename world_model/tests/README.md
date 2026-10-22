@@ -1,7 +1,9 @@
 # Tests
 
-Every suite in `tests/`: what it covers, how many tests it holds, how to run it, and what it needs. The last section
-is the design of the service's integration tests and how far it has got.
+Every suite of the world model member (`world_model/tests/`): what it covers, how many tests it holds, how to run it, and what it needs.
+The last section is the design of the service's integration tests and how far it has got. Ingestion's tests are in
+`ingestion/tests/` ([how to run them](../../ingestion/docs/README.md#running-it)); the repository's own are in `tests/`
+([development](../../docs/development.md#tests)).
 
 <!-- toc -->
 **Contents**
@@ -16,35 +18,38 @@ is the design of the service's integration tests and how far it has got.
 
 ## Running them
 
+Run from the member's folder (`cd world_model`):
+
 ```bash
 uv run pytest                                   # everything but the slow runs (they are collected and skipped)
 uv run pytest --runslow                         # also the full scenario runs and the browser smoke tests
-uv run pytest tests/service tests/integration tests/unit tests/lake tests/ingest -q -p no:warnings -m "not slow"
+uv run pytest tests/unit                        # the fast part
+uv run pytest tests/service tests/integration tests/unit -q -p no:warnings -m "not slow"
 uv run pytest -m integration                    # the service's end-to-end flows only (about a minute)
 uv run pytest -m "not integration"              # everything else
 uv run --with playwright==1.58.0 pytest tests/ui --runslow   # the browser tests (run `playwright install chromium` once)
-uv run ruff check src tests
+uv run ruff check .                             # from the root: the lint of both members
 ```
 
 Every test gets its own lakehouse directory and the exact `hashing` embedder, with no LLM step and no API keys from
-the environment (`tests/conftest.py`), so nothing reads or writes the repository's `var/lake` and no model is
-downloaded. All test data is synthetic: the notes and bundles in the tests are made up, and no test reports a real
-event.
+the environment (the `axelrod_ingest.testing` plugin and `tests/conftest.py`), so nothing reads or writes the
+repository's `var/lake` and no model is downloaded. The paths the tests read come from `tests/where.py`, never from
+the working directory. All test data is synthetic: the notes and bundles in the tests are made up, and no test reports a
+real event.
 
 ## The suites
 
 Counts are from `uv run pytest --collect-only -q <folder>` on Oct 18 and include parametrized cases; `tests/service/`,
-`tests/lake/`, `tests/unit/api/`, and `tests/integration/service/` were recounted after API v1.
+`tests/unit/api/`, and `tests/integration/service/` were recounted after API v1. The ingestion pipeline's and the
+lakehouse's suites moved to `ingestion/tests/` with the code they test.
 
 | Suite | Tests | What it covers |
 |---|---:|---|
-| `tests/unit/` | 1,040 | Each package's units, without the HTTP app (below) |
-| `tests/ingest/` | 583 | The ingestion pipeline: parsing (PDF, DOCX, PPTX, XLSX, HTML, CSV, Markdown, text, JSON), chunking, the gazetteer, rule and LLM extraction, the benchmark and its precision bar, and determinism (byte-identical across lakes, orders, processes, hash seeds, and read times) |
-| `tests/lake/` | 150 | The lakehouse: the store's contract, SQLite (documents, chunks, FTS5, mentions, embeddings, bundles, imports, tenants, the world model registry, the audit log, idempotency keys and jobs), embedders, and search in every mode |
-| `tests/service/` | 559 | The outward API, v1 (`/v1/world-models/{id}`, [docs/api/openapi.yaml](../docs/api/openapi.yaml)), its credentials, and its MCP server: see [below](#the-outward-apis-tests) |
-| `tests/integration/` | 131 | The demo's own API (`/api/...`) and `/ws` through FastAPI's TestClient: update runs, staged review and selective approval, examples, the library, the log, structure edits, imports, the brief, the v4 export's determinism across processes; and `tests/integration/service/` (8), the service's end-to-end flows |
-| `tests/scenario/` | 106 | Whole scenarios: initialization, determinism, restore; the small demo example by example, with rewind; the Sally demo's expected paths; the Toyota, Tokio Marine, and JPMorgan constructions; the full oil-demo checklist and the production demo (slow) |
-| `tests/ui/` | 3 | Playwright smoke tests of the page and of importing a document (slow; skipped without Playwright or Chromium) |
+| `world_model/tests/unit/` | 1,040 | Each package's units, without the HTTP app (below) |
+| `world_model/tests/service/` | 559 | The outward API, v1 (`/v1/world-models/{id}`, [world_model/docs/api/openapi.yaml](../docs/api/openapi.yaml)), its credentials, and its MCP server: see [below](#the-outward-apis-tests) |
+| `world_model/tests/integration/` | 131 | The demo's own API (`/api/...`) and `/ws` through FastAPI's TestClient: update runs, staged review and selective approval, examples, the library, the log, structure edits, imports, the brief, the v4 export's determinism across processes; and `world_model/tests/integration/service/` (8), the service's end-to-end flows |
+| `world_model/tests/scenario/` | 106 | Whole scenarios: initialization, determinism, restore; the small demo example by example, with rewind; the Sally demo's expected paths; the Toyota, Tokio Marine, and JPMorgan constructions; the full oil-demo checklist and the production demo (slow) |
+| `world_model/tests/ui/` | 3 | Playwright smoke tests of the page and of importing a document (slow; skipped without Playwright or Chromium) |
 
 `tests/unit/` by package:
 
@@ -65,39 +70,36 @@ Counts are from `uv run pytest --collect-only -q <folder>` on Oct 18 and include
 | `flows/` | 28 | The flowchart is well formed and current in `docs/flowchart.svg` |
 | `cli/` | 21 | The `axelrod` command |
 | `evaluation/`, `memory/`, `events/`, `trace/` | 58 | Backtests and metrics; Entity memories, the frontier, working and long-term memory; graph-update events; the trace |
-| top level | 37 | Basic auth, the build info, the import bundle format, the Railway drift verifier |
+| top level | 40 | Basic auth, the build info, the paths, signals into operations (the bundle's schema tests moved to ingestion) |
 
 ## Markers, skips, and extras
 
 | Marker or condition | Where | Effect |
 |---|---|---|
-| `slow` | the full oil-demo checklist, the production demo, every slot alternative (`tests/integration/test_api.py`), the browser tests | Collected and skipped unless `--runslow` (`tests/conftest.py`) |
-| `integration` | `tests/integration/service/` | Selects the service's end-to-end flows: `-m integration`, or `-m "not integration"` to leave them out. Registered in `pyproject.toml` |
-| Playwright | `tests/ui/` | Skipped without it (`pytest.importorskip`) or without Chromium; run with `uv run --with playwright==1.58.0 pytest tests/ui --runslow` |
-| `data/clients/` (the client root, `WORLD_MODEL_CLIENT_DIR`; gitignored) | the client-specific scenario tests (`tests/scenario/test_construction_*.py`, `test_sally_*.py`) and `tests/unit/context/test_construction_scripts.py` | Skipped, with the reason, where the client scenarios are absent, as on CI. Everything else runs against a synthetic client, `tests/fixtures/clients` (invented `acme` names), which `tests/conftest.py` puts first on the client roots (`tests/clients.py`) |
-| `data/work/sally/` (local client data, gitignored) | the Tokio Marine and Toyota construction checks that read the client's own files, and `tests/unit/context/test_construction_scripts.py` | Skipped where it is absent, as on CI. `SALLY_CONSTRUCTION` points the Tokio Marine checks at another folder. Never commit that data |
+| `slow` | the full oil-demo checklist, the production demo, every slot alternative (`world_model/tests/integration/test_api.py`), the browser tests | Collected and skipped unless `--runslow` (`world_model/tests/conftest.py`) |
+| `integration` | `world_model/tests/integration/service/` | Selects the service's end-to-end flows: `-m integration`, or `-m "not integration"` to leave them out. Registered in `pyproject.toml` |
+| Playwright | `world_model/tests/ui/` | Skipped without it (`pytest.importorskip`) or without Chromium; run with `uv run --with playwright==1.58.0 pytest world_model/tests/ui --runslow` |
+| `data/clients/` (the client root, `WORLD_MODEL_CLIENT_DIR`; gitignored) | the client-specific scenario tests (`world_model/tests/scenario/test_construction_*.py`, `test_sally_*.py`) and `world_model/tests/unit/context/test_construction_scripts.py` | Skipped, with the reason, where the client scenarios are absent, as on CI. Everything else runs against a synthetic client, `world_model/tests/fixtures/clients` (invented `acme` names), which `world_model/tests/conftest.py` puts first on the client roots (`world_model/tests/clients.py`) |
+| `data/work/sally/` (local client data, gitignored) | the Tokio Marine and Toyota construction checks that read the client's own files, and `world_model/tests/unit/context/test_construction_scripts.py` | Skipped where it is absent, as on CI. `SALLY_CONSTRUCTION` points the Tokio Marine checks at another folder. Never commit that data |
 
 ## Coverage policy
 
-- **Strict modules are fully covered**: every line and every branch, with no pragmas and no omissions (an unreachable
-  line is deleted). They are the ingestion pipeline (`src/axelrod_wm/ingest/*`), the lakehouse
-  (`src/axelrod_wm/lake/*`), and the outward service (`api/v1/*`, `api/tokens.py`, `api/mcp.py`, `api/keys.py`):
-  `STRICT` in `scripts/coverage_gate.py`.
-- **Everything else ratchets.** `coverage-floor.json` holds the repository's line, branch, and combined coverage (100%
-  each today). A run below the floor fails; `--update` raises the floor when a run beats it, never lowers it.
-- **CI** (`.github/workflows/tests.yml`) runs `tests/unit` on every pull request, and the whole suite (not the slow
-  runs) with coverage, then the gate:
+Every source file of the member (`world_model/src/axelrod_wm/`) is covered, **every line and every branch, by this
+member's own tests**, with no pragmas and no omissions (an unreachable line is deleted). There is no floor to ratchet and
+no strict list. `scripts/coverage_gate.py --member world_model` checks it; CI (`.github/workflows/tests.yml`, job
+`world_model`) runs `tests/unit` first, then the whole suite (not the slow runs) with coverage, then the gate:
 
 ```bash
-uv run pytest --cov=axelrod_wm --cov-branch --cov-report=json:coverage.json --junitxml=junit.xml
-uv run python scripts/coverage_gate.py coverage.json --junit junit.xml [--update] [--readme README.md]
+cd world_model && uv run pytest --cov --cov-report=json:coverage.json --junitxml=junit.xml
+cd .. && uv run python scripts/coverage_gate.py world_model/coverage.json --member world_model --junit world_model/junit.xml
 ```
 
-`--readme` rewrites the test widget in the repository's README from the JUnit XML.
+CI has no client data, so the gate holds without it: set `WORLD_MODEL_DATA_DIR` to an empty folder to check locally. The
+same run with the client's content present covers the same lines (the client tests add reads, not coverage).
 
 ## The outward API's tests
 
-`tests/service/` holds the API to its contract ([docs/api/openapi.yaml](../docs/api/openapi.yaml)), route by route
+`world_model/tests/service/` holds the API to its contract ([world_model/docs/api/openapi.yaml](../docs/api/openapi.yaml)), route by route
 and across all routes at once, so a route added later cannot skip a rule. `helpers.py` holds what they share: a static
 key, and `Signer`, core's side of a service token for tests (an ephemeral ES256 key whose JWKS an
 `httpx.MockTransport` serves, so nothing calls core).
@@ -117,9 +119,9 @@ key, and `Signer`, core's side of a service token for tests (an ephemeral ES256 
 
 ## Integration tests: design and status
 
-`tests/integration/service/` runs the service end to end: REST and MCP over one app, with the lakehouse, the engine,
+`world_model/tests/integration/service/` runs the service end to end: REST and MCP over one app, with the lakehouse, the engine,
 the review queue, and the snapshot store all real, on directories of the test's own. Each test is one user-visible
-flow on v1, starts from a fresh service (`tests/service/helpers.py`: `service()`, with `root=` for files that a
+flow on v1, starts from a fresh service (`world_model/tests/service/helpers.py`: `service()`, with `root=` for files that a
 restarted service reuses), and uses synthetic, dated notes only. Callers propose with a static key; a person decides
 with a service token (`conftest.py`: `review_all`). They are marked `integration`.
 

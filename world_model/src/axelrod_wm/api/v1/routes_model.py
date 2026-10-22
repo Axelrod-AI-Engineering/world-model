@@ -1,4 +1,4 @@
-"""v1 reads of the model (docs/api/openapi.yaml): the credential, world models, versions, entities and attributes,
+"""v1 reads of the model (world_model/docs/api/openapi.yaml): the credential, world models, versions, entities and attributes,
 construction, relationships and evidence, concepts and groups, the graph, exports, and the audit log."""
 
 from __future__ import annotations

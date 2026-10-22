@@ -1,6 +1,6 @@
 """Toyota's business construction in sally_demo (<client root>/worlds/sally_demo/construction/toyota.yaml, Oct 17).
 
-Holds the build to the reviewer's Toyota requirements (docs/construction/toyota.md): the composition views reconcile by
+Holds the build to the reviewer's Toyota requirements (world_model/docs/construction/toyota.md): the composition views reconcile by
 accounting links with their residuals and eliminations, and overlapping views never share a part or a calibrated route;
 every named path is connected and every step carries a transition (a sign when uncalibrated); the tariff path has its
 five transitions; the yen's parts are never added to the calibrated aggregate; s44 is re-routed; and a development the

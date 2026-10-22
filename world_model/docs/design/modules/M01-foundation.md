@@ -54,5 +54,5 @@ Nothing inside `axelrod_wm`, except that `ports/` uses [M02](M02-model.md)'s and
 
 ## Done when
 
-- `tests/unit/ports/test_layers.py` builds the import graph with `ast` and fails on an upward import or a cycle.
+- `world_model/tests/unit/ports/test_layers.py` builds the import graph with `ast` and fails on an upward import or a cycle.
 - Each slot has a conformance test: every registered implementation takes the same inputs, returns outputs of the right type, and writes only what its contract allows.

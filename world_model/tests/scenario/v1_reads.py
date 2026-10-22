@@ -1,4 +1,4 @@
-"""What an agent reads about a company through the v1 API (docs/api/openapi.yaml), for the construction tests: the
+"""What an agent reads about a company through the v1 API (world_model/docs/api/openapi.yaml), for the construction tests: the
 export, a subgraph, the construction view, a trace, and a simulation's calculation coverage. Each test app is a local
 run (no credential configured), so its one world model is the organization's only one."""
 

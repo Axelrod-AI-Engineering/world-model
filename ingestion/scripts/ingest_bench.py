@@ -4,7 +4,7 @@ Each file is ingested the way an upload is: its bytes and its file name, nothing
 The report, the scores, and every prediction (for labelling) are written to --out, which for a client's corpus must
 stay inside that client's gitignored folder.
 
-    uv run python ingestion/scripts/ingest_bench.py --corpus data/sources/sally --world-view data/work/sally/world_view.json \
+    uv run python ingestion/scripts/ingest_bench.py --corpus data/sources/sally --world-view data/work/<client>/world_view.json \
         --items data/work/sally/_bundle_parts --gold data/work/sally/bench/gold.json \
         --labels data/work/sally/bench/labels.json --out data/work/sally/bench
 

@@ -1,10 +1,10 @@
 """Calibrate a link from a disclosed sensitivity (model/calibrate.py), and optionally write it into the world's files.
 
-    uv run python scripts/construction/calibrate.py sally_demo tm-c-exposure --source-change 1 --target-change 12 \\
+    uv run python world_model/scripts/construction/calibrate.py sally_demo tm-c-exposure --source-change 1 --target-change 12 \\
         --evidence tm.co [--support documented|guidance|broker|peer|model|inferred] [--sd-range LO HI | --target-range LO HI] \\
         [--sigma-fraction 0.25] [--allow-sign-flip --reason "..."] [--write]
 
-    uv run python scripts/construction/calibrate.py sally_demo --disclosure disclosure.yaml [--write]
+    uv run python world_model/scripts/construction/calibrate.py sally_demo --disclosure disclosure.yaml [--write]
 
 "A 1-unit move in X changes Y by Z": --source-change is the move in X and --target-change the change in Y, each in the
 value's native unit. --side rises|falls sizes one side of an asymmetric link; --stop-when VALUE above|below LEVEL and

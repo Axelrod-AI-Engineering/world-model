@@ -1,4 +1,4 @@
-"""v1 work on the model (docs/api/openapi.yaml): documents into bundles (202 and a job), bundles, search, changes and
+"""v1 work on the model (world_model/docs/api/openapi.yaml): documents into bundles (202 and a job), bundles, search, changes and
 their human review (If-Match), events and what they did, theses run as simulations, jobs, and Idempotency-Key."""
 
 from __future__ import annotations
@@ -242,7 +242,7 @@ def test_a_second_proposal_while_one_waits_is_a_conflict(c):
     problem(c.post(f"{WM}/changes", json={"bundle_id": "nope"}), 404, "bundle_not_found")
     problem(c.post(f"{WM}/changes", json={"bundle_id": b["bundle_id"], "review": "auto"}), 422, "invalid_request")
     decide_all(c, SIGNER)
-    # another proposal starting at the same moment (tests/integration/service/test_concurrency.py runs the race)
+    # another proposal starting at the same moment (world_model/tests/integration/service/test_concurrency.py runs the race)
     c.app.state.proposing.add("acme_demo")
     try:
         problem(c.post(f"{WM}/changes", json={"bundle_id": b["bundle_id"]}), 409, "update_in_progress")

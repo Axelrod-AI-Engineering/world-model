@@ -17,11 +17,11 @@ There are five demos: three in the repository and two client demos, which appear
 |---|---|---|
 | **Small demo** | `uv run axelrod small_demo` | A blank canvas. The 24 examples build a world model from nothing, one feature at a time. Start here. |
 | **Production demo** | `uv run axelrod prod_demo` | The same 24 examples in the oil-shock world, after three years of synthetic history, with a deeper hierarchy: superentities of superentities, three levels deep (Global tightening › Stagflation squeeze › Energy price shock; Tech decoupling › Semiconductor complex › AI chip supply chain; Oil to airlines) |
-| **Full demo** | `uv run axelrod demo` | The oil-shock scenario: 53 real actors and ideas and 18 scripted steps. The [hosted demo](deployment.md) runs this one. |
+| **Full demo** | `uv run axelrod demo` | The oil-shock scenario: 53 real actors and ideas and 18 scripted steps. The [hosted demo](../../../docs/deployment.md) runs this one. |
 | **Emily's demo** | `uv run axelrod demo --scenario emily_demo` | The ordinary use case: a PM's world model brought up to date by importing research, then forecasts of her book. See [below](#emilys-demo). |
 | **Sally's demo** | `uv run axelrod demo --scenario sally_demo` | Eleven names across banks, insurers, and Japan's exporters, brought up to date one day of research at a time; each forecast reads as a scenario table, and the model exports as context for a client's agents. See [below](#sallys-demo). |
 
-Emily's and Sally's demos are client content (Oct 21): their scenarios, worlds, and configs are not tracked in the repository. They live in the client root (`WORLD_MODEL_CLIENT_DIR`, default `data/clients`), and the demo menu lists them only where that folder holds them ([deployment](deployment.md#client-content)). The test suite uses a synthetic client in `tests/fixtures/clients` (invented names, scenario `acme_demo`) in their place.
+Emily's and Sally's demos are client content (Oct 21): their scenarios, worlds, and configs are not tracked in the repository. They live in the client root (`WORLD_MODEL_CLIENT_DIR`, default `data/clients`), and the demo menu lists them only where that folder holds them ([deployment](../../../docs/deployment.md#client-content)). The test suite uses a synthetic client in `world_model/tests/fixtures/clients` (invented names, scenario `acme_demo`) in their place.
 
 The small and production demos serve http://127.0.0.1:8765. The full demo serves http://127.0.0.1:8000 unless you pass `--port`.
 
@@ -31,7 +31,7 @@ You don't need to restart the server to change demos. The **demo menu** beside t
 
 - **A demo opened before comes back as you left it**, with its reviews, examples, and versions. Each demo keeps its own storage (next to the first one's, for example `var/axelrod/demo-prod_demo`) and its own trace stream. To start a demo over, use **Reset**, or Admin › Scenario; **Reset to the original demo** (☰) starts every demo under the login over at once.
 - **A demo opened for the first time is built in the background.** The demo you're on keeps working, and a card under the menu shows the progress. The production and full demos replay three years of synthetic history the first time they open on a machine, which takes about two and a half minutes. The card counts the days as they're replayed, and the menu marks those demos *First open replays its history: a few minutes*. After that the history is cached in `var/oil_shock_demo/` (the two demos share it), and opening either one takes seconds.
-- **On the hosted demo, each login switches only its own engine.** Switching under Emily's login never changes what the main login sees, and the other way round. `WORLD_MODEL_SCENARIO` and `WORLD_MODEL_LOGINS` still choose the demo each login opens on ([deployment.md](deployment.md)).
+- **On the hosted demo, each login switches only its own engine.** Switching under Emily's login never changes what the main login sees, and the other way round. `WORLD_MODEL_SCENARIO` and `WORLD_MODEL_LOGINS` still choose the demo each login opens on ([deployment.md](../../../docs/deployment.md)).
 - **In Emily's demo, Tutorial** switches to the small demo and opens its examples. **Back to your model** switches back, and her model is as she left it.
 
 The API behind the menu: `GET /api/demos` returns the demos, the current one, and the switch under way (its phase and, during the history replay, the days done). `POST /api/demos/{id}` switches. Every page on the same engine receives a `switched` message on `/ws` and reloads. `POST /api/sim/load` still reloads a demo from its start.
@@ -45,7 +45,7 @@ What an ordinary week with the product looks like for a cross-asset PM. The mode
 3. **Predict** opens on a blank canvas. Ask a question, or pick one of her four ready-made scenarios (from her Fed-versus-BoJ table and her yen simulator). The forecast brings forward only what it reaches, with the forecast's effect on each value; **Show the whole model** shows everything, as of the version the forecast used. Its transmission path opens first, as the grid; the brief is one click away, and takes notes, an **Edit**, and a **Re-run** ([gui.md](gui.md#panels)).
 4. **Tutorial** opens the small demo in place of the model, and **Back to your model** returns.
 
-The bundle format (`axelrod.import/v1`) is in `src/axelrod_wm/intake/bundle.py`; a synthetic sample is `tests/fixtures/import_bundle_sample.json`. Emily's own bundle is built from client research and lives in `data/work/emily/`, which is never committed or uploaded: on the hosted demo, import it with the file picker.
+The bundle format (`axelrod.import/v1`) is in `ingestion/src/axelrod_ingest/contract/bundle.py` ([the contract](../../../ingestion/docs/contract.md)); a synthetic sample is `world_model/tests/fixtures/import_bundle_sample.json`. Emily's own bundle is built from client research and lives in `data/work/emily/`, which is never committed or uploaded: on the hosted demo, import it with the file picker.
 
 ## Sally's demo
 
@@ -78,7 +78,7 @@ JPY/USD is the inverse of USD/JPY; USD/EUR follows the Fed-ECB gap; JPY/EUR cros
 3. **Scenarios for the book.** Each forecast's panel opens with its scenario table, the form of the client's Decision Engine card "Scenarios & conviction". The forecast's joint draws are sorted by how the book moves (the average effect on the eleven names' share prices, or their earnings line where a name has no price). **Bear** is the worst quarter of the draws, **Base** the middle half, **Bull** the best quarter. For each band: the names it favors and hurts (median moves, in percent), the drivers that differ most between bear and bull (the mechanism), and what would change the read (the open hypothesis on the book worth most to learn). The chances of the book ending up or down at all are the model's own, and sit above the table. Nothing in it is learned or written by a language model (`inference/scenario_table.py`).
 4. **Agent context.** **Agent context** on a forecast opens the context beside the card it fills. It follows the client's numbered load order: their **000** (core contract), **010** (relationship schema), and **020** (registry), unchanged, then our **036 domain pack**, then **evidence**. The export has five parts: the **load order** (and which of their agents' cards reads which part), the **domain pack**, the **registry entry** to append to their 020 (so the harness activates the pack by `domain_pack_id` or file index), the **evidence pack** (every value at the committed version, what has been observed, and the open questions), and the forecast's **evidence pack** (targets, transmission, key interactions, the scenario table). Live state is evidence, never part of a pack, as their contract asks. **Download** saves everything as one file; **As files** saves each part under the file name the load order gives it. It grounds the agent's judgment and never concludes it: no ratings, no sizing, no funding sources.
 
-How it maps onto the client's format (their packs' sections and the contract's ID rules, checked by `tests/integration/test_sally_context_api.py`):
+How it maps onto the client's format (their packs' sections and the contract's ID rules, checked by `world_model/tests/integration/test_sally_context_api.py`):
 
 | Their v4.1.4 section | Ours |
 |---|---|
@@ -95,19 +95,19 @@ How it maps onto the client's format (their packs' sections and the contract's I
 | 020 registry entry | The row to append: `domain_pack_id`, name, file name, activation terms, `never_merge_into_base`, file index |
 | evidence | The current state, and each forecast, as evidence packs loaded after the domain pack |
 
-The research is client material and stays local, like Emily's: `data/` is gitignored and never in the Docker image. Research agents write dated items into `data/work/sally/_bundle_parts/`, and `scripts/imports/bundles.py` gives them the model's ids, checks each part against the model, and writes the daily bundles:
+The research is client material and stays local, like Emily's: `data/` is gitignored and never in the Docker image. Research agents write dated items into `data/work/sally/_bundle_parts/`, and `world_model/scripts/imports/bundles.py` gives them the model's ids, checks each part against the model, and writes the daily bundles:
 
 ```bash
-uv run python scripts/imports/bundles.py ids sally_demo > data/work/sally/_bundle_parts/model_ids.txt
-uv run python scripts/imports/bundles.py check sally_demo data/work/sally/_bundle_parts/<group>.json
-uv run python scripts/imports/bundles.py days sally_demo data/work/sally/_bundle_parts data/work/sally/days --title "Sally's research"
+uv run python world_model/scripts/imports/bundles.py ids sally_demo > data/work/sally/_bundle_parts/model_ids.txt
+uv run python world_model/scripts/imports/bundles.py check sally_demo data/work/sally/_bundle_parts/<group>.json
+uv run python world_model/scripts/imports/bundles.py days sally_demo data/work/sally/_bundle_parts data/work/sally/days --title "Sally's research"
 ```
 
 5. **Export the world model** (☰, Learn) exports the model as it stands after the research approved so far, without a forecast: the 036 domain pack, its 020 registry entry, and the current state as an evidence pack, as one file or as the separate files the agents' load order names. Export again after each day's research, and the agents read the updated model.
 
-To write the whole upload set to a folder (after folding in a folder of daily bundles, with an evidence pack per ready thesis, and the client's 000, 010, and 020 beside it, 020 with our row appended): `uv run python scripts/imports/export_context.py sally_demo data/exports/sally/<name> --days data/work/sally/days --theses --client-core <their folder>`. Point it at a gitignored folder: the set holds client files.
+To write the whole upload set to a folder (after folding in a folder of daily bundles, with an evidence pack per ready thesis, and the client's 000, 010, and 020 beside it, 020 with our row appended): `uv run python world_model/scripts/imports/export_context.py sally_demo data/exports/sally/<name> --days data/work/sally/days --theses --client-core <their folder>`. Point it at a gitignored folder: the set holds client files.
 
-The API: `GET /api/context/v4` returns the export (load order, domain pack, registry entry, evidence); `?forecast=<id>` adds that forecast's evidence pack. The exporter is `src/axelrod_wm/context/v4.py`. The script also writes `reading/`, the pack split into files of at most 100 KB with a `00_START_HERE.md` (`--max-file-kb`), because the whole pack can be too large for an agent's file reader; see [focus.md](../construction/focus.md#the-reading-set-reading).
+The API: `GET /api/context/v4` returns the export (load order, domain pack, registry entry, evidence); `?forecast=<id>` adds that forecast's evidence pack. The exporter is `world_model/src/axelrod_wm/context/v4.py`. The script also writes `reading/`, the pack split into files of at most 100 KB with a `00_START_HERE.md` (`--max-file-kb`), because the whole pack can be too large for an agent's file reader; see [focus.md](../construction/focus.md#the-reading-set-reading).
 
 ## The tutorial (small and production demos)
 
@@ -136,7 +136,7 @@ How the examples run:
 - **More like this.** Under an example, **More like this** adds further articles of the same kind to the current state.
 - **Every example stops at Review.** Nothing in either memory changes until you approve. [The review](#the-review) explains what it shows.
 
-The examples, their articles, and the "more like this" events are in `src/axelrod_wm/sim/examples/`.
+The examples, their articles, and the "more like this" events are in `world_model/src/axelrod_wm/sim/examples/`.
 
 ## The full demo
 

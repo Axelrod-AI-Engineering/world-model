@@ -1,6 +1,6 @@
 """Identities, stock-flows, matrices, reconciling views and state-dependent links (Oct 18) where people and agents read
 them: the readable view, the trace (which may go on through totals), the import overlap guard, the v4.1.4 export, and
-the check script's tables. Synthetic bank (tests/unit/model/test_identities.py)."""
+the check script's tables. Synthetic bank (world_model/tests/unit/model/test_identities.py)."""
 
 from __future__ import annotations
 

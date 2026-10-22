@@ -1,4 +1,4 @@
-"""The domain model, projected onto the API model (docs/design/api.md §1): an attribute is the engine's subentity, a
+"""The domain model, projected onto the API model (world_model/docs/design/api.md §1): an attribute is the engine's subentity, a
 relationship its interaction, an event its market event, a change its proposal, a simulation its forecast. Each
 function reads domain objects and returns an API object from schemas.py; nothing here writes."""
 

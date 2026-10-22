@@ -19,13 +19,13 @@ The full demo is hosted on Railway's `dev` environment at **https://world-model-
 
 | Piece | Where | What it does |
 |---|---|---|
-| Image | `Dockerfile` | Python 3.12 slim. Installs the frozen dependencies with uv (`uv sync --frozen --no-dev --extra semantic`, which adds the embedding model's runtime) and copies `configs/`, `world_model/` (the examples and the taxonomy), `web/`, and the start script. |
-| Start | `scripts/start-railway.sh` | Runs `axelrod demo --scenario $WORLD_MODEL_SCENARIO --host 0.0.0.0 --port $PORT`: on dev, the production demo for the main login, and Emily's demo for hers ([demos.md](demos.md), [A login per scenario](#a-login-per-scenario)) |
+| Image | `Dockerfile` | Python 3.12 slim, built from the repository root. Installs the frozen dependencies of the world model member, with ingestion beside it as its workspace dependency (`uv sync --frozen --no-dev --no-editable --package axelrod-world-model --extra semantic`; the extra forwards to `axelrod-ingest[semantic]` and adds the embedding model's runtime), then copies `configs/` (the stage settings), `world_model/{examples,taxonomy,configs,web}`, and the start script. `AXELROD_ROOT=/app` tells the installed package where they are (`world_model/src/axelrod_wm/paths.py`). |
+| Start | `scripts/start-railway.sh` | Runs `axelrod demo --scenario $WORLD_MODEL_SCENARIO --host 0.0.0.0 --port $PORT`: on dev, the production demo for the main login, and Emily's demo for hers ([demos.md](../world_model/docs/guides/demos.md), [A login per scenario](#a-login-per-scenario)) |
 | Infrastructure | `.railway/railway.ts` | The service, its volume, and its settings, as code |
 | Release checks | `scripts/persist-railway-fields.sh`, `scripts/verify-railway-drift.py` | Set the two fields Railway's IaC does not store, then reject any drift except known leftovers |
-| Auth | `src/axelrod_wm/api/auth.py` | A signed-in session on every request except the health check; service tokens or scoped keys for `/v1` and `/mcp` |
+| Auth | `world_model/src/axelrod_wm/api/auth.py` | A signed-in session on every request except the health check; service tokens or scoped keys for `/v1` and `/mcp` |
 
-![The hosted deployment](../design/diagrams/deployment.svg)
+![The hosted deployment](../world_model/docs/design/diagrams/deployment.svg)
 
 The service's settings, from `.railway/railway.ts`:
 
@@ -79,7 +79,7 @@ An upload or a successful build alone is not a healthy deployment. Check all of 
 
 Every page, static file, API call, the API docs, and the WebSocket stream require a signed-in login. `GET` and `HEAD` on `/api/health` are the only exception: Railway's readiness probe has no credentials, and the health check exposes no data.
 
-- **The sign-in page** (`/login`, `src/axelrod_wm/api/login.html`) replaced the browser's Basic Auth prompt on Oct 12. A page opened without a session goes there and comes back after signing in; the API and the WebSocket answer 401 instead. Signing in sets an HttpOnly session cookie (the username and an expiry, HMAC-signed, 14 days), which also authenticates the WebSocket. **Sign out** (☰ menu, or `/logout`) clears it.
+- **The sign-in page** (`/login`, `world_model/src/axelrod_wm/api/login.html`) replaced the browser's Basic Auth prompt on Oct 12. A page opened without a session goes there and comes back after signing in; the API and the WebSocket answer 401 instead. Signing in sets an HttpOnly session cookie (the username and an expiry, HMAC-signed, 14 days), which also authenticates the WebSocket. **Sign out** (☰ menu, or `/logout`) clears it.
 - The signing key is `WORLD_MODEL_SESSION_SECRET` when set, else derived from the logins' passwords: sessions survive a restart, and changing any password signs everyone out. There is no user database.
 - The session cookie is the only credential. A script signs in the way a browser does: `curl -c jar -d username=… -d password=… https://…/login`, then `curl -b jar …`. A Basic `Authorization` header is ignored (Oct 12): a browser that once answered the old Basic prompt keeps sending one by itself, which kept people signed in after Sign out.
 
@@ -91,7 +91,7 @@ Every page, static file, API call, the API docs, and the WebSocket stream requir
 
 `WORLD_MODEL_LOGINS` adds logins that each open their own scenario, as comma-separated `username:password:scenario` entries (no `:` or `,` inside a field). On dev it holds Emily's login, which opens `emily_demo`, and Sally's, which opens `sally_demo`; the main login opens `WORLD_MODEL_SCENARIO` (`prod_demo` on dev; `oil_shock_demo` when unset). Each login gets an engine of its own, with its own storage (`var/axelrod/demo-<username>`) and trace stream, so reviews under one login never show under another. Everyone who signs in with the same login still shares that login's session. The variable lives in Railway only, like the main credentials.
 
-The top bar's demo menu ([demos.md](demos.md#switching-demos)) switches only the signed-in login's engine. Each demo a login opens keeps its own storage next to that login's storage (`var/axelrod/demo-<username>-<demo>`), and it stays in memory until the server restarts. The first time the production or full demo opens on a fresh container, its history is replayed, which takes a few minutes.
+The top bar's demo menu ([demos.md](../world_model/docs/guides/demos.md#switching-demos)) switches only the signed-in login's engine. Each demo a login opens keeps its own storage next to that login's storage (`var/axelrod/demo-<username>-<demo>`), and it stays in memory until the server restarts. The first time the production or full demo opens on a fresh container, its history is replayed, which takes a few minutes.
 
 To switch logins, **Sign out** (☰ menu, or `/logout`) and sign in again, or use a private window.
 
@@ -110,7 +110,7 @@ Client scenarios, worlds, configs, and construction pages are not in the reposit
 
 The root is `WORLD_MODEL_CLIENT_DIR`. It defaults to `data/clients` (gitignored) in a checkout; on dev, `.railway/railway.ts` sets it to `/app/var/clients`, on the volume. The service finds scenarios in `world_model/examples/scenarios` first, then in the client root's `scenarios/`, so the demo menu lists a client demo only when its folder is there. The variable may name several roots separated by `:`, searched in order.
 
-A path in a client `scenario.yaml` (`construction_dir`, `taxonomy_dir`, `seeds`, `layout`, `config_overrides`, `imports_dir`) is read against the root that holds the scenario, then against the repository, so a client scenario writes `worlds/<name>` for its own world and `world_model/taxonomy` for the shared one (`src/axelrod_wm/clients.py`).
+A path in a client `scenario.yaml` (`construction_dir`, `taxonomy_dir`, `seeds`, `layout`, `config_overrides`, `imports_dir`) is read against the root that holds the scenario, then against the repository, so a client scenario writes `worlds/<name>` for its own world and `world_model/taxonomy` for the shared one (`world_model/src/axelrod_wm/clients.py`).
 
 A login in `WORLD_MODEL_LOGINS` whose scenario is not under any client root opens the main engine, with a warning in the log, instead of stopping the server. To put a client's content on dev, copy its folders to `/app/var/clients` on the volume (for example `tar cz -C data/clients . | railway ssh -s world-model -e dev -- tar xz -C /app/var/clients`, after `railway ssh keys add`), then redeploy.
 
@@ -119,8 +119,8 @@ To load client content on dev, copy the folder onto the volume (for example `rai
 ## The API and its keys
 
 The outward API (`/v1/*`) and its MCP server (`/mcp`) take core-minted service tokens or scoped static keys rather
-than a sign-in. Every variable they read is in [the API reference's Configuration](../api/README.md#configuration),
-and how core authenticates is in [design/core-mcp-auth.md](../design/core-mcp-auth.md). For operations:
+than a sign-in. Every variable they read is in [the API reference's Configuration](../world_model/docs/api/README.md#configuration),
+and how core authenticates is in [design/core-mcp-auth.md](../world_model/docs/design/core-mcp-auth.md). For operations:
 
 - `WORLD_MODEL_API_KEYS` holds comma-separated `caller:key:org[:scope+scope…]` entries. A key acts as a service of
   that organization and opens only `/v1` and `/mcp`. Keys are at least 24 characters, never carry `changes:approve`,
@@ -148,4 +148,4 @@ Mounting `var/` keeps the init cache between runs, as the Railway volume does. A
 
 ## Tests
 
-`tests/unit/test_basic_auth.py` covers the auth middleware. `tests/unit/test_railway_drift.py` checks that the drift verifier rejects unrelated and destructive changes. Both run with `uv run pytest`.
+The three CI jobs (`ingestion`, `world_model`, `repo`) are in [development.md](development.md#continuous-integration). `world_model/tests/unit/test_basic_auth.py` covers the auth middleware. `tests/test_railway_drift.py` checks that the drift verifier rejects unrelated and destructive changes. The first runs with the world model's tests (`cd world_model && uv run pytest`), the second with the repository's (`uv run pytest`, from the root).

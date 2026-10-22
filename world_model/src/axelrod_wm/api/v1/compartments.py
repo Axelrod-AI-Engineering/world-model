@@ -1,4 +1,4 @@
-"""The unified world model and its compartments (Oct 19; docs/design/architecture-plan.md §4, D-20): `/v1/erid`.
+"""The unified world model and its compartments (Oct 19; world_model/docs/archive/architecture-plan.md §4, D-20): `/v1/erid`.
 
 **erid** is the unified world model: the whole graph, served beside the per-client `/v1/world-models/{id}`. It is the
 main engine's world: a deployment runs its fullest scenario there (`sally_demo` today), so nothing new is loaded.

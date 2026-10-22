@@ -1,5 +1,5 @@
 """The construction scripts of the second round (Oct 18) on a synthetic world and corpus: the input search
-(scripts/construction/inputs.py) and the reconciliation table (scripts/construction/check.py)."""
+(world_model/scripts/construction/inputs.py) and the reconciliation table (world_model/scripts/construction/check.py)."""
 
 from __future__ import annotations
 

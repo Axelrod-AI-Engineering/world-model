@@ -1,6 +1,6 @@
 """Search the supplied material for each input a company's transitions still need, before declaring it missing.
 
-    uv run python scripts/construction/inputs.py sally_demo --entities toyota --corpus data/sources/sally \\
+    uv run python world_model/scripts/construction/inputs.py sally_demo --entities toyota --corpus data/sources/sally \\
         [--files <file> ... | --dirs <folder> ...] [--extra-terms "eligible import volume=import units,CBU imports"] \\
         [--exclude construction bench] [--top 5]
 

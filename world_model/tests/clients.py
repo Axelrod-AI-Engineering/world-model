@@ -1,10 +1,10 @@
 """Client content in the tests (Oct 21).
 
 Client scenarios, worlds, and construction files are never tracked: they live in a client root (`WORLD_MODEL_CLIENT_DIR`,
-default <data>/clients, data/ being local and gitignored; src/axelrod_wm/clients.py). CI has none. The suite therefore runs in two ways:
+default <data>/clients, data/ being local and gitignored; world_model/src/axelrod_wm/clients.py). CI has none. The suite therefore runs in two ways:
 
-- Against `tests/fixtures/clients`, a small synthetic client (the invented "acme" names: scenarios `acme_demo` and
-  `acme_focus`, world `acme_demo`). tests/conftest.py puts it first on the client roots, so every test can use it.
+- Against `world_model/tests/fixtures/clients`, a small synthetic client (the invented "acme" names: scenarios `acme_demo` and
+  `acme_focus`, world `acme_demo`). world_model/tests/conftest.py puts it first on the client roots, so every test can use it.
 - Against the real client content, when it is present: a test module that reads it starts with
   `skip_without_client("sally_demo")`, and is skipped, with the reason, when it is absent.
 """

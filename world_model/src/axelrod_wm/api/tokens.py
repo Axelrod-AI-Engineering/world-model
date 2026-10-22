@@ -1,4 +1,4 @@
-"""Who is calling (Oct 18; docs/design/core-mcp-auth.md): the principal every v1 request acts as, and the verification
+"""Who is calling (Oct 18; world_model/docs/design/core-mcp-auth.md): the principal every v1 request acts as, and the verification
 of core-minted service tokens.
 
 A **principal** is the verified identity a request acts as: its kind (a core-minted `token`, a static `key`, a

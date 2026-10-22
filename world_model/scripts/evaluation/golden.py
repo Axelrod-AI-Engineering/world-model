@@ -1,6 +1,6 @@
 """Run a golden test bank against a world: the responder answers through v1 reads only, the grader scores four outcomes.
 
-    python scripts/evaluation/golden.py --world sally_demo --cases <bank.yaml> [--only T01A,T02A] \
+    python world_model/scripts/evaluation/golden.py --world sally_demo --cases <bank.yaml> [--only T01A,T02A] \
         [--baselines <bundle.json> ...] --out <results.json>
 
 `--baselines` is operator setup, not part of any answer: each bundle is imported through the v1 bundle and change

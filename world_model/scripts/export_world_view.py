@@ -4,7 +4,7 @@ they never need the world model.
 
     uv run python world_model/scripts/export_world_view.py acme_demo ingestion/tests/fixtures/world_view_acme.json \\
         --client-dir world_model/tests/fixtures/clients
-    uv run python world_model/scripts/export_world_view.py sally_demo data/work/sally/world_view.json   # a client's
+    uv run python world_model/scripts/export_world_view.py <scenario> data/work/<client>/world_view.json   # a client's
 
 The file is {"inverted": [...patterns...], "world_view": {...}}: sorted, with sorted keys, so equal worlds give equal bytes.
 """

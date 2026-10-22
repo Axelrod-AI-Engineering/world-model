@@ -1,4 +1,4 @@
-"""Engine configuration (§8.2). Mirrors configs/default.yaml, with those values as defaults."""
+"""Engine configuration (§8.2). Mirrors world_model/configs/default.yaml, with those values as defaults."""
 
 from __future__ import annotations
 
@@ -322,7 +322,7 @@ DEFAULT_CONFIG_PATH = WM_ROOT / "configs" / "default.yaml"
 
 def load_config(path: str | Path | None = None, overrides: list[str | Path | dict] | None = None,
                 **updates: Any) -> EngineConfig:
-    """Load a config file (default: configs/default.yaml), then apply override files or dicts."""
+    """Load a config file (default: world_model/configs/default.yaml), then apply override files or dicts."""
     p = Path(path) if path is not None else DEFAULT_CONFIG_PATH
     data: dict = {}
     if p.exists():

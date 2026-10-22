@@ -2,8 +2,8 @@
 
 This page turns the API and interface review with Manav (Oct 18) into a plan. It has four parts: what was decided,
 what still needs analysis, the order of work, and the analysis of one world model against several. The decisions are
-also recorded in [decisions.md](decisions.md) as D-20 to D-24. Open questions stay on
-[questions-for-manav-and-zsolt.md](questions-for-manav-and-zsolt.md).
+also recorded in [decisions.md](../design/decisions.md) as D-20 to D-24. Open questions stay on
+[questions-for-manav-and-zsolt.md](../design/questions-for-manav-and-zsolt.md).
 
 <!-- toc -->
 **Contents**
@@ -18,15 +18,15 @@ also recorded in [decisions.md](decisions.md) as D-20 to D-24. Open questions st
 
 | Topic | Decision | Where it lands |
 |---|---|---|
-| Who may reach the world model | Only internal staff and backend services, never a client directly. Clients use the products built on top. Read and write are distinct permissions. | [core-mcp-auth.md §5](core-mcp-auth.md#5-recommendation), D-21 |
+| Who may reach the world model | Only internal staff and backend services, never a client directly. Clients use the products built on top. Read and write are distinct permissions. | [core-mcp-auth.md §5](../design/core-mcp-auth.md#5-recommendation), D-21 |
 | Core's backend MCP | Read only, to start | The scope table and the core patch |
 | Who may write | The web interface (a signed-in person) and the data-ingestion pipeline (a scoped service key) | The scope table |
-| Scope names | One verb per action, used the same way on every resource. No near-synonyms such as review/approve or propose/write. Scopes stay fine-grained; finer admin and approval roles come later. | [api.md §3](api.md#3-api-conventions) |
+| Scope names | One verb per action, used the same way on every resource. No near-synonyms such as review/approve or propose/write. Scopes stay fine-grained; finer admin and approval roles come later. | [api.md §3](../design/api.md#3-api-conventions) |
 | Audit log | Kept forever: no deletion and no expiry | D-22 |
 | Idempotency | Keys are permanent, and creation is keyed on content as well, so the same content always gives the same result. Determinism comes first. Grouping several articles about one event comes later. | D-23 |
-| Acronyms | Every acronym and short field name in the API docs is spelled out and defined | [api.md](api.md) |
-| ETag and If-Match | Kept as built. Manav is reviewing them. | [api.md §3](api.md#3-api-conventions) |
-| A unified endpoint | A separate top-level resource for the unified world model, beside the per-client `/v1/world-models/{id}`, which stays for now. Named `/v1/erid` (the notes' `/erit`; core calls the world model state Erid) and built Oct 19, with compartments defined as focused worlds. | [api.md §4](api.md#the-unified-world-model-erid-built-oct-19) (built) |
+| Acronyms | Every acronym and short field name in the API docs is spelled out and defined | [api.md](../design/api.md) |
+| ETag and If-Match | Kept as built. Manav is reviewing them. | [api.md §3](../design/api.md#3-api-conventions) |
+| A unified endpoint | A separate top-level resource for the unified world model, beside the per-client `/v1/world-models/{id}`, which stays for now. Named `/v1/erid` (the notes' `/erit`; core calls the world model state Erid) and built Oct 19, with compartments defined as focused worlds. | [api.md §4](../design/api.md#the-unified-world-model-erid-built-oct-19) (built) |
 | Onboarding first | The world model goes to the client as its JSON export. Core integration waits: Manav opens a basic integration PR to refine later. | Section 3 below |
 
 ## 2. Needs analysis
@@ -35,9 +35,9 @@ also recorded in [decisions.md](decisions.md) as D-20 to D-24. Open questions st
   is one unified model served in compartments. Manav and Karthik decide together after reading it.
 - **The object model.** Manav proposed entity types (company, product, metric, and so on) on one base class, with
   strictly typed relationships, so filters can be precise. This is for a joint session. The starting point is the
-  current split into entities and attributes ([data-model.md](data-model.md)).
+  current split into entities and attributes ([data-model.md](../design/data-model.md)).
 - **First-class records.** Should organization, world model and the structured actor be records in the data model,
-  or API metadata? This waits until every term is defined (see the terms table in [api.md](api.md)).
+  or API metadata? This waits until every term is defined (see the terms table in [api.md](../design/api.md)).
 - **Search from a question.** Agreed direction (D-24): start from the nearest neighbours of the question in the
   semantic space, then expand best-first by edge weight rather than by hop count. Today `graph_search` expands one
   hop from what the question names (`lake/search.py`). In the Toyota golden tests it missed a link when the

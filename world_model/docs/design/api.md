@@ -29,7 +29,7 @@ consumers use those truths; keep both independent of implementation details.*
 
 Every acronym, short field name and role used in the API, with its full name, meaning and an example. One source: the
 contract's `info.x-terms` ([../api/openapi.yaml](../api/openapi.yaml)), rendered here, in
-[../api/README.md](../api/README.md) and in [core-mcp-auth.md](core-mcp-auth.md) by `scripts/api/reference.py`.
+[../api/README.md](../api/README.md) and in [core-mcp-auth.md](core-mcp-auth.md) by `world_model/scripts/api/reference.py`.
 
 <!-- terms:start -->
 | Term | Full name | Meaning | Example |
@@ -75,7 +75,7 @@ contract's `info.x-terms` ([../api/openapi.yaml](../api/openapi.yaml)), rendered
 | Cursor |  | An opaque position in a list, returned as `meta.next_cursor`; it keeps the version it started on. | `eyJvIjo1MCwidiI6M30` |
 | Job |  | Long work answered `202 Accepted` with a job to poll. | `job_8f2a…` |
 | `traceparent` | W3C Trace Context header | Distributed-tracing context, accepted and echoed. W3C is the World Wide Web Consortium. | `00-4bf9…-00f0…-01` |
-| OpenAPI | the OpenAPI Specification 3.1 | The machine-readable contract of this API, docs/api/openapi.yaml. |  |
+| OpenAPI | the OpenAPI Specification 3.1 | The machine-readable contract of this API, world_model/docs/api/openapi.yaml. |  |
 | CRUD | create, read, update, delete | The plain operations; actions that are not CRUD create a resource instead. | `POST …/approvals` |
 | Lakehouse catalog |  | The service's store of documents, chunks, bundles, the registry, the audit log, idempotency keys and jobs (SQLite). |  |
 | Bitemporal |  | Two times on every fact: when it applies (`valid_at`) and when the model learned it (`observed_at`). |  |
@@ -86,12 +86,12 @@ contract's `info.x-terms` ([../api/openapi.yaml](../api/openapi.yaml)), rendered
 ## 1. The three models
 
 *Separate domain, storage and API models.* Each serves one purpose. Today the service mostly serializes the domain
-model, and v1 ends that: `src/axelrod_wm/api/v1/schemas.py` holds the API models and `project.py` maps the domain onto them.
+model, and v1 ends that: `world_model/src/axelrod_wm/api/v1/schemas.py` holds the API models and `project.py` maps the domain onto them.
 
 | Layer | What it is | Here |
 |---|---|---|
 | **API model** | Shapes for consumers and their workflows | `EntityResponse`, `SimulationResponse`, `ImpactAnalysisResponse` (OpenAPI components) |
-| **Domain model** | Business concepts, invariants and rules | `Entity`, `Subentity`, `Interaction`, `Composition`, `Transition`, `Forecast` (src/axelrod_wm/model) |
+| **Domain model** | Business concepts, invariants and rules | `Entity`, `Subentity`, `Interaction`, `Composition`, `Transition`, `Forecast` (world_model/src/axelrod_wm/model) |
 | **Persistence model** | Snapshots, the lakehouse catalog, indexes | content-addressed snapshots, SQLite catalog, FTS5 and vector indexes |
 
 The world model is a *substrate* for agents. Agents produce theses, simulations and proposed changes that reference
@@ -166,7 +166,7 @@ Data-model principles, as applied:
 | Access boundary | Only internal staff and backend services reach the world model (D-21). Core's backend MCP reads only: a `core-mcp` or `act` token holds `world_model:read`, whatever it asks. A static key with no scopes listed reads only. Writes come from the web interface (a person) and the data-ingestion pipeline (a key with `documents:create changes:create`) |
 | Authorization | The organization comes from the credential, never from the request. A world model of another organization is `404`. A scope check on every route; a decision checks that a person decides before any scope |
 | Audit | Every write records its actor (`kind`, `org`, `sub`, `name`, `azp`, `act`, `jti`). The log is **kept forever**: no route deletes it and nothing expires (D-22); `admin` reads it |
-| Contracts | OpenAPI 3.1 written first (`docs/api/openapi.yaml`), JSON Schema validation of responses in tests, route parity both ways, and consumer contract tests (core's patch) |
+| Contracts | OpenAPI 3.1 written first (`world_model/docs/api/openapi.yaml`), JSON Schema validation of responses in tests, route parity both ways, and consumer contract tests (core's patch) |
 
 ## 4. Resources and routes
 
@@ -244,7 +244,7 @@ here are its outline.
 
 Manav asked for a separate top-level resource for the unified world model, beside the per-client
 `/v1/world-models/{id}`, which stays. The user named it **`erid`**. It is the analysis default of
-[architecture-plan.md §4](architecture-plan.md#4-one-world-model-or-several) (D-20, proposed): one unified model,
+[architecture-plan.md §4](../archive/architecture-plan.md#4-one-world-model-or-several) (D-20, proposed): one unified model,
 served in compartments.
 
 | Route | Returns |
@@ -376,7 +376,7 @@ Built since, from [core-mcp-auth.md](core-mcp-auth.md): two security schemes (co
 keys) plus sessions; the `admin` scope; human-only decisions; `review: "auto"` removed; the `world_models` registry;
 and an audit log of every write.
 
-Decided Oct 19, in the API review with Manav ([architecture-plan.md](architecture-plan.md), D-20 to D-24), and built:
+Decided Oct 19, in the API review with Manav ([architecture-plan.md](../archive/architecture-plan.md), D-20 to D-24), and built:
 
 6. **Scopes are `resource:action`** with one verb per action: read, create, approve, plus `admin` (§3).
 7. **Only internal staff and backend services reach the world model; core's backend MCP reads only** (D-21). Writes

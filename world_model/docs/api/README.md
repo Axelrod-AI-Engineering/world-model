@@ -90,7 +90,7 @@ looks the way it does, and [design/core-mcp-auth.md](../design/core-mcp-auth.md)
 | Cursor |  | An opaque position in a list, returned as `meta.next_cursor`; it keeps the version it started on. | `eyJvIjo1MCwidiI6M30` |
 | Job |  | Long work answered `202 Accepted` with a job to poll. | `job_8f2a…` |
 | `traceparent` | W3C Trace Context header | Distributed-tracing context, accepted and echoed. W3C is the World Wide Web Consortium. | `00-4bf9…-00f0…-01` |
-| OpenAPI | the OpenAPI Specification 3.1 | The machine-readable contract of this API, docs/api/openapi.yaml. |  |
+| OpenAPI | the OpenAPI Specification 3.1 | The machine-readable contract of this API, world_model/docs/api/openapi.yaml. |  |
 | CRUD | create, read, update, delete | The plain operations; actions that are not CRUD create a resource instead. | `POST …/approvals` |
 | Lakehouse catalog |  | The service's store of documents, chunks, bundles, the registry, the audit log, idempotency keys and jobs (SQLite). |  |
 | Bitemporal |  | Two times on every fact: when it applies (`valid_at`) and when the model learned it (`observed_at`). |  |
@@ -322,13 +322,13 @@ claude mcp add --transport http world-model https://world-model-dev.up.railway.a
 ## Mounting it from core
 
 Core re-publishes the **read** tools in its own MCP catalog, under its own sign-in. The proposal is
-[integrations/core](../../integrations/core/README.md): 17 read tools and no write tool, since core's backend MCP reads
+[integrations/core](../../../integrations/core/README.md): 17 read tools and no write tool, since core's backend MCP reads
 only, to start. For each call, core mints a service token for the signed-in org user (`azp: core-mcp`, `act` naming
 the MCP host) and calls `/v1/world-models/{id}/…`; the service caps such a token at `world_model:read`.
 
 ## Configuration
 
-Settings live in two places, following core's convention (`src/axelrod_wm/settings.py`):
+Settings live in two places, following core's convention (`world_model/src/axelrod_wm/settings.py`):
 
 - **Non-secret settings are checked in:** `configs/world_model.toml`, overlaid by `configs/world_model.<stage>.toml`
   (`[auth]`: `trusted_issuers`, `internal_orgs`, `main_login_org`, `deny`, `owners`; `[compartments]`). The loader
@@ -364,14 +364,14 @@ repository.
 
 | Part | Code | Tests |
 |---|---|---|
-| The contract | `docs/api/openapi.yaml` | `tests/service/test_openapi_contract.py` (lint, route parity, response schemas, this reference and the terms) |
-| REST routes | `src/axelrod_wm/api/v1/` (API models in `schemas.py`, projections from the domain in `project.py`) | `tests/service/` |
-| The unified world model | `src/axelrod_wm/api/v1/routes_erid.py`, `compartments.py` | `tests/service/test_v1_erid.py` |
-| Credentials, tokens, scopes | `src/axelrod_wm/api/keys.py`, `api/tokens.py`, `api/auth.py` | `tests/service/test_keys.py`, `test_tokens.py`, `test_v1_auth.py` |
-| MCP server | `src/axelrod_wm/api/mcp.py` | `tests/service/test_mcp.py` |
-| End-to-end flows | the service, MCP, lakehouse, engine and snapshots together | `tests/integration/service/` |
+| The contract | `world_model/docs/api/openapi.yaml` | `world_model/tests/service/test_openapi_contract.py` (lint, route parity, response schemas, this reference and the terms) |
+| REST routes | `world_model/src/axelrod_wm/api/v1/` (API models in `schemas.py`, projections from the domain in `project.py`) | `world_model/tests/service/` |
+| The unified world model | `world_model/src/axelrod_wm/api/v1/routes_erid.py`, `compartments.py` | `world_model/tests/service/test_v1_erid.py` |
+| Credentials, tokens, scopes | `world_model/src/axelrod_wm/api/keys.py`, `api/tokens.py`, `api/auth.py` | `world_model/tests/service/test_keys.py`, `test_tokens.py`, `test_v1_auth.py` |
+| MCP server | `world_model/src/axelrod_wm/api/mcp.py` | `world_model/tests/service/test_mcp.py` |
+| End-to-end flows | the service, MCP, lakehouse, engine and snapshots together | `world_model/tests/integration/service/` |
 
-[tests/README.md](../../tests/README.md) lists every suite.
+[world_model/tests/README.md](../../tests/README.md) lists every suite.
 
 ## Reference
 

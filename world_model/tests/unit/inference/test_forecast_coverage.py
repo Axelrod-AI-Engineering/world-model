@@ -1,6 +1,6 @@
 """A forecast's calculation coverage (inference/task.forecast_coverage, channel_contributions; Oct 18): the quantified
 links that contribute, the reached links that carry no size and why, the inputs that block them, and per target the
-share of the reached routes that are fully quantified. Synthetic world (tests/unit/model/test_business_construction)."""
+share of the reached routes that are fully quantified. Synthetic world (world_model/tests/unit/model/test_business_construction)."""
 
 from __future__ import annotations
 

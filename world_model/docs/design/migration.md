@@ -45,7 +45,7 @@ The back edges that cause them, and the task that cuts each one:
 | `shared/analyze.py` lazily imports `inference.transmission` | | T-06 |
 | `control/` imports `api.views` | `controller.py:931`, `stage.py:392` | T-09 |
 | `api` wraps `sim.ScenarioRunner` and probes it with `hasattr` | `routes.py:1172, 1244` | T-11 |
-| `intake/bundle.py` imports `sim.examples.catalog` | line 136 | T-07 |
+| `intake/structured.py` (formerly `intake/bundle.py`) imports `sim.examples.catalog` | `signal_ops` | T-07 |
 
 ## Tasks, in order
 
@@ -56,7 +56,7 @@ Each task lists: **Do**, the change; **Keep**, what must not change; **Test**, h
 **T-01 · Create `core/`.**
 - **Do:** move `engine/registry.py`, `engine/rng.py`, `trace.py`, `model/ids.py`, and `model/serialization.py` into `axelrod_wm/core/`. Leave re-export shims at the old paths, with a `DeprecationWarning`. Replace `engine/defaults.py` with `runtime/plugins.py` (the list of modules to import).
 - **Keep:** every import path still works through the shims.
-- **Test:** add `tests/unit/ports/test_layers.py`, an `ast` import graph that asserts `core/` is a leaf.
+- **Test:** add `world_model/tests/unit/ports/test_layers.py`, an `ast` import graph that asserts `core/` is a leaf.
 
 **T-02 · Create `ports/`.**
 - **Do:** move every slot ABC and its record types into `ports/<module>.py`, and move `contracts.py` there. Implementations import from `ports/`.
@@ -136,7 +136,7 @@ Each task lists: **Do**, the change; **Keep**, what must not change; **Test**, h
 - **Test:** the Playwright smoke test passes.
 
 **T-18 · Align the older documents.**
-- **Do:** apply the fixes listed in [decisions.md](decisions.md#where-older-documents-disagree) to `web/literature.md` and `web/implementation.html`. Mark the planned methods "planned", and match the stage counts to `flows/`.
+- **Do:** apply the fixes listed in [decisions.md](decisions.md#where-older-documents-disagree) to `world_model/web/literature.md` and `world_model/web/implementation.html`. Mark the planned methods "planned", and match the stage counts to `flows/`.
 - **Keep:** the academic terms and the references.
 - **Test:** the How it works tab renders, and no claim in it contradicts ml-stack.md.
 

@@ -41,8 +41,8 @@ uv run axelrod export-trace ...                            # copy a recorded tra
 
 ## Configuration
 
-- `configs/default.yaml` picks one component per slot. To swap one in, copy the file, edit `components:`, and pass `--config`.
-- `configs/demo.yaml` and `configs/small_demo.yaml` hold each scenario's overrides. Both demos review every change (`review_all`).
+- `world_model/configs/default.yaml` picks one component per slot. To swap one in, copy the file, edit `components:`, and pass `--config`.
+- `world_model/configs/demo.yaml` and `world_model/configs/small_demo.yaml` hold each scenario's overrides. Both demos review every change (`review_all`).
 - `world_model/examples/worlds/<world>/` holds a world's construction files. `world_model/taxonomy/objects.yaml` gives each firm concept (Airline, Chipmaker, …) its default values and links.
 - `world_model/examples/scenarios/<scenario>/` holds a script, seeds, a layout, market events and their reviewed translations, and the synthetic world's truth. The small demo is a blank canvas (`canvas: blank`). The production demo builds on `oil_shock_demo` (`base:`).
 
@@ -53,4 +53,4 @@ uv run axelrod export-trace ...                            # copy a recorded tra
 | `WORLD_MODEL_BASIC_AUTH_USERNAME`, `WORLD_MODEL_BASIC_AUTH_PASSWORD` | The main login. When both are set, every page, API call, and WebSocket requires signing in (the variables keep their old name). Setting only one stops the server from starting. |
 | `WORLD_MODEL_REQUIRE_BASIC_AUTH=1` | Refuse to start without both credentials. On Railway this is automatic. |
 
-Without these variables, the local demos need no login. [deployment.md](deployment.md#sign-in) covers the hosted setup and the other logins (`WORLD_MODEL_LOGINS`); the API's variables (keys, trusted issuers, the lakehouse, the embedder, the LLM step) are in [the API reference](../api/README.md#configuration).
+Without these variables, the local demos need no login. [deployment.md](../../../docs/deployment.md#sign-in) covers the hosted setup and the other logins (`WORLD_MODEL_LOGINS`); the API's variables (keys, trusted issuers, the lakehouse, the embedder, the LLM step) are in [the API reference](../api/README.md#configuration).

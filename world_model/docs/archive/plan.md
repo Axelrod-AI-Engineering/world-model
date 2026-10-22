@@ -119,7 +119,7 @@ Rules:
 4. **One writer.** Every change to working or long-term memory goes through `GraphMutator` (§7.7). It records a `ChangeSet` in the ledger and bumps the state version. Nothing else mutates memory.
 5. **Explicit randomness.** All sampling uses the `numpy.random.Generator` in `ProcessContext`. Never call `np.random.*` module functions. The same seed, state version, and config must give identical outputs.
 6. **Trace what the UI shows.** Each stage emits trace events through `ctx.tracer` (§10). The front end never computes model results. It renders API views and replays traces.
-7. **No build step for the front end.** Use plain HTML, CSS, and ES modules, with d3 v7 vendored in `web/vendor/`.
+7. **No build step for the front end.** Use plain HTML, CSS, and ES modules, with d3 v7 vendored in `world_model/web/vendor/`.
 8. **When this plan is silent,** pick the simplest option that keeps the interfaces intact and leave a `# DECISION:` comment.
 
 These commands must work at the end:
@@ -398,7 +398,7 @@ axelrod-world-model/
 │       ├── figure1_layout.yaml      # positions and hull shapes from Figure 1 (§13.3)
 │       ├── truth.yaml
 │       └── history_regimes.yaml
-├── src/axelrod_wm/
+├── world_model/src/axelrod_wm/
 │   ├── __init__.py
 │   ├── core/          ids.py categories.py distributions.py temporal.py evidence.py entity.py
 │   │                  interaction.py superentity.py taxonomy.py hypothesis.py graph.py
@@ -2055,7 +2055,7 @@ def register(slot: str, name: str) -> Callable[[type], type]:
 
 ### 8.2 Configuration
 
-`configs/default.yaml`. A component can be given as a name or as `{name: ..., params: {...}}`.
+`world_model/configs/default.yaml`. A component can be given as a name or as `{name: ..., params: {...}}`.
 
 ```yaml
 seed: 7                 # precedence: --seed flag, then the scenario's seed, then this value
@@ -2209,7 +2209,7 @@ storage:
   path: var/axelrod
 ```
 
-`EngineConfig` (`engine/config.py`) is a pydantic model that mirrors this file, with these values as defaults; `configs/demo.yaml` overrides a few keys. `config_hash` is the SHA-256 of the canonical JSON of the loaded config. Forecasts record it.
+`EngineConfig` (`engine/config.py`) is a pydantic model that mirrors this file, with these values as defaults; `world_model/configs/demo.yaml` overrides a few keys. `config_hash` is the SHA-256 of the canonical JSON of the loaded config. Forecasts record it.
 
 ### 8.3 Context and engine
 
@@ -3625,7 +3625,7 @@ initialization:
     regimes: world_model/examples/scenarios/oil_shock_demo/history_regimes.yaml
 world:
   truth: world_model/examples/scenarios/oil_shock_demo/truth.yaml
-config_overrides: configs/demo.yaml
+config_overrides: world_model/configs/demo.yaml
 steps:
   - at: 2026-01-28T20:00:00Z
     update: {}
@@ -3690,7 +3690,7 @@ class ScenarioRunner:
     def checklist(self) -> list[tuple[str, bool]]: ...  # §15.3
 ```
 
-The effective seed is the `--seed` flag if given, else the scenario's `seed`, else the config's; the runner records it in the ledger. A step with `update` calls `controller.request_update(UpdateRequest(requested_by="scenario", until=at.date(), requested_at=at, ...))`, resolving the user event ids from the scenario files. The demo's sources are the mock scraper and the synthetic data feed (`configs/demo.yaml`), and the world advances as the data feed is polled. When the update finishes, the step runs its action. In interactive mode, an update that pauses for review sets the runner's state to `awaiting_review`; the runner continues when the update does. The Update button in the UI makes the same request with a date the user picks. Headless runs with `--auto-approve` use the `auto_approve_all` policy.
+The effective seed is the `--seed` flag if given, else the scenario's `seed`, else the config's; the runner records it in the ledger. A step with `update` calls `controller.request_update(UpdateRequest(requested_by="scenario", until=at.date(), requested_at=at, ...))`, resolving the user event ids from the scenario files. The demo's sources are the mock scraper and the synthetic data feed (`world_model/configs/demo.yaml`), and the world advances as the data feed is polled. When the update finishes, the step runs its action. In interactive mode, an update that pauses for review sets the runner's state to `awaiting_review`; the runner continues when the update does. The Update button in the UI makes the same request with a date the user picks. Headless runs with `--auto-approve` use the `auto_approve_all` policy.
 
 CLI (`typer`):
 
@@ -4004,17 +4004,17 @@ U: open the Update dialog. Space: play or pause. →: step. Shift+← and Shift+
 ### 13.9 Front-end files
 
 ```text
-web/index.html
-web/css/tokens.css   web/css/app.css
-web/js/main.js                 boot, layout, shortcuts
-web/js/api.js                  REST and WebSocket client
-web/js/store.js                client model: GraphView plus incremental trace application
-web/js/graph/                  renderer.js zoom.js forces.js layouts.js hulls.js fuzzy.js draw-tool.js legend.js
-web/js/panels/                 update.js inbox.js review.js inspector.js thesis.js forecast.js hypotheses.js
+world_model/web/index.html
+world_model/web/css/tokens.css   world_model/web/css/app.css
+world_model/web/js/main.js                 boot, layout, shortcuts
+world_model/web/js/api.js                  REST and WebSocket client
+world_model/web/js/store.js                client model: GraphView plus incremental trace application
+world_model/web/js/graph/                  renderer.js zoom.js forces.js layouts.js hulls.js fuzzy.js draw-tool.js legend.js
+world_model/web/js/panels/                 update.js inbox.js review.js inspector.js thesis.js forecast.js hypotheses.js
                                decisions.js memory.js pipeline.js timeline.js caption.js
-web/js/animator/               player.js effects.js
-web/js/charts/                 fan.js density.js sparkline.js
-web/vendor/d3.v7.min.js        downloaded once and committed
+world_model/web/js/animator/               player.js effects.js
+world_model/web/js/charts/                 fan.js density.js sparkline.js
+world_model/web/vendor/d3.v7.min.js        downloaded once and committed
 ```
 
 ---
@@ -4689,7 +4689,7 @@ How the truth makes the demo work:
 The demo also overrides a few defaults:
 
 ```yaml
-# configs/demo.yaml
+# world_model/configs/demo.yaml
 propagation:
   samples: 300
 frontier:
@@ -4699,7 +4699,7 @@ update:
   sources: [mock_web_scraper, synthetic_data_feed]
 ```
 
-The calibration here (truth effects, noise, and these thresholds) is a first guess. If a checklist item fails because the signal is too weak or too strong, tune `truth.yaml` and `configs/demo.yaml` as §15.3 says, not the engine defaults.
+The calibration here (truth effects, noise, and these thresholds) is a first guess. If a checklist item fails because the signal is too weak or too strong, tune `truth.yaml` and `world_model/configs/demo.yaml` as §15.3 says, not the engine defaults.
 
 ```yaml
 # world_model/examples/scenarios/oil_shock_demo/history_regimes.yaml
@@ -4858,7 +4858,7 @@ Using FastAPI's `TestClient`: load the scenario, request an update with a typed 
 16. **Update runs:** every step with an update produced a run in state `DONE` with a report; the duplicate of ME-03 was dropped; requesting step 17's update again collects nothing; after step 6, an interaction from `fed_chair.hawkishness` to `interest_rates.long_term_yields` exists with `origin=human`; and T-00 (pinned) was re-posed at the end of step 17's update, at the new version.
 17. **Daily propagation:** `northwind_semis.capex` was never observed, yet by step 17 its z has moved by at least 0.2 standard units through e46 and e48.
 
-If an item fails because the synthetic world does not produce the intended signal, tune `truth.yaml` (noise, hidden effect sizes, timing), the scenario's world shocks, or `configs/demo.yaml`, not the engine defaults. Record each change with a `# DECISION:` comment in the YAML.
+If an item fails because the synthetic world does not produce the intended signal, tune `truth.yaml` (noise, hidden effect sizes, timing), the scenario's world shocks, or `world_model/configs/demo.yaml`, not the engine defaults. Record each change with a `# DECISION:` comment in the YAML.
 
 ### 15.4 UI checks
 
@@ -4881,7 +4881,7 @@ Manual, with an optional Playwright smoke test (Chromium is available locally):
 
 | Milestone | Build | Done when |
 |---|---|---|
-| M0 Scaffold | `pyproject.toml`, the package skeleton, ruff, pytest, a `typer` CLI stub, and a FastAPI app serving a placeholder `web/index.html` | `uv run pytest` passes; `uv run axelrod --help` works |
+| M0 Scaffold | `pyproject.toml`, the package skeleton, ruff, pytest, a `typer` CLI stub, and a FastAPI app serving a placeholder `world_model/web/index.html` | `uv run pytest` passes; `uv run axelrod --help` works |
 | M1 Core model | §6, the construction and taxonomy loaders, the §14 data files, seed patterns with their instances bound directly from `members`, and `SuperInteractionBuilder` | The entity, subentity, interaction, and pattern counts and the super-interactions in §15.3 item 1 are right; every non-leaf taxonomy node has two or more children; invalid specs raise clear errors; serialization round trips |
 | M2 Memory and persistence | WM, and LTM with its four parts plus prior states (§6.13), `GraphMutator`, change sets, the ledger, snapshots and versions, `IdFactory`, the correlation frontier store (with `frontier_seeds`), and tracers | The ledger and snapshot unit tests pass; replay reproduces hashes |
 | M3 Engine core | Registry and config, `build_engine`, propagation, and the shared process with defaults, including `PatternBinder` and `inducer.bind()` | Unit tests for distributions, kernels, propagation, taxonomy, ops, and recall pass |

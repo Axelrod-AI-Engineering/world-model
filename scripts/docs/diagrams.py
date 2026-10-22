@@ -1,6 +1,6 @@
 """Render the design's diagrams to SVG, in the look of the app's flowcharts (docs/flowchart.svg).
 
-Each diagram is a Mermaid source in docs/design/diagrams/*.mmd, and the docs show the rendered SVG beside it.
+Each diagram is a Mermaid source in world_model/docs/design/diagrams/*.mmd, and the docs show the rendered SVG beside it.
 Write a source in plain Mermaid with three kinds of markup; this script adds the rest when it renders:
 
 - Node classes, as `A["..."]:::step`:

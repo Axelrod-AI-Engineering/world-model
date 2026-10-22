@@ -45,10 +45,10 @@ The browser app. It renders the server's views and replays trace events, and it 
 ## Target
 
 ```text
-web/js/core/      api.js · stream.js · store.js (applyTrace dispatches to features) · names.js · util.js
-web/js/shell/     boot · views · router · keyboard · menus
-web/js/canvas/    nodes.js · edges.js · hulls.js · animate.js · layouts · zoom · lod · lens
-web/js/features/<name>/index.js   export function init({ api, store, canvas, shell })
+world_model/web/js/core/      api.js · stream.js · store.js (applyTrace dispatches to features) · names.js · util.js
+world_model/web/js/shell/     boot · views · router · keyboard · menus
+world_model/web/js/canvas/    nodes.js · edges.js · hulls.js · animate.js · layouts · zoom · lod · lens
+world_model/web/js/features/<name>/index.js   export function init({ api, store, canvas, shell })
 ```
 
 ## Depends on

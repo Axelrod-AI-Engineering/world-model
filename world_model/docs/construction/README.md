@@ -23,8 +23,8 @@ This page holds the method; the rules it serves are in [design/specificity.md](.
 company's page holds its gap register and completion report (AIB Group, China Construction Bank, Citigroup, JPMorgan,
 Komatsu, Morgan Stanley, MS&AD, SoftBank Corp, Tokio Marine, Toyota with its before-and-after of the review, and
 UniCredit). Those pages are client content: they are local, not tracked, and live in the client root as
-`docs/construction/<company>.md` (`WORLD_MODEL_CLIENT_DIR`, default `data/clients`; see
-[the deployment guide](../guides/deployment.md#client-content)). A narrowed world of some covered companies and the
+`world_model/docs/construction/<company>.md` (`WORLD_MODEL_CLIENT_DIR`, default `data/clients`; see
+[the deployment guide](../../../docs/deployment.md#client-content)). A narrowed world of some covered companies and the
 players they connect to is in [focus.md](focus.md) (Oct 18).
 
 The company registers (Toyota's and Tokio Marine's, local) list gaps blocked by a named input. The
@@ -44,7 +44,7 @@ for a lognormal one (a price, USD/JPY, a profit level). The changes are converte
     effect = z_Y / z_X
 
 ```
-uv run python scripts/construction/calibrate.py sally_demo <interaction_id> \
+uv run python world_model/scripts/construction/calibrate.py sally_demo <interaction_id> \
     --source-change 1 --target-change 45 --evidence <source id> [--support documented|guidance|broker] \
     [--sd-range LO HI | --target-range LO HI] [--sigma-fraction 0.25] [--allow-sign-flip --reason "..."] [--write]
 ```
@@ -91,7 +91,7 @@ corporate_actions: [{entity: tokio_marine, type: split, ratio: 15, effective: 20
 - **Validation.** The ratio is positive and not 1 (a reverse split is below 1). No two actions share a day. An entity
   with a split must have a per-share value.
 
-Code: `model/corporate_actions.py`, `intake/bundle.py` (`signal_conversion`).
+Code: `model/corporate_actions.py`, `intake/structured.py` (`signal_conversion`).
 
 ## Overlapping views at import
 
@@ -111,7 +111,7 @@ carry the change into the total, and it counts twice.
   results release reports segments, regions, guidance and the price together), and the reviewer would have to edit
   the bundle by hand. Folding one view never double counts, keeps what was dropped in view, and leaves the choice
   open: to use the other view, import an item without these parts.
-- **Check.** `scripts/construction/check.py` prints each total with more than one driving additive view (`VIEWS ...`).
+- **Check.** `world_model/scripts/construction/check.py` prints each total with more than one driving additive view (`VIEWS ...`).
   `validate_construction` still reports a part that belongs to two additive views.
 - **Reconciling views (Oct 18).** The guard applies only between driving views. Mark every view but one
   `drives: false`, or declare segments x lines as a matrix, and a results day folds whole: see
@@ -133,8 +133,8 @@ A claim is **material** when any of a transition's `existence`, `direction`, `ma
 `documented`, `guidance`, `broker`, or `model`. A material claim needs a citation that gives a location.
 
 ```
-uv run python scripts/construction/check.py sally_demo --entities toyota --sources data/work/sally/construction
-uv run python scripts/imports/export_context.py sally_demo <out> --construction-sources data/work/sally/construction
+uv run python world_model/scripts/construction/check.py sally_demo --entities toyota --sources data/work/sally/construction
+uv run python world_model/scripts/imports/export_context.py sally_demo <out> --construction-sources data/work/sally/construction
 ```
 
 - **The check** prints, per company, the source ids that resolve and the ones that do not (`UNRESOLVED`, with what
@@ -162,7 +162,7 @@ A transition's `unresolved` inputs each carry a status (`model/construction.Inpu
 needs the list of what was searched, so search first:
 
 ```
-uv run python scripts/construction/inputs.py sally_demo --entities toyota --corpus data/sources/sally \
+uv run python world_model/scripts/construction/inputs.py sally_demo --entities toyota --corpus data/sources/sally \
     [--files <file> ... | --dirs spreadsheets unpacked/sell_side/<company>] \
     [--extra-terms "eligible import volume=CBU imports,imported units"] [--exclude construction bench] [--top 5]
 ```
@@ -205,7 +205,7 @@ and subtracts. An elimination is held negative with a positive link, or positive
   within the tolerance (0.5%). Otherwise `flag`.
 
 ```
-uv run python scripts/construction/check.py sally_demo --entities toyota --reconcile \
+uv run python world_model/scripts/construction/check.py sally_demo --entities toyota --reconcile \
     [--baselines data/work/sally/construction/toyota/baselines.json | --statistic median] [--suggest-residual] [--tolerance 0.005]
 ```
 
@@ -364,7 +364,7 @@ scenarios:
 ```
 
 ```
-uv run python scripts/construction/calibrate.py sally_demo --disclosure disclosure.yaml [--write]
+uv run python world_model/scripts/construction/calibrate.py sally_demo --disclosure disclosure.yaml [--write]
 ```
 
 - **Refusals.** Fewer scenarios than sizes, a rank-deficient design ("underdetermined", naming the sizes), a size no

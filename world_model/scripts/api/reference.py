@@ -1,11 +1,11 @@
-"""docs/api/README.md's route reference, and the terms table in every API document, generated from the contract.
+"""world_model/docs/api/README.md's route reference, and the terms table in every API document, generated from the contract.
 
-The reference sits between `<!-- reference:start -->` and `<!-- reference:end -->` in docs/api/README.md: every
+The reference sits between `<!-- reference:start -->` and `<!-- reference:end -->` in world_model/docs/api/README.md: every
 operation by tag (method, path, summary, scope, pinning, statuses), the error codes, and the schemas. The prose around
-it is kept by hand; `--check` fails while the block is stale (tests/service/test_openapi_contract.py runs it).
+it is kept by hand; `--check` fails while the block is stale (world_model/tests/service/test_openapi_contract.py runs it).
 
-    uv run python scripts/api/reference.py            # rewrite the block
-    uv run python scripts/api/reference.py --check    # exit 1 if it is stale
+    uv run python world_model/scripts/api/reference.py            # rewrite the block
+    uv run python world_model/scripts/api/reference.py --check    # exit 1 if it is stale
 """
 
 from __future__ import annotations
@@ -105,7 +105,7 @@ def main(argv: list[str]) -> int:
             if "--check" not in argv:
                 path.write_text(new)
     if "--check" in argv and stale:
-        print(f"stale: {', '.join(map(str, stale))}: run uv run python scripts/api/reference.py")
+        print(f"stale: {', '.join(map(str, stale))}: run uv run python world_model/scripts/api/reference.py")
         return 1
     return 0
 

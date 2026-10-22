@@ -159,6 +159,6 @@ Scoring must be against raw observations (R0) and in synthetic worlds with known
 
 ## References
 
-The full list, with DOIs, is in the Literature tab (`web/literature.md`). Cited here:
+The full list, with DOIs, is in the Literature tab (`world_model/web/literature.md`). Cited here:
 
 Amershi et al. (2014); Bar-Shalom et al. (2009); Barari et al. (2024, 2026); Bramley et al. (2017); Corter & Gluck (1992); Dayan & Kakade (2001); Ferguson (1973); Fisher (1987); Forbus et al. (1995); Gennari et al. (1989); Gentner (1983); Gick & Holyoak (1983); Griffiths & Tenenbaum (2005); Grover & Leskovec (2016); Gupta, Singaravadivelan, & Wang (2025); Jordà (2005); Kemp et al. (2010); Lian et al. (2024); Lu et al. (2008); MacLellan et al. (2016); McClelland et al. (1995); Nelson (2005); Rehder (2003); Reid (1979); Reimers & Gurevych (2019); Rosch et al. (1976); Ross (1976); Settles (2012); Sims (1980); Singaravadivelan & Langley (2026); Steyvers et al. (2003); Stock & Watson (2002); Thompson & Langley (1991); Wald (1945).

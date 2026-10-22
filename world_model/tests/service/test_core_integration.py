@@ -1,6 +1,6 @@
 """The patch that puts this service's tools in core's MCP catalog (integrations/core) stays in step with the service:
 every route it calls is a v1 route the contract specifies and this service serves, with the method it uses, and it
-publishes no tool that decides a change (docs/design/core-mcp-auth.md: approval is human-only)."""
+publishes no tool that decides a change (world_model/docs/design/core-mcp-auth.md: approval is human-only)."""
 
 from __future__ import annotations
 
@@ -59,7 +59,7 @@ def test_every_route_the_patch_calls_is_specified_and_served():
     assert len(made) >= 18 and {m for m, _p in made} == {"GET"}          # read only (the API review, Oct 19)
     served, specified = _served(), _specified()
     for method, path in made:
-        assert (method, path) in specified, (method, path, "not in docs/api/openapi.yaml")
+        assert (method, path) in specified, (method, path, "not in world_model/docs/api/openapi.yaml")
         assert (method, path) in served, (method, path, "not served")
 
 

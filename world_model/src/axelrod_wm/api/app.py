@@ -37,7 +37,7 @@ T = TypeVar("T")
 WEB_DIR = WM_ROOT / "web"
 
 
-# The demos the top bar's menu switches between (docs/guides/demos.md), in menu order: (scenario id, label, note).
+# The demos the top bar's menu switches between (world_model/docs/guides/demos.md), in menu order: (scenario id, label, note).
 DEMOS: list[tuple[str, str, str]] = [
     ("small_demo", "Small demo", "A blank canvas, built one example at a time"),
     ("prod_demo", "Production demo", "The same examples after three years of synthetic history"),

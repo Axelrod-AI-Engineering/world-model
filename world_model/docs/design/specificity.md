@@ -322,7 +322,7 @@ What a document may contribute, in order:
 | Gap | Where it will live |
 |---|---|
 | Ingestion mapping to the narrowest matching value, refusing basis mismatches (R2, R11) | ingest/extract.py and gazetteer, with a definition match on `features.basis` |
-| A proposed link's transition stub (mechanism, sign, condition from the text) and a flag on macro → total proposals (R1, R3) | ingest/extract.py, intake/bundle.py, and the review view |
+| A proposed link's transition stub (mechanism, sign, condition from the text) and a flag on macro → total proposals (R1, R3) | ingestion's `extract.py`, `intake/structured.py`, and the review view |
 | Review flags for rule breaks (R1, R11) | control/review and the demo's review panel |
 | A label and observation count on statistically proposed sizes | learning and review |
 | A declared link between a reduced form and its path's entries, so a forecast uses one *instead of* the other (R13) | model/construction.py (`reduced_form_of`), engine forecast |
@@ -332,7 +332,7 @@ What a document may contribute, in order:
 | A driver on a matrix cell when the cells are not disclosed (R5) | matrices |
 | A constant inside an identity, such as (1 − tax rate) (R12) | identity form |
 | Dated one-off events (a certification halt, a plant restart, a price increase) as events, not links. They are recorded locally for Toyota; the engine cannot replay them yet | events and scenarios |
-| Japanese query terms in the input search (R7) | scripts/construction/inputs.py |
+| Japanese query terms in the input search (R7) | world_model/scripts/construction/inputs.py |
 
 The identity, stock-flow, matrix, state and driving-view forms were added on Oct 18. All eleven companies in the
 Sally world were converted to them, so products, ratios and stocks are no longer sign-only.

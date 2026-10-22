@@ -1,4 +1,4 @@
-"""The unified world model, `/v1/erid` (api/v1/routes_erid.py, compartments.py; docs/design/api.md §4): the whole
+"""The unified world model, `/v1/erid` (api/v1/routes_erid.py, compartments.py; world_model/docs/design/api.md §4): the whole
 graph for internal staff, compartments narrowed as a focused world is, the same reads and scopes as a world model,
 and what the unified model learns reaching its compartments."""
 

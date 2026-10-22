@@ -51,7 +51,7 @@ context_pack(wm, ltm, *, scenario_id, title, book, version, state_hash, forecast
 
 The verbs are served now, over REST (`/v1/world-models/{id}/*`, [api/openapi.yaml](../../api/openapi.yaml)) and MCP (`/mcp`, 27 tools), with a service token or a scoped key per caller ([../../api/](../../api/README.md)). Read: `state`, `query` (pinned by `version` or `as_of`, Erid-compatible nodes and edges), `entities` and their `attributes`, `taxonomy`, `search` (RAG over ingested documents, below). Propose: upload files (`documents`) or bundles, then `import` them for review. Review: `proposals` approve and reject. Ask: `forecasts` and their briefs. Every answer names its state (`version`, `state_hash`). Code: `api/service.py`, `api/mcp.py`, `api/keys.py`. `recall` is `query` plus `search`; `trace` and `feedback` are not yet served.
 
-Retrieval is the lakehouse's search (`lake/search.py`): keyword (BM25), prefix, semantic (bge-small), graph (named nodes, their neighbours, the chunks that mention them), and hybrid (reciprocal-rank fusion). See [ingestion.md](../../guides/ingestion.md#search).
+Retrieval is the lakehouse's search (`lake/search.py`): keyword (BM25), prefix, semantic (bge-small), graph (named nodes, their neighbours, the chunks that mention them), and hybrid (reciprocal-rank fusion). See [pipeline.md](../../../../ingestion/docs/lake.md#search).
 
 ## Interface
 

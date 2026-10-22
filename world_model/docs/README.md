@@ -1,6 +1,8 @@
-# Documentation
+# World model documentation
 
-A map: find the question you have, and go to the one page that answers it.
+A map of the world model's own documents: find the question you have, and go to the one page that answers it. What
+spans the whole repository (the architecture, the reading order, the decisions, deployment, development) is in the
+[front door](../../docs/README.md); ingestion's is in [ingestion/docs](../../ingestion/docs/README.md).
 
 <!-- toc -->
 **Contents**
@@ -12,11 +14,11 @@ A map: find the question you have, and go to the one page that answers it.
 
 ## Start here
 
-New to the repository? Read these four, in order (about an hour):
+New to the repository? Read [the front door](../../docs/README.md) and [the architecture](../../docs/architecture.md) first, then these four, in order (about an hour):
 
 1. [design/README.md](design/README.md): what the world model is for, its principles, and the system at a glance.
 2. [guides/demos.md](guides/demos.md): run `uv run axelrod small_demo` and follow the 24 examples.
-3. [guides/development.md](guides/development.md): tests, the layout, and the conventions.
+3. [development](../../docs/development.md): tests, the layout, and the conventions.
 4. [vocab.md](vocab.md): the terms. Every page uses them; none renames them.
 
 ## Where to go for…
@@ -26,9 +28,9 @@ New to the repository? Read these four, in order (about an hour):
 | Run a demo, or see what each one shows | [guides/demos.md](guides/demos.md) |
 | Find a control, panel, or shortcut in the app | [guides/gui.md](guides/gui.md) |
 | Run a command, or set a config file or environment variable | [guides/cli.md](guides/cli.md) |
-| Run the tests, or follow the conventions (TOCs, diagrams, decisions) | [guides/development.md](guides/development.md), [../tests/README.md](../tests/README.md) |
-| Release, verify a deploy, or manage logins and keys | [guides/deployment.md](guides/deployment.md) |
-| Know how a file becomes graph updates; the lakehouse, search, the benchmark | [guides/ingestion.md](guides/ingestion.md) |
+| Run the tests, or follow the conventions (TOCs, diagrams, decisions) | [development](../../docs/development.md), [../tests/README.md](../tests/README.md) |
+| Release, verify a deploy, or manage logins and keys | [deployment](../../docs/deployment.md) |
+| Know how a file becomes graph updates; the lakehouse, search, the benchmark; the bundle format | [ingestion/docs](../../ingestion/docs/README.md) ([pipeline](../../ingestion/docs/pipeline.md), [lake](../../ingestion/docs/lake.md), [bench](../../ingestion/docs/bench.md), [contract](../../ingestion/docs/contract.md)) |
 | Call the API or MCP: routes, auth, errors, configuration | [api/README.md](api/README.md) (generated from [api/openapi.yaml](api/openapi.yaml)) |
 | Know why the API looks the way it does | [design/api.md](design/api.md) |
 | Know how core and other callers authenticate | [design/core-mcp-auth.md](design/core-mcp-auth.md) |
@@ -57,22 +59,25 @@ implementation.
 ## Folder layout
 
 ```text
-docs/
-  README.md           this map
-  vocab.md            every term, defined once
-  flowchart.svg       the root README's overview (axelrod flows --svg)
-  guides/             running it: demos, gui, cli, ingestion, development, deployment
-  api/                README.md (the reference, generated) and openapi.yaml (the contract)
-  design/             the design of record: README (front page), requirements, data model, architecture,
+world_model/
+  src/axelrod_wm/     the package (modules: design/modules/)
+  tests/              unit/ integration/ service/ scenario/ ui/ (tests/README.md)
+  examples/ taxonomy/ configs/ web/ skills/ scripts/
+  docs/
+    README.md         this map
+    vocab.md          every term, defined once
+    guides/           running it: demos, gui, cli
+    api/              README.md (the reference, generated) and openapi.yaml (the contract)
+    design/           the design of record: README (front page), requirements, data model, architecture,
                       interfaces, api, core-mcp-auth, specificity, cognition, frameworks, decisions, migration,
-                      questions-for-manav-and-zsolt; modules/ (M01–M17); diagrams/ (Mermaid sources and SVGs)
-  construction/       the business-construction method, and one page per company
-  ml/                 stack.md (the math as built) and roadmap.md (the plan)
-  briefs/             dated status briefs for colleagues
-  archive/            superseded documents, kept for their references
-  media/              videos (gitignored; ask the team)
+                      questions-for-manav-and-zsolt; modules/ (M01-M17); diagrams/ (Mermaid sources and SVGs)
+    construction/     the business-construction method, and one page per company
+    ml/               stack.md (the math as built) and roadmap.md (the plan)
+    briefs/           dated status briefs for colleagues
+    archive/          superseded documents, kept for their references (plan.md, architecture-plan.md)
 ```
 
-**Where a new page goes.** How to run or use something: `guides/`. Why it is built the way it is: `design/`. A
+**Where a new page goes.** How to run or use the app: `guides/`. Why it is built the way it is: `design/`. A
 term: a row in [vocab.md](vocab.md), never a second glossary. A dated status note: `briefs/`. A page something else
-replaced: `archive/`, with a line at the top naming its replacement.
+replaced: `archive/`, with a line at the top naming its replacement. Something about ingestion, or about the
+repository as a whole, goes in [ingestion/docs](../../ingestion/docs/README.md) or the [front door](../../docs/README.md).

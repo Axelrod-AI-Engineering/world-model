@@ -1,4 +1,4 @@
-"""The lakehouse's world model registry, audit log, idempotency keys and jobs (Oct 18; docs/design/core-mcp-auth.md): each world model is
+"""The lakehouse's world model registry, audit log, idempotency keys and jobs (Oct 18; world_model/docs/design/core-mcp-auth.md): each world model is
 upserted with its owning organization and survives a reopen; the audit log is append-only, read per organization and
 world model, newest first, with the structured actor intact."""
 

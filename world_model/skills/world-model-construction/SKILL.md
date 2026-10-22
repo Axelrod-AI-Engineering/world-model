@@ -6,9 +6,9 @@ description: Build a company's business construction in an Axelrod world model a
 # Building a company's business construction
 
 This is the method behind the Toyota, Tokio Marine and JPMorgan builds, and the eight that followed. The standard it
-enforces is [docs/design/specificity.md](../../docs/design/specificity.md), rules R1–R17. The tools and forms are in
-[docs/construction/README.md](../../docs/construction/README.md). Reference builds are in
-[docs/construction/](../../docs/construction/).
+enforces is [world_model/docs/design/specificity.md](../../docs/design/specificity.md), rules R1–R17. The tools and forms are in
+[world_model/docs/construction/README.md](../../docs/construction/README.md). Reference builds are in
+[world_model/docs/construction/](../../docs/construction/).
 
 ## The standard in one paragraph
 
@@ -39,7 +39,7 @@ Build in this order: composition → operating paths → mapping into the accoun
    missing from the export may still exist internally. Classify each existing requirement as already owned, missing,
    modify lightly, or do not touch (existing ids, valid statistical records, shared governance). Flag concepts the
    schema cannot represent.
-2. **Gap register first** (`docs/construction/<company>.md`, in the client root for a client's company: local, not tracked). Write one entry per gap:
+2. **Gap register first** (`world_model/docs/construction/<company>.md`, in the client root for a client's company: local, not tracked). Write one entry per gap:
    - what is missing or wrong, and what exists now, with object ids;
    - what to add;
    - the evidence needed;
@@ -75,7 +75,7 @@ Build in this order: composition → operating paths → mapping into the accoun
    binding a workbook row, check that it feeds a live formula; a display-only row is not a sensitivity. Calibrate
    from a multi-period history (eight quarters where available), with standalone quarters derived from cumulative
    figures and accounting changes kept as breaks:
-   - `scripts/construction/calibrate.py` turns a disclosed sensitivity into a size, in log space for lognormal values;
+   - `world_model/scripts/construction/calibrate.py` turns a disclosed sensitivity into a size, in log space for lognormal values;
    - `--disclosure scenarios.yaml` solves several disclosed scenarios or a netted sensitivity jointly;
    - `--side rises|falls` gives an asymmetric response its two sizes;
    - a size borrowed from a peer is `peer`, with a citation.
@@ -101,13 +101,13 @@ Build in this order: composition → operating paths → mapping into the accoun
    figure for it is a comparison. A value of another node that the company's links read follows the same observed
    rule.
 10. **Baselines.** Make an `axelrod.import/v1` bundle of dated actuals from the company's own material, and keep
-   estimates in a separate file. Validate it: `scripts/imports/bundles.py check <world> <bundle>`.
+   estimates in a separate file. Validate it: `world_model/scripts/imports/bundles.py check <world> <bundle>`.
 11. **Sources and citations (R6).** Keep two local files:
     - `sources.json`: source id → document, kind, date, period, basis, read state, proof limits;
     - `citations.json`: link or value id → source id, location (sheet!cell, table/row, page and paragraph), and passage.
 
     Tracked files hold **neutral ids only**: never a firm, broker, vendor or file name, and never a client figure.
-12. **Inputs (R7).** Run `scripts/construction/inputs.py <world> --entities <company> --corpus <client folder>`. Read
+12. **Inputs (R7).** Run `world_model/scripts/construction/inputs.py <world> --entities <company> --corpus <client folder>`. Read
     the candidates, then set each input's status:
     - found and connected;
     - found but not connected;
@@ -119,7 +119,7 @@ Build in this order: composition → operating paths → mapping into the accoun
 13. **Check and reconcile.** Run:
 
     ```
-    scripts/construction/check.py <world> --entities <company> --sources <client>/construction --reconcile --statistic median [--baselines <bundle>]
+    world_model/scripts/construction/check.py <world> --entities <company> --sources <client>/construction --reconcile --statistic median [--baselines <bundle>]
     ```
 
     The run must end with no problems, no unresolved ids, no uncited material claims, and no reconciliation flags
@@ -131,7 +131,7 @@ Build in this order: composition → operating paths → mapping into the accoun
     - which are excluded, and why;
     - which inputs block a size;
     - the company's own steps, counted apart from summary links.
-16. **Validation test** (`tests/scenario/test_construction_<company>.py`):
+16. **Validation test** (`world_model/tests/scenario/test_construction_<company>.py`):
     - no construction problems;
     - the required compositions and paths exist;
     - every step has a transition, and every uncalibrated step a sign;
@@ -174,4 +174,4 @@ Build in this order: composition → operating paths → mapping into the accoun
 
 `check.py` is clean with `--sources --reconcile` (and with baselines). The company test and the world's
 expected-paths test pass. The gap register, the readable view and the completion report are in
-`docs/construction/<company>.md`.
+`world_model/docs/construction/<company>.md`.

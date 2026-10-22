@@ -1,6 +1,6 @@
 """China Construction Bank's business construction (Oct 18): the compositions, operating and financial paths, and their
 transitions in <client root>/worlds/sally_demo/construction/china_construction_bank.yaml, checked in the loaded model, in the
-v4.1.4 export, and through the service API (docs/construction/china_construction_bank.md has the gap register these
+v4.1.4 export, and through the service API (world_model/docs/construction/china_construction_bank.md has the gap register these
 tests close). The second bank after JPMorgan, with its own economics: administered benchmarks (the LPR, posted deposit
 rates), a large government bond book, a mortgage-heavy loan book, fee caps, and the state as shareholder. Sally's world
 loads once for the module; no client data is read."""

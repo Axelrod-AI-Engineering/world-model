@@ -5,7 +5,7 @@
      └─ lakehouse (raw, by hash)        └─ keyword / semantic indexes                         └─ the model's Import
 
 Every step is deterministic: the same bytes and the same world model give byte-identical text, chunks, mentions, and
-bundles (tests/ingest/test_determinism.py). An optional LLM step proposes what the rules miss, through a replay cache
+bundles (ingestion/tests/ingest/test_determinism.py). An optional LLM step proposes what the rules miss, through a replay cache
 keyed by content, so a re-run reproduces it exactly; it is off unless a provider key is set.
 """
 

@@ -1,4 +1,4 @@
-"""Who may do what on v1 (docs/design/core-mcp-auth.md): every route's scope, organizations kept apart (another's world
+"""Who may do what on v1 (world_model/docs/design/core-mcp-auth.md): every route's scope, organizations kept apart (another's world
 model is 404), decisions by a person only, and the audit log naming the actor, organization, channel, act and jti."""
 
 from __future__ import annotations

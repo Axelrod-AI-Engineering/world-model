@@ -1,4 +1,4 @@
-"""v1 ingestion routes (docs/api/openapi.yaml): documents (upload, read, delete, read again), their passages and
+"""v1 ingestion routes (world_model/docs/api/openapi.yaml): documents (upload, read, delete, read again), their passages and
 content, the bundles extracted from them (or written by an agent), a bundle's items, and search over the lakehouse and
 the model's names. It imports only axelrod_ingest and the v1 plumbing, so it is the part of the service that moves
 with ingestion if that is ever served on its own; the world model reaches it only through the world view."""

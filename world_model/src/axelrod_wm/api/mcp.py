@@ -10,7 +10,7 @@ implementation: the same credentials, scopes, validation, tenancy, and answers.
 
 - **World models.** Every tool takes `world_model_id`, which defaults to the organization's only world model.
   `world_model_id="erid"` reads the unified world model (internal staff), and `compartment` narrows those reads to a
-  client's view (docs/design/api.md §4).
+  client's view (world_model/docs/design/api.md §4).
 - **Scopes** are the REST ones: reads need `world_model:read`; `world_model_ingest_document` needs `documents:create`,
   `world_model_propose_changes` `changes:create`, `world_model_simulate` `simulations:create`. A static key with no
   scopes listed reads only, and a token from core's MCP channel or driven by an agent (`act`) reads only, whatever it

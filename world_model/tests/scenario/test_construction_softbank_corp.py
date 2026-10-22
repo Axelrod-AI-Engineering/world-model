@@ -1,6 +1,6 @@
 """SoftBank Corp's business construction (Oct 18): the compositions, operating and financial paths, and their transitions
 in <client root>/worlds/sally_demo/construction/softbank_corp.yaml, checked in the loaded model, in the v4.1.4 export, and
-through the service API (docs/construction/softbank_corp.md has the gap register these tests close). The test of
+through the service API (world_model/docs/construction/softbank_corp.md has the gap register these tests close). The test of
 whether the method carries over to a telecom operator: subscribers times ARPU, churn, price competition and
 regulation, capex and depreciation, the AI build, funding costs in the yen rate environment, listed subsidiaries'
 minorities, and the dividend. Sally's world loads once for the module; no client data is read."""

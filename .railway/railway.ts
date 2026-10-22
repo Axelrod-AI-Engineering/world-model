@@ -33,16 +33,16 @@ export default defineRailway((ctx) => {
       // the scenario the main login opens on (scripts/start-railway.sh reads it); Emily's login opens hers (below)
       WORLD_MODEL_SCENARIO: "prod_demo",
       // client scenarios, worlds, and configs are never in the image or the repository: they are loaded from the
-      // volume (src/axelrod_wm/clients.py, docs/guides/deployment.md#client-content)
+      // volume (world_model/src/axelrod_wm/clients.py, docs/deployment.md#client-content)
       WORLD_MODEL_CLIENT_DIR: "/app/var/clients",
       WORLD_MODEL_REQUIRE_BASIC_AUTH: "1",
       WORLD_MODEL_BASIC_AUTH_USERNAME: preserve(),
       WORLD_MODEL_BASIC_AUTH_PASSWORD: preserve(),
       // logins that open their own scenario, username:password:scenario (api/auth.py); set in Railway only
       WORLD_MODEL_LOGINS: preserve(),
-      // the outward API's keys, caller:key:org[:scopes] (api/keys.py, docs/api/README.md). The secrets above come from
+      // the outward API's keys, caller:key:org[:scopes] (api/keys.py, world_model/docs/api/README.md). The secrets above come from
       // the gitignored .creds.dev through scripts/railway-sync-creds.sh; non-secret settings (trusted core issuers,
-      // owners, compartments) are checked in at configs/world_model.dev.toml (src/axelrod_wm/settings.py).
+      // owners, compartments) are checked in at configs/world_model.dev.toml (world_model/src/axelrod_wm/settings.py).
       WORLD_MODEL_API_KEYS: preserve(),
     },
     networking: {

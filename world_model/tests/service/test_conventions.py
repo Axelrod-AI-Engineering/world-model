@@ -1,4 +1,4 @@
-"""Every v1 route keeps the API's conventions (docs/api/README.md, Conventions), checked across all of them so a route added
+"""Every v1 route keeps the API's conventions (world_model/docs/api/README.md, Conventions), checked across all of them so a route added
 later cannot skip one: it has a summary, it refuses a caller without a credential, every answer carries X-Request-Id
 (echoing the caller's) and X-Axelrod-API-Version, traceparent is echoed, every failure is an RFC 9457 problem with a
 code of the contract's, and a JSON body with an unknown field is refused."""

@@ -1,6 +1,6 @@
-"""The contract, docs/api/openapi.yaml, against the service: the spec is valid OpenAPI 3.1; every route the app serves
+"""The contract, world_model/docs/api/openapi.yaml, against the service: the spec is valid OpenAPI 3.1; every route the app serves
 under /v1 is in the spec and every operation in the spec is served (same methods); every answer, success or problem, has
-a status the operation declares and a body its schema accepts; the problem codes are the spec's; and docs/api/README.md's
+a status the operation declares and a body its schema accepts; the problem codes are the spec's; and world_model/docs/api/README.md's
 generated reference is current."""
 
 from __future__ import annotations

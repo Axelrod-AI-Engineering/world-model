@@ -1,8 +1,8 @@
-"""The API model (docs/design/api.md §1): the shapes consumers see, as docs/api/openapi.yaml names them.
+"""The API model (world_model/docs/design/api.md §1): the shapes consumers see, as world_model/docs/api/openapi.yaml names them.
 
 These are not the domain model (axelrod_wm.model: Entity, Subentity, Interaction, ...) nor the storage model (the
 snapshots and the lakehouse catalog); project.py maps the domain onto them. Each model forbids extra fields, so an
-answer cannot carry a field the contract does not name; tests/service/test_openapi_contract.py checks every answer
+answer cannot carry a field the contract does not name; world_model/tests/service/test_openapi_contract.py checks every answer
 against the contract's own schemas as well.
 """
 

@@ -1,4 +1,4 @@
-"""The client root (src/axelrod_wm/clients.py): client content lives outside the tracked tree, found through
+"""The client root (world_model/src/axelrod_wm/clients.py): client content lives outside the tracked tree, found through
 `WORLD_MODEL_CLIENT_DIR`, and a scenario's paths are read against the root that holds it."""
 
 from __future__ import annotations

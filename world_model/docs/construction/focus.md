@@ -64,10 +64,10 @@ uv run python -c "import json; from axelrod_wm.sim.scenario import ScenarioScrip
 ## Check it
 
 ```
-uv run python scripts/construction/check.py sally_focus --entities toyota tokio_marine --reconcile --statistic median \
+uv run python world_model/scripts/construction/check.py sally_focus --entities toyota tokio_marine --reconcile --statistic median \
     --sources data/work/sally/construction --trace dollar_yen.usd_jpy:toyota boj.policy_rate:tokio_marine
-uv run pytest tests/scenario/test_sally_focus.py
-uv run pytest tests/scenario/test_construction_toyota.py tests/scenario/test_construction_tokio_marine.py
+uv run pytest world_model/tests/scenario/test_sally_focus.py
+uv run pytest world_model/tests/scenario/test_construction_toyota.py world_model/tests/scenario/test_construction_tokio_marine.py
 ```
 
 The two company test files run against both `sally_demo` and `sally_focus`. `test_sally_focus.py` checks that no
@@ -78,7 +78,7 @@ links match sally_demo's, that traces run as they do there, and that the remaini
 
 ```
 D=data/work/sally; X=data/exports/sally; S=data/sources/sally
-uv run python scripts/imports/export_context.py sally_focus $X/world_model_v4_1_4_axelrod_037_focus_toyota_tokio_marine_<date> \
+uv run python world_model/scripts/imports/export_context.py sally_focus $X/world_model_v4_1_4_axelrod_037_focus_toyota_tokio_marine_<date> \
     --days $D/days --theses \
     --client-core $S/unpacked/world_model_v4/world_model_v4_1_4_numbered_modular_domain_packs_plus_035 \
     --construction-sources $D/construction
@@ -113,7 +113,7 @@ equals the pack's objects (nothing lost, nothing duplicated; the script prints t
 domain pack's load-order entry `role: machine_import`, names `read_first`, and lists each reading file with its
 size and sha256. If the pack itself repeats an id (the check lists any), the index gives every file that holds it.
 The source catalogue, evidence packs, and forecast packs are small enough to read as they are; START_HERE links
-them. Tests: `tests/unit/context/test_reading.py`, and `tests/integration/test_export_determinism.py` for the
+them. Tests: `world_model/tests/unit/context/test_reading.py`, and `world_model/tests/integration/test_export_determinism.py` for the
 process-independence of the files.
 
 ## Regenerate after a new pack

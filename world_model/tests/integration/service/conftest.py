@@ -1,6 +1,6 @@
-"""Fixtures for the service's end-to-end flows on v1 (tests/README.md, Integration tests): a whole app (REST, MCP,
+"""Fixtures for the service's end-to-end flows on v1 (world_model/tests/README.md, Integration tests): a whole app (REST, MCP,
 lakehouse, engine, snapshots) on directories of the test's own, with synthetic notes only. Callers use a static key
-(read and propose); a person reviews with a service token signed by the tests' own ephemeral key (tests/service/
+(read and propose); a person reviews with a service token signed by the tests' own ephemeral key (world_model/tests/service/
 helpers.py), so nothing calls core."""
 
 from __future__ import annotations

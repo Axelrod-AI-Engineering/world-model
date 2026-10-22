@@ -1,4 +1,4 @@
-"""v1 reads of the model (docs/api/openapi.yaml): world models and versions, entities with their attributes nested,
+"""v1 reads of the model (world_model/docs/api/openapi.yaml): world models and versions, entities with their attributes nested,
 observations and states, construction, relationships and evidence, concepts and groups, the graph, the export; each
 pinned to a version or a date, paged by cursor, and answered in the envelope."""
 
