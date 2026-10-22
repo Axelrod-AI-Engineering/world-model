@@ -69,7 +69,7 @@ def joined(text: str, cut: int) -> bool:
     left, right = text[cut - 1], text[cut]
     return (unicodedata.combining(right) > 0 or right in JOINERS or left in JOINERS or "︀" <= right <= "️"
             or "ᅠ" <= right <= "ᇿ"                              # a vowel or final jamo completes a syllable
-            or (_ascii_word(left) and _ascii_word(right))                 # BYD, 123456
+            or (_ascii_word(left) and _ascii_word(right))                 # AEV, 123456
             or (left in ",." and right.isdigit() and cut >= 2 and text[cut - 2].isdigit())      # 1,|234
             or (left.isdigit() and right in ",." and text[cut + 1:cut + 2].isdigit())           # 1|,234
             or (left in "'’" and right.isalpha() and cut >= 2 and text[cut - 2].isalpha())      # don'|t
