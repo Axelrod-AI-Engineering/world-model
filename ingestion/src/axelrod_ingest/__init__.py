@@ -9,4 +9,4 @@ bundles (ingestion/tests/ingest/test_determinism.py). An optional LLM step propo
 keyed by content, so a re-run reproduces it exactly; it is off unless a provider key is set.
 """
 
-EXTRACTOR_VERSION = "ingest-1.0"
+EXTRACTOR_VERSION = "ingest-1.1"

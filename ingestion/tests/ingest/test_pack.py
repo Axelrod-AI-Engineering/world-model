@@ -14,7 +14,15 @@ from axelrod_ingest import pack as pack_module
 from axelrod_ingest.lake.embed import HashingEmbedder
 from axelrod_ingest.lake.sqlite import SQLiteLake
 from axelrod_ingest.ocr import Ocr, find_tesseract
-from axelrod_ingest.pack import find_manifest, ingest_pack, lake_digest, main, pack_files, run, world_from_file
+from axelrod_ingest.pack import (
+    find_manifest,
+    ingest_pack,
+    lake_digest,
+    main,
+    pack_files,
+    run,
+    world_from_file,
+)
 from axelrod_ingest.pipeline import Ingestor
 from tests.ingest.builders import pdf, scanned_pdf
 from tests.ingest.multilingual import world

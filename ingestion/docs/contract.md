@@ -52,6 +52,12 @@ the other.
    "signals": [{"type": "observe", "value_of": "boj.policy_rate", "value": 1.25, "quote": "..."}]}]}
 ```
 
+Ingestion fills an item's times and tags from the document: `published_at` is when it became available, `occurred_at` the end of
+the period it reports on (a monthly announcement published on 1 September has `occurred_at` 31 August; a forward-looking period
+gives none), and `tags` carry `extracted`, `doc_type:<type>`, `lang:<code>`, and `period:<label>` ([pipeline.md](pipeline.md#two-times-event-and-ingestion)).
+A bundle does not say whether its document is a copy of another: that is in the document's `meta.shared_origin`
+([duplicates](pipeline.md#duplicates-across-language-and-basis)).
+
 The schema is `contract/bundle.py` (pydantic models that forbid unknown fields); a synthetic sample is
 `ingestion/tests/fixtures/import_bundle_sample.json`, and its tests are `ingestion/tests/contract/test_bundle.py`. The
 other half, turning a bundle's signals into proposed graph updates, belongs to the world model

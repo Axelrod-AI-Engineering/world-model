@@ -28,7 +28,7 @@ Every answer carries its `reason`. The type maps to the contract's `source_type`
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from urllib.parse import urlsplit
 
 # -- the manifest -----------------------------------------------------------------------------------------------

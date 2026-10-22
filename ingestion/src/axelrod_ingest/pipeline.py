@@ -29,10 +29,10 @@ from pydantic import ValidationError
 
 from axelrod_ingest import EXTRACTOR_VERSION
 from axelrod_ingest.chunk import chunk
-from axelrod_ingest.dates import Dates
-from axelrod_ingest.dates import resolve as resolve_dates
 from axelrod_ingest.contract.bundle import FORMAT, ImportBundle
 from axelrod_ingest.contract.world_view import WorldView
+from axelrod_ingest.dates import Dates
+from axelrod_ingest.dates import resolve as resolve_dates
 from axelrod_ingest.extract import Reading, Rules, claims_of_chunk, item_of, keep_best
 from axelrod_ingest.gazetteer import Gazetteer
 from axelrod_ingest.lake.embed import Embedder
@@ -86,6 +86,12 @@ class Stopwatch:
         now = self.timer()
         self.laps[name] = self.laps.get(name, 0.0) + (now - self.t)
         self.t = now
+
+
+def _period_end(dates: Dates) -> datetime | None:
+    """The end of the period a document reports on, when it ended before the document was published."""
+    p = dates.period
+    return None if p is None or dates.forward else datetime(p.end.year, p.end.month, p.end.day, tzinfo=UTC)
 
 
 def _utc(t: datetime) -> datetime:
@@ -205,7 +211,7 @@ class Ingestor:
         items, mentions, warnings = [], [], []
         head = " ".join(c.text for c in chunks)[:PROFILE_CHARS]
         subject, region = gz.profile(f"{doc.title} {doc.filename}", head)
-        reading = Reading(subject=subject, region=region, date=doc.event_time)
+        reading = Reading(subject=subject, region=region, date=doc.event_time, ref=_period_end(dates))
         n_llm = 0
         prefix = f"D{doc.id[:10]}"
         read = []

@@ -9,7 +9,6 @@ from datetime import UTC, datetime
 import pytest
 
 from axelrod_ingest.lake.embed import HashingEmbedder
-from axelrod_ingest.lake.sqlite import SQLiteLake
 from axelrod_ingest.ocr import Ocr, find_tesseract
 from axelrod_ingest.pipeline import Ingestor
 from tests.ingest.builders import pdf, scanned_pdf
@@ -166,12 +165,12 @@ def test_a_bare_yen_sign_is_yuan_in_a_prc_issuers_document_and_yen_otherwise(lak
 
 
 def test_a_chinese_document_is_read_end_to_end(lake):
-    text = "艾克米电动股份有限公司\n\n2026年上半年，艾克米电动营业收入为人民币1,200亿元，净利润为人民币85.6亿元。同比增长。\n".encode()
+    text = "艾克米电动股份有限公司\n\n2025年度，艾克米电动营业收入为人民币1,200亿元，净利润为人民币85.6亿元。同比增长。\n".encode()
     res = make(lake).ingest_file(T, text, "zh.txt", G)
     sigs = {s["value_of"]: s["value"] for s in res.bundle.bundle["items"][0]["signals"]}
     assert sigs == {"acme_ev.revenue": 120.0, "acme_ev.net_profit": 8.56}
     assert res.document.meta["language"] == "zh" and "lang:zh" in res.bundle.bundle["items"][0]["tags"]
-    assert res.document.meta["dates"]["period"] == "2026-H1"
+    assert res.document.meta["dates"]["period"] == "2025"
 
 
 # -- the manifest and the type -------------------------------------------------------------------------------------------------

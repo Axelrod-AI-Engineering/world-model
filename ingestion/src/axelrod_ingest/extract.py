@@ -56,6 +56,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from axelrod_ingest.chunk import CELL, sentences, tabular
+from axelrod_ingest.cjk import CJK_CHAR
 from axelrod_ingest.contract.world_view import WorldView
 from axelrod_ingest.dates import resolve as resolve_dates
 from axelrod_ingest.gazetteer import METRICS, Gazetteer, Match
@@ -90,7 +91,6 @@ from axelrod_ingest.units import (
     scale_value,
     tail_value,
 )
-from axelrod_ingest.cjk import CJK_CHAR
 
 # -- numbers ------------------------------------------------------------------------------------------------------
 NUMBER = re.compile(
@@ -133,6 +133,7 @@ PROJECTED = re.compile(r"\b(?:projected|expected|forecast|seen|likely|should|wil
                        re.I)                   # "10-year yields projected to fall to 4.45%": a forecast, not a level
 PROSPECT = re.compile(r"\b(?:year-end|forecast|projected|simulated|scenario|target|terminal|implied)\b", re.I)
 YOY = re.compile(r"\s*\)?\s*(?:y-?o-?y|y/y|yoy|year[- ]on[- ]year|year[- ]over[- ]year)\b", re.I)
+CJK_FORECAST = re.compile(r"预计|预期|预测|预估|估计|有望|将达|예상|전망|추정")     # a figure only expected (Chinese, Korean)
 EXPECTS = re.compile(r"\b(?:expects?|expected|expecting|forecasts?|projects?|projected|anticipates?|sees?|will|likely|"
                      r"should)\b", re.I)
 AS_EXPECTED = re.compile(r"\bas\s+(?:\w+\s+)?expected\b", re.I)          # "as markets widely expected" is no forecast
@@ -230,7 +231,8 @@ MODIFIED_BY = {"growth", "volatility", "vol", "borrowing", "lending", "exposure"
                "pricing", "appreciation", "depreciation", "intervention", "hedging", "denominated", "translation", "fair",
                "platform", "boost", "impact", "drag", "uplift", "accretion", "dilution", "headwind", "tailwind",
                "benefit", "regime"}
-QUARTER = re.compile(r"\b(?:[1-4]Q|Q[1-4]|[12]H|H[12])\s?['’]?\d{0,4}\b|\bquarter(?:ly)?\b|\bq/q\b", re.I)
+QUARTER = re.compile(r"(?<![A-Za-z0-9])(?:[1-4]Q|Q[1-4]|[12]H|H[12])\s?['’]?\d{0,4}(?![A-Za-z0-9])|\bquarter(?:ly)?\b|\bq/q\b|"
+                     r"上半年|下半年|半年度?|前三季度|[一二三四1-4]季度|상반기|하반기|[1-4]분기|반기", re.I)    # a part of a year, in Chinese or Korean too
 FROM_TO = re.compile(r"\bfrom\s+(?:about\s+|c\.\s?|~)?$", re.I)
 # a verb (or a predicate) of causation, the cause before it: "higher yields lift NII", "the yen weighs on margins",
 # "rate hikes are a tailwind for NII" (never a passive: "driven by" names its cause after it, see BECAUSE)
@@ -392,6 +394,7 @@ class Num:
     signed: bool = False               # written with a sign ("+10%", "-2%"): the sign is a direction
     range: bool = False                # the midpoint of a range ("3.75-4.0%", "5-10bp")
     blank: bool = False                # an empty table cell ("-", "n.a."): a column with no figure
+    year: bool = False                 # a bare four-digit year ("2025" in a header): a date, not a level
 
 
 def _unit(u: str) -> str:
@@ -433,7 +436,8 @@ def numbers(text: str, yen: str = "¥") -> list[Num]:
             sign = ""                                    # " - 812.0": a dash standing alone is an empty cell
         first = min(x for x in (at if sign else None, m.start("cur") if m.group("cur") else None,
                                 m.start("num")) if x is not None)
-        n = Num(v, unit, cur, scale, first, m.end(), negative=bool(sign) and sign in "-−–", signed=bool(sign))
+        bare = re.fullmatch(r"(?:19|20)\d{2}", m.group("num")) is not None and not (unit or cur or sign or cscale or scale_word)
+        n = Num(v, unit, cur, scale, first, m.end(), negative=bool(sign) and sign in "-−–", signed=bool(sign), year=bare)
         prev = out[-1] if out else None
         # "3.75-4.0%", "5-10bp", "$4.06-4.16b": two numbers joined by a dash, the second larger, read as the midpoint
         if prev is not None and n.negative and not prev.signed and RANGE_JOIN.match(text[prev.end:m.start("num")]) \
@@ -506,6 +510,7 @@ class Reading:
     subject: str | None = None
     region: str | None = None
     date: datetime | None = None
+    ref: datetime | None = None         # the end of the period the document reports on (a report of FY2025 published in 2026)
     header: Header | None = None
     page: int | None = None
     columns: list[list[str]] = field(default_factory=list)   # a sheet's header rows over its entity rows, top first
@@ -513,6 +518,12 @@ class Reading:
     scenario: bool = False              # under a scenario's heading ("Upside Scenario"), its bullets are supposed
     past: bool = False                  # the last sentence was about earlier years only (an episode being told)
     stranger: bool = False              # the last sentence named, in the possessive, someone the model does not know
+
+    @property
+    def when(self) -> datetime | None:
+        """The date a year's flow and the history of a sentence are judged against: the period the document reports on, else
+        when it was published."""
+        return self.ref or self.date
 
 
 # a column of an entity-row table ("Company | ... | CET1 Ratio, % | ..."): a past or forward period relative to the
@@ -599,7 +610,7 @@ class Rules:
             else:
                 return None
         else:
-            if n.unit in ("%", "bp", "pp", "x"):
+            if n.unit in ("%", "bp", "pp", "x") or n.year:
                 return None
             # the unit's own currency is the first one it names ("¥ per $" is in yen, "€ per ¥100" in euros)
             low = unit.lower()
@@ -734,7 +745,8 @@ class Rules:
         return -1 if any(r.fullmatch(m.surface) for r in self.inverted) else 1   # "the yen strengthened": USD/JPY fell
 
     def value_claims(self, sent: str, m: Match, nums: list[Num], prev_end: int, next_start: int,
-                     date: datetime | None = None, linked: bool = False, others: bool = False) -> list[Found]:
+                     date: datetime | None = None, linked: bool = False, others: bool = False,
+                     ref: datetime | None = None) -> list[Found]:
         """What the sentence says about one value: a revision from one figure to another, its level, a move with a
         size, else a bare direction (unless the sentence states a channel through the value, `linked`, or a causal
         word joins it to another entity, `others`). Each is read from the value's clause: from the previous mention
@@ -743,6 +755,7 @@ class Rules:
         year two or more years out is a long-range forecast (no level)."""
         sid = m.subentity_id
         assert sid is not None
+        ref = ref or date
         flip = self._flip(m)
         clause = sent[prev_end:next_start]
         # the years the clause is about ("for the first time since 2007" dates nothing)
@@ -751,7 +764,7 @@ class Rules:
         # a target is not the value, though a market forecaster's revised target for a rate is a move in its view
         aimed = TARGET.match(sent[m.end:]) or TARGET_BEFORE.search(sent[max(0, m.start - 12):m.start])
         if (aimed and not rate) or NEGATED.search(clause) or SUPPOSED.search(sent) or HISTORY.search(sent) or sent.rstrip().endswith("?") \
-                or (date is not None and years and max(years) < date.year) or self._modified(sent, m) \
+                or (ref is not None and years and max(years) < ref.year) or self._modified(sent, m) \
                 or self._premodified(sent, m) or (m.via == "document" and m.entity_id in self.gz.policy) \
                 or self._generic(m) \
                 or (m.via != "name" and SECTOR_WIDE.search(clause)) \
@@ -794,7 +807,8 @@ class Rules:
         # a market level the sentence only expects ("we expect a further hike to lift the policy rate to 1.50%")
         expected = EXPECTS.search(AS_EXPECTED.sub(" ", sent[sent.rfind(";", 0, m.start) + 1:m.start]))
         forecast = (not flow and (FORECAST.match(sent[m.end:]) or NOT_NOW.search(lead) or ESTIMATED.search(clause)
-                                  or expected)) or AIMED.search(lead) or AVERAGED.search(" ".join(lead.split()[-3:]))
+                                  or expected)) or AIMED.search(lead) or AVERAGED.search(" ".join(lead.split()[-3:])) \
+            or CJK_FORECAST.search(lead)
         for k, n in enumerate(after):
             gap = sent[m.end:n.start]
             between = [x for x in after[:k] if not _inside_parens(sent, m.end, x.start)]
@@ -804,9 +818,14 @@ class Rules:
             if len(gap) > 60 or (between and not moved) or flip != 1 or (flow and QUARTER.search(clause)) \
                     or (flow and between and not FULL_YEAR.search(MONTH_YEAR.sub(" ", clause))) \
                     or far or stale or forecast or EXCLUDING.search(gap) or re.search(r"\bfrom\b", gap) \
+                    or CJK_FORECAST.search(re.split(r"[,;，；。]", sent[n.end:], maxsplit=1)[0]) \
                     or (_unit_kind(self.graph.values[sid].unit) == "rate" and OTHER_BASIS.match(sent[n.end:])):
                 break
-            keyed = len(sent) <= KEY_VALUE_CHARS and KEY_VALUE.match(PARENS.sub("", gap))
+            # (a row of a table is not a key-data line: "Research expenses 7 (15,510) (18,356)" is a note number and columns)
+            keyed = len(sent) <= KEY_VALUE_CHARS and KEY_VALUE.match(PARENS.sub("", gap)) \
+                and sum(not x.unit for x in after[k + 1:]) < 2
+            if flow and n.currency and n.scale == 1.0:
+                continue                 # "RMB 10" in a sentence is ten yuan, not ten of the flow's billions: it needs its scale
             if keyed or (LEVEL.search(gap) and not re.search(r"[,;]\s", PARENS.sub("", gap))
                          and not (not flow and PROJECTED.search(gap))):
                 lvl = self._level(sid, n)
@@ -857,7 +876,8 @@ class Rules:
             # (a connector after the value leaves its own verb a report: "USD/JPY fell amid talk of hikes")
             linked = linked or (others and (any(p.search(clause) for p in (CAUSAL_UP, CAUSAL_DOWN))
                                             or bool(BECAUSE.search(sent[prev_end:m.start]))))
-            if not out and not linked and not LEADS_TO.search(clause) and " = " not in sent \
+            figures_before = sum(n.end <= m.start for n in nums if n.start >= prev_end) >= 2     # a remark beside a row's figures
+            if not out and not linked and not LEADS_TO.search(clause) and " = " not in sent and not figures_before \
                     and not (VIEW_OF.match(sent[m.end:]) and not REVISED.search(sent[prev_end:m.start])) \
                     and not _heading(sent) and not EXPOSED.search(" ".join(sent[prev_end:m.start].split()[-4:])):
                 return [Found("move", value_of=sid, delta=direction * UNDIRECTED_SD, mode="standardized", quote=sent,
@@ -948,7 +968,7 @@ class Rules:
         nxt = cells[k + 1] if k + 1 < len(cells) else ""
         years = [int(y) for y in YEAR.findall(sent)]
         if nxt and figure(k + 1) and not self.graph.values[m.subentity_id].unit.endswith("/yr"):
-            if PROSPECT.search(label) or (reading.date and years and max(years) < reading.date.year):
+            if PROSPECT.search(label) or (reading.when and years and max(years) < reading.when.year):
                 return []                # a projection ("Year-end USD/JPY") or a past episode's row
             # a level and its figure side by side: "USD/JPY | 158.054", "Last Price | 349.31"
             v = self._cell_level(m.subentity_id, hint, figure(k + 1))
@@ -1092,7 +1112,7 @@ class Rules:
             # a flow's row that names the document's fiscal year ("unit sales FY3/27 | 9,500 | 9,650"): its new level
             year = [p for pm in PERIOD.finditer(label) if (p := period_of(pm)) and p.kind == "year"]
             if year and self.graph.values[sid].unit.endswith("/yr") and pick(
-                    year[:1], flow=True, date=reading.date, fy_month=self._fy_month(sid)) == 0 \
+                    year[:1], flow=True, date=reading.when, fy_month=self._fy_month(sid)) == 0 \
                     and (v := self._cell_level(sid, label, new)) is not None:
                 out.insert(0, Found("observe", value_of=sid, value=v, quote=sent, rule=f"table row ({year[0].text})",
                                     confidence=0.75))
@@ -1104,7 +1124,9 @@ class Rules:
         flow = unit.endswith("/yr")
         if flow and any(p.kind == "year" and not p.fiscal and p.end and p.end[1] != fy_month for p in periods):
             return []                    # years ending in another month: another company's table ("12/26E" for a March FY)
-        k = pick(periods, flow=flow, date=reading.date, fy_month=fy_month)
+        if flow and any(p.kind == "date" and p.end and p.end[1] != fy_month for p in periods):
+            return []                    # a column dated inside the year ("30 June ... 2026"): an interim statement, not a year
+        k = pick(periods, flow=flow, date=reading.when if flow else reading.date, fy_month=fy_month)
         p = periods[k] if k is not None else None
         if p is None or (not flow and reading.date and p.end and p.end[0] and (reading.date - datetime(
                 *end_of(p, fy_month, reading.date.year), tzinfo=UTC)).days > STALE_DAYS) \
@@ -1143,7 +1165,7 @@ class Rules:
         """A cell's number as a level: scaled by the row label's unit ("(¥ bn)", "mm", "000s", "(%)", a ratio as a
         fraction), else by the one scale that makes it plausible ("14,805" in € mn is 14.8 €bn)."""
         rate = _unit_kind(self.graph.values[sid].unit) == "rate"
-        if n.blank:
+        if n.blank or (n.year and not rate):
             return None
         if rate:
             if n.unit == "" and PERCENT_HINT.search(label):
@@ -1575,7 +1597,7 @@ def claims_of_chunk(rules: Rules, ord_: int, text: str, reading: Reading | None,
                 prev_end = max((v.end for v in vals[:k] if v.subentity_id != m.subentity_id), default=0)
                 nxt = next((v.start for v in vals[k + 1:] if v.subentity_id != m.subentity_id), len(sent))
                 row = [] if told else rules.value_claims(
-                    sent, m, nums, prev_end, nxt, reading.date, linked=m.subentity_id in linked,
+                    sent, m, nums, prev_end, nxt, reading.date, ref=reading.when, linked=m.subentity_id in linked,
                     others=any(x.entity_id != m.entity_id for x in ms))
             for f in row:
                 out.found.append(f)

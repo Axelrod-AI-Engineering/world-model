@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import re
 
-from axelrod_ingest.cjk import HANGUL, HAN, KANA, cut_at, limit, sentence_cuts, weight
+from axelrod_ingest.cjk import HAN, HANGUL, KANA, cut_at, limit, sentence_cuts, weight
 from axelrod_ingest.lake.store import Chunk
 from axelrod_ingest.parse import Parsed
 

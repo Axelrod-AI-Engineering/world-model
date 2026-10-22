@@ -217,9 +217,47 @@ def _xlsx(data: bytes) -> Parsed:
     return Parsed("xlsx", tuple(segs), meta={"sheets": [s.label for s in segs]})
 
 
+def _encoding(d: Decoded) -> dict[str, str]:
+    """How the bytes were read, for the document's metadata: a fallback to Latin-1 is visible there, never silent."""
+    return {"name": d.encoding, "how": d.how}
+
+
+@dataclass
+class _Table:
+    """A table being read: finished rows, the row and the cell open now, and the cells a rowspan carries into later rows."""
+
+    rows: list[list[str]] = field(default_factory=list)
+    row: list[str] | None = None
+    cell: list[str] | None = None
+    span: tuple[int, int] = (1, 1)                       # the open cell's colspan and rowspan
+    pending: dict[int, list] = field(default_factory=dict)      # column -> [text, rows still to cover]
+
+    def fill(self) -> None:
+        """Put the cells a rowspan carries down into this row, from where it stands."""
+        assert self.row is not None
+        while (col := len(self.row)) in self.pending:
+            text, left = self.pending.pop(col)
+            self.row.append(text)
+            if left > 1:
+                self.pending[col] = [text, left - 1]
+
+
+MAX_SPAN = 30                    # a colspan or rowspan beyond this is a typo
+DATA_CELL_CHARS = 160            # a table of cells longer than this on average lays out a page; it is not data
+
+
+def _span(attrs: list, name: str) -> int:
+    value = dict(attrs).get(name) or ""
+    return min(int(value), MAX_SPAN) if value.isdigit() and int(value) > 0 else 1
+
+
 class _Text(HTMLParser):
+    """HTML to text. A data table becomes one line per row ("Sales Revenue | Current Period | 49,215,328 | 45,938,886"): a cell's
+    own line breaks become spaces, a colspan leaves empty cells, a rowspan's text is carried into the rows it covers, so each
+    row's label and figures stay together. A table of long cells (a page laid out in a table) is read as blocks, as text."""
+
     BLOCK = {"p", "div", "br", "li", "tr", "h1", "h2", "h3", "h4", "h5", "h6", "section", "article", "table",
-             "ul", "ol", "header", "footer", "blockquote", "pre"}      # td/th: " | " within their row's line
+             "ul", "ol", "header", "footer", "blockquote", "pre"}
     SKIP = {"script", "style", "noscript", "template", "head"}
 
     def __init__(self) -> None:
@@ -228,35 +266,105 @@ class _Text(HTMLParser):
         self.skip = 0
         self.title: list[str] = []
         self.in_title = False
+        self.tables: list[_Table] = []
+
+    def _sink(self) -> list[str]:
+        """Where text goes: the open cell of the innermost table, else the page."""
+        cell = self.tables[-1].cell if self.tables else None
+        return self.out if cell is None else cell
+
+    def _break(self) -> str:
+        return "\n" if not self.tables or self.tables[-1].cell is None else " "
+
+    def _open_row(self) -> None:
+        t = self.tables[-1]
+        if t.cell is not None:
+            self._close_cell()
+        if t.row is not None:
+            self._close_row()
+        t.row = []
+        t.fill()
+
+    def _open_cell(self, attrs: list) -> None:
+        t = self.tables[-1]
+        if t.cell is not None:
+            self._close_cell()
+        if t.row is None:
+            self._open_row()
+        t.cell, t.span = [], (_span(attrs, "colspan"), _span(attrs, "rowspan"))
+
+    def _close_cell(self) -> None:
+        t = self.tables[-1]
+        assert t.cell is not None and t.row is not None
+        text = " ".join("".join(t.cell).split())
+        t.fill()
+        col, (colspan, rowspan) = len(t.row), t.span
+        t.row += [text] + [""] * (colspan - 1)
+        if rowspan > 1:
+            t.pending.update({col + j: [text if j == 0 else "", rowspan - 1] for j in range(colspan)})
+        t.cell = None
+
+    def _close_row(self) -> None:
+        t = self.tables[-1]
+        assert t.row is not None
+        t.fill()
+        if any(t.row):
+            t.rows.append(t.row)
+        t.row = None
+
+    def _close_table(self) -> None:
+        t = self.tables[-1]
+        if t.cell is not None:
+            self._close_cell()
+        if t.row is not None:
+            self._close_row()
+        self.tables.pop()
+        cells = [c for row in t.rows for c in row if c]
+        wide = any(sum(bool(c) for c in row) >= 2 for row in t.rows)
+        data = wide and sum(map(len, cells)) <= DATA_CELL_CHARS * len(cells)
+        lines = [" | ".join(row).rstrip(" |") for row in t.rows] if data else cells
+        self._sink().append(self._break() + self._break().join(lines) + self._break())
 
     def handle_starttag(self, tag: str, attrs: list) -> None:
         if tag == "title":
             self.in_title = True
         if tag in self.SKIP:
             self.skip += 1
+        elif tag == "table":
+            self.tables.append(_Table())
+        elif tag == "tr" and self.tables:
+            self._open_row()
+        elif tag in ("td", "th") and self.tables:
+            self._open_cell(attrs)
         elif tag in self.BLOCK:
-            self.out.append("\n")
-        if tag in ("td", "th"):
-            self.out.append(" | ")
+            self._sink().append(self._break())
 
     def handle_endtag(self, tag: str) -> None:
         if tag == "title":
             self.in_title = False
         if tag in self.SKIP and self.skip:
             self.skip -= 1
-        elif tag in self.BLOCK:
-            self.out.append("\n")
+        elif tag in ("td", "th") and self.tables and self.tables[-1].cell is not None:
+            self._close_cell()
+        elif tag == "tr" and self.tables and self.tables[-1].row is not None:
+            if self.tables[-1].cell is not None:
+                self._close_cell()
+            self._close_row()
+        elif tag == "table" and self.tables:
+            self._close_table()
+        elif tag in self.BLOCK and not (self.tables and tag in ("table", "tr")):
+            self._sink().append(self._break())
 
     def handle_data(self, data: str) -> None:
         if self.in_title:
             self.title.append(data)
         elif not self.skip:
-            self.out.append(data)
+            self._sink().append(data)
 
-
-def _encoding(d: Decoded) -> dict[str, str]:
-    """How the bytes were read, for the document's metadata: a fallback to Latin-1 is visible there, never silent."""
-    return {"name": d.encoding, "how": d.how}
+    def close(self) -> None:
+        super().close()
+        while self.tables:                               # a table the page never closed
+            self._close_table()
 
 
 def _html(data: bytes) -> Parsed:
@@ -264,7 +372,7 @@ def _html(data: bytes) -> Parsed:
     d = decode(data, html=True)
     p.feed(d.text)
     p.close()
-    text = normalize(re.sub(r"(\n *\| *)", "\n", "".join(p.out)))
+    text = normalize("".join(p.out))
     return Parsed("html", (Segment(text),), title=normalize("".join(p.title))[:160], meta={"encoding": _encoding(d)})
 
 

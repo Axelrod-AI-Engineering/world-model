@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import pytest
 
-from axelrod_ingest.encoding import ALIASES, decode, declared
+from axelrod_ingest.encoding import ALIASES, declared, decode
 
 ZH = "新能源汽车销量同比增长，净利润保持稳定。"
 KO = "영업이익은 전년 대비 증가했습니다."
