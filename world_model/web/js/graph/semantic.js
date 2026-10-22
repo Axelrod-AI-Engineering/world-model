@@ -65,8 +65,15 @@ export function createSemantic(r, { pillWidth }) {
     return r.view.entities.every((e) => r.gravHomes.has(e.id) || r.pinnedHomes.has(e.id));
   }
 
+  // where the homes are now: a layout, a repack, or a box dragged home changes this
+  function stamp() {
+    let h = 0;
+    for (const m of [r.gravHomes, r.pinnedHomes]) for (const p of m.values()) h = (h * 31 + Math.round(p.x) * 7 + Math.round(p.y)) | 0;
+    return `${r.gravHomes.size}#${r.pinnedHomes.size}#${h}`;
+  }
+
   function geometry() {
-    const k = `${key}#${r.gravHomes.size}#${r.pinnedHomes.size}`;
+    const k = `${key}#${stamp()}`;
     if (k === geoKey) return geo;
     geoKey = k;
     geo = new Map();

@@ -416,7 +416,9 @@ export class SvgRenderer extends GraphRenderer {
       // the top of the hierarchy and zooming in opens it level by level; the hand-placed Figure 1 opens readable
       setTimeout(() => { this.frameAll(0); this.sem.now(); }, 30);
     }
-    if (reason === "lod") {
+    if (reason === "tier") {
+      // a change of the cut through the superentities: boxes appear at their homes and nothing glides or re-frames
+    } else if (reason === "lod") {
       // before a person has moved the view, the first view keeps framing the whole graph as it opens (only the camera
       // moves; the boxes keep their places)
       if (!this.userMoved) this.autoFrame = true;
@@ -677,6 +679,7 @@ export class SvgRenderer extends GraphRenderer {
 
   // A new free entity grows out of the boxes it interacts with (so it arrives next to them, not in a far grid slot).
   startPosition(b, old) {
+    if (this.tierDraw) return this.homeOf(b);
     if (!figurePosition(this.layout, b.id) && !this.hasFixedHome(b.id)) {
       const near = (this.view?.entity_links ?? []).flatMap((l) => (l.source === b.id ? [l.target] : l.target === b.id ? [l.source] : []))
         .map((id) => old.get(id)).filter(Boolean);
@@ -1051,7 +1054,13 @@ export class SvgRenderer extends GraphRenderer {
         .transition().duration(dur + 30).ease(d3.easeBackOut.overshoot(1.05)).attr("transform", "scale(1)").style("opacity", 1);
     }
     const all = enter.merge(sel);
-    const subsOf = (d) => this.view.subentities.filter((s) => s.entity_id === d.id);
+    // indexed once: filtering every subentity for every pill was quadratic in the model's size
+    const subsBy = new Map();
+    for (const s of this.view.subentities) {
+      if (!subsBy.has(s.entity_id)) subsBy.set(s.entity_id, []);
+      subsBy.get(s.entity_id).push(s);
+    }
+    const subsOf = (d) => subsBy.get(d.id) ?? [];
     all.attr("data-id", (d) => d.id)
       .classed("loose", (d) => d.entity.loose)
       .classed("open", (d) => d.open)

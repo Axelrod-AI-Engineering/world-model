@@ -98,14 +98,16 @@ body.offline #clock::after { content: "offline"; font-size: 10px; color: var(--d
 #stage { position: absolute; top: var(--topbar-h); bottom: var(--bottom-h); left: 0; right: 0; }
 body.strip #stage { top: calc(var(--topbar-h) + 36px); }
 #canvas { position: absolute; inset: 0; background: var(--paper); overflow: hidden; outline: none; }
-#canvas > svg { position: absolute; left: -40%; top: -40%; width: 180%; height: 180%; display: block; user-select: none; }
-/* buffered zoom (graph/zoom.js): the svg slides as one composited layer while the view moves. It reaches 40% of the canvas
-   past each edge (clipped, so the layer is bounded), so a pan reveals the graph rather than blank paper */
-#canvas > svg { overflow: hidden; transform-origin: 0 0; }
+/* buffered zoom (graph/zoom.js): the layer slides and scales as one composited piece while the view moves. It reaches 40%
+   of the canvas past each edge (clipped, so the layer is bounded), so a pan reveals the graph rather than blank paper. The
+   transform is on this div, not on the svg: a transform on the svg root made the browser lay the whole drawing out again
+   at every frame (Oct 22). */
+#canvas-layer { position: absolute; left: -40%; top: -40%; width: 180%; height: 180%; overflow: hidden; transform-origin: 0 0; }
+#canvas-layer > svg { width: 100%; height: 100%; display: block; user-select: none; }
 /* the canvas stays its own compositor layer (Oct 11): promoting it at the start of every zoom and dropping it at the end
    re-rasterized the whole drawing twice per gesture, which a GPU shows as a flash */
-#canvas > svg { will-change: transform; }
-#canvas.draw-mode > svg { cursor: crosshair; }
+#canvas-layer { will-change: transform; }
+#canvas.draw-mode svg { cursor: crosshair; }
 .floating { position: absolute; z-index: 5; }
 /* the part of the canvas the side panels leave visible: main.js sets the insets, and the caption, banners, and
    controls stay inside it. The room on each side keeps the centered caption clear of the search box. */

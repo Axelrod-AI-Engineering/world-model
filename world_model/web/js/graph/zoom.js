@@ -18,9 +18,9 @@ const SHARP = [0.67, 1.5];       // commit mid-gesture once the buffered scale l
 export const MARGIN = 0.4;
 
 export function createZoom(svg, root, { onZoom, onRest, grid } = {}) {
-  const node = svg.node();
-  const host = node.parentNode;   // the zoom lives on the svg's container, which never moves
-  const ours = (ev) => ev.target === host || node.contains(ev.target);
+  const layer = svg.node().parentNode;   // the div that slides and scales while the view moves (#canvas-layer)
+  const host = layer.parentNode;         // the zoom lives on the canvas, which never moves
+  const ours = (ev) => ev.target === host || ev.target === layer || layer.contains(ev.target);
   let gliding = false;
   let committed = d3.zoomIdentity;
   let restTimer = 0;
@@ -32,9 +32,9 @@ export function createZoom(svg, root, { onZoom, onRest, grid } = {}) {
     // the svg's own origin sits MARGIN of the canvas up and to the left of the canvas's
     const o = offset();
     root.attr("transform", `translate(${t.x + o.x},${t.y + o.y}) scale(${t.k})`);
-    node.style.transformOrigin = `${o.x}px ${o.y}px`;
+    layer.style.transformOrigin = `${o.x}px ${o.y}px`;
     grid?.(t);
-    node.style.transform = "";
+    layer.style.transform = "";
     host.classList.remove("buffering");
   }
   function buffer(t) {
@@ -45,7 +45,7 @@ export function createZoom(svg, root, { onZoom, onRest, grid } = {}) {
     if (s < SHARP[0] || s > SHARP[1] || Math.abs(dx) > o.x * 0.75 || Math.abs(dy) > o.y * 0.75) { commit(t); return; }
     host.classList.add("buffering");
     const css = `translate(${dx}px,${dy}px) scale(${s})`;
-    node.style.transform = css;
+    layer.style.transform = css;
     grid?.slide?.(css);
   }
   const zoom = d3.zoom()
@@ -145,12 +145,13 @@ export function createZoom(svg, root, { onZoom, onRest, grid } = {}) {
 // largest single cost of re-drawing the svg while the view moved (about half of what was left to paint once the graph had
 // fewer elements); a gradient is cheap, and while the view moves the layer slides and scales with the drawing (`slide`).
 export function installGrid(svg) {
-  const host = svg.node().parentNode;
+  const layer = svg.node().parentNode;
+  const host = layer.parentNode;
   const el = document.createElement("div");
   el.className = "grid-bg";
   el.setAttribute("aria-hidden", "true");
   el.innerHTML = '<i class="minor"></i><i class="major"></i>';
-  host.insertBefore(el, svg.node());
+  host.insertBefore(el, layer);
   const [minor, major] = el.children;
   let last = { x: 0, y: 0, k: 1 };
   const mod = (a, n) => ((a % n) + n) % n;
