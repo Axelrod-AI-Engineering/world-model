@@ -12,6 +12,7 @@ from axelrod_wm.engine.interfaces import Classification
 from axelrod_wm.events.graph_update import GraphUpdateEvent
 from axelrod_wm.model.entity import Entity
 from axelrod_wm.model.taxonomy import Generalization, TaxonomyKind
+from axelrod_wm.shared import classify
 from axelrod_wm.shared.classify import (
     NoGrower,
     SplitOnSharedFeatureGrower,
@@ -162,3 +163,23 @@ def test_first_split_waits_for_a_second_group(warm_engine):
     with eng.mutator.begin("grow", at=AT) as txn:
         assert SplitOnSharedFeatureGrower().maybe_split(tax, "gen:obj:currency_board",
                                                         eng.context(learn=True, now=AT), txn) == []
+
+
+def test_an_interaction_node_splits_and_its_links_move_to_the_children(warm_engine, monkeypatch):
+    # interactions group by the features of their ends; the split re-points each link at its new child
+    eng = warm_engine
+    iids = sorted(eng.wm.graph.interactions)[:9]
+    ends = dict(zip(iids, ["bank"] * 4 + ["firm"] * 4 + ["agency"], strict=True))
+    monkeypatch.setattr(classify, "item_features",
+                        lambda kind, iid, graph, ltm: {"source_features": [ends[iid]], "label": ["moves"]})
+    with eng.mutator.begin("seed", at=AT) as txn:
+        txn.add(classify.collection_for(TaxonomyKind.INTERACTION),
+                Generalization(id="gen:int:links", kind=TaxonomyKind.INTERACTION, name="links", parent_id=None,
+                               instance_ids=iids))
+    tax = eng.ltm.interaction_generalizations.taxonomy
+    with eng.mutator.begin("grow", at=AT) as txn:
+        created = SplitOnSharedFeatureGrower().maybe_split(tax, "gen:int:links", eng.context(learn=True, now=AT), txn)
+    assert created == ["gen:int:links__source_features_bank", "gen:int:links__source_features_firm"]
+    assert tax.nodes["gen:int:links"].instance_ids == [iids[8]]
+    assert eng.wm.graph.interactions[iids[0]].generalization_id == created[0]
+    assert eng.wm.graph.interactions[iids[4]].generalization_id == created[1]

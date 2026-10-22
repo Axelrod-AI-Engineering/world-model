@@ -469,7 +469,13 @@ def create_app(config_path: str | None = None, scenario: str = "oil_shock_demo",
     from axelrod_ingest.pipeline import Ingestor
 
     app.state.lake = SQLiteLake(Path(lake_dir or os.environ.get("WORLD_MODEL_LAKE_DIR") or "var/lake"))
-    app.state.ingestor = Ingestor(app.state.lake, LazyEmbedder(), provider=provider_from_env())
+    provider = provider_from_env()
+    app.state.ingestor = Ingestor(app.state.lake, LazyEmbedder(), provider=provider)
+    # the nested superentities' optional names (api/hierarchy.py): cached beside the ingestion step's answers; with no
+    # provider configured nothing is ever called
+    from axelrod_wm.api import hierarchy
+
+    hierarchy.LABELS = hierarchy.ClusterLabels(app.state.lake, provider)
 
     @app.exception_handler(UnboundThesis)
     async def _unbound(request: Request, exc: UnboundThesis) -> JSONResponse:

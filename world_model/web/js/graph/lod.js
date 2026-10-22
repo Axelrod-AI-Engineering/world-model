@@ -48,7 +48,7 @@ export function createLOD(r, attention) {
     // entities' values
     const kOpen = attention.kOpen;
     if (t.k < kOpen * OPEN_HYST) { handOpen.clear(); handClosed.clear(); }
-    const ents = [...r.nodes.values()];
+    const ents = [...r.nodes.values()].filter((n) => n.kind === "entity");
     const inView = (n) => n.x >= near.x0 && n.x <= near.x1 && n.y >= near.y0 && n.y <= near.y1;
     const inner = viewBox(t, -0.22);
     const inMiddle = (n) => n.x >= inner.x0 && n.x <= inner.x1 && n.y >= inner.y0 && n.y <= inner.y1;
