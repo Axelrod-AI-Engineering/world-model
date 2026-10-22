@@ -5,19 +5,26 @@
 // which are opened into their members is the cut through that hierarchy, chosen from the zoom and the part of the model
 // in view:
 //   - a group opens when it is in view and big enough on screen for its parts to read (EXPAND_PX, measured as the square
-//     root of its screen area), the nearest the middle of the view first, until MAX_SHOWN boxes are in view; an entity's pill does not open
-//     below MIN_K, where its name could not be read;
+//     root of its screen area), the nearest the middle of the view first, for as long as the boxes in view still fit the canvas (the budget,
+//     below); an entity's pill does not open below MIN_K, where its name could not be read;
 //   - it closes below COLLAPSE of that size, or when it is well out of view. The gap between the two is the hysteresis
 //     that stops a group opening and closing around one zoom value;
 //   - the cut is chosen once the view rests (the same debounce as detail, graph/lod.js), never mid-gesture, and only the
 //     groups whose state changes are redrawn. Nothing moves: boxes sit at the layout's homes, which do not depend on
 //     the zoom.
+// The budget is the canvas and the zoom, nothing else: the screen area of the view (its size in pixels), divided by
+// SPACING, is the area the boxes may take. A closed box is a label of one size on screen (MIN_BOX_PX); a pill takes the
+// area it has at this zoom, and never less than it needs to be read (MIN_PILL_PX). A bigger window holds more, a small
+// one fewer, and where the pills are drawn larger (a closer zoom) fewer fit, while the zoom opens the groups that are big
+// enough to read (EXPAND_PX).
 // A group a person opened or closed by hand keeps that state until the zoom moves well past where it was chosen.
 
 const EXPAND_PX = 230;          // a group opens at this screen size (sqrt of its area)
 const COLLAPSE = 0.76;          // and closes below this share of it
-const MAX_SHOWN = 26;           // boxes in view at once (groups and entities)
-const GRACE = 1.25;             // a group already open may stay while the count is this far over
+const MIN_BOX_PX = [160, 100];  // the least screen area (w, h in px) a group's box costs: room for its keywords and counts
+const MIN_PILL_PX = [120, 36];  // the least screen area (w, h in px) an entity's pill costs: room for its name
+const SPACING = 1.8;            // boxes may fill 1/1.8 of the view's pixels; the rest is gaps, arrows and their labels
+const GRACE = 1.25;             // a group already open may stay while the area used is this far over the budget
 const MIN_K = 0.3;              // below this zoom an entity's name is unreadable: its group stays closed
 const IN_VIEW = 0.08;           // a closed group opens only inside the view, grown by this share of it
 const STAY_VIEW = 0.45;         // an open one stays until it is this far outside
@@ -93,6 +100,12 @@ export function createSemantic(r, { pillWidth }) {
     return geo;
   }
 
+  // what a box or a pill takes of the canvas, in px squared. A closed box is a label drawn at one size on screen, so it
+  // costs that, whatever the zoom; a pill is drawn at the zoom's scale, so it costs its area on screen, and never less than
+  // the least it needs to read
+  const boxCost = () => MIN_BOX_PX[0] * MIN_BOX_PX[1];
+  const pillCost = (id, k, w) => Math.max(MIN_PILL_PX[0] * MIN_PILL_PX[1], (w.get(id) ?? 0) * HEAD * k * k);
+
   const screenSize = (g, k) => Math.sqrt(g.w * g.h) * k;
 
   function inView(g, vb, margin) {
@@ -119,10 +132,12 @@ export function createSemantic(r, { pillWidth }) {
     const dist = (c) => { const b = g.get(c.id); return b ? Math.hypot(b.cx - vb.cx, b.cy - vb.cy) : Infinity; };
     const next = new Set();
     const held = new Set(roots.flatMap((id) => clusters.get(id).members));
-    // boxes in view count against the cap: the top level and loose entities to begin with; an opening takes its own box
-    // away and adds the parts of it that are in view
-    let shown = roots.filter((id) => g.has(id) && inView(g.get(id), vb, IN_VIEW)).length
-      + r.view.entities.filter((e) => !held.has(e.id) && entIn(e.id, IN_VIEW)).length;
+    // boxes in view are paid for from the canvas: the top level and loose entities to begin with; an opening gives back
+    // its own box and takes the parts of it that are in view
+    const budget = (vb.x1 - vb.x0) * (vb.y1 - vb.y0) * t.k * t.k / SPACING;
+    const wid = new Map(r.view.entities.map((e) => [e.id, pillWidth(e.name)]));
+    let used = roots.filter((id) => g.has(id) && inView(g.get(id), vb, IN_VIEW)).reduce((a, id) => a + boxCost(), 0)
+      + r.view.entities.filter((e) => !held.has(e.id) && entIn(e.id, IN_VIEW)).reduce((a, e) => a + pillCost(e.id, t.k, wid), 0);
     const queue = roots.map((id) => clusters.get(id));
     const order = (a, b) => dist(a) - dist(b) || (a.id < b.id ? -1 : 1);
     queue.sort(order);
@@ -138,11 +153,12 @@ export function createSemantic(r, { pillWidth }) {
         const big = screenSize(box, t.k) >= EXPAND_PX * (was ? COLLAPSE : 1);
         const near = inView(box, vb, was ? STAY_VIEW : IN_VIEW);
         const readable = c.children.length > 0 || t.k >= MIN_K * (was ? 0.85 : 1);
-        const parts = c.children.filter((id) => g.has(id) && inView(g.get(id), vb, IN_VIEW)).length
-          + c.entity_ids.filter((id) => entIn(id, IN_VIEW)).length;
-        const room = shown - 1 + parts <= MAX_SHOWN * (was ? GRACE : 1);
+        const parts = c.children.filter((id) => g.has(id) && inView(g.get(id), vb, IN_VIEW)).reduce((a, id) => a + boxCost(), 0)
+          + c.entity_ids.filter((id) => entIn(id, IN_VIEW)).reduce((a, id) => a + pillCost(id, t.k, wid), 0);
+        const own = near ? boxCost() : 0;
+        const room = used - own + parts <= budget * (was ? GRACE : 1);
         go = big && near && readable && room;
-        if (go) shown += parts - 1;
+        if (go) used += parts - own;
       }
       if (!go) continue;
       next.add(c.id);

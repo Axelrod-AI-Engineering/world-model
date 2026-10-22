@@ -127,8 +127,8 @@ def test_a_large_model_reads_as_superentities_that_open_as_the_view_closes_in(se
         flips = page.evaluate("() => [...window.__seen.values()].filter((v) => v[1] > 1).length")
         assert flips == 0
         page.evaluate("() => clearInterval(window.__poll)")
-        # the three detail buttons: superentities (3), entities (1)
-        page.keyboard.press("3")
+        # the three detail buttons: superentities (1), entities (2)
+        page.keyboard.press("1")
         page.wait_for_timeout(1200)
         assert page.locator("g.pill").count() == 0 and page.locator("g.cnode").count() >= 3
         # a box opens by click (its parts show where its members sit); right-click offers its options
@@ -142,7 +142,7 @@ def test_a_large_model_reads_as_superentities_that_open_as_the_view_closes_in(se
         page.locator("g.cnode").first.click()
         page.wait_for_timeout(1500)
         assert page.locator("g.pill").count() >= 1 or page.locator("g.cnode").count() != before
-        page.keyboard.press("1")
+        page.keyboard.press("2")
         page.wait_for_timeout(1200)
         assert page.locator("g.pill").count() == 53 and page.locator("g.cnode").count() == 0
         browser.close()
@@ -188,8 +188,8 @@ def test_the_demo_loads_opens_nodes_and_steps(server):
         page.click(".zs-step[data-step='1.25']")
         page.wait_for_timeout(800)
         assert 0 < page.locator("g.row").count() < 40
-        # detail presets (Oct 17: 1 entities, 2 subentities)
-        page.keyboard.press("2")
+        # detail presets (Oct 22: 1 superentities, 2 entities, 3 subentities)
+        page.keyboard.press("3")
         page.wait_for_timeout(1200)
         assert page.locator("g.row").count() == 159
         # each value shows its mean in its own unit, not a move in sd (that is in its hover card)
@@ -202,7 +202,7 @@ def test_the_demo_loads_opens_nodes_and_steps(server):
         assert page.locator('g.row.kin[data-id="delta.fuel_cost"]').count() == 1
         page.locator('g.row[data-id="united_airlines.fuel_cost"]').dispatch_event("mouseleave", {"bubbles": False})
         assert page.locator(".kin").count() == 0
-        page.keyboard.press("1")
+        page.keyboard.press("2")
         page.wait_for_timeout(1200)
         assert page.locator("g.row").count() == 0
         # undo and redo a view change
@@ -216,7 +216,7 @@ def test_the_demo_loads_opens_nodes_and_steps(server):
         page.keyboard.press("?")
         page.wait_for_selector(".modal .keys")
         page.keyboard.press("Escape")
-        page.keyboard.press("1")
+        page.keyboard.press("2")
         page.wait_for_timeout(1200)
         assert page.locator("g.pill").count() == 53 and page.locator("g.row").count() == 0
         # right-click opens one entity's subentities
