@@ -1,6 +1,13 @@
-# PR A (the moves): the same three job names the restructure ends with, with plain test runs. PR B replaces the bodies of
-# `ingestion` and `world_model` with the per-member coverage gate and adds the checks to `repo`. At this point
-# ingestion's tests still import the world model, so both members are installed.
+# Three parallel jobs on every pull request and on main, one per concern. Railway deploys main by itself
+# (.railway/railway.ts); this only reports whether the tests pass.
+#
+#   ingestion    the ingestion member alone: it installs only axelrod-ingest, so it cannot lean on the world model, and its
+#                own tests cover every line and branch of its own source
+#   world_model  the world model member (with ingestion installed beside it), the same gate for its own source
+#   repo         the workspace as a whole: lint, the repository-level tests, the docs' tables of contents and diagrams
+#
+# The gate is scripts/coverage_gate.py: every source file of a member at 100% lines and branches, from that member's own
+# tests (no client data: CI has none, and the member's tests run against the synthetic client).
 name: Tests
 
 on:
@@ -21,14 +28,22 @@ jobs:
       - uses: astral-sh/setup-uv@v6
         with:
           version: "0.9.2"
-      - run: uv sync --frozen --all-packages
-      - name: tests
+      - run: uv sync --frozen --package axelrod-ingest
+      - name: tests with coverage
         working-directory: ingestion
-        run: uv run --frozen --package axelrod-ingest pytest -p no:cacheprovider
+        run: >
+          uv run --frozen --package axelrod-ingest pytest -p no:cacheprovider --cov --cov-report=json:coverage.json
+          --cov-report=term --junitxml=junit.xml
+      - name: coverage gate
+        if: always()
+        run: >
+          uv run --frozen --package axelrod-ingest python scripts/coverage_gate.py ingestion/coverage.json
+          --member ingestion --junit ingestion/junit.xml --summary "$GITHUB_STEP_SUMMARY"
 
   world_model:
     name: world_model
     runs-on: ubuntu-latest
+    # the suite outgrew 75 minutes under coverage (API v1, the construction rounds, the golden harness)
     timeout-minutes: 150
     steps:
       - uses: actions/checkout@v4
@@ -39,9 +54,16 @@ jobs:
       - name: unit tests first, for a fast failure
         working-directory: world_model
         run: uv run --frozen --package axelrod-world-model pytest -p no:cacheprovider tests/unit
-      - name: the full suite
+      - name: the full suite with coverage
         working-directory: world_model
-        run: uv run --frozen --package axelrod-world-model pytest -p no:cacheprovider
+        run: >
+          uv run --frozen --package axelrod-world-model pytest -p no:cacheprovider --cov --cov-report=json:coverage.json
+          --cov-report=term --junitxml=junit.xml
+      - name: coverage gate
+        if: always()
+        run: >
+          uv run --frozen --package axelrod-world-model python scripts/coverage_gate.py world_model/coverage.json
+          --member world_model --junit world_model/junit.xml --summary "$GITHUB_STEP_SUMMARY"
 
   repo:
     name: repo
@@ -56,3 +78,5 @@ jobs:
       # scripts/video has errors from before the restructure; nothing else may add one
       - run: uv run --frozen ruff check . --extend-exclude scripts/video
       - run: uv run --frozen pytest -p no:cacheprovider tests
+      - run: uv run --frozen python scripts/docs/toc.py --check
+      - run: uv run --frozen python scripts/docs/diagrams.py --check

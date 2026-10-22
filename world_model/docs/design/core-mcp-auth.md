@@ -16,11 +16,23 @@ credentials are scoped.
 <!-- toc -->
 **Contents**
 
+- [Terms and acronyms](#terms-and-acronyms)
 - [1. Problem](#1-problem)
 - [2. Current state](#2-current-state)
+  - [Core (`Axelrod-AI-Engineering/core`, `main` at `01886b5`, Oct 17)](#core-axelrod-ai-engineeringcore-main-at-01886b5-oct-17)
+  - [Here (before v1)](#here-before-v1)
 - [3. Requirements](#3-requirements)
 - [4. Options](#4-options)
 - [5. Recommendation](#5-recommendation)
+  - [The token](#the-token)
+  - [Scopes per route, and how they map to core](#scopes-per-route-and-how-they-map-to-core)
+  - [Tenancy](#tenancy)
+  - [Approval stays human-only](#approval-stays-human-only)
+  - [Rotation and revocation](#rotation-and-revocation)
+  - [Audit](#audit)
+  - [When one side is down](#when-one-side-is-down)
+  - [Local dev and tests](#local-dev-and-tests)
+  - [The end user's direct MCP use](#the-end-users-direct-mcp-use)
 - [6. Changes in core](#6-changes-in-core)
 - [7. Changes here](#7-changes-here)
 - [8. Rollout and migration](#8-rollout-and-migration)
