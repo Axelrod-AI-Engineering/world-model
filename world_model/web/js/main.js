@@ -62,7 +62,7 @@ const REDO_KEY = IS_MAC ? "⇧⌘Z" : "Ctrl-Y";
 // the keyboard sheet (?): every shortcut in one place, so none needs a button on screen
 const SHORTCUTS = [
   ["Canvas", [[`${MOD}Z`, "Undo a view change (open, close, move, layout)"], [`${REDO_KEY}`, "Redo"],
-              ["1 · 2 · 3", "Entities · subentities · superentities"], ["0", "Auto: detail follows zoom"], ["K", "Color: what pills are colored by, and the key"], ["[ · ]", "Up a concept · down into the first narrower one (the taxonomy, top left)"], ["+ · − · F", "Zoom in · zoom out · fit"],
+              ["1 · 2 · 3", "Superentities · entities · subentities"], ["0", "Auto: detail follows zoom"], ["K", "Color: what pills are colored by, and the key"], ["[ · ]", "Up a concept · down into the first narrower one (the taxonomy, top left)"], ["+ · − · F", "Zoom in · zoom out · fit"],
               [`/ · ${MOD}K`, "Find or filter: words, concepts, “moved”, “open>0.8”, “learned”; widen to neighborhoods"], ["D", "Draw a proposed edge"], ["Esc", "Close the top thing"]]],
   ["Demo", [["E", "Tutorial"], ["I", "Import research (imported models)"], ["→", "Next scripted step"], ["Space", "Play or pause"],
             ["⇧← · ⇧→", "Step through the timeline"], ["U", "Request an update"]]],
@@ -608,9 +608,9 @@ async function boot() {
           ...(renderer.undoStack.length ? [{ label: `Undo ${renderer.undoStack.at(-1).label}`, kbd: `${MOD}Z`, action: undo }] : []),
           ...(renderer.redoStack.length ? [{ label: `Redo ${renderer.redoStack.at(-1).label}`, kbd: REDO_KEY, action: redo }] : []),
           ...(renderer.undoStack.length || renderer.redoStack.length ? [{ sep: true }] : []),
-          ...(renderer.sem.clusters().size ? [{ label: "Group into superentities", kbd: "3", action: () => { setAuto(false); renderer.setDetail("super"); } }] : []),
-          { label: "Close every entity", kbd: "1", action: () => renderer.setDetail("entity") },
-          { label: "Show every entity's subentities", kbd: "2", action: () => renderer.setDetail("sub") },
+          ...(renderer.sem.clusters().size ? [{ label: "Group into superentities", kbd: "1", action: () => { setAuto(false); renderer.setDetail("super"); } }] : []),
+          { label: "Close every entity", kbd: "2", action: () => renderer.setDetail("entity") },
+          { label: "Show every entity's subentities", kbd: "3", action: () => renderer.setDetail("sub") },
           ...(renderer.sem.clusters().size ? [{ label: "Name every superentity with a language model", action: relabelClusters }] : []),
           { sep: true },
           { label: document.body.classList.contains("labels") ? "Hide interaction labels" : "Show every interaction label",
@@ -1529,9 +1529,9 @@ async function boot() {
     else if (ev.key === "ArrowLeft" && ev.shiftKey) { ev.preventDefault(); timeline.stepBack(); }
     else if (ev.key === "ArrowRight") { ev.preventDefault(); doStep(); }
     else if (ev.key === "u" || ev.key === "U") update.open();
-    else if (ev.key === "1") { setAuto(false); renderer.setDetail("entity"); }
-    else if (ev.key === "2") { setAuto(false); renderer.setDetail("sub"); }
-    else if (ev.key === "3" && renderer.sem.clusters().size) { setAuto(false); renderer.setDetail("super"); }
+    else if (ev.key === "1" && renderer.sem.clusters().size) { setAuto(false); renderer.setDetail("super"); }
+    else if (ev.key === "2") { setAuto(false); renderer.setDetail("entity"); }
+    else if (ev.key === "3") { setAuto(false); renderer.setDetail("sub"); }
     else if (ev.key === "0") setAuto(!renderer.autoDetail);
     else if (ev.key === "f" || ev.key === "F") renderer.fit();
     else if (ev.key === "+" || ev.key === "=") renderer.zoomBy(1.25);
