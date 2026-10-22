@@ -10,17 +10,9 @@ import pytest
 import yaml
 from pydantic import ValidationError
 
+from axelrod_ingest.contract.bundle import ImportItem, Link, Move, Observe
 from axelrod_wm.engine.initialize import ConstructionError, ConstructionSpec, load_vocabulary
-from axelrod_wm.intake.bundle import (
-    ImportItem,
-    Link,
-    Move,
-    Observe,
-    market_event_of,
-    signal_conversion,
-    signal_ops,
-    translate_item,
-)
+from axelrod_wm.intake.structured import market_event_of, signal_conversion, signal_ops, translate_item
 from axelrod_wm.model.corporate_actions import CorporateAction, is_per_share, splits_in_force, to_model_basis
 from tests.unit.engine.test_cov_initialize import _taxonomy
 from tests.unit.model.test_business_construction import ATTRS, _s, acme_construction, build, world

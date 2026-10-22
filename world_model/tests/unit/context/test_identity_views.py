@@ -9,11 +9,11 @@ from datetime import date
 
 import pytest
 
+from axelrod_ingest.contract.bundle import ImportItem
 from axelrod_wm.context.construction import construction_view, state_text, to_markdown, trace
 from axelrod_wm.context.v4 import domain_pack, identity_ref, pack_config
 from axelrod_wm.engine.engine import Engine
 from axelrod_wm.engine.initialize import ConstructionSpec, Initializer, load_vocabulary
-from axelrod_wm.intake.bundle import ImportItem
 from axelrod_wm.intake.overlap import overlap_guard, overlapping_views, views_by_part
 from axelrod_wm.model.construction import Threshold
 from axelrod_wm.repo.snapshots import MemoryBackend

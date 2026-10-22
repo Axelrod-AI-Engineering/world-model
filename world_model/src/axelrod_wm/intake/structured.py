@@ -1,10 +1,6 @@
-"""Import bundles (Oct 11): research a collection agent has already read and categorized, ready to fold in.
-
-A bundle is what an upstream agent hands the world model after scraping and sorting sources: dated items, each with
-its source, a summary in the agent's words, the entities it is about, a category, and **signals**: the specific
-claims the item makes about the model, each tied to the phrase that makes it. The world model does not trust them:
-every item becomes a market event on its own date, the `structured` translator turns its signals into a proposed
-graph update, and a person reviews it like any other.
+"""Import bundles into the world model (Oct 11; the schema moved to axelrod_ingest.contract.bundle): every item
+becomes a market event on its own date, the `structured` translator turns its signals into a proposed graph update,
+and a person reviews it like any other. The world model does not trust a bundle's signals.
 
 Signals name the model's own ids. A signal whose ends are not in the graph is dropped (and reported), so a bundle
 written for a richer model still imports into a smaller one.
@@ -16,21 +12,14 @@ Two import rules keep a reported number from being misread (Oct 17):
   fall. A relative or standardized move is unchanged. The preview and the review's rationale show each conversion.
 - **Overlapping views.** Parts of two additive views of one total observed in one item or one day are not all folded:
   intake/overlap.py keeps one view and lists the other's signals as dropped.
-
-    {"format": "axelrod.import/v1", "title": ..., "collected_by": ..., "collected_at": ..., "items": [
-       {"id": "EM-001", "published_at": "2026-09-11T06:00:00Z", "source": "...", "source_type": "broker_research",
-        "kind": "analyst", "headline": "...", "summary": "...", "entities": ["boj"], "tickers": ["8766 JP"],
-        "category": "rates", "stance": "hawkish", "relevance": 0.9, "confidence": 0.8,
-        "signals": [{"type": "observe", "value_of": "boj.policy_rate", "value": 1.25, "quote": "..."}]}]}
 """
 
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Annotated, Any, Literal
+from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
-
+from axelrod_ingest.contract.bundle import ImportItem, Link, Move, Observe
 from axelrod_wm.engine.registry import register
 from axelrod_wm.events.graph_update import GraphUpdateEvent
 from axelrod_wm.events.market import MarketEvent, MarketEventChannel, MarketEventKind
@@ -41,93 +30,6 @@ from axelrod_wm.intake.translators import (
     fill_event,
 )
 from axelrod_wm.model.corporate_actions import to_model_basis
-
-FORMAT = "axelrod.import/v1"
-
-
-class _S(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    quote: str = ""                    # the phrase of the summary that makes this claim (highlighted in review)
-    note: str = ""                     # the agent's reason, shown beside the change
-
-
-class Observe(_S):
-    """A reported level: a value is now this, in its native unit."""
-
-    type: Literal["observe"]
-    value_of: str
-    value: float
-
-
-class Move(_S):
-    """A change to a value: relative (0.1 = +10%), absolute (native units), or standardized (sd)."""
-
-    type: Literal["move"]
-    value_of: str
-    delta: float
-    mode: Literal["relative", "absolute", "standardized"] = "absolute"
-
-
-class Link(_S):
-    """A causal link the item states: source drives target, with a sign, a size (target sd per source sd), and
-    timing (mean days until it starts, builds, and how long it lasts; no duration is permanent)."""
-
-    type: Literal["link"]
-    source: str
-    target: str
-    label: str
-    effect: float
-    delay_days: float = 7.0
-    lag_days: float = 30.0
-    duration_days: float | None = None
-
-
-class Support(_S):
-    """Evidence for (or against) a link already in the model, named by its two ends."""
-
-    type: Literal["support", "contradict"]
-    source: str
-    target: str
-    strength: float = 0.5
-
-
-Signal = Annotated[Observe | Move | Link | Support, Field(discriminator="type")]
-
-
-class ImportItem(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    id: str
-    published_at: datetime
-    occurred_at: datetime | None = None
-    source: str
-    source_type: Literal["broker_research", "expert_call", "news", "central_bank", "data", "filing",
-                         "client_model", "other"] = "news"
-    kind: Literal["news", "data", "analyst", "filing"] = "news"
-    headline: str
-    summary: str = ""
-    url: str | None = None
-    entities: list[str] = []           # the model's entity ids the agent tagged
-    tickers: list[str] = []
-    category: str = ""                 # the agent's topic, e.g. "rates", "fx", "earnings"
-    stance: str = ""                   # e.g. "hawkish", "positive", "estimates down"
-    relevance: float = Field(0.5, ge=0, le=1)     # to the book, as the agent judged it
-    confidence: float = Field(0.7, ge=0, le=1)    # in its own reading
-    tags: list[str] = []
-    signals: list[Signal] = []
-
-
-class ImportBundle(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    format: Literal["axelrod.import/v1"] = FORMAT
-    title: str = "Imported research"
-    collected_by: str = "research agent"
-    collected_at: datetime | None = None
-    description: str = ""
-    synthetic: bool = False            # made up for a demo or a test (the review shows a "synthetic" badge)
-    items: list[ImportItem]
 
 
 # ---------------------------------------------------------------------------------------------------
@@ -265,5 +167,4 @@ class StructuredTranslator(MarketEventTranslator):
         return result
 
 
-__all__ = ["FORMAT", "ImportBundle", "ImportItem", "Link", "Move", "Observe", "StructuredTranslator", "Support",
-           "conversion_text", "item_text", "market_event_of", "signal_conversion", "signal_ops", "translate_item"]
+__all__ = ["StructuredTranslator", "conversion_text", "item_text", "market_event_of", "signal_conversion", "signal_ops", "translate_item"]

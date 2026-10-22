@@ -11,10 +11,10 @@ from types import SimpleNamespace
 import pytest
 import yaml
 
+from axelrod_ingest.contract.bundle import ImportBundle
 from axelrod_wm.engine import focus as fo
 from axelrod_wm.engine.focus import FocusSpec, focus_result
 from axelrod_wm.engine.initialize import ConstructionError
-from axelrod_wm.intake.bundle import ImportBundle
 from axelrod_wm.sim import scenario as sc
 from axelrod_wm.sim.imports import ImportRunner
 

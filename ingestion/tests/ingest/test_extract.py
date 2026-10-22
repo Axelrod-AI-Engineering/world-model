@@ -7,6 +7,7 @@ from types import SimpleNamespace as NS
 
 import pytest
 
+from axelrod_ingest.contract.bundle import ImportItem
 from axelrod_ingest.extract import (
     LLM_CONFIDENCE,
     UNDIRECTED_SD,
@@ -23,7 +24,6 @@ from axelrod_ingest.extract import (
     numbers,
     stance_of,
 )
-from axelrod_wm.intake.bundle import ImportItem
 
 D = datetime(2026, 10, 5, tzinfo=UTC)
 

@@ -19,6 +19,7 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
+from axelrod_ingest.contract.bundle import ImportBundle, ImportItem
 from axelrod_wm.control.controller import ControllerError, WorldModelController
 from axelrod_wm.control.updates import UpdateRequest, UpdateState
 from axelrod_wm.engine.engine import build_engine, make_storage
@@ -31,16 +32,14 @@ from axelrod_wm.engine.initialize import (
     resolve_path,
 )
 from axelrod_wm.events.market import MarketEventKind
-from axelrod_wm.intake.bundle import (
-    ImportBundle,
-    ImportItem,
+from axelrod_wm.intake.overlap import RULE as OVERLAP_RULE
+from axelrod_wm.intake.overlap import overlap_guard
+from axelrod_wm.intake.structured import (
     StructuredTranslator,
     market_event_of,
     signal_conversion,
     translate_item,
 )
-from axelrod_wm.intake.overlap import RULE as OVERLAP_RULE
-from axelrod_wm.intake.overlap import overlap_guard
 from axelrod_wm.sim.runner import RunnerStatus, ScenarioRunner
 from axelrod_wm.sim.scenario import load_theses
 from axelrod_wm.trace import Phase

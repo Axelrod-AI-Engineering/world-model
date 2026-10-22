@@ -5,9 +5,10 @@ from __future__ import annotations
 
 import pytest
 
+from axelrod_ingest.contract.bundle import ImportItem
 from axelrod_wm.control.updates import UpdateState
-from axelrod_wm.intake.bundle import ImportItem, market_event_of, translate_item
 from axelrod_wm.intake.overlap import RULE, overlap_guard, overlapping_views, views_by_part
+from axelrod_wm.intake.structured import market_event_of, translate_item
 from axelrod_wm.model.construction import Composition
 from axelrod_wm.repo.snapshots import MemoryBackend
 from axelrod_wm.sim.imports import ImportRunner

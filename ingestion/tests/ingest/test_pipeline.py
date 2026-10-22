@@ -9,11 +9,11 @@ from datetime import UTC, datetime, timedelta, timezone
 import pytest
 
 from axelrod_ingest import EXTRACTOR_VERSION
+from axelrod_ingest.contract.bundle import ImportBundle
 from axelrod_ingest.gazetteer import Gazetteer
 from axelrod_ingest.lake.embed import HashingEmbedder
 from axelrod_ingest.lake.store import content_id
 from axelrod_ingest.pipeline import KIND_OF, SOURCE_TYPES, Ingestor, _utc, bundle_id
-from axelrod_wm.intake.bundle import ImportBundle
 from tests.ingest.conftest import NOW
 
 T = "acme"

@@ -8,20 +8,10 @@ from types import SimpleNamespace
 
 import pytest
 
+from axelrod_ingest.contract.bundle import ImportItem, Link, Move, Observe, Support
 from axelrod_wm.events.graph_update import GraphUpdateEvent
 from axelrod_wm.events.market import MarketEvent
 from axelrod_wm.intake import scrapers
-from axelrod_wm.intake.bundle import (
-    ImportItem,
-    Link,
-    Move,
-    Observe,
-    StructuredTranslator,
-    Support,
-    market_event_of,
-    signal_ops,
-    translate_item,
-)
 from axelrod_wm.intake.pipeline import op_summary
 from axelrod_wm.intake.resolver import (
     AliasFuzzyResolver,
@@ -32,6 +22,7 @@ from axelrod_wm.intake.resolver import (
 )
 from axelrod_wm.intake.scrapers import MockWebScraper
 from axelrod_wm.intake.sources import HistoryReplaySource, JsonlReplaySource, load_market_events
+from axelrod_wm.intake.structured import StructuredTranslator, market_event_of, signal_ops, translate_item
 from axelrod_wm.intake.translators import (
     DataFeedTranslator,
     LLMNotConfigured,

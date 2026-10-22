@@ -19,8 +19,8 @@ from typing import Any, Protocol
 import httpx
 from pydantic import TypeAdapter, ValidationError
 
+from axelrod_ingest.contract.bundle import Signal
 from axelrod_ingest.lake.store import LakeStore, digest
-from axelrod_wm.intake.bundle import Signal
 
 PROMPT_VERSION = "llm-signals-1"
 TIMEOUT = 60.0

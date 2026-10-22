@@ -7,10 +7,10 @@ import json
 
 import pytest
 
+from axelrod_ingest.contract.bundle import ImportBundle
 from axelrod_wm.clients import load_scenario_yaml
 from axelrod_wm.control.controller import ControllerError
 from axelrod_wm.control.updates import UpdateState
-from axelrod_wm.intake.bundle import ImportBundle
 from axelrod_wm.repo.snapshots import MemoryBackend
 from axelrod_wm.sim.imports import ImportRunner, load_bundle_file
 from axelrod_wm.sim.scenario import ScenarioScript

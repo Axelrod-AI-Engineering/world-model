@@ -1,21 +1,11 @@
-"""Import bundles (intake/bundle.py): the schema, and how signals become operations."""
+"""Import bundles into the world model (intake/structured.py): how signals become operations. The schema's own tests
+are ingestion's (ingestion/tests/contract)."""
 
 import json
 from datetime import UTC, datetime
 
-import pytest
-from pydantic import ValidationError
-
-from axelrod_wm.intake.bundle import (
-    ImportBundle,
-    Link,
-    Move,
-    Observe,
-    Support,
-    market_event_of,
-    signal_ops,
-    translate_item,
-)
+from axelrod_ingest.contract.bundle import ImportBundle, Link, Move, Observe, Support
+from axelrod_wm.intake.structured import market_event_of, signal_ops, translate_item
 from tests.where import IMPORT_BUNDLE_SAMPLE
 
 SAMPLE = IMPORT_BUNDLE_SAMPLE
@@ -32,20 +22,6 @@ class Graph:
 
     def active_interactions(self):
         return [Interaction("m16", "central_bank.policy_rate", "dollar.index")]
-
-
-def test_sample_bundle_parses():
-    b = ImportBundle.model_validate(json.loads(SAMPLE.read_text()))
-    assert [i.id for i in b.items] == ["T-002", "T-001", "T-003"]
-    assert {type(s).__name__ for i in b.items for s in i.signals} == {"Observe", "Support", "Link"}
-
-
-def test_unknown_signal_type_and_extra_fields_fail():
-    with pytest.raises(ValidationError):
-        ImportBundle.model_validate({"items": [{"id": "x", "published_at": "2026-09-01T00:00:00Z", "source": "s",
-                                                "headline": "h", "signals": [{"type": "guess", "value_of": "a"}]}]})
-    with pytest.raises(ValidationError):
-        ImportBundle.model_validate({"items": [], "surprise": 1})
 
 
 def test_signals_become_operations():
@@ -76,3 +52,14 @@ def test_translate_item_drops_what_does_not_map_and_highlights_quotes():
     start, end, op = res.spans[0]
     assert f"{item.headline}\n{item.summary}"[start:end] == item.signals[0].quote and op == 0
     assert me.published_at == item.published_at and "rates" in me.tags
+
+
+def test_the_structured_translator_is_registered_by_the_engine_defaults_alone():
+    """Importing engine.defaults (and nothing that names the translator) registers it, in a fresh interpreter."""
+    import subprocess
+    import sys
+
+    code = ("import axelrod_wm.engine.defaults; from axelrod_wm.engine.registry import registry; "
+            "print('structured' in registry('translator').names())")
+    out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True)
+    assert out.stdout.strip() == "True"

@@ -19,7 +19,7 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
-from axelrod_wm.intake.bundle import ImportBundle
+from axelrod_ingest.contract.bundle import ImportBundle
 from axelrod_wm.intake.overlap import overlapping_views, views_by_part
 from axelrod_wm.repo.snapshots import MemoryBackend
 from axelrod_wm.sim.runner import build_runner

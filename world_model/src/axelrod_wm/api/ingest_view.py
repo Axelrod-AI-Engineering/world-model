@@ -14,7 +14,8 @@ import re
 from typing import Any
 
 from axelrod_ingest.chunk import CELL, tabular
-from axelrod_wm.intake.bundle import ImportBundle, market_event_of, signal_ops, translate_item
+from axelrod_ingest.contract.bundle import ImportBundle
+from axelrod_wm.intake.structured import market_event_of, signal_ops, translate_item
 
 ORD = re.compile(r"-(\d{4})$")          # an extracted item's id ends in its chunk's position (ingest/extract.py)
 

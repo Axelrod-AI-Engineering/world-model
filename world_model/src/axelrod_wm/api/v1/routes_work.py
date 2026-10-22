@@ -322,7 +322,7 @@ def bundle_view(rec: Any) -> s.BundleSummary:
 
 @router.post(W + "/bundles", status_code=201, summary="Store a bundle an agent wrote")
 async def create_bundle(request: Request, world_model_id: str) -> Response:
-    from axelrod_wm.intake.bundle import ImportBundle
+    from axelrod_ingest.contract.bundle import ImportBundle
 
     m = model(request, world_model_id, DOCUMENTS)
     if not request.headers.get("content-type", "").startswith("application/json"):

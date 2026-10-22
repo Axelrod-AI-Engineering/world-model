@@ -25,13 +25,13 @@ from pydantic import ValidationError
 
 from axelrod_ingest import EXTRACTOR_VERSION
 from axelrod_ingest.chunk import chunk
+from axelrod_ingest.contract.bundle import FORMAT, ImportBundle
 from axelrod_ingest.extract import Reading, Rules, claims_of_chunk, find_date, item_of, keep_best
 from axelrod_ingest.gazetteer import Gazetteer
 from axelrod_ingest.lake.embed import Embedder
 from axelrod_ingest.lake.store import BundleRecord, Document, LakeStore, Mention, content_id, digest
 from axelrod_ingest.llm import Provider, propose
 from axelrod_ingest.parse import PARSER_VERSION, Parsed, ParseError, mime_of, parse
-from axelrod_wm.intake.bundle import FORMAT, ImportBundle
 
 KIND_OF = {"data": "data", "filing": "filing", "broker_research": "analyst", "expert_call": "analyst",
            "client_model": "analyst"}
