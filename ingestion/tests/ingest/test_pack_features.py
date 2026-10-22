@@ -204,3 +204,10 @@ def test_a_file_named_for_guidance_gives_no_results_and_a_quarters_headline_is_n
                               "001_1_2026-07-23_results.txt", G, meta={"manifest": MANIFEST})
     assert quarter.document.meta["dates"]["period_kind"] == "quarter"
     assert [(s["type"], s["value_of"]) for s in quarter.bundle.bundle["items"][0]["signals"]] == [("move", "acme_ev.net_profit")]
+
+
+def test_a_story_has_no_period_only_the_day_it_ran(lake):
+    story = b"Acme EV news. In the second quarter of 2026, Acme EV said results for Q2 2026 were solid. Posted 2026-07-30."
+    res = make(lake).ingest_file(T, story, "001_3_30-Jul-2026_story.txt", G, meta={"manifest": {**MANIFEST, "url": "", "section": "Risk Events"}})
+    assert res.document.meta["doc_type"]["type"] == "news"
+    assert res.document.meta["dates"] == {"published_source": "manifest", "published_at": "2026-07-30T00:00:00+00:00"}

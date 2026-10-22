@@ -28,10 +28,10 @@ HEAD = 3000                               # the opening text a publication date 
 PERIOD_HEAD = 8000                        # ... and a period
 MON = r"(?P<mon>Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\.?"
 CN_DIGIT = {c: str(k) for k, c in enumerate("〇一二三四五六七八九")} | {"零": "0"}
-DATE_PATTERNS = [
+DATE_PATTERNS = [       # month names in any case: a title in capitals ("MARCH 31, 2026") is a date too
     re.compile(r"\b(?P<y>20\d{2})-(?P<m>\d{2})-(?P<d>\d{2})\b"),
-    re.compile(rf"\b{MON}\s+(?P<d>\d{{1,2}}),?\s+(?P<y>20\d{{2}})\b"),
-    re.compile(rf"\b(?P<d>\d{{1,2}})[\s-]+{MON},?[\s-]+(?P<y>20\d{{2}})\b"),
+    re.compile(rf"\b{MON}\s+(?P<d>\d{{1,2}}),?\s+(?P<y>20\d{{2}})\b", re.I),
+    re.compile(rf"\b(?P<d>\d{{1,2}})[\s-]+{MON},?[\s-]+(?P<y>20\d{{2}})\b", re.I),
     re.compile(r"(?P<y>20\d{2})\s*[年년]\s*(?P<m>\d{1,2})\s*[月월]\s*(?P<d>\d{1,2})\s*[日일]"),
     re.compile(r"(?<![\d.])(?P<y>20\d{2})\.\s?(?P<m>\d{1,2})\.\s?(?P<d>\d{1,2})(?!\d)"),
     re.compile(r"(?P<y>[〇零一二三四五六七八九]{4})\s*年\s*(?P<m>[一二三四五六七八九十]{1,3})\s*月\s*(?P<d>[一二三四五六七八九十]{1,3})\s*日"),
@@ -55,7 +55,8 @@ MONTH_NAME_YEAR = re.compile(rf"(?<![A-Za-z])(?<!\d[-_ ]){MON}[-_ ](?P<y>20\d{{2
 ORDINAL = {"first": 1, "second": 2, "third": 3, "fourth": 4, "一": 1, "二": 2, "三": 3, "四": 4, "1": 1, "2": 2, "3": 3, "4": 4}
 QUARTERS = [re.compile(p, re.I) for p in (
     r"\bQ(?P<n>[1-4])[-\s]?(?P<y>20\d{2})\b", r"\b(?P<y>20\d{2})[-\s]?Q(?P<n>[1-4])\b", r"\b(?P<n>[1-4])Q[-\s]?(?P<y>20\d{2})\b",
-    r"\b(?P<n>first|second|third|fourth)\s+quarter\s+(?:of\s+)?(?P<y>20\d{2})\b",
+    r"\b(?P<n>first|second|third|fourth)\s+quarter(?:ly)?(?:\s+(?:report|results))?\s+(?:of\s+)?(?P<y>20\d{2})\b",
+    r"\b(?P<y>20\d{2})\s+(?P<n>first|second|third|fourth)\s+quarter(?:ly)?\b",
     r"(?P<y>20\d{2})\s*年\s*第?\s*(?P<n>[一二三四1-4])\s*季度", r"(?P<y>20\d{2})\s*년\s*(?P<n>[1-4])\s*분기")]
 HALVES = [re.compile(p, re.I) for p in (
     r"\bH(?P<n>[12])[-\s]?(?P<y>20\d{2})\b", r"\b(?P<n>[12])H[-\s]?(?P<y>20\d{2})\b",
@@ -65,7 +66,7 @@ HALVES = [re.compile(p, re.I) for p in (
 HALF_NUMBER = {**ORDINAL, "": 1, "上半年": 1, "半年度": 1, "下半年": 2, "상반기": 1, "반기": 1, "하반기": 2}
 YEARS = [re.compile(p, re.I) for p in (
     r"\bFY\s?(?P<y>20\d{2})\b", r"\b(?:full[- ]year|annual(?: report)?)\s+(?:results\s+)?(?:for\s+)?(?:the\s+year\s+)?(?P<y>20\d{2})\b",
-    r"\b(?P<y>20\d{2})\s+annual\s+(?:report|results)\b",
+    r"\b(?P<y>20\d{2})\s+annual\s+(?:report|results)\b", r"\b(?P<y>20\d{2})\s+(?:ESG|Environmental|Sustainability)\b",
     r"(?P<y>20\d{2}|[〇零一二三四五六七八九]{4})\s*年\s*(?:度|年度|年报|年度报告)", r"(?P<y>20\d{2})\s*년\s*(?:도|사업)")]
 
 

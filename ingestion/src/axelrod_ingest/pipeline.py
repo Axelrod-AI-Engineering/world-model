@@ -161,6 +161,8 @@ class Ingestor:
         screened = self.screen and parsed.format in SCREENED and doc.source_type == "other"
         kind = classify(doc.filename, parsed.text, url=manifest.get("url", ""), section=manifest.get("section", ""),
                         judge=screened and not needs_ocr, fmt=parsed.format)
+        if kind.type == "news":                  # a story is about when it ran: any month or quarter it mentions is no period
+            dates = Dates(dates.published, dates.source)
         meta = {k: v for k, v in doc.meta.items() if k not in DERIVED_META}
         meta.update({"format": parsed.format, **{k: v for k, v in parsed.meta.items() if k != "bundle"},
                      "language": language, "dates": dates.meta(), "currency": {"yen": yen.meta()}, "doc_type": kind.meta()})

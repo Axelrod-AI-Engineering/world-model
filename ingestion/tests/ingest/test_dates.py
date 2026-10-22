@@ -22,6 +22,7 @@ def d(y: int, m: int, day: int) -> datetime:
     ("2026.7.23", [d(2026, 7, 23)]),
     ("2026-02-30 and 2026年13月1日 and 二零二六年二十月一日 and 2026.12", []),         # not real days
     ("page 2026 of 3000", []),
+    ("FOR THE THREE-MONTH PERIOD ENDED\nMARCH 31, 2026 and 31 MARCH 2026 and SEPT 5, 2026", [d(2026, 3, 31), d(2026, 3, 31), d(2026, 9, 5)]),
 ])
 def test_dates_in(text, want):
     assert [x for _p, x in dates_in(text)] == want
@@ -69,6 +70,7 @@ def test_filename_date(name, want):
     ("the half-year ended 30 June 2026", "", date(2026, 6, 30), "half", "2026-H1", "content"),
     ("the period ending 31 May 2026", "", date(2026, 5, 31), "date", "2026-05-31", "content"),
     ("for the three months ended 31 July 2026", "", date(2026, 7, 31), "quarter", "2026-07-31", "content"),
+    ("INTERIM FINANCIAL STATEMENTS\nFOR THE THREE-MONTH PERIOD ENDED\nMARCH 31, 2026 (Unaudited)", "", date(2026, 3, 31), "quarter", "2026-Q1", "content"),
     ("for the six months ended 30 September 2026", "", date(2026, 9, 30), "half", "2026-09-30", "content"),
     ("for the six months ended 31 December 2025", "", date(2025, 12, 31), "half", "2025-H2", "content"),
     ("for the 1 month ended 15 July 2026", "", date(2026, 7, 15), "month", "2026-07-15", "content"),
@@ -91,6 +93,9 @@ def test_filename_date(name, want):
     ("2026-Q3 report", "", date(2026, 9, 30), "quarter", "2026-Q3", "content"),
     ("3Q26 report 3Q2026", "", date(2026, 9, 30), "quarter", "2026-Q3", "content"),
     ("results for the first quarter of 2026", "", date(2026, 3, 31), "quarter", "2026-Q1", "content"),
+    ("2026 FIRST QUARTERLY REPORT", "", date(2026, 3, 31), "quarter", "2026-Q1", "content"),
+    ("Third Quarterly Report 2025", "", date(2025, 9, 30), "quarter", "2025-Q3", "content"),
+    ("the second quarter results 2026", "", date(2026, 6, 30), "quarter", "2026-Q2", "content"),
     ("2026年第三季度报告", "", date(2026, 9, 30), "quarter", "2026-Q3", "content"),
     ("2026 년 1 분기 실적", "", date(2026, 3, 31), "quarter", "2026-Q1", "content"),
     ("", "001_1_period-2026-Q1_2026-Q1-Earnings-presentation.pdf", date(2026, 3, 31), "quarter", "2026-Q1", "filename"),
@@ -109,6 +114,8 @@ def test_filename_date(name, want):
     # a year
     ("FY2025 annual results", "", date(2025, 12, 31), "year", "2025", "content"),
     ("2025 Annual Report of the Company", "", date(2025, 12, 31), "year", "2025", "content"),
+    ("2025 Environmental, Social and Governance (ESG) Report", "", date(2025, 12, 31), "year", "2025", "content"),
+    ("2025 Sustainability Report", "", date(2025, 12, 31), "year", "2025", "content"),
     ("Annual Report 2025", "", date(2025, 12, 31), "year", "2025", "content"),
     ("full-year results for the year 2025", "", date(2025, 12, 31), "year", "2025", "content"),
     ("2025年年度报告", "", date(2025, 12, 31), "year", "2025", "content"),
