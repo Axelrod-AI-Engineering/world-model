@@ -27,3 +27,23 @@ def test_axelrod_root_moves_both_roots(monkeypatch, tmp_path):
         monkeypatch.delenv(paths.ROOT_ENV)
         importlib.reload(paths)
     assert paths.REPO_ROOT != tmp_path
+
+
+def test_yaml_files_skip_hidden_files(tmp_path):
+    # a copy made on a Mac carries ._name.yaml resource forks and .DS_Store; they are not YAML
+    (tmp_path / "b.yaml").write_text("x: 1\n")
+    (tmp_path / "a.yaml").write_text("x: 2\n")
+    (tmp_path / "._a.yaml").write_bytes(b"\x00\x05\x16\x07\xa3")
+    (tmp_path / ".DS_Store").write_bytes(b"\xa3")
+    (tmp_path / "notes.md").write_text("not yaml\n")
+    assert [p.name for p in paths.yaml_files(tmp_path)] == ["a.yaml", "b.yaml"]
+
+
+def test_a_construction_folder_with_resource_forks_still_loads(tmp_path):
+    from axelrod_wm.engine.initialize import read_construction
+    (tmp_path / "entities.yaml").write_text("{}\n")
+    (tmp_path / "interactions.yaml").write_text("{}\n")
+    (tmp_path / "construction").mkdir()
+    (tmp_path / "construction" / "._acme.yaml").write_bytes(b"\x00\x05\x16\x07\xa3\xff")
+    data, origin = read_construction(tmp_path)
+    assert origin == {}
