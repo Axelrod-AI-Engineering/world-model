@@ -114,6 +114,11 @@ def to_decimal(x: Any) -> Decimal | None:
         return None
 
 
+def mixed_scales(unit: Any) -> bool:
+    """A key unit that names more than one scale ("billion/trillion JPY"): each of our fields carries its own."""
+    return sum(word in str(unit or "").lower() for word, _ in SCALES) > 1
+
+
 def unit_scale(unit: Any) -> Decimal:
     """The scale a unit string states first (million, billion, ...); none is 1."""
     text = str(unit or "").lower()
@@ -214,8 +219,10 @@ def haystack(result: dict, fields: dict[str, Any]) -> list[tuple[set[str], Any]]
     scope = result.get("scope_period_units_when_applicable") or {}
     hay += [(stems(k.replace("_", " ")) | words(v), v) for k, v in flatten(scope).items()]
     for step in result.get("calculation_trace_when_applicable") or []:
-        named = {s for k, v in step.get("inputs", {}).items() for s in stems(k.replace("_", " ")) | words(v)}
-        hay.append((stems(step["name"].replace("_", " ")) | words(step["value"]) | named, step["value"]))
+        # an answer's calculation is {expression, inputs, value}; a recipe run's also has a name
+        label = step.get("name") or step.get("expression", "")
+        named = {s for k, v in (step.get("inputs") or {}).items() for s in stems(k.replace("_", " ")) | words(v)}
+        hay.append((stems(label.replace("_", " ")) | words(step.get("value")) | named, step.get("value")))
     return hay
 
 
@@ -246,6 +253,8 @@ def check_case(case: dict, result: dict) -> tuple[bool, dict[str, dict], list[di
     def factor_for(path: str) -> Decimal:
         """Our number in the key's unit: the scale of our unit for this field (the recipe's `units`, else its `unit`)."""
         ours = (scope.get("units") or {}).get(path.rsplit(".", 1)[-1], scope.get("unit"))
+        if mixed_scales(oracle.get("unit")):
+            return Decimal(1)                                      # the key's fields are in their own scales: ours are too
         return unit_scale(ours) / unit_scale(oracle.get("unit"))   # no unit in the key: the numbers are compared as given
 
     expected_values = oracle.get("expected_values") or {}
@@ -354,11 +363,13 @@ def separation_evidence(key_path: Path, results: dict, forbid: tuple[str, ...] =
             "transcripts": scan, "no_transcript_mentions_the_key": not any(scan["mentions"].values())}
 
 
-def grade(results: dict, key_path: Path, run: str = "run", forbid: tuple[str, ...] = ()) -> dict:
+def grade(results: dict, key_path: Path, run: str = "run", forbid: tuple[str, ...] = (),
+          only: tuple[str, ...] = ()) -> dict:
     """The scorecard for `results` (the runner's output) against the key at `key_path`."""
     key = json.loads(Path(key_path).read_text(encoding="utf-8"))
     by_id = {r["test_id"]: r for r in results["results"]}
-    rows = [grade_case(c, by_id.get(c["test_id"]), c["development_split"] != "development") for c in key["cases"]]
+    rows = [grade_case(c, by_id.get(c["test_id"]), c["development_split"] != "development") for c in key["cases"]
+            if not only or c["test_id"] in only]
     main = [r for r in rows if r["group"] != "review_gate"]
     gates = [r for r in rows if r["group"] == "review_gate"]
     families: dict[str, dict] = {}
@@ -374,6 +385,7 @@ def grade(results: dict, key_path: Path, run: str = "run", forbid: tuple[str, ..
             "blocked": sorted({(r["test_id"], r["reason"]) for r in main if r["status"] == "blocked"}),
             "not_run": sorted({(r["test_id"], r["reason"]) for r in main if r["status"] == "not_run"}),
             "review_gates": review, "cases": main, "note": NOTE, "graded_inputs": results.get("answers"),
+            "only": list(only) or None,
             "tolerances": "exact at displayed precision; one million yen for rounding residuals; 0.005 percentage "
                           "point for the automotive margin"}
 

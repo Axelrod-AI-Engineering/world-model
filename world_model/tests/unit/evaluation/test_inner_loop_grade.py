@@ -233,3 +233,34 @@ def test_grading_is_deterministic_and_takes_the_key_path_only_as_an_argument(tmp
     a = json.dumps(g.grade(results(ROWS), key_copy, "r"), sort_keys=True)
     b = json.dumps(g.grade(results(ROWS), INNER_LOOP_KEY, "r"), sort_keys=True)
     assert a.replace(str(tmp_path), "") != "" and json.loads(a)["main"] == json.loads(b)["main"]
+
+
+def test_a_calculation_may_have_the_answer_shape_or_the_recipe_shape() -> None:
+    answer_shape = [{"expression": "gross - allowance", "inputs": {"gross": 1000, "allowance": 30}, "value": 970}]
+    recipe_shape = [{"name": "net", "expression": "gross - allowance", "inputs": {"gross": 1000, "allowance": 30}, "value": 970}]
+    for trace in (answer_shape, recipe_shape, [{"expression": "x", "value": 1}]):
+        hay = g.haystack(res("G", {"a": 1}, trace=trace), {"a": 1})
+        assert hay[-1][1] == trace[0]["value"]
+    assert {"gross", "allow"} <= g.haystack(res("G", {"a": 1}, trace=answer_shape), {"a": 1})[-1][0]
+    card = g.grade(results([res("G-01-06", {"delivered": 105, "income": 14, "coefficient": None, "flag": True,
+                                            "mode": "simple mode", "bounds": [180, 220]}, trace=answer_shape)]),
+                   INNER_LOOP_KEY, "t", only=("G-01-06",))
+    assert row(card, "G-01-06")["status"] in ("pass", "fail")           # graded, not crashed
+
+
+def test_only_leaves_the_other_cases_out_rather_than_counting_them() -> None:
+    card = g.grade(results(ROWS), INNER_LOOP_KEY, "t", only=("G-01-01", "G-01-02", "G-03-10"))
+    assert [r["test_id"] for r in card["cases"]] == ["G-01-01", "G-01-02"]
+    assert card["main"]["cases"] == 2 and card["main"]["not_run"] == 0 and card["main"]["blocked"] == 0
+    assert [r["test_id"] for r in card["review_gates"]["cases"]] == ["G-03-10"] and card["only"] == ["G-01-01", "G-01-02", "G-03-10"]
+    assert g.grade(results(ROWS), INNER_LOOP_KEY, "t")["only"] is None
+
+
+def test_a_key_unit_that_mixes_scales_is_compared_in_each_fields_own_scale() -> None:
+    assert g.mixed_scales("billion/trillion JPY") and not g.mixed_scales("JPY million") and not g.mixed_scales(None)
+    case = {"test_id": "X-01-05", "numeric_oracle": {"unit": "billion/trillion JPY", "absolute_tolerance": 0,
+                                                     "expected_values": {"billion": 13525.4, "trillion": 13.5254}}}
+    r = res("X", {"value_billion_yen": 13525.4, "value_trillion_yen": 13.5254}, units={"value_billion_yen": "billion yen",
+                                                                                     "value_trillion_yen": "trillion yen"})
+    ok, facets, _ = g.check_case({**case, "acceptance_check": ""}, r)
+    assert ok and facets["values"] == {"checked": 2, "failed": 0}

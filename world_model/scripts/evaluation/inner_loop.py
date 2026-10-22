@@ -23,11 +23,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
+from axelrod_wm.clients import DATA_DIR  # noqa: E402
 from axelrod_wm.evaluation.inner_loop import Access, dumps, load_recipes, load_suite, run_suite  # noqa: E402
 from axelrod_wm.evaluation.inner_loop_packets import collect, prepare_packets  # noqa: E402
 from axelrod_wm.evaluation.inner_loop_tools import ModelReads  # noqa: E402
 
-TOOLS = f"uv run python {ROOT / 'scripts' / 'evaluation' / 'il_tools.py'}"
+# the commands name the data folder, so a tool run from a worktree finds the world and its client content
+TOOLS = f"WORLD_MODEL_DATA_DIR={DATA_DIR} uv run python {ROOT / 'scripts' / 'evaluation' / 'il_tools.py'}"
 
 
 def world_client(scenario: str):
