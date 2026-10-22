@@ -21,6 +21,7 @@ prefix, meaning, and graph. It is the workspace member `ingestion/` (distributio
 | Know where everything is kept, and how search works | [lake.md](lake.md) |
 | Know what ingestion exchanges with the world model: the bundle format and the world view | [contract.md](contract.md) |
 | Measure speed and extraction against a gold set | [bench.md](bench.md) |
+| Pick up the work: what is built downstream (search), what is not (grounded answering), and the next steps in order | [next_steps.md](next_steps.md) |
 | See how the whole repository fits together | [../../docs/architecture.md](../../docs/architecture.md) |
 
 ## The package
