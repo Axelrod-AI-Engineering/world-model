@@ -49,6 +49,106 @@ def settled_box(page, locator, tries: int = 40):
     return prev
 
 
+def _zoom_to(page, target, pause=60, step=40):
+    """Wheel the canvas toward a zoom, a notch at a time (as a person does); True once within 4% of it."""
+    for _ in range(300):
+        k = page.evaluate("() => window.axelrod.renderer.zoom.transform().k")
+        if (k <= target * 1.04) if target < k else (k >= target / 1.04):
+            return True
+        page.mouse.wheel(0, step if target < k else -step)
+        page.wait_for_timeout(pause)
+    return False
+
+
+@pytest.mark.slow
+def test_a_large_model_reads_as_superentities_that_open_as_the_view_closes_in(server):
+    """Semantic zoom (Oct 22): the oil world has 53 entities, enough to be grouped. In the gravity layout it opens as
+    superentity boxes with their keywords, entities appear as the view comes in and fold away as it goes out, nothing
+    toggles back and forth around one zoom, and a box opens by click."""
+    sync_api = pytest.importorskip("playwright.sync_api")
+    errors: list[str] = []
+    with sync_api.sync_playwright() as p:
+        try:
+            browser = p.chromium.launch()
+        except Exception as exc:  # Chromium not installed
+            pytest.skip(f"no Chromium: {exc}")
+        page = browser.new_page(viewport={"width": 1600, "height": 1000})
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        page.goto(server)
+        page.wait_for_selector("g.pill", timeout=60000)
+        page.wait_for_timeout(1500)
+        # Figure 1's hand-placed layout keeps every entity a pill; the gravity layout groups
+        assert page.locator("g.pill").count() == 53 and page.locator("g.cnode").count() == 0
+        page.evaluate("() => window.axelrod.renderer.setLayoutMode('gravity')")
+        page.wait_for_selector("g.cnode", timeout=20000)
+        page.wait_for_timeout(2500)
+        boxes, pills = page.locator("g.cnode").count(), page.locator("g.pill").count()
+        assert boxes >= 3 and boxes + pills <= 40                 # a few boxes and the entities near the middle, not all 53
+        # every box is named by its keywords, and no two siblings share a name
+        names = page.locator("g.cnode text.cname").all_text_contents()
+        assert all(names) and len(set(names)) == len(names)
+        assert page.locator("#lvl-super").is_visible()
+        # zooming in reveals members, and zooming out folds them
+        page.mouse.move(800, 520)
+        assert _zoom_to(page, 2.2)
+        page.wait_for_timeout(1200)
+        zoomed = page.locator("g.pill").count()
+        assert _zoom_to(page, 0.3)
+        page.wait_for_timeout(1500)
+        assert page.locator("g.cnode").count() >= boxes - 1 and page.locator("g.pill").count() < zoomed
+        # hysteresis: swing the zoom a few percent each way at several zooms; the cut does not change on the swings
+        page.evaluate("""() => {
+          const r = window.axelrod.renderer, m = window.__changes = { n: 0, last: null };
+          const read = () => JSON.stringify([...r.sem.clusters().keys()].filter((i) => r.sem.isOpen(i)).sort());
+          m.last = read();
+          window.__poll = setInterval(() => { const now = read(); if (now !== m.last) { m.n += 1; m.last = now; } }, 25);
+        }""")
+        for k0 in (0.45, 0.8, 1.4):
+            assert _zoom_to(page, k0)
+            page.wait_for_timeout(1500)
+            page.evaluate("() => { window.__changes.n = 0; }")
+            for _ in range(5):
+                page.mouse.wheel(0, -20)
+                page.wait_for_timeout(250)
+                page.mouse.wheel(0, 20)
+                page.wait_for_timeout(250)
+            page.wait_for_timeout(800)
+            assert page.evaluate("() => window.__changes.n") <= 1, k0
+        # a slow zoom in only ever opens boxes (no box opens and closes in one run)
+        assert _zoom_to(page, 0.25)
+        page.wait_for_timeout(1500)
+        page.evaluate("""() => { window.__changes.n = 0; const r = window.axelrod.renderer; window.__seen = new Map();
+          clearInterval(window.__poll);
+          window.__poll = setInterval(() => { for (const i of r.sem.clusters().keys()) {
+            const was = window.__seen.get(i) ?? [r.sem.isOpen(i), 0], now = r.sem.isOpen(i);
+            if (now !== was[0]) was[1] += 1; was[0] = now; window.__seen.set(i, was); } }, 25); }""")
+        assert _zoom_to(page, 3.0, pause=90, step=30)
+        page.wait_for_timeout(1500)
+        flips = page.evaluate("() => [...window.__seen.values()].filter((v) => v[1] > 1).length")
+        assert flips == 0
+        page.evaluate("() => clearInterval(window.__poll)")
+        # the three detail buttons: superentities (3), entities (1)
+        page.keyboard.press("3")
+        page.wait_for_timeout(1200)
+        assert page.locator("g.pill").count() == 0 and page.locator("g.cnode").count() >= 3
+        # a box opens by click (its parts show where its members sit); right-click offers its options
+        box = page.locator("g.cnode").first
+        box.click(button="right")
+        page.wait_for_selector(".ctx-menu")
+        assert page.locator(".ctx-menu button:has-text('Open it into its parts')").count() == 1
+        assert page.locator(".ctx-menu button:has-text('Zoom to it')").count() == 1
+        page.keyboard.press("Escape")
+        before = page.locator("g.cnode").count()
+        page.locator("g.cnode").first.click()
+        page.wait_for_timeout(1500)
+        assert page.locator("g.pill").count() >= 1 or page.locator("g.cnode").count() != before
+        page.keyboard.press("1")
+        page.wait_for_timeout(1200)
+        assert page.locator("g.pill").count() == 53 and page.locator("g.cnode").count() == 0
+        browser.close()
+    assert not errors, errors
+
+
 @pytest.mark.slow
 def test_the_demo_loads_opens_nodes_and_steps(server):
     sync_api = pytest.importorskip("playwright.sync_api")

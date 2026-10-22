@@ -14,6 +14,7 @@
 
 **Code today:**
 - `api/views.py` (924 lines), `brief.py`, `find.py`, `checks.py`;
+- `api/hierarchy.py`: the nested superentities in `GraphView.clusters` and their optional language-model names ([M16](M16-web.md));
 - the view half of `control/stage.py`;
 - `memory/open_world.py`;
 - `api/app.py`, `routes.py` (1,330 lines, 79 routes), `ws.py`, `auth.py`;
