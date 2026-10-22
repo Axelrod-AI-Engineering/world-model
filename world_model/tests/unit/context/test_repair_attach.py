@@ -307,3 +307,83 @@ def test_load_repair_reads_only_the_named_companies(tmp_path):
     assert [r["company_id"] for r in load_repair(tmp_path)] == ["C_A", "C_B"]
     assert [r["company_id"] for r in load_repair(tmp_path, {"C_B"})] == ["C_B"]
     assert load_repair(tmp_path, set()) == []
+
+
+# -- a second synthetic company, whose repair data has none of the statement profile's sections ("Borealis Ferries") -------------------------
+BO, BO_ENT = "C_BO", "borealis"
+
+
+def generic():
+    """An export context and repair data for a company that is not the statement profile's: observations, input classes
+    and a business record only."""
+    values = [{**value(f"borealis.{m}", refs=["bo.pdf"] if m == "revenue" else (), declared="derived" if m == "profit" else None), "node_id": BO}
+              for m in ("revenue", "cost", "profit")]
+    comp_obj = {"composition_id": "bo.comp", "company_id": BO, "role": "primary", "total_metric": "borealis.profit", "member_metrics": ["borealis.revenue", "borealis.cost"],
+                "residual_metric": None, "eliminations_metric": None, "overlaps_other_views": [], "additive": True,
+                "reconciliation": {"unit": "u", "total": "borealis.profit", "parts": ["borealis.revenue", "borealis.cost"], "subtracted": ["borealis.cost"],
+                                   "tolerance": 0.005, "residual": None}}
+    pack = {"companies": [{"company_id": BO, "company_name": "Borealis Ferries", "primary_sector_pack_id": "SP9"}],
+            "metric_families": [], "required_search_scopes": [], "company_edge_relationships": [
+                rel("bo_fuel", company=BO, delay=3, timing="none"), rel("bo_tourism", company=BO, delay=None, lag=None)],
+            "domain_specific_support_objects": {"macro_transmission_links": [], "financial_identities": [], "financial_bridge": [comp_obj],
+                                                "schema_gaps": []}}
+    ev = {"state_version": "v2", "as_of": "2026-10-01", "state_hash": "h", "values": values}
+    obs = [mkobs("BO_REV", 10.0, metric="borealis.revenue", selected=True), mkobs("BO_COST", 6.0, metric="borealis.cost", selected=True),
+           mkobs("BO_PROFIT", 4.0, metric="borealis.profit", selected=True)]
+    repair = {"company_id": BO, "entity": BO_ENT, "repair_version": "B1", "observations": obs,
+              "selected_baseline": {"baseline_id": "BBASE", "period": FY, "available_at": "2026-05-01"},
+              "key_outputs": ["borealis.profit", "borealis.not_in_the_export"],
+              "input_classes": {"borealis.cost": {"class": "assumed", "basis": "b"}},
+              "business_records": [{"record_id": "PRJ_BO_1", "record_kind": "project", "stage": "planned"}]}
+    return {"domain_pack": pack, "evidence": ev, "manifest": {"decision_date": "kept"}}, repair
+
+
+def test_a_company_outside_the_statement_profile_gets_the_generic_core():
+    ctx, repair = generic()
+    counts = attach_repair(ctx, repair)
+    sup = ctx["domain_pack"]["domain_specific_support_objects"]
+    assert counts["values"] == 3 and counts["values_with_reported_observation"] == 3 and counts["observations"] == 3
+    assert (counts["bridges"], counts["checks"], counts["assumption_records"], counts["fx_boundaries"]) == (0, 0, 0, 0)
+    assert sup["earnings_bridges"] == sup["financing_bridges"] == sup["fx_boundaries"] == sup["model_checks"] == sup["assumption_records"] == []
+    assert [b["record_id"] for b in sup["business_records"]] == ["PRJ_BO_1"] and sup["business_records"][0]["company_id"] == BO
+    (recon,) = sup["baseline_reconciliations"]
+    assert recon["after"]["status"] == "ok" and recon["baseline_id"] == "BBASE"
+    assert {p["metric_id"] for p in sup["observation_estimate_pairs"]} == {"borealis.revenue", "borealis.cost", "borealis.profit"}
+    cls = {o["metric_id"]: o for o in sup["input_classification"]}
+    assert cls["borealis.cost"]["class"] == "assumed" and cls["borealis.profit"]["class"] == "reported"
+    vals = {v["metric_id"]: v for v in ctx["evidence"]["values"]}
+    assert vals["borealis.profit"]["depends_on_assumptions"] is True and "depends_on_assumptions" not in vals["borealis.revenue"]
+    assert ctx["domain_pack"]["required_search_scopes"][0]["required_search_scope_id"] == "REQ_SEARCH_EARNINGS_QUALITY_BOREALIS"
+    assert ctx["evidence"]["baseline_selection"]["baseline_id"] == "BBASE" and ctx["manifest"]["repair"]["selected_baseline"] == "BBASE"
+    rels = {r["axelrod"]["interaction_id"]: r for r in ctx["domain_pack"]["company_edge_relationships"]}
+    assert rels["bo_fuel"]["axelrod"]["timing_basis"].startswith("model assumption") and "timing_basis" not in rels["bo_tourism"]["axelrod"]
+
+
+def test_repair_data_that_has_no_observations_or_baseline_is_attached_as_it_is():
+    ctx, repair = generic()
+    bare = {k: repair[k] for k in ("company_id", "entity", "repair_version")} | {"business_records": repair["business_records"]}
+    counts = attach_repair(ctx, bare)
+    sup = ctx["domain_pack"]["domain_specific_support_objects"]
+    assert counts["observations"] == 0 and counts["pairs"] == 0 and counts["reconciliations"] == 0 and counts["values_with_reported_observation"] == 0
+    assert sup["baseline_reconciliations"] == [] and sup["earnings_observations"] == [] and "baseline_selection" not in ctx["evidence"]
+    assert ctx["manifest"]["repair"]["selected_baseline"] is None and ctx["manifest"]["repair"]["decision_date"] is None
+    assert ctx["manifest"]["decision_date"] == "kept"                      # the manifest's own date stands when the data has none
+    assert ctx["domain_pack"]["required_search_scopes"][0]["member_selector"]["periods"] == ["latest reported quarter and its prior-year quarter"]
+    assert {c["input_class"] for c in ctx["evidence"]["values"]} == {"assumed", "derived", "externally_estimated"}
+
+
+def test_a_profile_section_for_another_company_is_refused_by_name():
+    ctx, repair = generic()
+    with pytest.raises(ValueError, match="carries quarter_bridges, financing_bridge, sections that only the toyota profile builds"):
+        attach_repair(ctx, {**repair, "quarter_bridges": [], "financing_bridge": {}})
+    with pytest.raises(ValueError, match="lacks repair_version, entity"):
+        attach_repair(ctx, {"company_id": BO})
+    full, full_repair = build()
+    with pytest.raises(ValueError, match="china_measures"):
+        attach_repair(full, {**full_repair, "profile": "another"})           # naming another profile turns the statement sections off
+
+
+def test_load_repair_skips_a_file_without_a_company(tmp_path):
+    (tmp_path / "x").mkdir()
+    (tmp_path / "x" / "repair.json").write_text(json.dumps({"entity": "x"}))
+    assert load_repair(tmp_path) == [{"entity": "x"}] and load_repair(tmp_path, {"C_X"}) == []

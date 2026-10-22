@@ -15,6 +15,14 @@ management explanations, a financing bridge, input classes) to them, and adds wh
   controlled model checks of Fixes 7 to 14 with their intermediate values;
 - an earnings-quality search scope, and honest timing and hypothesis labels on the company's relationships.
 
+Which sections a company gets. The core (values, observations, evidence records, input classes, business records, a selected
+baseline with its pairs and reconciliations) is driven by the repair data's own ids and the company's construction, and every
+part of it is optional: a repair file needs only `repair_version`, `entity` and `company_id`. The statement profile (quarterly
+statement bridges, partial-scope measures, an operating-income walk, a financing bridge, the FX boundaries, the assumption
+records and the controlled model checks) is built around one company's statements and ids; a repair file for another company that
+carries one of its sections is refused by name, and `key_outputs` (the metrics whose upstream assumptions are listed) is read from
+the repair data.
+
 Every figure comes from the local repair data or from a hypothetical fixture; this module holds none. Without a
 `repair.json` nothing is changed.
 """
@@ -29,6 +37,17 @@ from axelrod_wm.context.repair_checks import ASSUMPTIONS, completion_checks, run
 from axelrod_wm.model.rate_exposure import Cohort, interest_increment
 
 REPAIR_FILE = "repair.json"
+REQUIRED = ("repair_version", "entity", "company_id")
+# A repair file may carry any of these sections of the statement profile: dated statement bridges, a partial-scope measure
+# set, an operating-income walk, a financing bridge. Their arithmetic, the controlled model checks and the FX boundaries
+# are built for one company's statements (`STATEMENT_PROFILE`); a company without that profile gets the generic core
+# (its observations, evidence records, input classes, business records, baselines and reconciliations), and a repair
+# file that carries a profile section for another company is refused by name instead of failing on a missing id.
+STATEMENT_PROFILE = "toyota"
+PROFILE_SECTIONS = ("quarter_bridges", "china_measures", "operating_income_walk", "financing_bridge")
+PROFILE_KEY_OUTPUTS = ("toyota.operating_profit", "toyota.net_income", "toyota.financial_services_operating_income", "toyota.fs_income_us_scope",
+                       "toyota.automotive_operating_income", "toyota.us_fin_net_interest_income", "toyota.pricing_net_op_effect",
+                       "toyota.hybrid_mix_contribution")
 SECTIONS = ("earnings_observations", "earnings_evidence_records", "earnings_bridges", "observation_estimate_pairs",
             "baseline_reconciliations", "financing_bridges", "input_classification", "assumption_records", "model_checks",
             "fx_boundaries", "business_records")
@@ -51,7 +70,7 @@ def load_repair(root: str | Path, companies: set[str] | None = None) -> list[dic
         f = d / REPAIR_FILE
         if f.exists():
             data = json.loads(f.read_text())
-            if companies is None or data["company_id"] in companies:
+            if companies is None or data.get("company_id") in companies:
                 out.append(data)
     return out
 
@@ -243,12 +262,20 @@ def attach_repair(ctx: dict, repair: dict, days_dir: str | Path | None = None) -
     """Bind one company's repair data to an exported context (see the module docstring); returns counts."""
     pack, ev, m = ctx["domain_pack"], ctx["evidence"], ctx["manifest"]
     sup = pack["domain_specific_support_objects"]
+    missing = [k for k in REQUIRED if k not in repair]
+    if missing:
+        raise ValueError(f"repair data lacks {', '.join(missing)}")
     cid, ent = repair["company_id"], repair["entity"]
-    obs_all: list[dict] = repair["observations"]
+    profile = repair.get("profile", ent) == STATEMENT_PROFILE
+    unsupported = [k for k in PROFILE_SECTIONS if k in repair] if not profile else []
+    if unsupported:
+        raise ValueError(f"repair data for {ent} carries {', '.join(unsupported)}, sections that only the {STATEMENT_PROFILE} "
+                         f"profile builds (set `profile` to name it)")
+    obs_all: list[dict] = repair.get("observations", [])
     obs = {o["observation_id"]: o for o in obs_all}
     if len(obs) != len(obs_all):
         raise ValueError("observation ids repeat")
-    base = repair["selected_baseline"]
+    base = repair.get("selected_baseline")
     version = ev["state_version"]
     as_of = ev["as_of"]
     sigs = _signals(days_dir)
@@ -290,9 +317,7 @@ def attach_repair(ctx: dict, repair: dict, days_dir: str | Path | None = None) -
 
     # 2. input classes
     fwd, rev = _graph(pack)
-    key_outputs = [k for k in ("toyota.operating_profit", "toyota.net_income", "toyota.financial_services_operating_income", "toyota.fs_income_us_scope",
-                               "toyota.automotive_operating_income", "toyota.us_fin_net_interest_income", "toyota.pricing_net_op_effect",
-                               "toyota.hybrid_mix_contribution") if k in values]
+    key_outputs = [k for k in repair.get("key_outputs", PROFILE_KEY_OUTPUTS if profile else ()) if k in values]
     cls_objs: dict[str, dict] = {}
     for mid, v in values.items():
         spec = classes.get(mid, {})
@@ -327,14 +352,14 @@ def attach_repair(ctx: dict, repair: dict, days_dir: str | Path | None = None) -
         values[mid]["depends_on_assumptions"] = bool(up)
 
     # 3. observations, evidence records, bridges
-    evid = {e["evidence_id"]: e for e in repair["evidence_records"]}
-    evid_out = [{**e, "company_id": cid} for e in repair["evidence_records"]]
+    evid = {e["evidence_id"]: e for e in repair.get("evidence_records", [])}
+    evid_out = [{**e, "company_id": cid} for e in repair.get("evidence_records", [])]
     bridges = []
-    for spec in repair["quarter_bridges"]:
+    for spec in repair.get("quarter_bridges", []):
         b = build_bridge(spec, obs, set(evid))
         b["company_id"] = cid
         bridges.append(b)
-    for spec in repair["china_measures"]:
+    for spec in repair.get("china_measures", []):
         b = build_china(spec, obs)
         b["company_id"] = cid
         bridges.append(b)
@@ -348,7 +373,7 @@ def attach_repair(ctx: dict, repair: dict, days_dir: str | Path | None = None) -
 
     # 4. observation / estimate pairs
     pairs = []
-    for mid, rep in sorted(by_metric.items()):
+    for mid, rep in sorted(by_metric.items() if base else ()):
         sel = [o for o in rep if o.get("selected_baseline")]
         if mid not in values or not sel:
             continue
@@ -367,8 +392,8 @@ def attach_repair(ctx: dict, repair: dict, days_dir: str | Path | None = None) -
     # 5. reconciliations: before (model state) and after (the selected baseline)
     levels = {o["metric_id"]: o["value"] for o in obs_all if o.get("selected_baseline") and o.get("metric_id")}
     state_lv = {k: v["mean"] for k, v in values.items() if v.get("mean") is not None}
-    bridge_objs = [c for c in sup["financial_bridge"] if c["company_id"] == cid]
-    after = reconcile_at(bridge_objs, levels, f"{base['baseline_id']} ({base['period']['label']}, reported actuals)")
+    bridge_objs = [c for c in sup["financial_bridge"] if c["company_id"] == cid] if base else []
+    after = reconcile_at(bridge_objs, levels, f"{base['baseline_id']} ({base['period']['label']}, reported actuals)") if base else {}
     recons = []
     for c in bridge_objs:
         cidn = c["composition_id"]
@@ -405,54 +430,58 @@ def attach_repair(ctx: dict, repair: dict, days_dir: str | Path | None = None) -
     sels = sorted({x["composition_id"] for x in recons if x["after"]["status"] != "ok"})
 
     # 6. financing bridge with computed checks
-    fin = repair["financing_bridge"]
-    q = lambda oid: obs[oid]["value"]  # noqa: E731
-    cur, pri = "Q1_FY3_27", "Q1_FY3_26"
-    us_check = {}
-    for k in (cur, pri):
-        nfr = q(f"OBS_TMCC_Q_FIN_REV_{k}") - q(f"OBS_TMCC_Q_DEPR_{k}") - q(f"OBS_TMCC_Q_INTEREST_{k}")
-        interest_based = q(f"OBS_TMCC_Q_RETAIL_REV_{k}") + q(f"OBS_TMCC_Q_DEALER_REV_{k}") - q(f"OBS_TMCC_Q_INTEREST_{k}")
-        lease_margin = q(f"OBS_TMCC_Q_OPLEASE_REV_{k}") - q(f"OBS_TMCC_Q_DEPR_{k}")
-        other = q(f"OBS_TMCC_Q_VPC_REV_{k}") + q(f"OBS_TMCC_Q_INVEST_{k}")
-        exp = q(f"OBS_TMCC_Q_PROVISION_{k}") + q(f"OBS_TMCC_Q_OPADMIN_{k}") + q(f"OBS_TMCC_Q_VPC_EXP_{k}")
-        us_check[k] = {"unit": "$m per quarter", "net_financing_revenues_from_lines": nfr, "net_financing_revenues_reported": q(f"OBS_TMCC_Q_NFR_{k}"),
-                       "interest_based_margin (retail + dealer revenue - interest expense)": interest_based, "net_lease_margin (lease revenue - depreciation)": lease_margin,
-                       "interest_based + lease = net financing revenues": interest_based + lease_margin, "other_revenues": other, "expenses": exp,
-                       "pretax_from_bridge": nfr + other - exp, "pretax_reported": q(f"OBS_TMCC_Q_PRETAX_{k}"),
-                       "gaap_to_ifrs_adjustment": "not disclosed: an explicit assumption (zero-centred), never a plug"}
-    fx_rate = None
-    fb = {**fin, "company_id": cid, "us_reported_bridge_check": us_check,
-          "cohort_fixture": {"function": fin["rate_exposure"]["function"], "result_usd_bn": interest_increment([Cohort(10.0)], 1.0, 0.5),
-                             "zero_exposure_result": interest_increment([], 1.0, 0.5)},
-          "group_scope": "The US scope covers the subsidiary only; the Japan and other financing scopes are unknown here, not zero. A complete US scope does not validate a global finance sensitivity.",
-          "fx_note": fx_rate}
-    fin_objs = [fb]
+    fb: dict | None = None
+    fin_objs: list[dict] = []
+    if profile:
+        fin = repair["financing_bridge"]
+        q = lambda oid: obs[oid]["value"]  # noqa: E731
+        cur, pri = "Q1_FY3_27", "Q1_FY3_26"
+        us_check = {}
+        for k in (cur, pri):
+            nfr = q(f"OBS_TMCC_Q_FIN_REV_{k}") - q(f"OBS_TMCC_Q_DEPR_{k}") - q(f"OBS_TMCC_Q_INTEREST_{k}")
+            interest_based = q(f"OBS_TMCC_Q_RETAIL_REV_{k}") + q(f"OBS_TMCC_Q_DEALER_REV_{k}") - q(f"OBS_TMCC_Q_INTEREST_{k}")
+            lease_margin = q(f"OBS_TMCC_Q_OPLEASE_REV_{k}") - q(f"OBS_TMCC_Q_DEPR_{k}")
+            other = q(f"OBS_TMCC_Q_VPC_REV_{k}") + q(f"OBS_TMCC_Q_INVEST_{k}")
+            exp = q(f"OBS_TMCC_Q_PROVISION_{k}") + q(f"OBS_TMCC_Q_OPADMIN_{k}") + q(f"OBS_TMCC_Q_VPC_EXP_{k}")
+            us_check[k] = {"unit": "$m per quarter", "net_financing_revenues_from_lines": nfr, "net_financing_revenues_reported": q(f"OBS_TMCC_Q_NFR_{k}"),
+                           "interest_based_margin (retail + dealer revenue - interest expense)": interest_based, "net_lease_margin (lease revenue - depreciation)": lease_margin,
+                           "interest_based + lease = net financing revenues": interest_based + lease_margin, "other_revenues": other, "expenses": exp,
+                           "pretax_from_bridge": nfr + other - exp, "pretax_reported": q(f"OBS_TMCC_Q_PRETAX_{k}"),
+                           "gaap_to_ifrs_adjustment": "not disclosed: an explicit assumption (zero-centred), never a plug"}
+        fx_rate = None
+        fb = {**fin, "company_id": cid, "us_reported_bridge_check": us_check,
+              "cohort_fixture": {"function": fin["rate_exposure"]["function"], "result_usd_bn": interest_increment([Cohort(10.0)], 1.0, 0.5),
+                                 "zero_exposure_result": interest_increment([], 1.0, 0.5)},
+              "group_scope": "The US scope covers the subsidiary only; the Japan and other financing scopes are unknown here, not zero. A complete US scope does not validate a global finance sensitivity.",
+              "fx_note": fx_rate}
+        fin_objs = [fb]
 
     # 7. FX boundaries and timing basis
     rels = {r["axelrod"]["interaction_id"]: r for r in pack["company_edge_relationships"] if r["company_id"] == cid}
-    fxb = []
-    FX = [("m29", "aggregate", "aggregate yen effect on operating income (transaction, translation of overseas profits, dearer imported inputs, euro and other currencies)",
-           "the remainder of the company's total FX effect after the dollar transactional line (ty_yen_transaction), so its size already excludes that line", ["ty_yen_transaction"]),
-          ("ty_yen_transaction", "aggregate component (calibrated)", "dollar transactional line of the company's walk (dollar exports net of dollar imports)",
-           "re-solved on six standalone actual quarters; it nets dollar imports and exports, so the dollar-input effect (ty_yen_imports) is inside it", ["ty_yen_imports", "m29 (remainder only)"]),
-          ("ty_yen_imports", "explanatory (unsized)", "dollar-priced inputs bought by Japan", "unsized to avoid adding the dollar-input effect a second time", ["ty_yen_transaction"]),
-          ("ty_yen_translation", "explanatory (unsized)", "translation of North American dollar profits", "sign follows the sign of the region's profit; unsized", ["m29"])]
-    for iid, mode, includes, excl, overl in FX:
-        r = rels.get(iid)
-        if r is None:
-            continue
-        ax = r["axelrod"]
-        tl = (ax.get("transition") or {}).get("evidence", {}).get("timing")
-        fxb.append({"boundary_id": f"FXB_{iid.upper()}", "company_id": cid, "interaction_id": iid, "relationship_id": r["relationship_id"], "role_in_calculation": mode,
-                    "calibration": r.get("qualification_status"), "includes_channels": includes, "exclusions_and_netting": excl, "overlaps": overl,
-                    "baseline_and_period": ax.get("note") or "see the relationship note",
-                    "simulation_delay_lag_days": {"delay": ax.get("delay_days"), "lag": ax.get("lag_days"), "status": "model setting for the simulation; not evidence of shipment, hedge roll-off or recognition dates"},
-                    "timing_evidence": {"documented_in_transition": tl, "recognition": ((ax.get("transition") or {}).get("timing") or {}).get("recognition")}})
-    fxb.append({"boundary_id": "FXB_SELECTED_MODE", "company_id": cid, "interaction_id": None, "role_in_calculation": "selection",
-                "selected_mode": "aggregate",
-                "rule": "A calculation uses either the aggregate sensitivity with its exclusions (m29 for the remainder plus ty_yen_transaction for the dollar transactional line, which do not overlap), or a scoped component run with stated exposures that suppresses the overlapping aggregate. Component links stay explanatory and unsized. A broad branch does not justify another numerical effect.",
-                "translation": {"identity": "ty.id.us_translation", "formula": "yen trillion = 0.001 x local USD profit (billions) x period-average JPY per USD", "sign_rule": "a lower JPY per USD means yen appreciation; a loss keeps its sign, so appreciation shrinks its yen magnitude; translation is kept apart from transaction exposure"},
-                "do_not": "change a calibrated aggregate into gross export exposure without re-estimating the decomposition"})
+    fxb: list[dict] = []
+    if profile:
+        FX = [("m29", "aggregate", "aggregate yen effect on operating income (transaction, translation of overseas profits, dearer imported inputs, euro and other currencies)",
+               "the remainder of the company's total FX effect after the dollar transactional line (ty_yen_transaction), so its size already excludes that line", ["ty_yen_transaction"]),
+              ("ty_yen_transaction", "aggregate component (calibrated)", "dollar transactional line of the company's walk (dollar exports net of dollar imports)",
+               "re-solved on six standalone actual quarters; it nets dollar imports and exports, so the dollar-input effect (ty_yen_imports) is inside it", ["ty_yen_imports", "m29 (remainder only)"]),
+              ("ty_yen_imports", "explanatory (unsized)", "dollar-priced inputs bought by Japan", "unsized to avoid adding the dollar-input effect a second time", ["ty_yen_transaction"]),
+              ("ty_yen_translation", "explanatory (unsized)", "translation of North American dollar profits", "sign follows the sign of the region's profit; unsized", ["m29"])]
+        for iid, mode, includes, excl, overl in FX:
+            r = rels.get(iid)
+            if r is None:
+                continue
+            ax = r["axelrod"]
+            tl = (ax.get("transition") or {}).get("evidence", {}).get("timing")
+            fxb.append({"boundary_id": f"FXB_{iid.upper()}", "company_id": cid, "interaction_id": iid, "relationship_id": r["relationship_id"], "role_in_calculation": mode,
+                        "calibration": r.get("qualification_status"), "includes_channels": includes, "exclusions_and_netting": excl, "overlaps": overl,
+                        "baseline_and_period": ax.get("note") or "see the relationship note",
+                        "simulation_delay_lag_days": {"delay": ax.get("delay_days"), "lag": ax.get("lag_days"), "status": "model setting for the simulation; not evidence of shipment, hedge roll-off or recognition dates"},
+                        "timing_evidence": {"documented_in_transition": tl, "recognition": ((ax.get("transition") or {}).get("timing") or {}).get("recognition")}})
+        fxb.append({"boundary_id": "FXB_SELECTED_MODE", "company_id": cid, "interaction_id": None, "role_in_calculation": "selection",
+                    "selected_mode": "aggregate",
+                    "rule": "A calculation uses either the aggregate sensitivity with its exclusions (m29 for the remainder plus ty_yen_transaction for the dollar transactional line, which do not overlap), or a scoped component run with stated exposures that suppresses the overlapping aggregate. Component links stay explanatory and unsized. A broad branch does not justify another numerical effect.",
+                    "translation": {"identity": "ty.id.us_translation", "formula": "yen trillion = 0.001 x local USD profit (billions) x period-average JPY per USD", "sign_rule": "a lower JPY per USD means yen appreciation; a loss keeps its sign, so appreciation shrinks its yen magnitude; translation is kept apart from transaction exposure"},
+                    "do_not": "change a calibrated aggregate into gross export exposure without re-estimating the decomposition"})
     n_t = 0
     for iid, r in rels.items():
         ax = r["axelrod"]
@@ -472,11 +501,11 @@ def attach_repair(ctx: dict, repair: dict, days_dir: str | Path | None = None) -
             ax["effect_q05"] = ax["effect_q95"] = None
 
     # 8. assumptions and checks
-    asm = [{**a, "company_id": cid, "observed": False, "class": "assumed", "assumption_id": a["assumption_id"]} for a in ASSUMPTIONS]
+    asm = [{**a, "company_id": cid, "observed": False, "class": "assumed", "assumption_id": a["assumption_id"]} for a in ASSUMPTIONS] if profile else []
     business = build_business(repair, obs)
     repair = {**repair, "business_records": business}
-    checks = run_checks(pack, repair, obs, values, bridges, recons, fb, fxb)
-    checks += completion_checks(pack, repair, values, bridges, recons, fb, checks)
+    checks = run_checks(pack, repair, obs, values, bridges, recons, fb, fxb) if profile else []
+    checks += completion_checks(pack, repair, values, bridges, recons, fb, checks) if profile else []
     for c in checks:
         c["company_id"] = cid
 
@@ -489,7 +518,7 @@ def attach_repair(ctx: dict, repair: dict, days_dir: str | Path | None = None) -
         "why_required": "Questions about what drove a quarter's operating profit, non-operating lines or attributable net income, and which drivers repeat, need the dated statement lines, "
                         "management's explanations and the line definitions, not a macro transmission link.",
         "member_selector": {"companies": [cid], "aliases": co.get("aliases", []) + [co["company_name"]], "question_types": ["latest-quarter earnings", "attributable income against operating profit", "one-time items", "China measures", "baseline versus estimate", "reconciliation"],
-                            "periods": ["latest reported quarter and its prior-year quarter", base["period"]["label"]]},
+                            "periods": ["latest reported quarter and its prior-year quarter", *([base["period"]["label"]] if base else [])]},
         "seed_search_targets": [f"{co['company_name']} quarterly earnings bridge", f"{co['company_name']} operating income to net income", f"{co['company_name']} other finance income",
                                 f"{co['company_name']} equity-method income", f"{co['company_name']} China operating income and equity-method income"],
         "mechanisms_to_inspect": ["operating income", "equity-method income", "other finance income and costs", "foreign exchange gain (loss)", "income tax", "non-controlling interests"],
@@ -516,13 +545,14 @@ def attach_repair(ctx: dict, repair: dict, days_dir: str | Path | None = None) -
     sup["schema_gaps"] = [*sup["schema_gaps"], *SCHEMA_GAPS]
     ev["evidence_count_definition"] = EVIDENCE_COUNT_DEFINITION
     ev["observed_definition"] = OBSERVED_DEFINITION
-    ev["baseline_selection"] = {**base, "rule": "A calculation names its baseline; the reported observation is the baseline, never the estimate. A zero incremental change reproduces it."}
+    if base:
+        ev["baseline_selection"] = {**base, "rule": "A calculation names its baseline; the reported observation is the baseline, never the estimate. A zero incremental change reproduces it."}
     ev["repair_version"] = repair["repair_version"]
-    m["repair"] = {"repair_version": repair["repair_version"], "company_id": cid, "decision_date": repair["decision_date"], "instruction": repair["instruction"],
-                   "as_of": as_of, "state_version": version, "selected_baseline": base["baseline_id"],
+    m["repair"] = {"repair_version": repair["repair_version"], "company_id": cid, "decision_date": repair.get("decision_date"), "instruction": repair.get("instruction"),
+                   "as_of": as_of, "state_version": version, "selected_baseline": base["baseline_id"] if base else None,
                    "note": "Decision and as-of dates come from the instruction and the model state; the generation time above is not an observation date."}
     m["as_of"] = as_of
-    m["decision_date"] = repair["decision_date"]
+    m["decision_date"] = repair.get("decision_date", m.get("decision_date"))
     counts = {"values": len(values), "values_with_reported_observation": n_reported, "observations": len(obs_out), "evidence_records": len(evid_out),
               "bridges": len(bridges), "pairs": len(pairs), "reconciliations": len(recons), "reconciliations_not_ok": sels,
               "input_classes": dict(sorted(_count(o["class"] for o in cls_objs.values()).items())), "assumption_records": len(asm), "checks": len(checks),
