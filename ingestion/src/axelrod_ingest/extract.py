@@ -198,7 +198,10 @@ PRE_OK = {"the", "a", "an", "its", "their", "our", "this", "that", "of", "in", "
           "slower", "faster", "continued", "sustained", "held", "hold", "holds", "kept", "keep", "keeps", "left",
           "maintained", "maintain", "said", "says", "closing", "close", "current", "last", "latest", "stock", "share",
           "one", "two", "three", "four", "another", "further", "additional", "policy"}
-AIMED = re.compile(r"\b(?:targets?|objectives?|terminal|neutral|ambitions?|aspirations?)\b", re.I)
+AIMED = re.compile(r"\b(?:targets?|targeting|targeted|objectives?|terminal|neutral|ambitions?|aspirations?|goals?)\b", re.I)
+# a year's figure is named a year's: a quarterly document's headline is the quarter's unless it says otherwise
+YEAR_WORDS = re.compile(r"\b(?:(?:FY|CY)\s?['’]?\d{0,4}|full[- ]year|annual(?:ly)?|(?:fiscal|calendar) year|for the year|year ended)\b|年度|全年|연간",
+                        re.I)
 CORE = re.compile(r"\b(?:core|underlying|adj\w*|ex)\b", re.I)
 EXCLUDING = re.compile(r"\((?:ex|excl|excluding|adj|adjusted|underlying|core)\b", re.I)   # "NII (ex markets)": another metric
 OTHER_BASIS = re.compile(r"^\s*(?:QoQ|q/q|m/m|MoM|annuali[sz]ed|saar|SAAR|qoq)\b")       # not a y/y rate
@@ -518,6 +521,8 @@ class Reading:
     scenario: bool = False              # under a scenario's heading ("Upside Scenario"), its bullets are supposed
     past: bool = False                  # the last sentence was about earlier years only (an episode being told)
     stranger: bool = False              # the last sentence named, in the possessive, someone the model does not know
+    forward: bool = False               # a guidance or an outlook: its figures are plans, not results
+    partial: bool = False               # the document reports a month, a quarter, or a half: a year's flow needs its own words
 
     @property
     def when(self) -> datetime | None:
@@ -746,7 +751,7 @@ class Rules:
 
     def value_claims(self, sent: str, m: Match, nums: list[Num], prev_end: int, next_start: int,
                      date: datetime | None = None, linked: bool = False, others: bool = False,
-                     ref: datetime | None = None) -> list[Found]:
+                     ref: datetime | None = None, partial: bool = False) -> list[Found]:
         """What the sentence says about one value: a revision from one figure to another, its level, a move with a
         size, else a bare direction (unless the sentence states a channel through the value, `linked`, or a causal
         word joins it to another entity, `others`). Each is read from the value's clause: from the previous mention
@@ -819,11 +824,12 @@ class Rules:
                     or (flow and between and not FULL_YEAR.search(MONTH_YEAR.sub(" ", clause))) \
                     or far or stale or forecast or EXCLUDING.search(gap) or re.search(r"\bfrom\b", gap) \
                     or CJK_FORECAST.search(re.split(r"[,;，；。]", sent[n.end:], maxsplit=1)[0]) \
+                    or (flow and partial and not YEAR_WORDS.search(clause)) \
                     or (_unit_kind(self.graph.values[sid].unit) == "rate" and OTHER_BASIS.match(sent[n.end:])):
                 break
             # (a row of a table is not a key-data line: "Research expenses 7 (15,510) (18,356)" is a note number and columns)
             keyed = len(sent) <= KEY_VALUE_CHARS and KEY_VALUE.match(PARENS.sub("", gap)) \
-                and sum(not x.unit for x in after[k + 1:]) < 2
+                and sum(not x.unit for x in after[k + 1:]) < 2 and (not flow or YEAR_WORDS.search(sent))
             if flow and n.currency and n.scale == 1.0:
                 continue                 # "RMB 10" in a sentence is ten yuan, not ten of the flow's billions: it needs its scale
             if keyed or (LEVEL.search(gap) and not re.search(r"[,;]\s", PARENS.sub("", gap))
@@ -1122,6 +1128,8 @@ class Rules:
         unit = self.graph.values[sid].unit
         fy_month = self._fy_month(sid)
         flow = unit.endswith("/yr")
+        if flow and reading.partial:
+            return []                    # a quarter's document: its table's year column is not told from the quarter's
         if flow and any(p.kind == "year" and not p.fiscal and p.end and p.end[1] != fy_month for p in periods):
             return []                    # years ending in another month: another company's table ("12/26E" for a March FY)
         if flow and any(p.kind == "date" and p.end and p.end[1] != fy_month for p in periods):
@@ -1585,7 +1593,7 @@ def claims_of_chunk(rules: Rules, ord_: int, text: str, reading: Reading | None,
             out.found.append(f)
             claimed.add(f.value_of)
         for k, m in enumerate(vals):
-            if m.subentity_id in claimed:
+            if m.subentity_id in claimed or reading.forward:
                 continue
             row = rules.row_claims(sent, m, nums, reading)
             if row is None and (tabular(sent) and sum(not _inside_parens(sent, m.end, n.start) for n in nums
@@ -1597,7 +1605,7 @@ def claims_of_chunk(rules: Rules, ord_: int, text: str, reading: Reading | None,
                 prev_end = max((v.end for v in vals[:k] if v.subentity_id != m.subentity_id), default=0)
                 nxt = next((v.start for v in vals[k + 1:] if v.subentity_id != m.subentity_id), len(sent))
                 row = [] if told else rules.value_claims(
-                    sent, m, nums, prev_end, nxt, reading.date, ref=reading.when, linked=m.subentity_id in linked,
+                    sent, m, nums, prev_end, nxt, reading.date, ref=reading.when, partial=reading.partial, linked=m.subentity_id in linked,
                     others=any(x.entity_id != m.entity_id for x in ms))
             for f in row:
                 out.found.append(f)

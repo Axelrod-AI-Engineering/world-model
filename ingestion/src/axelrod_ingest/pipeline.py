@@ -19,6 +19,7 @@ a separate step (the import, reviewed item by item), so storing and processing s
 from __future__ import annotations
 
 import hashlib
+import re
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -86,6 +87,14 @@ class Stopwatch:
         now = self.timer()
         self.laps[name] = self.laps.get(name, 0.0) + (now - self.t)
         self.t = now
+
+
+GUIDANCE = re.compile(r"guidance|outlook|forecast|budget", re.I)     # a file named for what it plans, not what happened
+
+
+def _partial(dates: Dates) -> bool:
+    """Whether the document reports a month, a quarter, or a half (so a headline figure is the part's, not the year's)."""
+    return dates.period is not None and dates.period.kind in ("month", "quarter", "half") and not dates.forward
 
 
 def _period_end(dates: Dates) -> datetime | None:
@@ -211,7 +220,8 @@ class Ingestor:
         items, mentions, warnings = [], [], []
         head = " ".join(c.text for c in chunks)[:PROFILE_CHARS]
         subject, region = gz.profile(f"{doc.title} {doc.filename}", head)
-        reading = Reading(subject=subject, region=region, date=doc.event_time, ref=_period_end(dates))
+        reading = Reading(subject=subject, region=region, date=doc.event_time, ref=_period_end(dates),
+                          forward=bool(GUIDANCE.search(doc.filename)), partial=_partial(dates))
         n_llm = 0
         prefix = f"D{doc.id[:10]}"
         read = []

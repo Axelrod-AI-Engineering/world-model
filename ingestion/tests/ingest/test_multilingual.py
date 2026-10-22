@@ -3,6 +3,8 @@ currencies and units, a bare ¥ read as yen or yuan. Every sentence is invented.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 from axelrod_ingest.contract.world_view import EntityView, ValueView, WorldView
 from axelrod_ingest.extract import claims_of_chunk
 from axelrod_ingest.gazetteer import Gazetteer
@@ -130,7 +132,7 @@ def test_a_bare_year_is_never_a_level():
 def test_a_table_row_is_no_key_data_line_and_a_scale_less_flow_is_no_level():
     assert signals("Acme EV net profit 7 (15,510) (18,356) (18,606)") == []       # a note number, then the columns
     assert signals("Acme EV net profit RMB 10") == []                               # ten yuan, not ten billion
-    assert signals("Acme EV net profit RMB 10bn") == [("observe", "acme_ev.net_profit", 10.0)]
+    assert signals("FY2025 Acme EV net profit RMB 10bn") == [("observe", "acme_ev.net_profit", 10.0)]
 
 
 def test_a_remark_beside_a_rows_figures_is_no_move():
@@ -144,3 +146,50 @@ def test_a_forecast_in_chinese_or_korean_is_no_level_and_a_quarter_mark_stops_a_
     assert signals("艾克米电动净利润约85.6亿元。") == [("observe", "acme_ev.net_profit", 8.56)]
     assert signals("艾克米电动Q1净利润为人民币22亿元。") == [] and signals("艾克米电动3Q净利润为人民币22亿元。") == []
     assert signals("시장은 에이크미코리아 영업이익이 3조원일 것으로 예상했다.") == []
+
+
+def _read(text: str, reading=None, yen: str = "CNY") -> list[tuple]:
+    from axelrod_ingest.extract import Reading
+    claims, _ = claims_of_chunk(rules(yen), 0, normalize(text), reading or Reading(subject="acme_ev"))
+    return [(f.type, f.value_of, round(f.value, 6) if f.value is not None else round(f.delta, 6)) for f in claims.found]
+
+
+def test_a_guidance_document_states_plans_not_results():
+    from axelrod_ingest.extract import Reading
+    text = "Acme EV net profit: CNY 8.5bn."
+    assert _read(text) == [("observe", "acme_ev.net_profit", 8.5)]
+    assert _read(text, Reading(subject="acme_ev", forward=True)) == []
+    assert _read("Acme EV net profit increase by 10%", Reading(subject="acme_ev", forward=True)) == []
+    assert _read("Acme EV is targeting net profit of CNY 8.5bn.") == []
+    assert _read("The goal is net profit of CNY 8.5bn.") == []
+
+
+def test_a_quarters_document_needs_the_year_named_for_a_years_flow():
+    from axelrod_ingest.extract import Reading
+    quarter = Reading(subject="acme_ev", partial=True)
+    assert _read("Acme EV net profit: CNY 8.5bn.", quarter) == []
+    assert _read("Acme EV net profit for the year: CNY 8.5bn.", quarter) == [("observe", "acme_ev.net_profit", 8.5)]
+    assert _read("FY2025 Acme EV net profit: CNY 8.5bn.", quarter) == [("observe", "acme_ev.net_profit", 8.5)]
+    assert _read("Acme EV net profit rose by 10%.", quarter) == [("move", "acme_ev.net_profit", 0.1)]     # a change is read
+    table = "Fiscal year ending 2025 2024\nAcme EV revenue 120 110\n"
+    assert _read(table, Reading(subject="acme_ev", date=None, ref=datetime(2025, 12, 31, tzinfo=UTC), partial=True)) == []
+    assert _read("Acme EV net profit RMB 10bn") == []                         # a flow's key-data line needs a year in it
+
+
+def test_a_company_named_a_moment_ago_is_not_the_subjects_to_claim():
+    from axelrod_ingest.contract.world_view import EntityView
+    from axelrod_ingest.extract import Reading, Rules
+
+    w = world()
+    w = type(w)(entities={**w.entities, "acme_cap": EntityView("acme_cap", "Acme Capital", "company", (), "US", "autos", ())},
+                values=w.values, links=())
+    r = Rules(w, Gazetteer(w), yen="CNY")
+
+    def read(text: str) -> list[tuple]:
+        claims, _ = claims_of_chunk(r, 0, text, Reading(subject="acme_ev"))
+        return [(f.value_of, f.value) for f in claims.found]
+
+    assert read("Next is Acme Capital. Net profit for the year: CNY 8.5bn.") == []
+    assert read("Next is Acme Capital. It grew. It grew again. It grew once more. Net profit for the year: CNY 8.5bn.") == [
+        ("acme_ev.net_profit", 8.5)]
+    assert read("Net profit for the year: CNY 8.5bn.") == [("acme_ev.net_profit", 8.5)]

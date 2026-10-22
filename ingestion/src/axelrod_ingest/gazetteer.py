@@ -304,10 +304,12 @@ class Gazetteer:
                     owner_at = [pos for pos, e in named if lo < pos < a and e in owners]
                     if rival_at and max(rival_at) > max(owner_at, default=-1):
                         before, after = [], []           # the nearest company before it is another's
+                    # a company the last sentences named (another's subsidiary, say) is not the subject's own to claim
+                    elsewhere = bool(recent) and recent[-1] in self.companies and recent[-1] != subject and recent[-1] not in owners
                     ent, via = ((before[-1], "sentence") if before else (after[0], "sentence") if after else
                                 (ctx, "context") if ctx and not has_value and not (rivals - {ctx}) and (
                                     subject in (None, ctx) or ctx not in self.companies) else
-                                (subject, "subject") if subject in owners and not has_value and not rivals else
+                                (subject, "subject") if subject in owners and not has_value and not rivals and not elsewhere else
                                 (local[0], "region" if here else "document") if len(local) == 1 else (None, ""))
                 if ent is not None:
                     out.append(Match("value", ent, owners[ent], a, b, surface, via))

@@ -37,21 +37,21 @@ OCR_BODY = ('cat >/dev/null; echo "Acme EV net profit: CNY 7.5bn. ' + "The slide
 
 
 def en_pdf() -> bytes:
-    lines = [f"{PRC}", "Interim Report 2026", "For the six months ended 30 June 2026 under IFRS.",
-             "Acme EV net profit: CNY 8.5bn.", *[f"Item {k}: {f}" for k, f in enumerate(FIGURES)]]
+    lines = [f"{PRC}", "Annual Report 2025", "For the year ended 31 December 2025 under IFRS.",
+             "Acme EV net profit for the year: CNY 8.5bn.", *[f"Item {k}: {f}" for k, f in enumerate(FIGURES)]]
     return pdf(["\n".join(lines[i:i + 25]) for i in range(0, len(lines), 25)])
 
 
 def zh_html() -> bytes:
     body = "".join(f"<p>第{k}项的金额为{f}元，同比有所变化，管理层认为业务保持稳定。</p>" for k, f in enumerate(FIGURES[:70]))
-    page = ("<html><head><meta http-equiv=\"Content-Type\" content=\"text/html; charset=gb2312\"><title>艾克米电动2026年半年度报告</title>"
-            f"</head><body><p>艾克米电动股份有限公司 2026 年半年度报告。艾克米电动净利润为人民币85亿元，营业收入为人民币1,200亿元。</p>{body}</body></html>")
+    page = ("<html><head><meta http-equiv=\"Content-Type\" content=\"text/html; charset=gb2312\"><title>艾克米电动2025年年度报告</title>"
+            f"</head><body><p>艾克米电动股份有限公司 2025 年年度报告。截至2025年12月31日止年度，艾克米电动净利润为人民币85亿元，营业收入为人民币1,200亿元。</p>{body}</body></html>")
     return page.encode("gb18030")
 
 
 FILES = {
-    "Business/001_1_28-Aug-2026_Interim-Report-English.pdf": en_pdf(),
-    "Business/001_1_2026-08-29_Interim-Report-Chinese.html": zh_html(),
+    "Business/001_1_28-Aug-2026_Annual-Report-English.pdf": en_pdf(),
+    "Business/001_1_2026-08-29_Annual-Report-Chinese.html": zh_html(),
     "Business/001_INDEX_ONLY_Archive.html": b"<html><body>" + b"<p>Archive of filings, see the list below for the filings.</p>" * 40 + b"</body></html>",
     "Risk/001_3_undated_scanned-deck.pdf": scanned_pdf([None]),
     "Risk/001_3_notes.txt": b"Acme EV net profit: CNY 9.5bn. Note of 2026-09-01.",
@@ -117,10 +117,10 @@ def test_a_row_for_every_file(pack, tmp_path, fake_ocr):
     report, _ = run_pack(pack, tmp_path / "lake", fake_ocr)
     rows = {r.path.split("/")[-1]: r for r in report.rows}
     assert list(rows) == [p.name for p in pack_files(pack)] and report.manifest_title == "Acme EV - source pack"
-    en, zh = rows["001_1_28-Aug-2026_Interim-Report-English.pdf"], rows["001_1_2026-08-29_Interim-Report-Chinese.html"]
+    en, zh = rows["001_1_28-Aug-2026_Annual-Report-English.pdf"], rows["001_1_2026-08-29_Annual-Report-Chinese.html"]
     assert (en.status, en.doc_type, en.language, en.pages, en.format) == ("extracted", "report", "en", 4, "pdf")
     assert (en.published_source, en.published_at[:10], en.period, en.in_manifest, en.sha256_matches) == (
-        "manifest", "2026-08-28", "2026-H1", True, True)
+        "manifest", "2026-08-28", "2025", True, True)
     assert (zh.status, zh.language, zh.format, zh.sha256_matches, zh.yen, zh.yen_signs) == ("extracted", "zh", "html", False, "CNY", 0)
     assert en.signals >= 1 and zh.signals == 2 and en.bundle_id and en.chunks > 0 and en.mentions > 0
     idx = rows["001_INDEX_ONLY_Archive.html"]
@@ -149,9 +149,9 @@ def test_the_english_and_chinese_reports_are_one_disclosure_with_the_english_cop
     report, _ = run_pack(pack, tmp_path / "lake", fake_ocr)
     (g,) = report.groups
     rows = {r.path.split("/")[-1]: r for r in report.rows}
-    assert set(g.members) == {rows["001_1_28-Aug-2026_Interim-Report-English.pdf"].doc_id,
-                              rows["001_1_2026-08-29_Interim-Report-Chinese.html"].doc_id}
-    assert g.primary == rows["001_1_28-Aug-2026_Interim-Report-English.pdf"].doc_id
+    assert set(g.members) == {rows["001_1_28-Aug-2026_Annual-Report-English.pdf"].doc_id,
+                              rows["001_1_2026-08-29_Annual-Report-Chinese.html"].doc_id}
+    assert g.primary == rows["001_1_28-Aug-2026_Annual-Report-English.pdf"].doc_id
 
 
 def test_without_an_engine_the_scan_is_reported_not_lost(pack, tmp_path):

@@ -209,7 +209,11 @@ wins over a move, and a move over a bare direction.
 document reports on when it has one (an annual report of FY2025 published in March 2026 is about 2025, so 2025 figures are
 its own and 2024 ones are history), else against its publication date. A year's flow is read in the column of that fiscal year, never
 from a half-year, a quarter, or a table dated inside the year ("30 June 2026"): in English, Chinese (上半年, 第三季度, 前三季度), and
-Korean (상반기, 3분기).
+Korean (상반기, 3분기). In a document that reports a month, a quarter, or a half, a year's flow is read only where the text names the
+year ("for the year", "FY2025", "annual", 年度, 연간), since its headline figure is the part's; a file named for guidance, an
+outlook, or a forecast states plans, not results, and its figures are not read; a figure only targeted or expected ("targeting",
+"goal", 预计, 예상) is no level; and a company named in the last three sentences that is not the subject (a subsidiary,
+a peer) leaves a value phrase unresolved rather than claimed for the subject.
 
 **The LLM step is off by default.** When a provider and key are set (`WORLD_MODEL_LLM_PROVIDER`), it reads only the
 chunks that name model values but where the rules found nothing. It is asked for the same signal schema, and every

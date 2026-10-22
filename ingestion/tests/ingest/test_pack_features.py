@@ -110,7 +110,7 @@ MANIFEST = {"file": "x", "url": "https://www.hkexnews.hk/a/b.pdf", "section": "B
 
 
 def test_a_manifest_file_is_dated_by_its_name_and_keeps_its_period(lake):
-    text = b"Acme EV net profit: CNY 8.5bn.\nFor the six months ended 30 June 2026 the company reported results on 5 October 2026."
+    text = b"Acme EV net profit for the year: CNY 8.5bn.\nFor the six months ended 30 June 2026 the company reported results on 5 October 2026."
     res = make(lake).ingest_file(T, text, "001_1_28-Aug-2026_interim.txt", G, meta={"manifest": MANIFEST})
     doc, item = res.document, res.bundle.bundle["items"][0]
     assert doc.published_at == datetime(2026, 8, 28, tzinfo=UTC) == doc.event_time
@@ -122,8 +122,8 @@ def test_a_manifest_file_is_dated_by_its_name_and_keeps_its_period(lake):
 
 
 def test_a_forward_period_gives_no_occurred_at(lake):
-    text = b"Acme EV net profit: CNY 8.5bn.\nGuidance for FY2027."
-    res = make(lake).ingest_file(T, text, "001_1_29-Jan-2026_guidance.txt", G, meta={"manifest": MANIFEST})
+    text = b"Acme EV net profit: CNY 8.5bn.\nA plan for FY2027."
+    res = make(lake).ingest_file(T, text, "001_1_29-Jan-2026_notes.txt", G, meta={"manifest": MANIFEST})
     item = res.bundle.bundle["items"][0]
     assert res.document.meta["dates"]["period_forward"] is True and item["occurred_at"] is None and "period:2027" in item["tags"]
 
@@ -194,3 +194,13 @@ def test_store_file_keeps_the_meta_it_is_given(lake):
 def test_a_json_document_that_is_not_text_still_carries_the_derived_meta(lake):
     res = make(lake).ingest_file(T, json.dumps({"a": 1}).encode(), "a.json", G)
     assert res.document.meta["format"] == "json" and res.document.meta["doc_type"]["type"] == "other"
+
+
+def test_a_file_named_for_guidance_gives_no_results_and_a_quarters_headline_is_not_the_years(lake):
+    ing = make(lake)
+    plan = ing.ingest_file(T, b"Acme EV net profit: CNY 8.5bn.", "001_1_2026-01-30_Annual-Guidance.txt", G, meta={"manifest": MANIFEST})
+    assert plan.document.status == "extracted" and plan.signals == 0
+    quarter = ing.ingest_file(T, b"Results for the three months ended 30 June 2026.\nAcme EV net profit: CNY 8.5bn. Acme EV net profit rose by 10%.",
+                              "001_1_2026-07-23_results.txt", G, meta={"manifest": MANIFEST})
+    assert quarter.document.meta["dates"]["period_kind"] == "quarter"
+    assert [(s["type"], s["value_of"]) for s in quarter.bundle.bundle["items"][0]["signals"]] == [("move", "acme_ev.net_profit")]
