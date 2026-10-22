@@ -463,10 +463,10 @@ def create_app(config_path: str | None = None, scenario: str = "oil_shock_demo",
     app.state.axelrod = state
     app.state.axelrod_by_login = by_login
     # the lakehouse and the ingestion pipeline behind the outward service (Oct 17): one store, partitioned by login
-    from axelrod_wm.ingest.llm import provider_from_env
-    from axelrod_wm.ingest.pipeline import Ingestor
-    from axelrod_wm.lake.embed import LazyEmbedder
-    from axelrod_wm.lake.sqlite import SQLiteLake
+    from axelrod_ingest.lake.embed import LazyEmbedder
+    from axelrod_ingest.lake.sqlite import SQLiteLake
+    from axelrod_ingest.llm import provider_from_env
+    from axelrod_ingest.pipeline import Ingestor
 
     app.state.lake = SQLiteLake(Path(lake_dir or os.environ.get("WORLD_MODEL_LAKE_DIR") or "var/lake"))
     app.state.ingestor = Ingestor(app.state.lake, LazyEmbedder(), provider=provider_from_env())

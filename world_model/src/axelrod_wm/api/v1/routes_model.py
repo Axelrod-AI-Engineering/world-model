@@ -461,7 +461,7 @@ async def get_graph(request: Request, world_model_id: str, entities: str = "", a
             raise ApiError("attribute_not_found", f"no attribute {sid}")
         seeds.add(sid)
     if q.strip():
-        from axelrod_wm.ingest.gazetteer import Gazetteer
+        from axelrod_ingest.gazetteer import Gazetteer
 
         for hit in Gazetteer(g).find(q):
             seeds |= {hit.subentity_id} if hit.subentity_id else set(pj.own_attributes(wm, hit.entity_id))

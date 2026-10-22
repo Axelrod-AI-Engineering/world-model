@@ -5,7 +5,7 @@
         [--exclude construction bench] [--top 5]
 
 Reads the world's files (never edits them), collects the inputs of every link that touches the company's values
-(`transition.unresolved`), parses the files (axelrod_wm.ingest.parse) and scores each line of each page, sheet, or slide
+(`transition.unresolved`), parses the files (axelrod_ingest.parse) and scores each line of each page, sheet, or slide
 against the input's name, its words, and any extra terms (context/construction.search_inputs: plain, deterministic
 keyword scoring). Writes <corpus>/construction/<company>/input_search.json and .md (the candidate passages per input, with
 file and location) and prints a suggested status per input: candidates found -> found_not_connected (confirm and bind
@@ -24,10 +24,10 @@ import subprocess
 import sys
 from pathlib import Path
 
+from axelrod_ingest.parse import ParseError, parse, supported
 from axelrod_wm.clients import find_world
 from axelrod_wm.context.construction import input_needs, search_inputs, search_markdown
 from axelrod_wm.engine.initialize import ConstructionSpec, resolve_path, world_taxonomy_dir
-from axelrod_wm.ingest.parse import ParseError, parse, supported
 
 
 def world_dir(world: str) -> Path:

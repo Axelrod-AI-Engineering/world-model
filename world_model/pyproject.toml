@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Axelrod World Model v0: an evidence-backed, event-sourced causal world model with a browser demo."
 requires-python = ">=3.11"
 dependencies = [
+    "axelrod-ingest",
     "numpy>=1.26",
     "scipy>=1.11",
     "pydantic>=2.6",
@@ -12,10 +13,8 @@ dependencies = [
     "fastapi>=0.110",
     "uvicorn[standard]>=0.29",
     "typer>=0.12",
-    "openpyxl>=3.1",
     "python-multipart>=0.0.9",
     "mcp>=2.2,<3",
-    "pypdfium2>=5.14",
     "pyjwt[crypto]>=2.8",
 ]
 
@@ -24,8 +23,11 @@ axelrod = "axelrod_wm.cli:app"
 
 [project.optional-dependencies]
 semantic = [
-    "fastembed>=0.4",
+    "axelrod-ingest[semantic]",
 ]
+
+[tool.uv.sources]
+axelrod-ingest = { workspace = true }
 
 [dependency-groups]
 dev = [

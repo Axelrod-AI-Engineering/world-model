@@ -16,10 +16,10 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from axelrod_ingest.lake.store import AuditRecord, IdempotencyRecord, LakeStore, WorldModelRecord
 from axelrod_wm.api.app import AppState
 from axelrod_wm.api.tokens import Principal
 from axelrod_wm.api.v1.problems import ApiError, as_api_error, problem_body
-from axelrod_wm.lake.store import AuditRecord, IdempotencyRecord, LakeStore, WorldModelRecord
 
 
 @dataclass

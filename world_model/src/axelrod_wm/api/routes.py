@@ -1435,8 +1435,8 @@ async def import_document(request: Request, file: UploadFile = File(...), source
                           source_type: str = Form("other"), published_at: datetime | None = Form(None)) -> dict:
     """A raw document (PDF, DOCX, XLSX, HTML, CSV, Markdown, text, or a JSON bundle) stored in the lakehouse, read
     into an import bundle, and drawn as the graph update each item would make. Nothing in the model changes."""
+    from axelrod_ingest.pipeline import SOURCE_TYPES
     from axelrod_wm.api.v1.routes_work import MAX_UPLOAD
-    from axelrod_wm.ingest.pipeline import SOURCE_TYPES
 
     st = S(request)
     if source_type not in SOURCE_TYPES:

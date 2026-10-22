@@ -15,6 +15,7 @@ from fastapi import APIRouter, File, Form, Query, Request, UploadFile
 from fastapi import Path as FPath
 from fastapi.responses import Response
 
+from axelrod_ingest.pipeline import Ingestor, IngestResult
 from axelrod_wm.api.tokens import ADMIN, APPROVE, CHANGES, DOCUMENTS, READ, SIMULATIONS
 from axelrod_wm.api.v1 import project as pj
 from axelrod_wm.api.v1 import schemas as s
@@ -40,7 +41,6 @@ from axelrod_wm.api.v1.context import version_ref as vref
 from axelrod_wm.api.v1.problems import ApiError, V1Route
 from axelrod_wm.api.v1.routes_model import AsOf, Cursor, Limit, Version, read_at
 from axelrod_wm.control.controller import ControllerError
-from axelrod_wm.ingest.pipeline import Ingestor, IngestResult
 
 router = APIRouter(prefix="/v1", route_class=V1Route, tags=["v1"])
 W = "/world-models/{world_model_id}"
@@ -383,7 +383,7 @@ async def list_bundle_items(request: Request, world_model_id: str, bundle_id: st
 async def search(request: Request, world_model_id: str, q: Annotated[str, Query(min_length=1, max_length=500)],
                  mode: Literal["keyword", "prefix", "semantic", "graph", "hybrid"] = "hybrid",
                  limit: Annotated[int, Query(ge=1, le=200)] = 20) -> Response:
-    from axelrod_wm.lake.search import Searcher
+    from axelrod_ingest.lake.search import Searcher
 
     m = model(request, world_model_id, READ)
 
@@ -419,8 +419,8 @@ def change_view(request: Request, m: Model, p: Any, who: tuple[dict, dict]) -> s
 
 @router.post(W + "/changes", status_code=202, summary="Propose one change per bundle item")
 async def create_changes(request: Request, world_model_id: str, body: s.ChangeCreate) -> Response:
+    from axelrod_ingest.lake.store import ImportRecord
     from axelrod_wm.api.routes import _importer
-    from axelrod_wm.lake.store import ImportRecord
 
     m = model(request, world_model_id, CHANGES)
     rec = bundle_of(request, m, body.bundle_id)

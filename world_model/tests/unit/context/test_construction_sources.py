@@ -10,6 +10,7 @@ from types import SimpleNamespace as NS
 
 import pytest
 
+from axelrod_ingest.parse import parse
 from axelrod_wm.context import v4
 from axelrod_wm.context.construction import (
     citation_check,
@@ -25,7 +26,6 @@ from axelrod_wm.context.construction import (
     search_inputs,
     search_markdown,
 )
-from axelrod_wm.ingest.parse import parse
 from axelrod_wm.model.construction import Transition, bundle_levels, model_levels, reconcile
 from tests.unit.model.test_business_construction import acme_construction, build, world
 

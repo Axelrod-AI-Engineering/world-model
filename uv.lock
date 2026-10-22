@@ -10,6 +10,7 @@ resolution-markers = [
 
 [manifest]
 members = [
+    "axelrod-ingest",
     "axelrod-world-model",
     "axelrod-world-model-workspace",
 ]
@@ -55,20 +56,57 @@ wheels = [
 ]
 
 [[package]]
+name = "axelrod-ingest"
+version = "0.1.0"
+source = { editable = "ingestion" }
+dependencies = [
+    { name = "httpx" },
+    { name = "openpyxl" },
+    { name = "pydantic" },
+    { name = "pypdfium2" },
+]
+
+[package.optional-dependencies]
+semantic = [
+    { name = "fastembed" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "pytest" },
+    { name = "pytest-cov" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "fastembed", marker = "extra == 'semantic'", specifier = ">=0.4" },
+    { name = "httpx", specifier = ">=0.27" },
+    { name = "openpyxl", specifier = ">=3.1" },
+    { name = "pydantic", specifier = ">=2.6" },
+    { name = "pypdfium2", specifier = ">=5.14" },
+]
+provides-extras = ["semantic"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pytest", specifier = ">=8.0" },
+    { name = "pytest-cov", specifier = ">=5.0" },
+]
+
+[[package]]
 name = "axelrod-world-model"
 version = "0.1.0"
 source = { editable = "world_model" }
 dependencies = [
+    { name = "axelrod-ingest" },
     { name = "fastapi" },
     { name = "mcp" },
     { name = "networkx", version = "3.6.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "networkx", version = "3.7", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "numpy", version = "2.5.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
-    { name = "openpyxl" },
     { name = "pydantic" },
     { name = "pyjwt", extra = ["crypto"] },
-    { name = "pypdfium2" },
     { name = "python-multipart" },
     { name = "pyyaml" },
     { name = "scipy", version = "1.17.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
@@ -79,7 +117,7 @@ dependencies = [
 
 [package.optional-dependencies]
 semantic = [
-    { name = "fastembed" },
+    { name = "axelrod-ingest", extra = ["semantic"] },
 ]
 
 [package.dev-dependencies]
@@ -92,15 +130,14 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "axelrod-ingest", editable = "ingestion" },
+    { name = "axelrod-ingest", extras = ["semantic"], marker = "extra == 'semantic'", editable = "ingestion" },
     { name = "fastapi", specifier = ">=0.110" },
-    { name = "fastembed", marker = "extra == 'semantic'", specifier = ">=0.4" },
     { name = "mcp", specifier = ">=2.2,<3" },
     { name = "networkx", specifier = ">=3.2" },
     { name = "numpy", specifier = ">=1.26" },
-    { name = "openpyxl", specifier = ">=3.1" },
     { name = "pydantic", specifier = ">=2.6" },
     { name = "pyjwt", extras = ["crypto"], specifier = ">=2.8" },
-    { name = "pypdfium2", specifier = ">=5.14" },
     { name = "python-multipart", specifier = ">=0.0.9" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "scipy", specifier = ">=1.11" },
