@@ -35,7 +35,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
-from axelrod_wm.evaluation import inner_loop
+from axelrod_wm.evaluation import inner_loop, inner_loop_packets, inner_loop_tools
 
 STATUSES = ("pass", "fail", "blocked", "not_run")
 MAIN_CASES = 98
@@ -323,22 +323,38 @@ def rates(rows: list[dict]) -> dict:
                 "execution_coverage": round(ran / MAIN_CASES, 4)}
 
 
-def separation_evidence(key_path: Path, results: dict) -> dict:
+def transcript_scan(key_path: Path, results: dict, forbid: tuple[str, ...] = ()) -> dict:
+    """What the agents' transcripts show: for each marker (the key's path and file name, and any the caller adds, such as
+    the folder name of held-out data), how many transcripts mention it. A transcript that cannot be read is counted."""
+    markers = [m for m in (str(Path(key_path)), Path(key_path).name, *forbid) if m]
+    texts, unreadable = [], 0
+    for t in results.get("transcripts", []):
+        try:
+            texts.append(Path(t["path"]).read_text(encoding="utf-8", errors="replace"))
+        except OSError:
+            unreadable += 1
+    return {"transcripts_scanned": len(texts), "transcripts_unreadable": unreadable,
+            "mentions": {m: sum(m in t for t in texts) for m in markers}}
+
+
+def separation_evidence(key_path: Path, results: dict, forbid: tuple[str, ...] = ()) -> dict:
     """The evidence for answer-key separation, taken outside the runner: the files it reports reading, against the key's
-    own folder, and the runner's source against the key's path and folder names."""
+    own folder, the source of the runner's modules against the key's path and names, and what the agents' transcripts say."""
     key_dir = Path(key_path).resolve().parent
     read = [Path(f["path"]).resolve() for f in results["access"]["files_read"]]
-    source = inspect.getsource(inner_loop)
+    source = "".join(inspect.getsource(m) for m in (inner_loop, inner_loop_packets, inner_loop_tools))
     names = [p for p in (key_dir.name, Path(key_path).name) if p]
+    scan = transcript_scan(key_path, results, forbid)
     return {"runner_read_files": len(read),
             "runner_read_anything_under_key_folder": any(p.is_relative_to(key_dir) for p in read),
             "runner_roots_exclude_key_folder": not any(key_dir.is_relative_to(Path(r)) or Path(r).is_relative_to(key_dir)
                                                        for r in results["access"]["roots"]),
             "runner_source_names_key_location": any(n in source for n in names),
-            "grader_takes_key_path_as_argument": "key_path" in inspect.signature(grade).parameters}
+            "grader_takes_key_path_as_argument": "key_path" in inspect.signature(grade).parameters,
+            "transcripts": scan, "no_transcript_mentions_the_key": not any(scan["mentions"].values())}
 
 
-def grade(results: dict, key_path: Path, run: str = "run") -> dict:
+def grade(results: dict, key_path: Path, run: str = "run", forbid: tuple[str, ...] = ()) -> dict:
     """The scorecard for `results` (the runner's output) against the key at `key_path`."""
     key = json.loads(Path(key_path).read_text(encoding="utf-8"))
     by_id = {r["test_id"]: r for r in results["results"]}
@@ -351,13 +367,13 @@ def grade(results: dict, key_path: Path, run: str = "run") -> dict:
     review = {"cases": gates, "counts": rates(gates) | {"note": "own section; not in the main rates"}}
     for g in gates:
         if g["test_id"].endswith("10"):
-            review["answer_key_separation"] = separation_evidence(key_path, results)
+            review["answer_key_separation"] = separation_evidence(key_path, results, forbid)
     return {"run": run, "suite_id": key["suite_id"], "version": key["version"],
             "main": rates(main) | {"cases": len(main)},
             "by_family": {k: rates(v) | {"cases": len(v)} for k, v in sorted(families.items())},
             "blocked": sorted({(r["test_id"], r["reason"]) for r in main if r["status"] == "blocked"}),
             "not_run": sorted({(r["test_id"], r["reason"]) for r in main if r["status"] == "not_run"}),
-            "review_gates": review, "cases": main, "note": NOTE,
+            "review_gates": review, "cases": main, "note": NOTE, "graded_inputs": results.get("answers"),
             "tolerances": "exact at displayed precision; one million yen for rounding residuals; 0.005 percentage "
                           "point for the automotive margin"}
 
@@ -365,7 +381,9 @@ def grade(results: dict, key_path: Path, run: str = "run") -> dict:
 def markdown(card: dict) -> str:
     m = card["main"]
     pct = lambda x: "n/a" if x is None else f"{100 * x:.1f}%"      # noqa: E731
+    answers = card.get("graded_inputs")
     lines = [f"# Inner-loop accuracy scorecard: {card['suite_id']} v{card['version']} ({card['run']})", "",
+             *([f"Graded answers: `{answers['dir']}` ({answers['files']} files, sha256 `{answers['sha256']}`)", ""] if answers else []),
              "## Main scorecard", "",
              "| pass | fail | blocked | not run | executed pass rate | execution coverage |", "|---|---|---|---|---|---|",
              f"| {m['pass']} | {m['fail']} | {m['blocked']} | {m['not_run']} | {pct(m['executed_pass_rate'])} "

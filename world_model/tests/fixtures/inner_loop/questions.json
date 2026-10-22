@@ -481,6 +481,18 @@
     "T-001"
    ],
    "scorecard_group": "main_model_tests"
+  },
+  {
+   "test_id": "TST-05-04",
+   "family_id": 5,
+   "failure_family": "Family 5",
+   "title": "t",
+   "answer_type": "Source",
+   "question": "A page that has no layout copy.",
+   "frozen_excerpt_ids": [
+    "T-002"
+   ],
+   "scorecard_group": "main_model_tests"
   }
  ]
 }

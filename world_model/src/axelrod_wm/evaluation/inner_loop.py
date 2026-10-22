@@ -653,7 +653,7 @@ def review_golden(recipe: dict, run: Run, env: dict[str, Any]) -> dict:
 
 
 # -- one case --------------------------------------------------------------------------------------------------------------
-def _na(reason: str) -> dict:
+def na(reason: str) -> dict:
     return {"applicable": False, "reason": reason}
 
 
@@ -702,12 +702,12 @@ def answer_case(suite: Suite, case: dict, recipe: dict | None, reader: Reader | 
         "grounding": grounding,
         "answer": plain(answer),
         "scope": {**{k: recipe[k] for k in ("period", "unit", "units", "scope", "currency", "basis") if k in recipe},
-                  **({} if any(k in recipe for k in ("period", "unit", "scope")) else _na("no period, unit or scope"))},
+                  **({} if any(k in recipe for k in ("period", "unit", "scope")) else na("no period, unit or scope"))},
         "evidence_and_objects": {"evidence": sorted(run.evidence.values(), key=lambda e: e["excerpt_id"]),
                                  "objects": run.objects} if run.evidence or run.objects
-        else _na(recipe.get("no_evidence_reason", "a stipulated fixture: no source is needed")),
+        else na(recipe.get("no_evidence_reason", "a stipulated fixture: no source is needed")),
         "calculations": trace,
-        "baseline": run.baseline or recipe.get("baseline") or _na(recipe.get("no_baseline_reason",
+        "baseline": run.baseline or recipe.get("baseline") or na(recipe.get("no_baseline_reason",
                                                              "isolated fixture arithmetic: no baseline is selected")),
         "assumptions_and_missing": {"assumptions": list(recipe.get("assumptions") or []), "unresolved": unknowns},
         "mechanism": recipe.get("mechanism"),
@@ -719,7 +719,7 @@ def to_contract(case: dict, status: str, internal: dict | None, reason: str, req
     out: dict[str, Any] = {"test_id": case["test_id"], "status": status, "reason": reason}
     for label in required:
         if label in FIELD_MAP:
-            out[label] = (internal or {}).get(FIELD_MAP[label], _na(reason or "not answered"))
+            out[label] = (internal or {}).get(FIELD_MAP[label], na(reason or "not answered"))
     out["family"] = case.get("failure_family")
     out["scorecard_group"] = case.get("scorecard_group")
     out["internal"] = internal or {}

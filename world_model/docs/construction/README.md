@@ -446,35 +446,45 @@ Code: `model/construction.py` (objects, weights, checks, reconciliation), `engin
 
 A reviewer's bank of questions with a held-out answer key (a company's inner loop: identity and scope, composition,
 document contradictions, periods and versions, transmission, proof limits, accounting, timing, offsets, unknowns). The
-runner answers it from the world model and the grader scores it; the two never share the key.
+system under test is an agent that reads our export the way an analyst's agent does; the repository prepares its task
+packets, collects its answers, and grades them. It never answers a case itself, and the key is only the grader's.
 
 ```
-uv run python world_model/scripts/evaluation/inner_loop.py --suite <suite folder> --recipes <recipes.yaml> \
-    --world <scenario> --out <results.json>
-uv run python world_model/scripts/evaluation/inner_loop_grade.py --results <results.json> --key <answer key> \
-    --run <label> --out <scorecard path without extension> [--explain]
+uv run python world_model/scripts/evaluation/inner_loop.py prepare --suite <suite> --world <scenario> --run <run> --out <packets> \
+    [--days <bundles>] [--construction-sources <folder>]
+#   ... agents answer: one answers/<test_id>.json each, using the tools in their packet ...
+uv run python world_model/scripts/evaluation/inner_loop.py collect --suite <suite> --packets <packets> --out <results.json> \
+    [--transcripts <files>]
+uv run python world_model/scripts/evaluation/inner_loop_grade.py --results <results.json> --key <answer key> --run <label> \
+    --out <scorecard path without extension> [--explain] [--forbid <marker>]
 ```
 
-- **The runner** (`evaluation/inner_loop.py`) reads only the suite folder and the recipes, through a guard that refuses any
-  other path and logs every file read with its hash. A recipe says where each input comes from (the question, the
-  fixture, a frozen page by locator, the world model) and how the answer is built; it holds no answers. The arithmetic is
-  Decimal, deterministic, in a restricted expression language. Operations: a calculation, a reconciliation of a
-  composition's parts (the composition is the model's), an identity of the model, update and undo with its audit log,
-  a repeated import and a two-order ingestion on clean worlds, and the review gates. A missing recipe, source, store or
-  operation is `blocked` with its reason; a case the runner is told to skip is `not_run`.
-- **The contract** is the suite's own field list, mapped from ours (`FIELD_MAP`), with a stated reason where a field does
-  not apply (no baseline is invented for an isolated fixture). Our schema is not renamed: the result keeps it under
-  `internal`, with the grounding of the answer (model objects, frozen pages, stated facts).
-- **The grader** (`evaluation/inner_loop_grade.py`) takes the key's path as an argument and nothing else does. A case
-  passes only when every applicable check passes: values at displayed precision (a tolerance only where the clarifications
-  name one), assertions by facet (mechanism, accounting destination, proof limits), expected unknowns, and the prose
-  directives of the acceptance check, which are matched lexically and therefore remain subject to a domain owner's review.
-  The scorecard reports pass, fail, blocked and not run, the executed pass rate (pass over pass and fail), the execution
-  coverage (pass and fail over the 98 main cases), the two review gates apart with the separation evidence, and that a
-  high pass rate does not resolve a material blocked requirement. A validation candidate keeps its status and no detail.
-- **Separation as evidence.** The runner module never names the key (a test asserts its text); the grader reports what the
-  runner read against the key's folder and the runner's roots.
-- **Tests.** An invented suite and key (`world_model/tests/fixtures/inner_loop*`) exercise every branch; the client test
-  runs the real suite end to end where client data is present and asserts no pass rate.
+- **Packets** (`evaluation/inner_loop_packets.py`): `<packets>/<test_id>/` holds `task.md` (the question, the return contract and
+  the suite's field policy, generic instructions and the tool commands: no case-specific hint), `fixture_inputs.json` when the
+  case has stipulated inputs (and nothing of the suite's own labels), `excerpts/` (the frozen pages bound to the case, as text and
+  as the page's layout) with `excerpt_index.json`, and `answer.schema.json`. Beside them: the shared export (`export/`, from
+  `export_context.py`), `model_reads/` (memoized v1 reads), `answers/`, and `run.json`.
+- **Tools** (`evaluation/inner_loop_tools.py`, run through `scripts/evaluation/il_tools.py`): a Decimal calculator with a log;
+  export search, list and read (refusing any path outside the export); v1 reads of the world (in process, memoized) and a
+  company's compositions, identities, values and paths by section and word; and the two state operations, which report
+  `supported: false` with the reason when the system cannot run them (the bundle contract has no supersession, the API no undo).
+- **Collect** validates each answer against the schema; a missing or invalid answer, and an answer's own `blocked`, are `blocked`
+  with the reason. An answer's evidence is checked against the case's own pages (the quoted passage must be on the page) and its
+  calculations against the calculator's log. The results record the graded answers (folder, a sha256 over every file) and the
+  agents' transcripts (path and hash); the same answers give byte-identical results.
+- **Grader** (`evaluation/inner_loop_grade.py`): takes the key's path as an argument and nothing else does. A case passes only when
+  every applicable check passes: values at displayed precision (a tolerance only where the clarifications name one), assertions by
+  facet (mechanism, accounting destination, proof limits), expected unknowns, and the prose directives of the acceptance check,
+  which are matched lexically and so remain subject to a domain owner's review. The scorecard reports pass, fail, blocked and not
+  run, the executed pass rate (pass over pass and fail), the execution coverage (pass and fail over the 98 main cases), the two
+  review gates apart with the separation evidence (what the runner read, what its modules name, what the transcripts mention), the
+  graded answers' hash, and that a high pass rate does not resolve a material blocked requirement. A validation candidate keeps
+  its status and no detail.
+- **Tests.** An invented suite, export and key (`world_model/tests/fixtures/inner_loop*`) exercise every branch; the client test
+  prepares and collects the real suite without answers and asserts no pass rate.
 
-Code: `evaluation/inner_loop.py`, `evaluation/inner_loop_grade.py`, `scripts/evaluation/inner_loop*.py`.
+An earlier mechanism, per-case recipes answered by the runner itself (`evaluation/inner_loop.py`, `run-recipes`), is kept but not
+used: it measured the recipes, not the model.
+
+Code: `evaluation/inner_loop.py` (suite, guard, contract), `inner_loop_packets.py`, `inner_loop_tools.py`, `inner_loop_grade.py`;
+`scripts/evaluation/inner_loop.py`, `il_tools.py`, `inner_loop_grade.py`.

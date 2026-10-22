@@ -161,7 +161,9 @@ def test_the_review_gates_have_their_own_section_and_the_separation_evidence(car
     sep = rg["answer_key_separation"]
     assert sep == {"runner_read_files": 0, "runner_read_anything_under_key_folder": False,
                    "runner_roots_exclude_key_folder": True, "runner_source_names_key_location": False,
-                   "grader_takes_key_path_as_argument": True}
+                   "grader_takes_key_path_as_argument": True, "no_transcript_mentions_the_key": True,
+                   "transcripts": {"transcripts_scanned": 0, "transcripts_unreadable": 0,
+                                   "mentions": {str(INNER_LOOP_KEY): 0, "answer_key.json": 0}}}
     assert all(r["test_id"] not in {x["test_id"] for x in rg["cases"]} for r in card["cases"])
 
 

@@ -1,16 +1,22 @@
-"""Run the inner-loop accuracy suite against a world: the runner answers a questions-only bank from the world model.
+"""The inner-loop accuracy suite as a file protocol.
 
-    python world_model/scripts/evaluation/inner_loop.py --suite <suite folder> --recipes <recipes.yaml> [more.yaml ...] \
-        [--world sally_demo] [--only TWM-01-01,...] --out <results.json>
+    prepare   task packets (one folder per case) and the shared export, from a questions-only suite
+    collect   the answers the agents wrote, checked against the schema, as results for the grader
+    run-recipes   the earlier mechanism: per-case recipes answered by the runner itself (kept, not used)
 
-The runner reads only the suite folder and the recipes (the guard in `Access` refuses anything else). It is never given
-the answer key; the grader (inner_loop_grade.py) is. Results are deterministic: the same inputs give the same bytes.
+    python world_model/scripts/evaluation/inner_loop.py prepare --suite <suite> --world sally_demo --run <run> --out <packets>
+    python world_model/scripts/evaluation/inner_loop.py collect --suite <suite> --packets <packets> --out <results.json>
+
+The runner reads only the suite folder (and, to collect, the packets): a guard refuses anything else and logs every file
+read. It is never given the answer key; the grader (inner_loop_grade.py) is.
 """
 
 from __future__ import annotations
 
 import argparse
 import logging
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -18,59 +24,110 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
 from axelrod_wm.evaluation.inner_loop import Access, dumps, load_recipes, load_suite, run_suite  # noqa: E402
+from axelrod_wm.evaluation.inner_loop_packets import collect, prepare_packets  # noqa: E402
+from axelrod_wm.evaluation.inner_loop_tools import ModelReads  # noqa: E402
+
+TOOLS = f"uv run python {ROOT / 'scripts' / 'evaluation' / 'il_tools.py'}"
 
 
-class BundleContractStore:
-    """A clean store reached through the v1 bundle contract. It says whether the contract can state that one item
-    corrects and supersedes another, by looking at the contract's own fields; until it can, nothing is ingested."""
+def world_client(scenario: str):
+    from fastapi.testclient import TestClient
 
-    def __init__(self) -> None:
-        from axelrod_ingest.contract.bundle import ImportItem
+    from axelrod_wm.api.app import create_app
+    from axelrod_wm.repo.snapshots import MemoryBackend
 
-        self.can_state_supersession = any("supersed" in f for f in ImportItem.model_fields)
+    logging.disable(logging.INFO)
+    return TestClient(create_app(scenario=scenario, storage=MemoryBackend(), trace_dir=None, play_delay=0.0)).__enter__()
+
+
+def make_export(a: argparse.Namespace, out: Path) -> Path:
+    """The shared export: a current export of the world under test (export_context.py), or a copy of one already made."""
+    dest = out / "export"
+    if a.export_from:
+        shutil.copytree(a.export_from, dest, dirs_exist_ok=True)
+        return dest
+    cmd = [sys.executable, str(ROOT / "scripts" / "imports" / "export_context.py"), a.world, str(dest)]
+    for flag, value in (("--days", a.days), ("--construction-sources", a.construction_sources)):
+        if value:
+            cmd += [flag, value]
+    subprocess.run(cmd, check=True, cwd=ROOT.parent)
+    return dest
+
+
+def prewarm(memo: Path, scenario: str) -> int:
+    """Read once what an agent asks first: the entities, and the construction of each."""
+    memo.mkdir(parents=True, exist_ok=True)
+    (memo / "world.txt").write_text(scenario + "\n", encoding="utf-8")
+    reads = ModelReads(memo, lambda _m: world_client(scenario))
+    listing = reads.get("/entities", {"limit": 200})
+    n = 1
+    for e in listing["body"].get("data", []):
+        reads.get(f"/entities/{e['id']}/construction")
+        n += 1
+    return n
 
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--suite", required=True)
-    ap.add_argument("--recipes", required=True, nargs="+")
-    ap.add_argument("--world", default="")
-    ap.add_argument("--only", default="")
-    ap.add_argument("--out", required=True)
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    p = sub.add_parser("prepare")
+    p.add_argument("--suite", required=True)
+    p.add_argument("--world", required=True)
+    p.add_argument("--run", required=True)
+    p.add_argument("--out", required=True)
+    p.add_argument("--days")
+    p.add_argument("--construction-sources")
+    p.add_argument("--export-from")
+    p.add_argument("--only", default="")
+    c = sub.add_parser("collect")
+    c.add_argument("--suite", required=True)
+    c.add_argument("--packets", required=True)
+    c.add_argument("--transcripts", nargs="*", default=[])
+    c.add_argument("--out", required=True)
+    c.add_argument("--only", default="")
+    r = sub.add_parser("run-recipes")
+    r.add_argument("--suite", required=True)
+    r.add_argument("--recipes", required=True, nargs="+")
+    r.add_argument("--world", default="")
+    r.add_argument("--only", default="")
+    r.add_argument("--out", required=True)
     a = ap.parse_args(argv)
+    only = [x for x in getattr(a, "only", "").split(",") if x] or None
+    if a.cmd == "prepare":
+        out = Path(a.out)
+        suite = load_suite(Path(a.suite), Access([Path(a.suite)]))
+        export = make_export(a, out)
+        memo = out / "model_reads"
+        n = prewarm(memo, a.world)
+        meta = prepare_packets(suite, out, a.run, tools_command=TOOLS, export_dir=export, memo_dir=memo, only=only)
+        print(f"{len(meta['cases'])} packets, an export of {meta['export_files']} files, {n} memoized reads: {out}")
+        return 0
+    if a.cmd == "collect":
+        packets = Path(a.packets)
+        suite = load_suite(Path(a.suite), Access([Path(a.suite), packets]))
+        res = collect(suite, packets, [Path(t) for t in a.transcripts], only)
+        Path(a.out).parent.mkdir(parents=True, exist_ok=True)
+        Path(a.out).write_text(dumps(res), encoding="utf-8")
+        counts: dict[str, int] = {}
+        for x in res["results"]:
+            counts[x["status"]] = counts.get(x["status"], 0) + 1
+        print(f"{len(res['results'])} cases: " + ", ".join(f"{k} {v}" for k, v in sorted(counts.items()))
+              + f"; answers sha256 {res['answers']['sha256']}")
+        return 0
     logging.disable(logging.INFO)
-    access = Access([Path(a.suite), *{Path(r).parent for r in a.recipes}])
+    access = Access([Path(a.suite), *{Path(x).parent for x in a.recipes}])
     suite = load_suite(Path(a.suite), access)
-    recipes = {k: v for r in a.recipes for k, v in load_recipes(Path(r), access).items()}
-    only = [x for x in a.only.split(",") if x] or None
-    if a.world:
-        from fastapi.testclient import TestClient
-
-        from axelrod_wm.api.app import create_app
+    recipes = {k: v for x in a.recipes for k, v in load_recipes(Path(x), access).items()}
+    client = world_client(a.world) if a.world else None
+    reader = None
+    if client is not None:
         from axelrod_wm.evaluation.golden import V1Reader
-        from axelrod_wm.evaluation.inner_loop import V1Service
-        from axelrod_wm.repo.snapshots import MemoryBackend
 
-        def fresh_service():
-            """A clean world per use: a new app on its own in-memory storage."""
-            clean = create_app(scenario=a.world, storage=MemoryBackend(), trace_dir=None, play_delay=0.0)
-            stack.append(TestClient(clean))
-            return V1Service(stack[-1].__enter__(), a.world)
-
-        stack: list = []
-        app = create_app(scenario=a.world, storage=MemoryBackend(), trace_dir=None, play_delay=0.0)
-        with TestClient(app) as c:
-            run = run_suite(suite, recipes, V1Reader(c), only, services=fresh_service, stores=BundleContractStore)
-        for client in stack:
-            client.__exit__(None, None, None)
-    else:
-        run = run_suite(suite, recipes, None, only)
+        reader = V1Reader(client)
+    res = run_suite(suite, recipes, reader, only)
     Path(a.out).parent.mkdir(parents=True, exist_ok=True)
-    Path(a.out).write_text(dumps(run), encoding="utf-8")
-    counts: dict[str, int] = {}
-    for r in run["results"]:
-        counts[r["status"]] = counts.get(r["status"], 0) + 1
-    print(f"{len(run['results'])} cases: " + ", ".join(f"{k} {v}" for k, v in sorted(counts.items())))
+    Path(a.out).write_text(dumps(res), encoding="utf-8")
+    print(f"{len(res['results'])} cases")
     return 0
 
 
