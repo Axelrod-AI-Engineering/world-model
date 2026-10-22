@@ -354,7 +354,7 @@ class Responder:
         delta: dict[str, float] = dict(fixed)
         unknown: dict[str, list[str]] = {}
         done = set(fixed) | (hold & live)
-        for h in hold & live:
+        for h in sorted(hold & live):
             delta.setdefault(h, 0.0)
             a.states[h] = "held constant"
         # breadth-first distance from the changes: a loop is cut at the edge that returns to an earlier value

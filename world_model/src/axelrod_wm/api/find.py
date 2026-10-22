@@ -87,7 +87,7 @@ def find(ctl: WorldModelController, q: str, limit: int = 40) -> dict:
         sw = stem(w)
         if sw and sw not in STOP:
             query.add(sw)
-    expanded = {w: {w, *(stem(x) for x in SYNONYMS.get(w, []))} for w in query}
+    expanded = {w: {w, *(stem(x) for x in SYNONYMS.get(w, []))} for w in sorted(query)}
 
     def score(fields: list[tuple[str, str, float]]) -> tuple[float, list[str]]:
         """fields: (label, text, weight). Every query word must match some field (a synonym counts for less)."""

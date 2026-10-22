@@ -151,7 +151,7 @@ def isolate(src: dict, method: str = "relevant", outputs: list[str] | None = Non
         fwd = _reach(inputs, src["edges"], forward=True)
         bwd = _reach(outs, src["edges"], forward=False)
         on = (fwd & bwd) | set(outs)
-        for sid in on:
+        for sid in sorted(on):
             if vals[sid]["order"] > 0:
                 col[sid] = vals[sid]["order"]
         for (s, t), e in by_pair.items():
@@ -226,7 +226,7 @@ def _relevant(src: dict, inputs: list[str], outputs: list[str] | None) -> dict:
         keep.add(nxt[0])
     shown = keep | set(inputs)
     edges = {}
-    for sid in keep:
+    for sid in sorted(keep):
         for k in vals[sid]["path"]:
             e = edge_by_key.get(k)
             if e is not None and e["source"] in shown:
@@ -245,8 +245,8 @@ def _relevant(src: dict, inputs: list[str], outputs: list[str] | None) -> dict:
     else:
         feeds = {s for (s, t) in edges if t in keep}
         ends = [sid for sid in keep if sid not in feeds]
-        outs = sorted(ends, key=lambda x: -score[x])[:10]
-    col = {sid: (99 if sid in outs else vals[sid]["order"]) for sid in keep}
+        outs = sorted(ends, key=lambda x: (-score[x], x))[:10]
+    col = {sid: (99 if sid in outs else vals[sid]["order"]) for sid in sorted(keep)}
     return _grid(src, "relevant", inputs, outs, col, list(edges.values()))
 
 
