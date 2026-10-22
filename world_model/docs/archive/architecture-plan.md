@@ -2,8 +2,7 @@
 
 This page turns the API and interface review with Manav (Oct 18) into a plan. It has four parts: what was decided,
 what still needs analysis, the order of work, and the analysis of one world model against several. The decisions are
-also recorded in [decisions.md](../design/decisions.md) as D-20 to D-24. Open questions stay on
-[questions-for-manav-and-zsolt.md](../design/questions-for-manav-and-zsolt.md).
+also recorded in [decisions.md](../design/decisions.md) as D-20 to D-24.
 
 <!-- toc -->
 **Contents**

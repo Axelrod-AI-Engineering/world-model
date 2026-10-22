@@ -34,7 +34,6 @@ New to the repository? Read [the front door](../../docs/README.md) and [the arch
 | Call the API or MCP: routes, auth, errors, configuration | [api/README.md](api/README.md) (generated from [api/openapi.yaml](api/openapi.yaml)) |
 | Know why the API looks the way it does | [design/api.md](design/api.md) |
 | Know how core and other callers authenticate | [design/core-mcp-auth.md](design/core-mcp-auth.md) |
-| Answer the open questions for Manav and Zsolt | [design/questions-for-manav-and-zsolt.md](design/questions-for-manav-and-zsolt.md) |
 | Understand the design: problem, scope, principles, modules | [design/README.md](design/README.md) |
 | See the user stories and measured limits | [design/requirements.md](design/requirements.md) |
 | Look up a type, field, unit, or invariant | [design/data-model.md](design/data-model.md) |
@@ -69,8 +68,8 @@ world_model/
     guides/           running it: demos, gui, cli
     api/              README.md (the reference, generated) and openapi.yaml (the contract)
     design/           the design of record: README (front page), requirements, data model, architecture,
-                      interfaces, api, core-mcp-auth, specificity, cognition, frameworks, decisions, migration,
-                      questions-for-manav-and-zsolt; modules/ (M01-M17); diagrams/ (Mermaid sources and SVGs)
+                      interfaces, api, core-mcp-auth, specificity, cognition, frameworks, decisions, migration;
+                      modules/ (M01-M17); diagrams/ (Mermaid sources and SVGs)
     construction/     the business-construction method, and one page per company
     ml/               stack.md (the math as built) and roadmap.md (the plan)
     briefs/           dated status briefs for colleagues

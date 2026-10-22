@@ -338,8 +338,8 @@ them into an immutable snapshot whose id is a content hash. To bind the canvas t
 3. **Tenancy and auth.** Settled on our side (Oct 18, [design/core-mcp-auth.md](../design/core-mcp-auth.md)): the
    organization comes from the credential, each world model belongs to one organization, and core will mint a
    short-lived service token per call that names the org user. Until core mints them, the patch sends one key per
-   organization (`org_id=key`, with `*` as the default). Still open: the questions in
-   [questions-for-manav-and-zsolt.md](../design/questions-for-manav-and-zsolt.md).
+   organization (`org_id=key`, with `*` as the default). Still open: how core mints the
+   token and who holds its key.
 4. **Key rotation.** A caller may hold two keys at once, so a key rotates by overlap: add the new entry, move the
    caller, remove the old one. Who holds core's key, and how often it rotates, is still open.
 5. **The Notion MCP catalog** is the single draft of core's next tools, so the world-model tools belong there and
