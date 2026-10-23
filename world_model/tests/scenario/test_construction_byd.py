@@ -105,7 +105,8 @@ IDENTITIES = {'by.id.gross_profit': ('difference', 'byd.gross_profit'),
               'by.id.total_equity': ('difference', 'byd.total_equity'),
               'by.id.parent_equity': ('difference', 'byd.parent_equity'),
               'by.id.eu_duty': ('product', 'byd.eu_duty_cost')}
-STOCK_FLOWS = {'by.sf.cash': 'byd.cash_equivalents', 'by.sf.borrowings': 'byd.total_borrowings'}
+STOCK_FLOWS = {'by.sf.cash': 'byd.cash_equivalents', 'by.sf.borrowings': 'byd.total_borrowings',
+               'by.sf.auto_finance_jv': 'byd.auto_finance_jv_carrying'}
 MATRICES = {'by.mx.contract_revenue': ('by.comp.crev_segment', 'by.comp.crev_place'),
             'by.mx.contract_cost': ('by.comp.ccost_segment', 'by.comp.ccost_place')}
 PATHS = {'by.path.export_demand': 'byd.operating_profit',
@@ -236,6 +237,15 @@ def test_stock_flows_roll_forward(g):
         assert flows, sfid
         for v in flows:                                               # each flow reaches its stock by a stock-flow link
             assert str(link(g, v, stock).edge_type) == "stock_flow", (sfid, v)
+
+
+def test_the_auto_finance_joint_venture_values_are_labelled_partial(g):
+    """BYD's share of the BYD Auto Finance joint venture is partial coverage (its carrying amount and the income booked on
+    it), and the stock-flow says so through its values."""
+    x = g.stock_flows["by.sf.auto_finance_jv"]
+    for sid in ("byd.auto_finance_jv_carrying", "byd.auto_finance_jv_income"):
+        assert "partial" in (g.subentities[sid].features or {}).get("basis", "").lower(), sid
+    assert {v for v, _ in x.terms()} <= {"byd.auto_finance_jv_income"} and x.stock == "byd.auto_finance_jv_carrying"
 
 
 def test_required_paths_exist(g):

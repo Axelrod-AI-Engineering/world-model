@@ -44,7 +44,12 @@ CO, PRE, CID = "catl", "ct.", "N_CATL"
 OP = "catl.operating_profit"
 LOCAL = SALLY_WORK / "construction"     # the client's data: local only, absent on CI
 # (file, period, the compositions the bundle cannot check: blocked for want of reported parts, never flagged; None = not listed)
-BASELINES = [('baselines.json', 'H1 2026', ['ct.comp.cost_nature', 'ct.comp.rev_customers', 'ct.comp.sales_volume', 'ct.comp.usage_geography']), ('baselines_fy2025.json', 'FY2025', None)]
+# the Oct 22 supplement adds the ct.comp.asbe_* views (PRC ASBE, unaudited): the H1 2026 and FY2025 bundles do not carry them, their own do
+ASBE = ['ct.comp.asbe_adjusted', 'ct.comp.asbe_assets', 'ct.comp.asbe_equity', 'ct.comp.asbe_finance_expenses', 'ct.comp.asbe_financing_cash', 'ct.comp.asbe_investing_cash', 'ct.comp.asbe_investment_income', 'ct.comp.asbe_liabilities', 'ct.comp.asbe_net_profit', 'ct.comp.asbe_operating_cash', 'ct.comp.asbe_operating_profit', 'ct.comp.asbe_ownership', 'ct.comp.asbe_pretax_profit', 'ct.comp.asbe_q3_adjusted']
+BASELINES = [('baselines.json', 'H1 2026', ['ct.comp.cost_nature', 'ct.comp.rev_customers', 'ct.comp.sales_volume', 'ct.comp.usage_geography', *ASBE]),
+             ('baselines_fy2025.json', 'FY2025', None),
+             ('baselines_q3_2026_asbe.json', 'Q3 2026 ASBE', None),
+             ('baselines_q3_2025_asbe.json', 'Q3 2025 ASBE', None)]
 
 COMPOSITIONS = {'ct.comp.rev_primary': ('catl.primary_operations_revenue', True),
                 'ct.comp.rev_operations': ('catl.net_revenue', True),
@@ -75,9 +80,27 @@ COMPOSITIONS = {'ct.comp.rev_primary': ('catl.primary_operations_revenue', True)
                 'ct.comp.rd_nature': ('catl.rd_expenses', True),
                 'ct.comp.admin_nature': ('catl.admin_expenses', True),
                 'ct.comp.selling_nature': ('catl.selling_expenses', True),
-                'ct.comp.rev_customers': ('catl.net_revenue', True)}
+                'ct.comp.rev_customers': ('catl.net_revenue', True),
+                'ct.comp.asbe_operating_profit': ('catl.asbe_9m_operating_profit', True),
+                'ct.comp.asbe_finance_expenses': ('catl.asbe_9m_finance_expenses', True),
+                'ct.comp.asbe_investment_income': ('catl.asbe_9m_investment_income', True),
+                'ct.comp.asbe_pretax_profit': ('catl.asbe_9m_profit_before_tax', True),
+                'ct.comp.asbe_net_profit': ('catl.asbe_9m_net_profit', True),
+                'ct.comp.asbe_ownership': ('catl.asbe_9m_net_profit', True),
+                'ct.comp.asbe_adjusted': ('catl.asbe_9m_net_profit_attributable', True),
+                'ct.comp.asbe_q3_adjusted': ('catl.asbe_q3_net_profit_attributable', True),
+                'ct.comp.asbe_assets': ('catl.asbe_total_assets', True),
+                'ct.comp.asbe_liabilities': ('catl.asbe_total_liabilities', True),
+                'ct.comp.asbe_equity': ('catl.asbe_total_equity', True),
+                'ct.comp.asbe_operating_cash': ('catl.asbe_9m_operating_cash_flow', True),
+                'ct.comp.asbe_investing_cash': ('catl.asbe_9m_net_investing_outflow', True),
+                'ct.comp.asbe_financing_cash': ('catl.asbe_9m_net_financing_inflow', True)}
 # one view drives each total; these reconcile against it without driving it
 RECONCILING = {'ct.comp.adjusted': 'drives: false',
+               'ct.comp.asbe_adjusted': 'drives: false',
+               'ct.comp.asbe_equity': 'drives: false',
+               'ct.comp.asbe_ownership': 'drives: false',
+               'ct.comp.asbe_q3_adjusted': 'drives: false',
                'ct.comp.cost_primary': 'drives: false',
                'ct.comp.cost_region': 'drives: false',
                'ct.comp.equity': 'drives: false',
@@ -112,10 +135,13 @@ IDENTITIES = {'ct.id.gross_profit': ('difference', 'catl.gross_profit'),
               'ct.id.catl_global_usage': ('product', 'catl.global_usage_gwh'),
               'ct.id.catl_exchina_usage': ('product', 'catl.exchina_usage_gwh'),
               'ct.id.byd_global_usage': ('product', 'ev_battery_market.byd_global_usage'),
-              'ct.id.interim_dividend': ('product', 'catl.interim_dividend_declared')}
+              'ct.id.interim_dividend': ('product', 'catl.interim_dividend_declared'),
+              'ct.id.asbe_np_attributable': ('difference', 'catl.asbe_9m_net_profit_attributable'),
+              'ct.id.asbe_total_equity': ('difference', 'catl.asbe_total_equity')}
 STOCK_FLOWS = {'ct.sf.cash': 'catl.cash_equivalents',
                'ct.sf.equity': 'catl.equity_attributable',
-               'ct.sf.shares': 'catl.shares_issued'}
+               'ct.sf.shares': 'catl.shares_issued',
+               'ct.sf.asbe_cash': 'catl.asbe_cash_equivalents'}
 MATRICES = {}
 PATHS = {'ct.path.materials': 'catl.operating_profit',
          'ct.path.materials_offsets': 'catl.operating_profit',
@@ -344,6 +370,37 @@ def test_the_battery_rivalry_with_byd_is_an_uncalibrated_signed_link(g):
     i = link(g, "ev_battery_market.byd_global_share", "catl.global_usage_share")
     assert i.id == "ct_byd_share_catl_share" and not i.quantified and i.transition.sign == "-"
     assert i.transition.evidence.magnitude == "unknown" and i.transition.evidence.sources
+
+
+def asbe_values(g) -> list[str]:
+    return sorted(k for k, v in g.subentities.items() if v.entity_id == CO and k.startswith("catl.asbe_"))
+
+
+def objects_values(g) -> dict[str, list[str]]:
+    """The value ids each composition and identity names (a value of another company, a market, counts as it is)."""
+    out = {cid: [c.total, *parts(c)] for cid, c in g.compositions.items() if c.entity_id == CO}
+    for iid, x in g.identities.items():
+        if x.entity_id == CO:
+            out[iid] = [x.target, x.of, *x.minus, *x.factors, *x.numerator, *x.denominator]
+    return {k: [v for v in vs if v] for k, vs in out.items()}
+
+
+def test_every_asbe_value_is_labelled_prc_asbe_and_unaudited(g):
+    ids = asbe_values(g)
+    assert ids and len(ids) == len({*ids})
+    for sid in ids:
+        basis = (g.subentities[sid].features or {}).get("basis", "").lower()
+        assert "prc asbe" in basis and "unaudited" in basis, sid
+
+
+def test_no_view_mixes_asbe_with_h1_ifrs_values(g):
+    """The ASBE values (nine months, unaudited) are never added to or differenced against the H1 IFRS/HKEX ones: a composition
+    or identity holds only the one or the other."""
+    asbe = set(asbe_values(g))
+    mixed = {k: vs for k, vs in objects_values(g).items() if {v in asbe for v in vs} == {True, False}
+             and [v for v in vs if v not in asbe and v in g.subentities and g.subentities[v].entity_id == CO]}
+    assert not mixed, sorted(mixed)
+    assert {k for k, vs in objects_values(g).items() if asbe & set(vs)} >= {k for k in COMPOSITIONS if k.startswith("ct.comp.asbe_")}
 
 
 # -- delivery: export and API ---------------------------------------------------------------------------------------------

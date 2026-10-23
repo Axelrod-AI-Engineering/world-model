@@ -44,7 +44,12 @@ CO, PRE, CID = "hyundai", "hy.", "N_HYUNDAI_MOTOR"
 OP = "hyundai.operating_profit"
 LOCAL = SALLY_WORK / "construction"     # the client's data: local only, absent on CI
 # (file, period, the compositions the bundle cannot check: blocked for want of reported parts, never flagged; None = not listed)
-BASELINES = [('baselines_fy2025.json', 'FY2025', ['hy.comp.op_walk_q2', 'hy.comp.revenue_walk_q2']), ('baselines_q2_2026.json', 'Q2 2026', [])]
+# the Oct 22 supplement adds the Hyundai Card, HCS and Kia views: a group bundle cannot check the HCS ones (its own bundles do), nor Kia's at Q2 2026
+HCS_BLOCKED = ['hy.comp.hcs_expense_lines', 'hy.comp.hcs_nonop_lines', 'hy.comp.hcs_pretax_bridge', 'hy.comp.hcs_receivable_lines', 'hy.comp.hcs_revenue_lines']
+BASELINES = [('baselines_fy2025.json', 'FY2025', ['hy.comp.op_walk_q2', 'hy.comp.revenue_walk_q2', *HCS_BLOCKED]),
+             ('baselines_q2_2026.json', 'Q2 2026', [*HCS_BLOCKED, 'hy.comp.kia_equity_income_bridge', 'hy.comp.kia_pretax_bridge']),
+             ('baselines_hcs_fy2024.json', 'HCS FY2024', None),
+             ('baselines_hcs_sep2025.json', 'HCS Sep 2025', None)]
 
 COMPOSITIONS = {'hy.comp.op_by_segment': ('hyundai.operating_profit', True),
                 'hy.comp.revenue_by_segment': ('hyundai.net_revenue', True),
@@ -74,10 +79,22 @@ COMPOSITIONS = {'hy.comp.op_by_segment': ('hyundai.operating_profit', True),
                 'hy.comp.op_walk_q2': ('hyundai.opq2_swing', True),
                 'hy.comp.revenue_walk_q2': ('hyundai.revq2_swing', True),
                 'hy.comp.investment_by_type': ('hyundai.investment_overall', True),
-                'hy.comp.hca_pretax': ('hyundai.hca_pretax', True)}
+                'hy.comp.hca_pretax': ('hyundai.hca_pretax', True),
+                'hy.comp.hcard_revenue_lines': ('hyundai.hcard_operating_revenue', True),
+                'hy.comp.hcard_expense_lines': ('hyundai.hcard_operating_expenses', True),
+                'hy.comp.hcard_pretax_bridge': ('hyundai.hcard_pretax', True),
+                'hy.comp.hcard_debt_lines': ('hyundai.hcard_debt', True),
+                'hy.comp.hcs_revenue_lines': ('hyundai.hcs_operating_revenue', True),
+                'hy.comp.hcs_expense_lines': ('hyundai.hcs_operating_expenses', True),
+                'hy.comp.hcs_nonop_lines': ('hyundai.hcs_nonop_income', True),
+                'hy.comp.hcs_pretax_bridge': ('hyundai.hcs_pretax', True),
+                'hy.comp.hcs_receivable_lines': ('hyundai.hcs_receivables', True),
+                'hy.comp.kia_pretax_bridge': ('hyundai.kia_pretax', True),
+                'hy.comp.kia_equity_income_bridge': ('hyundai.eq_kia', True)}
 # one view drives each total; these reconcile against it without driving it
 RECONCILING = {'hy.comp.expenses_by_nature': 'drives: false',
                'hy.comp.income_statement_lines': 'drives: false',
+               'hy.comp.hcs_nonop_lines': 'drives: false',
                'hy.comp.nonop_lines': 'drives: false',
                'hy.comp.revenue_by_entity_region': 'drives: false',
                'hy.comp.revenue_by_nature': 'drives: false',
@@ -106,7 +123,24 @@ IDENTITIES = {'hy.id.gross_profit': ('difference', 'hyundai.gross_profit'),
               'hy.id.hca_net_income': ('difference', 'hyundai.hca_net_income'),
               'hy.id.hca_interest': ('product', 'hyundai.hca_interest_expense'),
               'hy.id.hca_krw': ('product', 'hyundai.hca_pretax_krw'),
-              'hy.id.payout': ('ratio', 'hyundai.payout_ratio')}
+              'hy.id.payout': ('ratio', 'hyundai.payout_ratio'),
+              'hy.id.hcard_op_income': ('difference', 'hyundai.hcard_operating_income'),
+              'hy.id.hcard_profit': ('difference', 'hyundai.hcard_profit'),
+              'hy.id.hcard_profit_owners': ('difference', 'hyundai.hcard_profit_owners'),
+              'hy.id.hcard_equity': ('difference', 'hyundai.hcard_equity'),
+              'hy.id.hcard_interest': ('product', 'hyundai.hcard_interest_expense'),
+              'hy.id.hcs_op_income': ('difference', 'hyundai.hcs_operating_income'),
+              'hy.id.hcs_net_income': ('difference', 'hyundai.hcs_net_income'),
+              'hy.id.hcs_net_income_owners': ('difference', 'hyundai.hcs_net_income_owners'),
+              'hy.id.hcs_equity': ('difference', 'hyundai.hcs_equity'),
+              'hy.id.hcs_interest': ('product', 'hyundai.hcs_interest_expense'),
+              'hy.id.hcs_p_equity': ('difference', 'hyundai.hcs_p_equity'),
+              'hy.id.kia_gp': ('difference', 'hyundai.kia_gross_profit'),
+              'hy.id.kia_op_profit': ('difference', 'hyundai.kia_operating_profit'),
+              'hy.id.kia_profit': ('difference', 'hyundai.kia_profit'),
+              'hy.id.kia_profit_owners': ('difference', 'hyundai.kia_profit_owners'),
+              'hy.id.kia_equity': ('difference', 'hyundai.kia_equity'),
+              'hy.id.kia_pro_rata': ('product', 'hyundai.eq_kia_pro_rata')}
 STOCK_FLOWS = {'hy.sf.cash': 'hyundai.cash_equivalents',
                'hy.sf.affiliates': 'hyundai.invest_in_affiliates',
                'hy.sf.warranty': 'hyundai.warranty_provision'}
@@ -144,7 +178,18 @@ PATHS = {'hy.path.tariffs_sourcing': 'hyundai.operating_profit',
          'hy.path.localization_investment': 'hyundai.operating_profit',
          'hy.path.group_bridge': 'hyundai.net_income_owners',
          'hy.path.warranty_roll': 'hyundai.warranty_provision',
-         'hy.path.research_investment': 'hyundai.operating_profit'}
+         'hy.path.research_investment': 'hyundai.operating_profit',
+         'hy.path.card_funding': 'hyundai.operating_profit',
+         'hy.path.card_growth': 'hyundai.operating_profit',
+         'hy.path.hcs_funding': 'hyundai.operating_profit',
+         'hy.path.hcs_settlement_interest': 'hyundai.operating_profit',
+         'hy.path.hcs_growth': 'hyundai.operating_profit',
+         'hy.path.hcs_lease_book': 'hyundai.operating_profit',
+         'hy.path.hcs_credit': 'hyundai.operating_profit',
+         'hy.path.hcs_partial_profit': 'hyundai.operating_profit',
+         'hy.path.kia_profit_equity': 'hyundai.net_income',
+         'hy.path.kia_dividends': 'hyundai.invest_in_affiliates'}
+HCS_PARTIAL = ['hyundai.hcs_p_assets', 'hyundai.hcs_p_liabilities', 'hyundai.hcs_p_sales', 'hyundai.hcs_p_profit', 'hyundai.hcs_p_equity']
 CALIBRATED = {'hy_eur_net_fx': 'documented', 'hy_usd_net_fx': 'documented'}
 
 
@@ -351,7 +396,18 @@ def test_the_business_records_are_projects_and_events(g):
     if not rep:
         pytest.skip("the client's local hyundai/repair.json is absent (data/ is gitignored; CI has none)")
     kinds = {r["record_kind"] for r in rep[0]["business_records"]}
-    assert kinds == {"project", "event"} and len(rep[0]["business_records"]) == 12
+    assert kinds == {"project", "event", "relationship", "rating", "coverage", "input_status"}
+    assert len([r for r in rep[0]["business_records"] if r["record_kind"] in ("project", "event")]) == 12     # the earlier records stay
+
+
+def test_the_hcs_partial_scope_is_labelled_partial(g):
+    """The summary lines Hyundai Motor's notes give of Hyundai Capital Services are partial coverage, and say so in their basis
+    and in their coverage; no other HCS value sits in that scope."""
+    scoped = sorted(k for k, v in g.subentities.items() if (v.features or {}).get("view") == "hcs_partial_scope")
+    assert scoped == sorted(HCS_PARTIAL)
+    for sid in scoped:
+        f = g.subentities[sid].features
+        assert "partial" in f["basis"].lower() and "partial" in str(f.get("coverage", "")).lower(), sid
 
 
 # -- delivery: export and API ---------------------------------------------------------------------------------------------
