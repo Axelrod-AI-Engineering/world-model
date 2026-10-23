@@ -6,7 +6,7 @@ description: Build a company's business construction in an Axelrod world model a
 # Building a company's business construction
 
 This is the method behind the Toyota, Tokio Marine and JPMorgan builds, and the eight that followed. The standard it
-enforces is [world_model/docs/design/specificity.md](../../docs/design/specificity.md), rules R1–R17. The tools and forms are in
+enforces is [world_model/docs/design/specificity.md](../../docs/design/specificity.md), rules R1–R21. The tools and forms are in
 [world_model/docs/construction/README.md](../../docs/construction/README.md). Reference builds are in
 [world_model/docs/construction/](../../docs/construction/).
 
@@ -23,6 +23,17 @@ Each step is a model object that says what it means, when it acts, what proves i
 it. A size comes from evidence or not at all: an unknown size is uncalibrated, never zero and never a guess. The
 numbers must satisfy the structure. Every claim resolves to a document, location and passage. "Missing" is declared
 only after a search. A forecast says what it could not calculate.
+
+Coverage says how complete it is. Figures on two accounting bases never meet in one calculation. A related company is
+a scope until it needs its own forecasts. A link between companies needs a document. Third-party material is a dated,
+attributed assumption.
+
+**Shared tools, company data.** Your company's folder holds data (specs, sources, citations, baselines, repair data,
+registers), not build logic. Use the shared tools in `world_model/scripts/construction/` and `world_model/scripts/imports/`.
+When a tool cannot do what you need, record the gap and fix it in the shared tool, or report it, rather than writing a
+company-specific script. Until the shared builders listed in the standard exist, start from the most recent company's
+scripts as a template and change the template, not a private copy.
+([specificity.md](../../docs/design/specificity.md#shared-tools-company-data))
 
 ## Inputs
 
@@ -100,14 +111,29 @@ Build in this order: composition → operating paths → mapping into the accoun
    electrified), and keep a line's two reported scopes as two records. Each effect has one driver; the company's own
    figure for it is a comparison. A value of another node that the company's links read follows the same observed
    rule.
-10. **Baselines.** Make an `axelrod.import/v1` bundle of dated actuals from the company's own material, and keep
-   estimates in a separate file. Validate it: `world_model/scripts/imports/bundles.py check <world> <bundle>`.
-11. **Sources and citations (R6).** Keep two local files:
+10. **Coverage, bases and related companies (R18–R21).**
+    - Label each subsidiary fact taken from the parent's notes `partial`, and say what it does not replace.
+    - Name every missing document exactly (entity, statement, period). Never infer zero exposure, and never invent a
+      rating.
+    - Put the accounting standard, audit state and perimeter in each value's basis. Never add, difference or reconcile
+      across two bases. A quarter-only figure that would need it is recorded as unavailable on one basis.
+    - Model a financing arm, associate or joint venture as a scope (`<name>_scope`) inside the parent. It becomes its
+      own entity only when it needs its own forecasts.
+    - Add a link to another company only with a cited document. Put every other candidate in `cross_links.md`.
+    - When two filings disagree, keep both figures, cited, with an explicit residual.
+    - Third-party and industry figures are dated, attributed assumptions, assessed as `direct`, `proxy` or
+      `context only` against the value's definition.
+11. **Baselines.** Make an `axelrod.import/v1` bundle of dated actuals from the company's own material, and keep
+   estimates in a separate file. Validate it: `world_model/scripts/imports/bundles.py check <world> <bundle>`. A later
+   period or another accounting basis gets its own bundle and baseline id. In the repair data, it is a
+   `latest_period_baseline` or one of `additional_baselines` beside the `selected_baseline`, so each reconciles alone
+   (R19).
+12. **Sources and citations (R6).** Keep two local files:
     - `sources.json`: source id → document, kind, date, period, basis, read state, proof limits;
     - `citations.json`: link or value id → source id, location (sheet!cell, table/row, page and paragraph), and passage.
 
     Tracked files hold **neutral ids only**: never a firm, broker, vendor or file name, and never a client figure.
-12. **Inputs (R7).** Run `world_model/scripts/construction/inputs.py <world> --entities <company> --corpus <client folder> [--out <folder>]` (the report goes to `data/work/<client>/construction` by default, never into the corpus). Read
+13. **Inputs (R7).** Run `world_model/scripts/construction/inputs.py <world> --entities <company> --corpus <client folder> [--out <folder>]` (the report goes to `data/work/<client>/construction` by default, never into the corpus). Read
     the candidates, then set each input's status:
     - found and connected;
     - found but not connected;
@@ -116,7 +142,7 @@ Build in this order: composition → operating paths → mapping into the accoun
     - not disclosed in the reviewed sources, listing what was searched.
 
     Leave none "not yet reviewed".
-13. **Check and reconcile.** Run:
+14. **Check and reconcile.** Run:
 
     ```
     world_model/scripts/construction/check.py <world> --entities <company> --sources <client>/construction --reconcile --statistic median [--baselines <bundle>]
@@ -124,14 +150,14 @@ Build in this order: composition → operating paths → mapping into the accoun
 
     The run must end with no problems, no unresolved ids, no uncited material claims, and no reconciliation flags
     at medians or at baselines. Report any unexplained difference as an explicit residual.
-14. **Generalization trace (R10).** Trace a development no path was written for, using `context.construction.trace`.
+15. **Generalization trace (R10).** Trace a development no path was written for, using `context.construction.trace`.
     Show that it reaches a financial endpoint, or where and why it stops.
-15. **Calculation coverage (R9).** For each path, and for the client's theses, record from a forecast's `coverage`:
+16. **Calculation coverage (R9).** For each path, and for the client's theses, record from a forecast's `coverage`:
     - which links contribute a size;
     - which are excluded, and why;
     - which inputs block a size;
     - the company's own steps, counted apart from summary links.
-16. **Validation test** (`world_model/tests/scenario/test_construction_<company>.py`):
+17. **Validation test** (`world_model/tests/scenario/test_construction_<company>.py`):
     - no construction problems;
     - the required compositions and paths exist;
     - every step has a transition, and every uncalibrated step a sign;
@@ -140,9 +166,9 @@ Build in this order: composition → operating paths → mapping into the accoun
     - the objects appear in the export and the API.
 
     Tests that need the client's files skip without them.
-17. **Validation cases (R16).** Run the company's named validation cases, plus one development outside them, through
+18. **Validation cases (R16).** Run the company's named validation cases, plus one development outside them, through
     the internal model, the export and the context an agent retrieves.
-18. **Completion report: four reviewable parts (R16).** A before/after audit by canonical id; the compositions and
+19. **Completion report: four reviewable parts (R16).** A before/after audit by canonical id; the compositions and
     connected paths; evidence and calibration; the end-to-end checks. For each gap: built and verified, built but
     uncalibrated, blocked by a named input, or not built. Then say what a downstream agent can now trace or calculate,
     and what the method could not express.
@@ -153,6 +179,22 @@ Build in this order: composition → operating paths → mapping into the accoun
     separate states. Keep expected answers out of any retrieval scope, and never hard-code a test's answer into the
     model. When a reviewer's figure disagrees with the records, check the source and record the disagreement rather
     than overwrite either.
+
+## When new material arrives
+
+1. **Stage it as its own pack.** Put it under `data/sources/<client>/<pack>/`, with a `MANIFEST.md` listing file,
+   entity, period, basis, audit state and SHA-256. Ingest it into its own lake tenant, twice, to the same digest
+   (`ingestion/scripts/ingest_pack.py --twice`).
+2. **Back up first.** Copy the construction file, the gap register and the local data before editing.
+3. **Re-run the input search over the new tenant (R7).** Statuses move: not supplied becomes found, and found becomes
+   connected.
+4. **Add values and baselines without mixing bases (R19).** Re-run `check.py`, with every bundle, twice to the same
+   output.
+5. **Record the round in the gap register.** Add a dated section covering what each document added, what is
+   `partial`, every item still outstanding by exact name, and the links still uncalibrated with the document that would
+   size each.
+6. **Update the company's scenario test.** Additions only: if an expected id disappears, stop and find out why.
+7. **Export with a new number.** Set the focus scenario's `file_index` first, so the folder and its files match.
 
 ## Do not
 
@@ -169,6 +211,11 @@ Build in this order: composition → operating paths → mapping into the accoun
 - Relabel a category's total as one of its parts, or spread one country's statement over a region.
 - Size the same effect twice: once through its driver and again from the company's own figure.
 - Mark a value observed, or a stipulated zero reported, without a dated source observation.
+- Add, difference or reconcile figures on two accounting bases or audit states.
+- Link two companies without a document, or overwrite one filing's figure with another's.
+- Treat a forecast market size as revenue, an index page as its report, or an industry average as the company's own
+  figure.
+- Write a company-specific build script for something a shared tool should do.
 
 ## Done means
 

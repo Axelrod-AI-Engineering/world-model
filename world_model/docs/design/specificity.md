@@ -15,12 +15,14 @@
   - [Prediction](#prediction-1)
   - [Export](#export)
   - [Determinism](#determinism)
+- [Shared tools, company data](#shared-tools-company-data)
 - [What is not yet enforced](#what-is-not-yet-enforced)
 - [Decisions](#decisions)
 <!-- /toc -->
 
 The client's reviewer said, in two rounds, that our world model was not specific enough. A third document (Oct 18)
-set out how to build Toyota and Tokio Marine to her standard. Repair documents followed on Oct 18 and Oct 19. The reviewer said:
+set out how to build Toyota and Tokio Marine to her standard. Repair documents followed on Oct 18 and Oct 19, and a
+supplement of new filings and industry packs on Oct 22. The reviewer said:
 
 - it jumped from a macro driver straight to a company's sales or profit;
 - it did not say how;
@@ -269,6 +271,83 @@ every period; no value is observed without a dated reported observation; each ef
 company's figure as a comparison; the completion checks report model correctness, runtime access and answer quality
 as separate states.
 
+**R18. Coverage says how complete it is.** Every input and every value bound to a subsidiary or a document has one
+of these coverage states:
+
+- **full**: the entity's own statements for the period;
+- **`partial`**: the specific facts that a parent's notes, or another primary disclosure, establish about the entity.
+  A `partial` value says in its basis what it covers and what it does not replace. It never stands in for the
+  standalone accounts;
+- **not supplied**: named by the exact document, meaning the entity, the statement and the period (a finance arm's
+  FY annual statements, a quarter's release). "Missing data" is never enough;
+- **not disclosed**, after a search (R7).
+
+A check or test is `blocked` only when it needs evidence that is unavailable, and it names that document or input. An
+absence is never read as zero exposure, and no rating, ratio or figure that a missing document would hold is invented.
+*Test:* every `partial` value names its coverage in its basis; every blocked check and every not-supplied input names a
+document; no value is set to zero for want of a document.
+
+**R19. One basis per calculation.** The accounting standard (IFRS, a national GAAP such as K-IFRS, PRC ASBE or US
+GAAP), the audit state (audited, reviewed, unaudited) and the perimeter (consolidated, parent only, one subsidiary)
+are part of a value's basis (R2).
+
+- Values on two bases are never added, differenced or reconciled in one composition, identity or calculation. A
+  quarter-only figure is derived from cumulative figures only within one basis. Where the two periods sit on
+  different bases, the figure is recorded as unavailable on a single basis, not computed (R15).
+- A company may hold several dated baselines: one *selected* baseline, plus later-period or other-basis ones, each
+  with an id, period and availability date. Each baseline reconciles alone, and a reconciliation uses exactly one and
+  reports which (see [Export](#export)).
+- Where a document's basis is in doubt, the label follows the evidence, and the doubt is raised with the reviewer. It is
+  never resolved by assumption.
+
+*Test:* no composition or identity holds values of two bases; every reconciliation in the export names its baseline.
+
+**R20. Related companies are scopes; links between companies are documented.**
+
+- A related company (a financing arm, a subsidiary, an associate, a joint venture) is a **scope** inside its parent's
+  construction, such as `<name>_scope`, where each value keeps its entity, period and basis. It becomes an entity with
+  its own construction only when it needs forecasts of its own.
+- A link between two companies enters the world only when a document establishes it, cited: an ownership stake,
+  equity-method income, a supply contract, a joint venture. A plausible or inferred relationship stays a candidate in
+  the company's local `cross_links.md`, outside the world.
+- When two filings disagree (a stake as each party reports it, equity income against stake × profit), both figures
+  are kept with their sources, the difference is an explicit residual, and neither is overwritten.
+- One disclosure in several copies (languages, exchanges) is one source (`shared_origin`). A figure printed in only one
+  copy cites that copy and says so.
+
+*Test:* every link whose ends belong to two companies cites a source; candidates live only in the local register;
+every recorded disagreement has both sources and a residual.
+
+**R21. Third-party material is a dated, attributed assumption.** Industry statistics, research, consensus and
+sell-side estimates (ASPs, incentives, plant economics, battery costs, pass-through timing) enter as assumptions with
+these fields:
+
+- the source, its date and its definition;
+- its access class: full report, executive summary, public summary, or index page;
+- what it is: a realized statistic, a policy in force, a forecast or a scenario.
+
+Each is assessed against the definition of the value or link it would inform:
+
+- **`direct`:** the same measure and perimeter;
+- **`proxy`:** the note says why it differs, and the input becomes `found_proxy` (R4, R14);
+- **`context only`.**
+
+It sizes an input, such as a tariff rate or a market share. It sizes a response (a pass-through, an elasticity, a
+timing) only when it measures that response. It never replaces statutory accounts, and never establishes an
+undisclosed contractual fact.
+
+These never cross:
+
+- a forecast market size is never revenue;
+- sector growth is never attributed to a holding;
+- an index or access page is not its report;
+- registrations, retail, wholesale and production stay apart;
+- pack, cell and commodity prices stay apart;
+- industrial robots and humanoids stay apart, and so do pilots and paid deployments.
+
+*Test:* each candidate in the calibration register carries these fields; no link is sized from a `context only`
+candidate or a forecast market size.
+
 ## Where each rule is enforced
 
 | Rule | Build (check.py, tests) | Ingestion | Learning and review | Prediction |
@@ -290,6 +369,10 @@ as separate states.
 | R16 End-to-end validation | company tests: validation cases through model, export and context | — | — | the brief separates calculated from direction-only steps |
 | R13 One number per effect | company docs record the netting; company tests | — | — | not yet checked mechanically (see below) |
 | R17 Stage and scope | business records (`context/earnings.py`); completion checks C01–C06; company tests | a statement keeps its scope and stage (plan, announcement, order, delivery) | review shows the stage beside the claim | a conditional path is not reported as an observed change |
+| R18 Coverage | input statuses (`inputs.py`); company tests assert `partial` labels | a supplement is its own pack, and the input search re-runs over it | — | coverage lists inputs blocked by a named document |
+| R19 One basis per calculation | company tests (no view mixes bases); the export's per-baseline reconciliation (`context/earnings.py`) | a document's basis and audit state are kept in its metadata | — | — |
+| R20 Related companies | company tests; the local `cross_links.md` register | duplicate copies are grouped (`shared_origin`) | review shows a cross-company link's citation | — |
+| R21 Third-party material | the local calibration register | an index or access page is typed out | — | a size from a proxy is labelled as such |
 
 ## Ingestion
 
@@ -333,7 +416,7 @@ the same result every time. The full mathematical specification, with its known 
 ![The system: construction, ingestion, review, fold, learners, forecast and export](diagrams/specificity-system.svg)
 
 **Two ways into the graph.**
-- *Construction* sets the structure by hand. It is checked, cited and tested (R1–R17).
+- *Construction* sets the structure by hand. It is checked, cited and tested (R1–R21).
 - *Ingestion* proposes changes from documents. Nothing reaches the graph without a person approving each item. The
   learners only propose structure; they change sizes only inside the bounds the rules allow.
 
@@ -427,6 +510,14 @@ posterior.
 
 The export reads the state; it writes nothing back.
 
+- **Several baselines per company (R19).** A company's repair data has one `selected_baseline` and may add a
+  `latest_period_baseline` or `additional_baselines`. A composition reconciles against the first baseline that holds
+  every level it reads, the selected one first, and never against two at once. Each reconciliation reports its
+  `baseline_id`, and the manifest lists the extra baselines. See
+  [construction/focus.md](../construction/focus.md#repair-data-oct-19).
+- **Numbering.** A focused scenario's `context_pack.file_index` names its export. The folder number and the file names
+  inside it always match. A new export of the same scenario takes a new number, set in the scenario first.
+
 ### Determinism
 
 Every automated step is a deterministic function of its inputs. A person's review is the one input that is not
@@ -446,6 +537,41 @@ What is *not* claimed: that the learners are statistically sound. [ml/stack.md �
 lists where they double-count or confirm themselves. Determinism makes those weaknesses reproducible and testable; it
 does not remove them.
 
+## Shared tools, company data
+
+A company's build is **data, not code**. What differs between companies is the evidence and the structure, so those are
+what a company folder holds. Turning them into model objects and checks is the same work for every company, and it
+belongs to shared, tested tools.
+
+**What a company holds.** It holds its construction file. Its local work folder (`data/work/<client>/construction/<company>/`)
+holds:
+
+| File | Holds |
+|---|---|
+| `sources.json`, `citations.json` | Source catalogue; object id → location and passage (R6) |
+| `baselines*.json` | Dated actuals as `axelrod.import/v1` bundles, one per baseline (R19) |
+| `estimates.json`, `history.json`, `events.json` | Estimates kept apart from actuals; standalone history; dated one-off events |
+| `repair.json` | Observations, input classes, business records, the selected and any additional baselines |
+| `cross_links.md` | Candidate links to other companies, outside the world (R20) |
+| `world_additions.yaml` | New shared entities, macro values or links, for the integrator to merge |
+| the gap register | `docs/construction/<company>.md` under the client root |
+
+**The rule.**
+- Anything that turns these files into model objects, citations, bundles, repair data, registers or exports is a
+  shared tool under `world_model/scripts/construction/`, `world_model/scripts/imports/` or `ingestion/`. It is generic,
+  tested and deterministic.
+- A company folder may hold a spec as data (a table of values, links or observations) that a shared tool reads. It
+  holds no build logic of its own.
+- When a shared tool cannot do what a company needs, the gap is recorded and fixed in the shared tool, for every
+  company. It is never worked around with a company-specific script.
+
+**Where we are (Oct 22).** Only `check.py`, `calibrate.py`, `inputs.py`, `bundles.py` and `export_context.py` are
+shared. The three companies built on Oct 22 each have their own 14–25 build scripts that reimplement the same
+steps: spec to YAML, sources and citations from lake passages, baselines, repair data, input registers, the gap
+register, a private world copy, and deploying back. That is the main source of one-off implementation. The shared
+tools that replace it are listed under [What is not yet enforced](#what-is-not-yet-enforced). Until they exist, a new
+build reuses the most recent company's scripts as a template, and every fix to one is made to the template.
+
 ## What is not yet enforced
 
 | Gap | Where it will live |
@@ -462,6 +588,15 @@ does not remove them.
 | A constant inside an identity, such as (1 − tax rate) (R12) | identity form |
 | Dated one-off events (a certification halt, a plant restart, a price increase) as events, not links. They are recorded locally for Toyota; the engine cannot replay them yet | events and scenarios |
 | Japanese query terms in the input search (R7) | world_model/scripts/construction/inputs.py |
+| **Shared build tools** that replace per-company scripts: spec tables → construction YAML; passages → `sources.json` and `citations.json` with the quote verified against the lake; dated observations → baseline bundles; repair data (observations, input classes, records, baselines); the gap register and completion report from `check.py`'s output; a private world copy with a merge, check and deploy step | `world_model/scripts/construction/` (build, cite, baselines, repair, register, stage) |
+| Lake reads across several tenants for one company (a supplement beside the original pack) in the input search and the citation builder (R7, R18) | `inputs.py`, the citation builder |
+| `check.py --sources` refusing a single company's folder (it needs the parent folder, and a company folder is silently wrong today) | world_model/scripts/construction/check.py |
+| A mechanical check that no composition or identity mixes bases (R19); a company test asserts it today | `model/construction.py`, check.py |
+| A mechanical check of `partial` and not-supplied labels (R18), and that every cross-company link is cited (R20) | check.py |
+| The calibration register (R21) as a shared tool over the lake, not a one-off agent output | `world_model/scripts/construction/` |
+| The inner-loop scorecard reporting model-grounded, source-assisted and fixture/control results apart, with each disputed case classified (R16) | `evaluation/inner_loop_grade.py` |
+| An answer contract that always emits signed cash flows, counts, basis tags and the selected baseline id (R16) | `evaluation/inner_loop_packets.py` (task contract) |
+| A supersession field in the bundle contract: one source explicitly corrects and supersedes another (R8) | `ingestion/contract/bundle.py` |
 
 The identity, stock-flow, matrix, state and driving-view forms were added on Oct 18. All eleven companies in the
 Sally world were converted to them, so products, ratios and stocks are no longer sign-only.
@@ -536,3 +671,17 @@ Generalizations from building the eleven companies, kept here so the next compan
 | Oct 19 | A stipulated zero is an assumption, not an observed zero; free cash flow at a baseline is derived from its reported operands, with any perimeter caveat stated | R4, R8 |
 | Oct 19 | Completion checks return their package (status, changed ids, baseline, source period and passages, assumptions, intermediate values, reconciliation, unresolved endpoints) and keep model correctness, runtime access and answer quality apart | R16 |
 | Oct 19 | Agent-prompt amendments and runtime access problems are owned by the prompt and runtime owners; the model's job is that the records exist, are exported and are reachable by id | R16 |
+| Oct 22 | New material arrives as its own pack, with its own manifest (file, entity, period, basis, audit state, SHA-256) and lake tenant. It is ingested twice to the same digest, and the input search re-runs over it | R7, R18 |
+| Oct 22 | A subsidiary's facts from its parent's notes are `partial`; missing documents are named exactly; a check is blocked only by a named missing document; absence is never zero exposure, and no rating is invented | R18 |
+| Oct 22 | Figures on two accounting standards or audit states are never combined. A quarter-only line that would need one basis subtracted from another is recorded as unavailable, not computed | R19, R15 |
+| Oct 22 | A company may hold several dated baselines; each reconciles alone, and each reconciliation names its baseline | R19, R5 |
+| Oct 22 | A financing arm, associate or joint venture is a scope inside its parent unless it needs its own forecasts. Its stakes in other companies are candidates until a document establishes the link | R20 |
+| Oct 22 | No link between companies without a cited document; uncertain links stay in the local candidates register | R20 |
+| Oct 22 | When two filings disagree, both figures are kept with their sources and the difference is an explicit residual | R20, R5 |
+| Oct 22 | A figure printed in only one language copy of a filing cites that copy; the copies are one source | R20, R6 |
+| Oct 22 | An industry pack is matched to links through a calibration register (direct, proxy, context only). It sizes inputs such as tariff rates and market shares, not responses, unless it measures one | R21, R4 |
+| Oct 22 | Robotics material supports a conditional, task-level path (capability, deployment, uptime, labour hours, capex, earnings). It gives no sized financial link without a document that measures one | R21, R17 |
+| Oct 22 | A score is reported as model-grounded, source-assisted and fixture/control results, never as one combined rate. Each disputed case is classed as a model defect, test defect, missing source or missing capability | R16 |
+| Oct 22 | An answer that restates the required behaviour without executing it is "not demonstrated", whatever a judge says. Validation-case keys stay sealed, and the reviewer classifies those failures | R16 |
+| Oct 22 | Hidden files (`._*`, `.DS_Store`) are never loaded. A copy made on a Mac uses `COPYFILE_DISABLE=1` and excludes them | R6 |
+| Oct 22 | Build logic is shared; a company folder holds data. A gap in a shared tool is fixed in the tool, not worked around per company | Shared tools |

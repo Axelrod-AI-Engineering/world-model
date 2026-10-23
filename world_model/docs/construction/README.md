@@ -20,6 +20,7 @@
 - [Inner-loop accuracy suite (Oct 22)](#inner-loop-accuracy-suite-oct-22)
   - [The file protocol](#the-file-protocol)
   - [Two-layer grading](#two-layer-grading)
+  - [Reporting a score](#reporting-a-score)
   - [Holdout rules](#holdout-rules)
   - [Reproducing a run](#reproducing-a-run)
   - [Tests](#tests)
@@ -534,6 +535,30 @@ The earlier lexical mode, which matches field names and the key's wording, is ke
 computed and reported side by side; `--mode` chooses the headline. The scorecard gives pass, fail, blocked and not run, the executed
 pass rate (pass over pass and fail), the execution coverage over the 98 main cases, the two review gates apart, and the note that a
 high pass rate does not resolve a material blocked requirement. A validation candidate keeps its status and no detail.
+
+### Reporting a score
+
+A combined pass rate does not say how accurate the model is. A scorecard reports three classes apart, by what each
+answer actually rested on (the objects and evidence it cites):
+
+| Class | The answer rests on |
+|---|---|
+| Model-grounded | facts and paths in the model or its export (it cites model objects) |
+| Source-assisted | the frozen excerpts (it cites excerpts and no model objects) |
+| Fixture/control | only the figures stated in the question: accounting, arithmetic, update and uncertainty handling |
+
+Each disputed case, a failure or a doubtful pass, is classed as one of these:
+
+- a model defect;
+- a test defect, meaning the key or our grader;
+- a missing source;
+- a missing implementation capability, saying where (the model, the answer path or the harness).
+
+An answer that restates the required behaviour without executing it is "not demonstrated", whatever a judge says.
+Validation-case failures are classified by the reviewer, who holds the key. To measure the model itself, run
+model-grounded: re-answer the source and rule cases with the excerpts withheld, so that a fact missing from the model
+comes back "not in model". The grader does not split the classes yet
+([specificity.md](../design/specificity.md#what-is-not-yet-enforced)).
 
 ### Holdout rules
 

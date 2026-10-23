@@ -1,7 +1,7 @@
 # The construction pipeline
 
 How a company's business construction is built, checked and delivered, from raw material to the export an agent
-reads. This page is the abstract pipeline. The method's details are in [README.md](README.md) and the rules (R1–R17)
+reads. This page is the abstract pipeline. The method's details are in [README.md](README.md) and the rules (R1–R21)
 in [design/specificity.md](../design/specificity.md).
 
 <!-- toc -->
@@ -59,8 +59,16 @@ location and passage), next to the dated baselines. Tracked files hold neutral i
    link stays uncalibrated with its sign, never zero.
 8. **Baselines and citations.** Build dated actuals as an `axelrod.import/v1` bundle (`world_model/scripts/imports/bundles.py
    check`), with estimates kept apart. Cite every material claim to a document, location and passage.
-9. **Inputs.** Search the corpus for every input a transition needs (`world_model/scripts/construction/inputs.py`). Each input
-   ends found and connected, found but not connected, a proxy, not supplied, or not disclosed, never unreviewed.
+9. **Inputs and coverage.** Search the corpus for every input a transition needs
+   (`world_model/scripts/construction/inputs.py`). Each input ends in one of these states, never unreviewed:
+   - found and connected;
+   - found but not connected;
+   - a proxy;
+   - not supplied, naming the exact document;
+   - not disclosed.
+
+   A subsidiary's facts from its parent's notes are `partial`. Third-party and industry figures are dated, attributed
+   assumptions, assessed against each value's definition (R18, R21).
 10. **Check.** Run `world_model/scripts/construction/check.py --sources --reconcile [--baselines]`. It checks structural validity,
     resolving sources, uncited claims, input status, and that every view, identity and roll-forward closes at medians
     and at baselines. Any difference left over is reported as an explicit residual.
@@ -71,7 +79,10 @@ location and passage), next to the dated baselines. Tracked files hold neutral i
     contract, binding local repair data: reported against estimated, reconciliations, input classes, checks and
     business records. It also writes `reading/`, bounded shards an agent's reader can open, checked for exact
     coverage of the pack.
-13. **Review.** A reviewer runs small controlled checks first, reading model correctness, runtime access and answer
+13. **New material.** A supplement is its own pack and lake tenant. The input search re-runs over it, the gap register
+    gets a dated section, the company test is updated by additions only, and the export takes a new number
+    ([SKILL.md](../../skills/world-model-construction/SKILL.md#when-new-material-arrives)).
+14. **Review.** A reviewer runs small controlled checks first, reading model correctness, runtime access and answer
     quality as separate results. Findings go into the gap register, the standard and the skill
     ([skills/world-model-construction](../../skills/world-model-construction/SKILL.md)), and the pipeline runs again.
 
@@ -85,3 +96,8 @@ location and passage), next to the dated baselines. Tracked files hold neutral i
   never observed.
 - Every material claim resolves to a cited passage, and every missing input names what was searched.
 - Client figures, quotes and file names never enter tracked files.
+- One basis per calculation: two accounting standards or audit states never meet in a composition, identity or
+  difference. Each dated baseline reconciles alone (R19).
+- A link between two companies cites a document; every other candidate stays in the local register (R20).
+- Build logic is shared: a company folder holds data, and a gap in a shared tool is fixed in the tool
+  ([specificity.md](../design/specificity.md#shared-tools-company-data)).
