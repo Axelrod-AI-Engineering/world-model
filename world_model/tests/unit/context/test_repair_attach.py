@@ -407,3 +407,87 @@ def test_load_repair_skips_a_file_without_a_company(tmp_path):
     (tmp_path / "x").mkdir()
     (tmp_path / "x" / "repair.json").write_text(json.dumps({"entity": "x"}))
     assert load_repair(tmp_path) == [{"entity": "x"}] and load_repair(tmp_path, {"C_X"}) == []
+
+
+# -- a latest-period baseline beside the selected one (Borealis again, with a later accounting basis) ------------------------------------------
+LATE = {"label": "9M", "type": "nine_months", "start": "2026-01-01", "end": "2026-09-30"}
+EARLY = {"label": "9M prior", "type": "nine_months", "start": "2025-01-01", "end": "2025-09-30"}
+LATE_BASE = {"baseline_id": "BLATE", "period": LATE, "available_at": "2026-10-20"}
+
+
+def alt_comp(cid, total, parts, subtracted=()):
+    return {"composition_id": cid, "company_id": BO, "role": "alternate", "total_metric": total, "member_metrics": list(parts),
+            "residual_metric": None, "eliminations_metric": None, "overlaps_other_views": [], "additive": True,
+            "reconciliation": {"unit": "u", "total": total, "parts": list(parts), "subtracted": list(subtracted), "tolerance": 0.005, "residual": None}}
+
+
+def two_bases():
+    """Borealis with compositions that read values only the later baseline reports (`borealis.alt_*`), and one that reads both."""
+    ctx, repair = generic()
+    sup = ctx["domain_pack"]["domain_specific_support_objects"]
+    sup["financial_bridge"] += [alt_comp("bo.comp_alt", "borealis.alt_profit", ["borealis.alt_revenue", "borealis.alt_cost"], ["borealis.alt_cost"]),
+                                alt_comp("bo.comp_mixed", "borealis.profit", ["borealis.alt_revenue"])]
+    kw = dict(available_at="2026-10-20", period=LATE)
+    repair["observations"] += [
+        mkobs("L_REV", 20.0, metric="borealis.alt_revenue", **kw), mkobs("L_COST", 12.0, metric="borealis.alt_cost", **kw),
+        mkobs("L_PROFIT", 8.0, metric="borealis.alt_profit", baseline_id="BLATE", available_at="2026-01-01", period=EARLY),   # named, so it counts
+        mkobs("L_OTHER", 99.0, metric="borealis.alt_profit", baseline_id="BOTHER", **kw),                                   # names another baseline
+        mkobs("L_PRIOR", 98.0, metric="borealis.alt_revenue", available_at="2026-10-20", period=EARLY),                    # a comparative column
+        mkobs("L_FLAG", 97.0, metric="borealis.alt_cost", selected=True, **kw),                                              # flagged to the selected baseline
+        mkobs("L_NOMETRIC", 1.0, **kw)]
+    repair["latest_period_baseline"] = LATE_BASE
+    ctx["evidence"]["values"] += [{**value(f"borealis.alt_{m}"), "node_id": BO} for m in ("revenue", "cost", "profit")]
+    return ctx, repair
+
+
+def test_a_composition_reconciles_against_the_one_baseline_whose_values_it_uses():
+    ctx, repair = two_bases()
+    attach_repair(ctx, repair)
+    sup = ctx["domain_pack"]["domain_specific_support_objects"]
+    by = {r["composition_id"]: r for r in sup["baseline_reconciliations"]}
+    assert by["bo.comp"]["baseline_id"] == "BBASE" and by["bo.comp"]["after"]["status"] == "ok"
+    alt = by["bo.comp_alt"]
+    assert alt["baseline_id"] == "BLATE" and alt["baseline_period"] == LATE and alt["baseline_available_at"] == "2026-10-20"
+    assert alt["after"]["levels"].startswith("BLATE (9M") and alt["after"]["status"] == "ok" and alt["after"]["blocked_by"] == []
+    assert alt["after"]["total_level"] == 8.0 and alt["after"]["sum"] == 8.0        # the named observation; neither the other's nor the comparative
+    assert {a["metric"]: a["baseline_level"] for a in alt["adjustments"]} == {"borealis.alt_profit": 8.0, "borealis.alt_revenue": 20.0, "borealis.alt_cost": 12.0}
+    assert all(a["source"] is not None for a in alt["adjustments"])
+    comp = {c["composition_id"]: c for c in sup["financial_bridge"]}
+    assert comp["bo.comp_alt"]["reconciliation"]["baseline_id"] == "BLATE" and comp["bo.comp"]["reconciliation"]["baseline_id"] == "BBASE"
+
+
+def test_levels_of_two_baselines_are_never_mixed_in_one_reconciliation():
+    ctx, repair = two_bases()
+    attach_repair(ctx, repair)
+    mixed = next(r for r in ctx["domain_pack"]["domain_specific_support_objects"]["baseline_reconciliations"] if r["composition_id"] == "bo.comp_mixed")
+    # the total is only in the selected baseline, the part only in the later one: blocked under the selected baseline, not summed across both
+    assert mixed["baseline_id"] == "BBASE" and mixed["after"]["status"] == "blocked" and mixed["after"]["blocked_by"] == ["borealis.alt_revenue"]
+    assert mixed["after"]["sum"] is None
+
+
+def test_selected_baseline_stays_primary_and_the_additional_ones_are_reported():
+    ctx, repair = two_bases()
+    repair["additional_baselines"] = [{"baseline_id": "BEXTRA", "period": LATE, "available_at": "2026-11-01"}]
+    attach_repair(ctx, repair)
+    ev, m = ctx["evidence"], ctx["manifest"]["repair"]
+    assert ev["baseline_selection"]["baseline_id"] == "BBASE" and [b["baseline_id"] for b in ev["baseline_selections"]] == ["BBASE"]
+    assert m["selected_baseline"] == "BBASE" and m["additional_baselines"] == ["BLATE", "BEXTRA"]
+    sup = ctx["domain_pack"]["domain_specific_support_objects"]
+    assert {p["baseline_id"] for p in sup["observation_estimate_pairs"]} == {"BBASE"}
+
+
+def test_a_later_baseline_alone_still_reconciles():
+    ctx, repair = two_bases()
+    del repair["selected_baseline"]
+    attach_repair(ctx, repair)
+    sup = ctx["domain_pack"]["domain_specific_support_objects"]
+    assert {r["baseline_id"] for r in sup["baseline_reconciliations"]} == {"BLATE"} and sup["observation_estimate_pairs"] == []
+    assert ctx["manifest"]["repair"]["selected_baseline"] is None and "baseline_selection" not in ctx["evidence"]
+
+
+def test_a_malformed_or_repeated_baseline_is_refused():
+    ctx, repair = two_bases()
+    with pytest.raises(ValueError, match="baseline BLATE lacks available_at"):
+        attach_repair(ctx, {**repair, "latest_period_baseline": {"baseline_id": "BLATE", "period": LATE}})
+    with pytest.raises(ValueError, match="baseline ids repeat"):
+        attach_repair(ctx, {**repair, "additional_baselines": [LATE_BASE]})

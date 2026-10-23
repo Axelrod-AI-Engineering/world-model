@@ -134,6 +134,41 @@ def reconcile_at(bridge: list[dict], levels: dict[str, float], label: str) -> di
     return out
 
 
+# -- baselines -----------------------------------------------------------------------------------------------------------------------
+BASELINE_KEYS = ("baseline_id", "period", "available_at")
+
+
+def baselines_of(repair: dict) -> list[dict]:
+    """The repair data's dated baselines, the selected one first: `selected_baseline`, then the optional `latest_period_baseline` and
+    each of the optional `additional_baselines` (all the same shape: baseline_id, period, available_at). Ids are unique."""
+    out = [b for b in (repair.get("selected_baseline"), repair.get("latest_period_baseline"), *repair.get("additional_baselines", [])) if b]
+    for b in out:
+        lacking = [k for k in BASELINE_KEYS if k not in b]
+        if lacking:
+            raise ValueError(f"baseline {b.get('baseline_id', '?')} lacks {', '.join(lacking)}")
+    ids = [b["baseline_id"] for b in out]
+    if len(set(ids)) != len(ids):
+        raise ValueError("baseline ids repeat")
+    return out
+
+
+def in_baseline(o: dict, b: dict, primary: bool) -> bool:
+    """Whether an observation belongs to a baseline. The selected (primary) baseline owns the observations flagged `selected_baseline`.
+    Another baseline owns those that name it (`baseline_id`) or, when an observation names none and is not flagged, those whose
+    `available_at` and period end are the baseline's (its own figures, never a comparative column or an earlier period)."""
+    if primary:
+        return bool(o.get("selected_baseline"))
+    if o.get("baseline_id") is not None:
+        return o["baseline_id"] == b["baseline_id"]
+    return (not o.get("selected_baseline") and o.get("available_at") == b["available_at"]
+            and o.get("period", {}).get("end") == b["period"].get("end"))
+
+
+def levels_at(obs_all: list[dict], b: dict, primary: bool) -> dict[str, float]:
+    """The metric levels of one baseline's observations; no other baseline's observation enters."""
+    return {o["metric_id"]: o["value"] for o in obs_all if o.get("metric_id") and in_baseline(o, b, primary)}
+
+
 # -- the quarterly bridge --------------------------------------------------------------------------------------------------------------
 def build_bridge(spec: dict, obs: dict[str, dict], evidence_ids: set[str]) -> dict:
     """Each period's arithmetic and the year-on-year change by line, from the observations (¥tn, rounded display left to the reader)."""
@@ -276,6 +311,7 @@ def attach_repair(ctx: dict, repair: dict, days_dir: str | Path | None = None) -
     if len(obs) != len(obs_all):
         raise ValueError("observation ids repeat")
     base = repair.get("selected_baseline")
+    baselines = baselines_of(repair)
     version = ev["state_version"]
     as_of = ev["as_of"]
     sigs = _signals(days_dir)
@@ -390,22 +426,27 @@ def attach_repair(ctx: dict, repair: dict, days_dir: str | Path | None = None) -
                       "use": "calculations take the reported observation as the baseline; the estimate is shown beside it"})
 
     # 5. reconciliations: before (model state) and after (the selected baseline)
-    levels = {o["metric_id"]: o["value"] for o in obs_all if o.get("selected_baseline") and o.get("metric_id")}
     state_lv = {k: v["mean"] for k, v in values.items() if v.get("mean") is not None}
-    bridge_objs = [c for c in sup["financial_bridge"] if c["company_id"] == cid] if base else []
-    after = reconcile_at(bridge_objs, levels, f"{base['baseline_id']} ({base['period']['label']}, reported actuals)") if base else {}
+    bridge_objs = [c for c in sup["financial_bridge"] if c["company_id"] == cid] if baselines else []
+    # each baseline reconciles on its own levels; a composition takes the first baseline (the selected one first) that has every
+    # level it reads, else the selected one (blocked as before); observations of two baselines are never in one reconciliation
+    per_base = []
+    for bl in baselines:
+        lv = levels_at(obs_all, bl, bl is base)
+        per_base.append((bl, bl is base, lv, reconcile_at(bridge_objs, lv, f"{bl['baseline_id']} ({bl['period'].get('label')}, reported actuals)")))
     recons = []
     for c in bridge_objs:
         cidn = c["composition_id"]
         r = c.get("reconciliation")
-        if not r or cidn not in after:
+        if not r or cidn not in per_base[0][3]:
             continue
+        bc, primary, levels, after = next((x for x in per_base if not x[3][cidn]["blocked_by"]), per_base[0])
         a = after[cidn]
         c["reconciliation_at_model_state"] = r
         c["reconciliation"] = {k: a[k] for k in ("unit", "total", "total_level", "parts", "subtracted", "sum", "difference", "relative_difference",
                                                  "missing_levels", "tolerance", "status", "blocked_by")} | {
             "levels": a["levels"], "residual": r.get("residual"), "unit_mismatches": r.get("unit_mismatches", []),
-            "baseline_id": base["baseline_id"], "before_at_model_state": "reconciliation_at_model_state"}
+            "baseline_id": bc["baseline_id"], "before_at_model_state": "reconciliation_at_model_state"}
         attrib = []
         for p in [r["total"], *r["parts"]]:
             if p in levels and p in state_lv:
@@ -413,9 +454,9 @@ def attach_repair(ctx: dict, repair: dict, days_dir: str | Path | None = None) -
                                "baseline_level": levels[p], "state_minus_baseline": round(state_lv[p] - levels[p], 6),
                                "cause": ("moved by imported research: " + "; ".join(f"{s['day']} {s['item_id']} {s['type']} {s['value']}" for s in sigs[p]))
                                if sigs.get(p) else "construction prior (synthetic); the dated actual was not imported into the exported state",
-                               "source": next((_compact(o)["location"] for o in obs_all if o["metric_id"] == p and o.get("selected_baseline")), None)})
+                               "source": next((_compact(o)["location"] for o in obs_all if o["metric_id"] == p and in_baseline(o, bc, primary)), None)})
         recons.append({"reconciliation_id": f"RECON_{cidn.upper().replace('.', '_')}", "company_id": cid, "composition_id": cidn, "role": c["role"],
-                       "baseline_id": base["baseline_id"], "baseline_period": base["period"], "baseline_available_at": base["available_at"],
+                       "baseline_id": bc["baseline_id"], "baseline_period": bc["period"], "baseline_available_at": bc["available_at"],
                        "before": {"levels": "model state at the as-of date (posterior means)", **{k: r.get(k) for k in ("total_level", "sum", "difference", "relative_difference", "status")}},
                        "after": {k: a[k] for k in ("levels", "total_level", "sum", "difference", "relative_difference", "status", "blocked_by")},
                        "adjustments": attrib,
@@ -554,6 +595,7 @@ def attach_repair(ctx: dict, repair: dict, days_dir: str | Path | None = None) -
     ev["repair_version"] = repair["repair_version"]
     m["repair"] = {"repair_version": repair["repair_version"], "company_id": cid, "decision_date": repair.get("decision_date"), "instruction": repair.get("instruction"),
                    "as_of": as_of, "state_version": version, "selected_baseline": base["baseline_id"] if base else None,
+                   "additional_baselines": [x["baseline_id"] for x in baselines if x is not base],
                    "note": "Decision and as-of dates come from the instruction and the model state; the generation time above is not an observation date."}
     m["as_of"] = as_of
     m["decision_date"] = repair.get("decision_date", m.get("decision_date"))
