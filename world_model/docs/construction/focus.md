@@ -125,7 +125,9 @@ process-independence of the files.
 2. Run the checks above. A new link into another company's values goes automatically; a new group or thesis whose text
    names a removed company needs an override in `<client root>/scenarios/sally_focus/scenario.yaml`, and the report's
    `groups_dropped`, `theses_dropped`, and `mentions` say which.
-3. Run the export with a new date in the folder name, and zip it.
+3. Give the export a new number. Set `context_pack.file_index` in the focus scenario first, so the folder number and
+   the file names inside it match.
+4. Run the export with a new date in the folder name, and zip it.
 
 ### Repair data (Oct 19)
 

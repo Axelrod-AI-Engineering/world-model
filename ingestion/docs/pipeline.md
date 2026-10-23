@@ -184,6 +184,14 @@ uv run python ingestion/scripts/ingest_pack.py data/sources/<client>/<pack> --wo
 The lake's clock is fixed (`--clock`), so a rerun is identical; `--twice` runs the pack again into a second lake and exits
 nonzero if the two differ. The LLM step runs only if `WORLD_MODEL_LLM_PROVIDER` is already set.
 
+**Supplements.** Material that arrives after a pack (a new quarter, a subsidiary's statements, an industry pack) is a
+pack of its own: its own folder, a `MANIFEST.md` whose table lists each file with its entity, period, basis, audit
+state and SHA-256, and its own tenant in the same lake. Nothing is added to an earlier pack's folder, so each pack's
+digest stays reproducible. Hidden files (`._*`, `.DS_Store`) are never ingested; a copy made on a Mac uses
+`COPYFILE_DISABLE=1`. An archive is extracted with its UTF-8 names kept. A file type the parser does not read (an archive
+inside the pack, XML) is reported as `skipped`, with "unsupported file type", so whoever uses the pack reads it by
+hand and cites it by file location.
+
 ## Extraction: rules first, an LLM only where the rules are silent
 
 The rules read each sentence that names a value:

@@ -44,7 +44,7 @@ New to the repository? Read [the front door](../../docs/README.md) and [the arch
 | Pick the next refactor task | [design/migration.md](design/migration.md) |
 | Know why memory works like a mind, not a search index | [design/cognition.md](design/cognition.md) |
 | Know why we don't just use Cognee or Semantica | [design/frameworks.md](design/frameworks.md) |
-| Check a model is specific enough (rules R1–R17) | [design/specificity.md](design/specificity.md) |
+| Check a model is specific enough (rules R1–R21) | [design/specificity.md](design/specificity.md) |
 | Build a company's business construction | [construction/README.md](construction/README.md), then the company's page (local client content, not tracked) |
 | Read the math as built, and what is wrong with it | [ml/stack.md](ml/stack.md) |
 | See the plan to replace each heuristic (R0–R20) | [ml/roadmap.md](ml/roadmap.md) |
