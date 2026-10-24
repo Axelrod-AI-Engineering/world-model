@@ -102,7 +102,7 @@ export default defineRailway((ctx) => {
 // Production: the data service and its volume, and nothing else.
 function dataService() {
   const lake = volume("world-model-data-volume", {
-    sizeMB: 20000,
+    sizeMB: 5000,
     region: "us-west2",
     allowOnlineResize: true,
   });

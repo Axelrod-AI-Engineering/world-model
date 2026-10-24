@@ -20,6 +20,6 @@ COPY world_model/pyproject.toml ./world_model/pyproject.toml
 RUN uv sync --frozen --no-dev --no-editable --package axelrod-ingest --extra semantic --extra service
 # The embedding model (bge-small on ONNX, CPU) is fetched once at build, so a restart never downloads it, and it sits under
 # /tmp/models: this service is the only one that holds the weights, and they are a cache, not state to keep.
-ENV WORLD_MODEL_EMBED_CACHE=/tmp/models AXELROD_OCR_LANG=eng+chi_sim+chi_tra+kor
+ENV WORLD_MODEL_EMBED_CACHE=/tmp/models AXELROD_OCR_LANG=eng
 RUN python -c "from axelrod_ingest.lake.embed import FastEmbedder; FastEmbedder(cache_dir='/tmp/models')"
 CMD ["axelrod-ingest"]

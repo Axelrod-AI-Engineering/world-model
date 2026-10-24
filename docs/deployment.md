@@ -84,7 +84,7 @@ The OCR page cache used to sit under the lake directory (`WORLD_MODEL_LAKE_DIR/o
 | ingestion | `WORLD_MODEL_LAKE_URL`, `WORLD_MODEL_LAKE_TOKEN` | The data service's URL and token |
 | ingestion | `WORLD_MODEL_EMBEDDER` | `fastembed`, `hashing`, or `auto`. Set only here: the ingestion service is the only embedder, so there is nothing to match in the world model |
 | ingestion | `WORLD_MODEL_LLM_PROVIDER`, `WORLD_MODEL_LLM_MODEL`, `ANTHROPIC_API_KEY` | The optional LLM step |
-| ingestion | `AXELROD_OCR_CACHE`, `AXELROD_OCR_LANG` | OCR cache folder (default in temporary storage) and languages (the image sets `eng+chi_sim+chi_tra+kor`) |
+| ingestion | `AXELROD_OCR_CACHE`, `AXELROD_OCR_LANG` | OCR cache folder (default in temporary storage) and languages (the image sets `eng`, as the existing lake was read; the Chinese and Korean data are installed, so `eng+chi_sim+chi_tra+kor` is one variable away) |
 | world-model | `WORLD_MODEL_LAKE_URL`, `WORLD_MODEL_LAKE_TOKEN` | When set, the lake is the data service. Unset: the in-process SQLite lake in `WORLD_MODEL_LAKE_DIR` |
 | world-model | `WORLD_MODEL_INGEST_URL`, `WORLD_MODEL_INGEST_TOKEN` | When set, uploads and query embedding go to the ingestion service. Needs the lake variables too, or the process refuses to start (the ingestion service writes to the data service, so the model must read it there). Unset: the in-process pipeline |
 
