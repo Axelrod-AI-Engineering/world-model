@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import sqlite3
 import threading
@@ -86,6 +87,7 @@ CREATE TABLE IF NOT EXISTS llm_cache (
 
 WORD = re.compile(r"[\w][\w'.&-]*", re.UNICODE)
 EXT = re.compile(r"[^a-z0-9]+")
+DOC_ID = re.compile(r"[0-9a-f]{24}")        # a content id (store.content_id): the only name a raw file may have
 
 
 def _iso(t: datetime | None) -> str | None:
@@ -129,7 +131,14 @@ class SQLiteLake(LakeStore):
         safe_tenant = EXT.sub("_", tenant.lower()).strip("_") or "default"
         if safe_tenant != tenant:                 # keep sanitized names apart: "Acme" and "acme" are two silos
             safe_tenant += "-" + hashlib.sha256(tenant.encode()).hexdigest()[:8]
-        return self.root / safe_tenant / "raw" / f"{doc.id}{'.' + ext if ext else ''}"
+        # a document id names a file, so it must be a content id; a remote caller could send anything else ("../x")
+        if not DOC_ID.fullmatch(doc.id):
+            raise ValueError(f"not a content id: {doc.id!r}")
+        root = os.path.realpath(self.root)
+        path = os.path.realpath(os.path.join(root, safe_tenant, "raw", f"{doc.id}{'.' + ext if ext else ''}"))
+        if not path.startswith(root + os.sep):
+            raise ValueError(f"not a content id: {doc.id!r}")
+        return Path(path)
 
     # -- documents --------------------------------------------------------------------------------------------
     def _doc(self, row: tuple) -> Document:

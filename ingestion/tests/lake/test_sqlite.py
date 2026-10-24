@@ -34,11 +34,36 @@ def test_put_document_stores_once_per_content(lake):
     doc = make_doc(data, title="first")
     stored, new = lake.put_document(doc, data)
     assert new and stored == doc
-    again, new2 = lake.put_document(make_doc(data, title="second"), b"other bytes")
+    again, new2 = lake.put_document(make_doc(data, title="second"), data)
     assert not new2 and again.title == "first"
     assert lake.raw_bytes("acme", doc.id) == data                    # the raw file was written once
     assert lake.get_document("acme", doc.id) == doc
     assert lake.stats("acme")["documents"] == 1
+
+
+def test_a_raw_file_is_named_only_by_a_content_id(local_lake, tmp_path):
+    doc = make_doc(b"x").model_copy(update={"id": "../../escaped"})
+    with pytest.raises(ValueError, match="not a content id"):
+        local_lake.put_document(doc, b"x")
+    outside = tmp_path / "outside"                                     # a raw folder linked out of the lake
+    outside.mkdir()
+    (local_lake.root / "acme").mkdir()
+    (local_lake.root / "acme" / "raw").symlink_to(outside)
+    with pytest.raises(ValueError, match="not a content id"):
+        local_lake.put_document(make_doc(b"y"), b"y")
+    assert list(outside.iterdir()) == []
+
+
+def test_the_data_service_refuses_a_document_whose_id_is_not_its_bytes(lake):
+    data = b"Acme Bank"
+    forged = make_doc(data).model_copy(update={"id": "0" * 24})
+    if type(lake).__name__ == "RemoteLake":
+        with pytest.raises(ValueError, match="id and sha256 must be those of its bytes"):
+            lake.put_document(forged, data)
+        with pytest.raises(ValueError, match="id and sha256"):
+            lake.put_document(make_doc(data).model_copy(update={"sha256": "0" * 64}), data)
+    else:                                                               # in process the caller is trusted
+        assert lake.put_document(forged, data)[1] is True
 
 
 def test_documents_round_trip_every_field(lake):

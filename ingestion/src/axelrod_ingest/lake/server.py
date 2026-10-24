@@ -20,6 +20,7 @@ record" from "no such route".
 from __future__ import annotations
 
 import base64
+import hashlib
 import hmac
 import os
 from array import array
@@ -44,6 +45,7 @@ from axelrod_ingest.lake.store import (
     LakeStore,
     Mention,
     WorldModelRecord,
+    content_id,
 )
 
 PROBLEM_BASE = "https://docs.axelrod.ai/problems/"
@@ -174,7 +176,10 @@ def create_lake_app(store: LakeStore, token: str) -> FastAPI:
     # -- documents --------------------------------------------------------------------------------------------
     @r.post("/documents")
     def put_document(document: str = Form(...), data: UploadFile = File(...)) -> dict:
-        doc, new = store.put_document(Document.model_validate_json(document), data.file.read())
+        doc, blob = Document.model_validate_json(document), data.file.read()
+        if doc.id != content_id(blob) or doc.sha256 != hashlib.sha256(blob).hexdigest():
+            raise ValueError("the document's id and sha256 must be those of its bytes")   # ids name files: never trust one
+        doc, new = store.put_document(doc, blob)
         return {"document": doc.model_dump(mode="json"), "new": new}
 
     @r.get("/documents/{doc_id}")
