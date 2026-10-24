@@ -19,6 +19,7 @@ prefix, meaning, and graph. It is the workspace member `ingestion/` (distributio
 | I want to… | Go to |
 |---|---|
 | Follow a file from upload to bundle: the steps, the two times, typing, OCR, Chinese and Korean text, the yen sign, duplicates, packs, the rules, determinism | [pipeline.md](pipeline.md) |
+| See how each stage is implemented: the method (rules, learned model, workflow), its parameters, its module, and why it repeats | [implementation.md](implementation.md) |
 | Know where everything is kept, and how search works | [lake.md](lake.md) |
 | Know what ingestion exchanges with the world model: the bundle format and the world view | [contract.md](contract.md) |
 | Measure speed and extraction against a gold set | [bench.md](bench.md) |
