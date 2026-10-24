@@ -205,6 +205,11 @@ class LakeStore(ABC):
     @abstractmethod
     def embeddings(self, tenant: str, model: str) -> list[tuple[str, int, list[float]]]: ...
 
+    @abstractmethod
+    def nearest(self, tenant: str, model: str, query: list[float], limit: int = 20) -> list[tuple[float, str, int]]:
+        """The chunks whose embeddings are closest to `query` by cosine similarity, exactly (every chunk is scored):
+        (score rounded to 6 decimals, doc id, ordinal), best first, ties by document then position."""
+
     # -- search -----------------------------------------------------------------------------------------------
     @abstractmethod
     def keyword_search(self, tenant: str, query: str, *, prefix: bool = False, limit: int = 20) -> list[Hit]: ...

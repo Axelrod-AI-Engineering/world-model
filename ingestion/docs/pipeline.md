@@ -266,5 +266,6 @@ The work in order of priority, and what is built downstream of ingestion, is in 
   links leave more than one value with the stated sign.
 - **Names the model does not know** are not proposed as new entities. Recognition is against the model's own names,
   which keeps extraction exact. New entities are added to the taxonomy deliberately.
-- **Scale.** Semantic search compares vectors in Python, which is fine for thousands of chunks. Beyond that, the
-  `LakeStore` interface is where an ANN index (sqlite-vec, pgvector) would go.
+- **Scale.** Semantic search is exact: one NumPy matrix product over a tenant's vectors, held in memory until they
+  change or another connection commits (`PRAGMA data_version`). That is fine up to hundreds of thousands of chunks.
+  Beyond that, the `LakeStore` interface is where an ANN index (sqlite-vec, pgvector) would go.

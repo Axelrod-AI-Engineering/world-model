@@ -212,6 +212,47 @@ def test_embeddings_round_trip_as_float32_and_are_replaced(lake):
     assert lake.embeddings("bravo", "m") == []
 
 
+
+def python_ranking(lake, tenant, model, q, limit):
+    """The ranking the matrix search replaced: cosine in Python over every vector, rounded, ties by doc and position."""
+    from axelrod_ingest.lake.embed import cosine
+    return sorted(((round(cosine(q, v), 6), d, o) for d, o, v in lake.embeddings(tenant, model)),
+                  key=lambda x: (-x[0], x[1], x[2]))[:limit]
+
+
+def test_nearest_matches_the_python_ranking_exactly(lake):
+    import random
+    rng = random.Random(7)
+    for d in ("d3", "d1", "d2"):
+        lake.put_embeddings("acme", d, "m", [[round(rng.uniform(-1, 1), 4) for _ in range(16)] for _ in range(40)])
+    lake.put_embeddings("acme", "d4", "m", [[0.0] * 16, [1.0] + [0.0] * 15, [1.0] + [0.0] * 15])  # a zero row and a tie
+    for q in ([rng.uniform(-1, 1) for _ in range(16)], [1.0] + [0.0] * 15, [0.0] * 16):
+        assert lake.nearest("acme", "m", q, 25) == python_ranking(lake, "acme", "m", q, 25)
+    assert lake.nearest("acme", "m", [1.0] + [0.0] * 15, 2)[0][1:] == ("d4", 1)      # equal scores: by doc, then position
+    assert lake.nearest("bravo", "m", [1.0], 5) == [] and lake.nearest("acme", "none", [1.0], 5) == []
+
+
+def test_nearest_sees_its_own_writes_and_deletes(lake):
+    doc = add_doc(lake, b"one", ["Acme"])
+    lake.put_embeddings("acme", doc.id, "m", [[1.0, 0.0]])
+    assert [d for _s, d, _o in lake.nearest("acme", "m", [1.0, 0.0])] == [doc.id]
+    lake.put_embeddings("acme", "zz", "m", [[1.0, 0.0]])                 # held vectors are dropped on a write
+    assert [d for _s, d, _o in lake.nearest("acme", "m", [1.0, 0.0])] == [doc.id, "zz"]
+    lake.put_embeddings("bravo", "d9", "m", [[1.0, 0.0]])                # another tenant's write leaves acme's alone
+    assert [d for _s, d, _o in lake.nearest("acme", "m", [1.0, 0.0])] == [doc.id, "zz"]
+    assert lake.delete_document("acme", "missing") is False
+    assert lake.delete_document("acme", doc.id) is True                  # and on a delete
+    assert [d for _s, d, _o in lake.nearest("acme", "m", [1.0, 0.0])] == ["zz"]
+
+
+def test_nearest_sees_another_connections_commit(tmp_path):
+    a, b = SQLiteLake(tmp_path), SQLiteLake(tmp_path)                 # two processes sharing one lake file
+    a.put_embeddings("acme", "d1", "m", [[1.0, 0.0]])
+    assert len(b.nearest("acme", "m", [1.0, 0.0])) == 1                 # b builds its matrix
+    a.put_embeddings("acme", "d2", "m", [[0.0, 1.0]])                   # a commits; b's data_version moves
+    assert [d for _s, d, _o in b.nearest("acme", "m", [0.0, 1.0])] == ["d2", "d1"]
+
+
 # -- keyword search -------------------------------------------------------------------------------------------------
 
 def test_fts_query_quotes_every_word():

@@ -2,7 +2,8 @@
 
 Keyword search uses SQLite's FTS5 with Porter stemming; prefix search a second, unstemmed FTS5 index (a stemmed index
 holds "oper" for "operating", so the prefix "opera" would miss it); embeddings are stored as float32 blobs
-and compared in Python. A lock serializes writers, so the API's worker threads can share one store. Every query has
+and compared exactly, as one matrix product per query over a tenant's vectors (NumPy), held in memory until that
+tenant's embeddings change or another connection commits to the file (`PRAGMA data_version`). A lock serializes writers, so the API's worker threads can share one store. Every query has
 an explicit ORDER BY, so reads are deterministic.
 """
 
@@ -17,6 +18,8 @@ from array import array
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+
+import numpy as np
 
 from axelrod_ingest.lake.store import (
     AuditRecord,
@@ -116,6 +119,9 @@ class SQLiteLake(LakeStore):
         self.db.execute("PRAGMA foreign_keys=ON")
         self.db.executescript(SCHEMA)
         self.db.commit()
+        # (tenant, model) -> (doc ids, ordinals, unit-length float64 rows); valid while data_version is unchanged
+        self._vectors: dict[tuple[str, str], tuple[list[str], list[int], np.ndarray]] = {}
+        self._version = self._data_version()
 
     # -- files ------------------------------------------------------------------------------------------------
     def _raw_path(self, tenant: str, doc: Document) -> Path:
@@ -193,6 +199,7 @@ class SQLiteLake(LakeStore):
                 return False
             for table in ("texts", "chunks", "mentions", "embeddings"):
                 self.db.execute(f"DELETE FROM {table} WHERE tenant=? AND doc_id=?", (tenant, doc_id))
+            self._forget(tenant)
             for fts in ("chunks_fts", "chunks_prefix"):
                 self.db.execute(f"DELETE FROM {fts} WHERE tenant=? AND doc_id=?", (tenant, doc_id))
             self.db.execute("DELETE FROM documents WHERE tenant=? AND id=?", (tenant, doc_id))
@@ -257,6 +264,7 @@ class SQLiteLake(LakeStore):
             self.db.executemany("INSERT INTO embeddings VALUES (?,?,?,?,?)", [
                 (tenant, doc_id, k, model, array("f", v).tobytes()) for k, v in enumerate(vectors)])
             self.db.commit()
+            self._forget(tenant)
 
     def embeddings(self, tenant: str, model: str) -> list[tuple[str, int, list[float]]]:
         with self.lock:
@@ -268,6 +276,41 @@ class SQLiteLake(LakeStore):
             a.frombytes(blob)
             out.append((doc_id, ord_, a.tolist()))
         return out
+
+    def nearest(self, tenant: str, model: str, query: list[float], limit: int = 20) -> list[tuple[float, str, int]]:
+        with self.lock:
+            docs, ords, rows = self._matrix(tenant, model)
+        if not docs:
+            return []
+        q = np.asarray(query, dtype=np.float64)
+        q = q / (float(np.linalg.norm(q)) or 1.0)
+        scores = np.round(rows @ q, 6)
+        # rows are in (doc, ordinal) order, so a stable sort on the score alone breaks ties by document then position
+        top = np.argsort(-scores, kind="stable")[:limit]
+        return [(float(scores[i]), docs[i], ords[i]) for i in top]
+
+    def _data_version(self) -> int:
+        return self.db.execute("PRAGMA data_version").fetchone()[0]
+
+    def _forget(self, tenant: str) -> None:
+        for key in [k for k in self._vectors if k[0] == tenant]:
+            del self._vectors[key]
+
+    def _matrix(self, tenant: str, model: str) -> tuple[list[str], list[int], np.ndarray]:
+        """A tenant's vectors as unit-length rows, built once and reused until they change (called under the lock)."""
+        version = self._data_version()
+        if version != self._version:          # another connection committed: anything held may be stale
+            self._vectors.clear()
+            self._version = version
+        if (tenant, model) not in self._vectors:
+            rows = self.db.execute("SELECT doc_id, ord, vec FROM embeddings WHERE tenant=? AND model=? "
+                                   "ORDER BY doc_id, ord", (tenant, model)).fetchall()
+            m = (np.vstack([np.frombuffer(b, dtype=np.float32) for _d, _o, b in rows]).astype(np.float64)
+                 if rows else np.zeros((0, 0)))
+            norms = np.linalg.norm(m, axis=1, keepdims=True) if rows else m
+            self._vectors[(tenant, model)] = ([d for d, _o, _b in rows], [o for _d, o, _b in rows],
+                                              m / np.where(norms == 0, 1.0, norms) if rows else m)
+        return self._vectors[(tenant, model)]
 
     # -- search -----------------------------------------------------------------------------------------------
     def keyword_search(self, tenant: str, query: str, *, prefix: bool = False, limit: int = 20) -> list[Hit]:
