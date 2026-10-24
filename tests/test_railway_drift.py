@@ -33,7 +33,7 @@ def test_clean_and_known_persistence_gaps():
     }]))
 
 
-def test_each_environment_owns_its_own_services():
+def test_dev_owns_all_three_services():
     gap = ['deploy.sleepApplication (null → false)']
 
     def update(name):
@@ -41,11 +41,9 @@ def test_each_environment_owns_its_own_services():
                 "details": list(gap)}
 
     _module.verify(plan([update("world-model-ingestion")]))
-    _module.verify(plan([update("world-model-data")], "production"))
+    _module.verify(plan([update("world-model-data")]))
     with pytest.raises(ValueError):
-        _module.verify(plan([update("world-model-data")]))
-    with pytest.raises(ValueError):
-        _module.verify(plan([update("world-model")], "production"))
+        _module.verify(plan([update("world-model-data")], "production"))
 
 
 @pytest.mark.parametrize("change", [

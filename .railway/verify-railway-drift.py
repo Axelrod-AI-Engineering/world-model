@@ -1,18 +1,18 @@
 """Reject drift outside the two documented Railway persistence gaps (the service source is declared in IaC).
 
-Each environment owns its own services: dev the world model and the ingestion service, production the data service."""
+All three services live in dev: the world model, the ingestion service, and the data service."""
 
 import json
 import sys
 
-SERVICES = {"dev": ("world-model", "world-model-ingestion"), "production": ("world-model-data",)}
+SERVICES = {"dev": ("world-model", "world-model-ingestion", "world-model-data")}
 
 
 def verify(plan):
     target = plan.get("currentEnvironment", {})
     services = SERVICES.get(target.get("environmentName"))
     if not plan.get("ok") or target.get("projectId") != "ee19a1df-2ce5-4193-932a-6139f034bbce" or services is None:
-        raise ValueError("Expected a successful Axelrod dev or production plan")
+        raise ValueError("Expected a successful Axelrod dev plan")
     allowed = {
         'deploy.restartPolicyType (null → "ON_FAILURE")',
         'deploy.sleepApplication (null → false)',

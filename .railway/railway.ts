@@ -3,19 +3,17 @@ import { defineRailway, github, preserve, project, service, volume } from "railw
 // This repository owns only its own services in the shared Axelrod project (docs/deployment.md#three-services):
 //   world-model            the model API and UI                      dev only
 //   world-model-ingestion  parsing, embedding, extraction            dev only
-//   world-model-data       the lakehouse: SQLite file and raw files  production only
-// Dev, staging, and prod all reach the one data service through its public URL and token, with organizations as tenants,
-// so the data lives in one place and no environment holds a copy of it.
+//   world-model-data       the lakehouse: SQLite file and raw files  dev only
+// The other two reach the data service on the private network with its token, with organizations as tenants, so the data
+// lives in one place and no service holds a copy of it. Staging and production have no lake yet (Oct 24).
 export const partial = "world-model";
 
 const repo = github("Axelrod-AI-Engineering/world-model", { branch: "main", rootDirectory: ".", checkSuites: false });
 
 export default defineRailway((ctx) => {
-  // The guard, by environment. The data service is the only resource allowed in production: it is where the one lake
-  // lives, and the world model and ingestion never run there (they stay dev-only until they are authorized elsewhere).
-  if (ctx.environment === "production") return dataService();
+  // The guard: everything is dev-only until it is authorized elsewhere.
   if (ctx.environment !== "dev") {
-    throw new Error("World Model infrastructure is authorized only for dev, and the data service for production.");
+    throw new Error("World Model infrastructure is authorized only for dev.");
   }
   const storage = volume("world-model-volume", {
     sizeMB: 5000,
@@ -57,8 +55,8 @@ export default defineRailway((ctx) => {
       // owners, compartments) are checked in at configs/world_model.dev.toml (world_model/src/axelrod_wm/settings.py).
       WORLD_MODEL_API_KEYS: preserve(),
       // the data and ingestion services (set in Railway only; with the URLs unset this process runs the lake and the
-      // pipeline in process, as before). The lake is the production data service's public URL; ingestion is reached on
-      // the private network (world-model-ingestion.railway.internal) and needs the lake too.
+      // pipeline in process, as before). Both are on the private network (world-model-data.railway.internal and
+      // world-model-ingestion.railway.internal); ingestion needs the lake too.
       WORLD_MODEL_LAKE_URL: preserve(),
       WORLD_MODEL_LAKE_TOKEN: preserve(),
       WORLD_MODEL_INGEST_URL: preserve(),
@@ -87,7 +85,7 @@ export default defineRailway((ctx) => {
     variables: {
       PORT: "8080",
       INGEST_TOKEN: preserve(),
-      // the data service (public URL, production) and its token
+      // the data service (private network) and its token
       WORLD_MODEL_LAKE_URL: preserve(),
       WORLD_MODEL_LAKE_TOKEN: preserve(),
       // the optional LLM step (ingestion/docs/pipeline.md): provider, model, and key, when it is switched on
@@ -96,10 +94,11 @@ export default defineRailway((ctx) => {
       ANTHROPIC_API_KEY: preserve(),
     },
   });
-  return project("Axelrod", { resources: [storage, app, ingestion] });
+  const [lake, data] = dataService();
+  return project("Axelrod", { resources: [storage, app, ingestion, lake, data] });
 });
 
-// Production: the data service and its volume, and nothing else.
+// The data service and its volume.
 function dataService() {
   const lake = volume("world-model-data-volume", {
     sizeMB: 5000,
@@ -125,11 +124,8 @@ function dataService() {
       LAKE_DIR: "/data/lake",
       LAKE_TOKEN: preserve(),
     },
-    // dev, staging, and prod reach it here, with the token
-    networking: {
-      serviceDomains: { "world-model-data.up.railway.app": { port: 8080 } },
-    },
+    // Private network only, no public domain: the world model and ingestion reach it with the token.
     volumeMounts: { "/data": lake },
   });
-  return project("Axelrod", { resources: [lake, data] });
+  return [lake, data] as const;
 }

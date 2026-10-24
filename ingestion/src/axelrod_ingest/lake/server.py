@@ -1,7 +1,7 @@
 """The data service (Oct 24): the lakehouse behind HTTP, so one process owns the SQLite file.
 
 The world model and the ingestion service each reach the lake through `RemoteLake` (lake/remote.py), which calls these
-routes; dev, staging, and production all read and write one lake through its public URL, with organizations as tenants.
+routes on the private network, and both read and write one lake, with organizations as tenants.
 There is one route per `LakeStore` method under `/v1/lake`. Records travel as the pydantic records of lake/store.py in JSON;
 raw files travel as binary (a multipart file part going up, an octet-stream coming down), embedding vectors as float32
 bytes (the same bytes the store keeps), and `nearest` runs here, against the cached matrix, so no vector crosses the

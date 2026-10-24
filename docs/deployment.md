@@ -46,7 +46,7 @@ The deployment is three Railway services. Each kind of data has one home, and no
 |---|---|---|---|---|
 | `world-model` (dev) | `axelrod_wm` | `Dockerfile` | Volume at `/app/var`: client worlds, scenarios, model caches | The model API and UI. Sends uploads to ingestion; reads the lake and searches it through the data service |
 | `world-model-ingestion` (dev) | `axelrod_ingest.service` (`axelrod-ingest`) | `ingestion/Dockerfile` | None | Parses, chunks, embeds, recognizes, extracts, and bundles. The only embedder. Reads and writes the lake through the data service |
-| `world-model-data` (production) | `axelrod_ingest.lake.server` (`axelrod-lake`) | `ingestion/Dockerfile.lake` | Volume at `/data`: `lake/lake.sqlite3` and the raw files | The only process that opens the SQLite file. Serves every `LakeStore` method over HTTP, including `nearest`, the cached matrix search |
+| `world-model-data` (dev) | `axelrod_ingest.lake.server` (`axelrod-lake`) | `ingestion/Dockerfile.lake` | Volume at `/data`: `lake/lake.sqlite3` and the raw files | The only process that opens the SQLite file. Serves every `LakeStore` method over HTTP, including `nearest`, the cached matrix search |
 
 ```text
 browser / API client ──▶ world-model ──upload, process, embed (query)──▶ world-model-ingestion
@@ -90,9 +90,9 @@ The OCR page cache used to sit under the lake directory (`WORLD_MODEL_LAKE_DIR/o
 
 Remote mode is opt-in: with none of these set, everything runs in process as it always has. `Dockerfile` keeps the `semantic` extra for that local mode; a remote-mode deployment never loads it. `/api/health` reports `services.lake` and `services.ingestion` as `local`, or `remote` with whether the service answers (never the address or the token). An unreachable service does not fail the health check, so a data outage does not restart the world model.
 
-### Across environments
+### Network and environments
 
-The data service runs in `production` only. Dev and staging reach it through its public URL (`https://world-model-data.up.railway.app`) with `WORLD_MODEL_LAKE_URL` and the token, so there is one lake, with organizations as tenants. Anything that can reach the URL and hold the token can read and write every tenant, so treat `LAKE_TOKEN` as the lake's root credential: set it in Railway only, rotate it by changing it on all three services together, and never put it in the repository.
+All three services run in `dev` (Oct 24). The data service has no public domain: the world model and ingestion reach it on Railway's private network (`WORLD_MODEL_LAKE_URL=http://world-model-data.railway.internal:8080`) with the token, so there is one lake, with organizations as tenants. Anything that holds the token on that network can read and write every tenant, so treat `LAKE_TOKEN` as the lake's root credential: set it in Railway only, rotate it on all three services together, and never put it in the repository. Staging and production have no lake yet. Because Railway volumes and private networks are per environment, serving them later means either giving the data service a public domain they call with the token, or a data service of their own.
 
 ### Config files and redeploys
 
@@ -107,7 +107,7 @@ Each service reads its own config file, set as its Railway config-as-code path: 
 
 ## Ownership in the shared project
 
-The service lives in the shared Axelrod Railway project. This repository owns `world-model` and `world-model-ingestion` with `world-model-volume` in `dev`, and `world-model-data` with `world-model-data-volume` in `production`, through the named IaC partial `world-model`. The configuration throws for any other environment, and in production it declares the data service and nothing else: the world model and ingestion stay dev-only, and the data service is the one resource that must not live in dev, because dev, staging, and prod all read it. The drift verifier knows each environment's services. Other services and their secrets stay outside the partial. See [Railway multi-repo ownership](https://docs.railway.com/infrastructure-as-code#multi-repo-projects).
+The service lives in the shared Axelrod Railway project. This repository owns `world-model`, `world-model-ingestion` and `world-model-data`, with `world-model-volume` and `world-model-data-volume`, all in `dev`, through the named IaC partial `world-model`. The configuration throws for any other environment, and the drift verifier accepts only these three services. Other services and their secrets stay outside the partial. See [Railway multi-repo ownership](https://docs.railway.com/infrastructure-as-code#multi-repo-projects).
 
 Railway requires every IaC repository that targets an environment with named partials to export a partial. Axelrod/core still uses whole-project IaC. Before Core's next `dev` plan or apply, Core must move to its own named partial, with a CLI that supports partials, and claim only its resources. **Do not apply Core's older whole-project plan against `dev`:** it can propose deleting services owned by other repositories. This repository does not edit Core.
 
