@@ -71,7 +71,8 @@ export default defineRailway((ctx) => {
     root: ".",
     source: repo,
     // Stateless: no volume. File bytes are held in memory while a document is processed, and the OCR page cache and the
-    // embedding weights are in temporary storage. Private network only: no public domain.
+    // embedding weights are in temporary storage. The world model calls it on the private network; the public domain
+    // is for the ingestion console (ingestion/docs/console.md), whose every JSON call needs INGEST_TOKEN.
     build: { builder: "DOCKERFILE", dockerfilePath: "ingestion/Dockerfile" },
     deploy: {
       healthcheckPath: "/health",
@@ -92,6 +93,9 @@ export default defineRailway((ctx) => {
       WORLD_MODEL_LLM_PROVIDER: preserve(),
       WORLD_MODEL_LLM_MODEL: preserve(),
       ANTHROPIC_API_KEY: preserve(),
+    },
+    networking: {
+      serviceDomains: { "world-model-ingestion-dev.up.railway.app": { port: 8080 } },
     },
   });
   const [lake, data] = dataService();

@@ -13,12 +13,14 @@ bytes to disk (a document is held in memory while it is processed) and keeps its
     POST /v1/process   JSON: tenant, doc_id, world_view, inverted (a stored document read again)
     POST /v1/embed     JSON: texts; answers name, dim, and the vectors as exact JSON floats (no texts: just name and dim)
     GET  /health
+    GET  / and /ui     the console (console.py, docs/console.md): a debugging page and its /v1 routes, same bearer token
 
 Every route but /health needs `Authorization: Bearer <INGEST_TOKEN>`; failures are RFC 9457 problems (a `KeyError` is a
 404, a `ValueError` a 422), like the data service's.
 
     INGEST_TOKEN   the shared secret (required)
     PORT           the port (default 8000)
+    INGEST_MAX_BYTES   the largest file taken (default 100 MB)
     WORLD_MODEL_LAKE_URL / WORLD_MODEL_LAKE_TOKEN   the data service (else a local lake in WORLD_MODEL_LAKE_DIR)
     WORLD_MODEL_EMBEDDER, WORLD_MODEL_LLM_PROVIDER, ...   as everywhere
 """
@@ -38,6 +40,7 @@ from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, ConfigDict
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from axelrod_ingest.console import mount_console
 from axelrod_ingest.contract.world_view import WorldView
 from axelrod_ingest.lake.embed import Embedder
 from axelrod_ingest.lake.server import Problem, problem
@@ -45,6 +48,8 @@ from axelrod_ingest.lake.store import LakeStore, canonical_json
 from axelrod_ingest.llm import Provider
 from axelrod_ingest.ocr import Ocr
 from axelrod_ingest.pipeline import Ingestor
+
+MAX_BYTES = 100 * 1024 * 1024        # the largest file /v1/ingest and the console's dry run take (INGEST_MAX_BYTES)
 
 
 class IngestMeta(BaseModel):
@@ -76,7 +81,7 @@ class ProcessBody(BaseModel):
 
 
 def create_ingest_app(store: LakeStore, embedder: Embedder, provider: Provider | None, ocr: Ocr | None, token: str,
-                      **ingestor: Any) -> FastAPI:
+                      max_bytes: int = MAX_BYTES, **ingestor: Any) -> FastAPI:
     """The ingestion service over `store`. `ingestor` passes the rest of `Ingestor`'s options (clock, screen, ...)."""
     if not token:
         raise ValueError("an ingestion token is required")
@@ -123,8 +128,11 @@ def create_ingest_app(store: LakeStore, embedder: Embedder, provider: Provider |
         m = IngestMeta.model_validate_json(meta)
         graph = WorldView.from_json(world_view.file.read().decode())
         extra = {k: v for k, v in m.model_dump().items() if k not in ("tenant", "inverted")}
-        results = ingestor_for(m.inverted).ingest_many(
-            m.tenant, [(f.file.read(), f.filename or "upload.bin") for f in files], graph, **extra)
+        blobs = [(f.file.read(), f.filename or "upload.bin") for f in files]
+        for blob, name in blobs:
+            if len(blob) > max_bytes:
+                raise Problem(413, f"{name} is {len(blob)} bytes; the limit is {max_bytes}")
+        results = ingestor_for(m.inverted).ingest_many(m.tenant, blobs, graph, **extra)
         return _json({"results": [r.to_dict() for r in results]})
 
     @app.post("/v1/process", dependencies=[Depends(authorize)])
@@ -136,6 +144,7 @@ def create_ingest_app(store: LakeStore, embedder: Embedder, provider: Provider |
     def embed(body: EmbedBody) -> dict:
         return {"name": embedder.name, "dim": embedder.dim, "vectors": embedder.embed(body.texts) if body.texts else []}
 
+    mount_console(app, store=store, embedder=embedder, ocr=ocr, authorize=authorize, max_bytes=max_bytes, **ingestor)
     return app
 
 
@@ -158,7 +167,8 @@ def main() -> None:
     # OCR's page cache is a cache keyed by content, so it lives in temporary storage, not on any volume
     env = {**os.environ}
     env.setdefault("AXELROD_OCR_CACHE", str(Path(tempfile.gettempdir()) / "axelrod-ocr"))
-    app = create_ingest_app(lake_from_env(env), LazyEmbedder(env), provider_from_env(env), ocr_from_env(env), token)
+    app = create_ingest_app(lake_from_env(env), LazyEmbedder(env), provider_from_env(env), ocr_from_env(env), token,
+                            max_bytes=int(env.get("INGEST_MAX_BYTES") or MAX_BYTES))
     uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT") or 8000))
 
 

@@ -176,6 +176,14 @@ def test_delete_document_removes_everything_it_owns(local_lake):
     assert lake.delete_document("acme", doc.id) is False
 
 
+def test_tenants_are_the_sorted_names_that_hold_a_document(lake):
+    assert lake.tenants() == []
+    add_doc(lake, b"one", ["a"], tenant="zeta")
+    add_doc(lake, b"two", ["b"], tenant="acme")
+    add_doc(lake, b"three", ["c"], tenant="acme")
+    assert lake.tenants() == ["acme", "zeta"]
+
+
 def test_delete_document_tolerates_a_missing_raw_file(local_lake):
     lake = local_lake      # reaches into the SQLite files, so it runs on the local store only
     data = b"gone"

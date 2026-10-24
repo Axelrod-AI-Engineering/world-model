@@ -472,6 +472,10 @@ class SQLiteLake(LakeStore):
                 out[key] = int(self.db.execute(f"SELECT COUNT(*) FROM {table} WHERE tenant=?", (tenant,)).fetchone()[0])
         return out
 
+    def tenants(self) -> list[str]:
+        with self.lock:
+            return [r[0] for r in self.db.execute("SELECT DISTINCT tenant FROM documents ORDER BY tenant").fetchall()]
+
     def close(self) -> None:
         with self.lock:
             self.db.close()

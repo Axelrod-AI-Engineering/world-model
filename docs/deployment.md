@@ -45,8 +45,10 @@ The deployment is three Railway services. Each kind of data has one home, and no
 | Service | Code | Image | State | Role |
 |---|---|---|---|---|
 | `world-model` (dev) | `axelrod_wm` | `Dockerfile` | Volume at `/app/var`: client worlds, scenarios, model caches | The model API and UI. Sends uploads to ingestion; reads the lake and searches it through the data service |
-| `world-model-ingestion` (dev) | `axelrod_ingest.service` (`axelrod-ingest`) | `ingestion/Dockerfile` | None | Parses, chunks, embeds, recognizes, extracts, and bundles. The only embedder. Reads and writes the lake through the data service |
+| `world-model-ingestion` (dev) | `axelrod_ingest.service` (`axelrod-ingest`) | `ingestion/Dockerfile` | None | Parses, chunks, embeds, recognizes, extracts, and bundles. The only embedder. Reads and writes the lake through the data service. Serves the [ingestion console](../ingestion/docs/console.md) at `/` |
 | `world-model-data` (dev) | `axelrod_ingest.lake.server` (`axelrod-lake`) | `ingestion/Dockerfile.lake` | Volume at `/data`: `lake/lake.sqlite3` and the raw files | The only process that opens the SQLite file. Serves every `LakeStore` method over HTTP, including `nearest`, the cached matrix search |
+
+The dev ingestion service gets a public domain so the console can be opened in a browser. The page is static and open; every JSON call needs `INGEST_TOKEN`, which the console asks for and keeps in the tab's `sessionStorage`. `INGEST_MAX_BYTES` (default 100 MB) caps an uploaded file. The domain is declared in `.railway/railway.ts` (`world-model-ingestion-dev.up.railway.app`); the world model still calls ingestion on the private network.
 
 ```text
 browser / API client ──▶ world-model ──upload, process, embed (query)──▶ world-model-ingestion
@@ -80,7 +82,8 @@ The OCR page cache used to sit under the lake directory (`WORLD_MODEL_LAKE_DIR/o
 | data | `LAKE_TOKEN` | Required. The bearer token every route but `GET /health` needs |
 | data | `LAKE_DIR` | The lake folder (default `/data/lake`) |
 | data | `PORT` | Port (default 8000; Railway sets 8080) |
-| ingestion | `INGEST_TOKEN` | Required. The bearer token for `/v1/ingest`, `/v1/process`, `/v1/embed` |
+| ingestion | `INGEST_TOKEN` | Required. The bearer token for `/v1/ingest`, `/v1/process`, `/v1/embed` and the console's `/v1` routes |
+| ingestion | `INGEST_MAX_BYTES` | Largest file `/v1/ingest` and the console's dry run take (default 104857600) |
 | ingestion | `WORLD_MODEL_LAKE_URL`, `WORLD_MODEL_LAKE_TOKEN` | The data service's URL and token |
 | ingestion | `WORLD_MODEL_EMBEDDER` | `fastembed`, `hashing`, or `auto`. Set only here: the ingestion service is the only embedder, so there is nothing to match in the world model |
 | ingestion | `WORLD_MODEL_LLM_PROVIDER`, `WORLD_MODEL_LLM_MODEL`, `ANTHROPIC_API_KEY` | The optional LLM step |

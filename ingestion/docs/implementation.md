@@ -6,6 +6,9 @@ for and how to run it, see [pipeline.md](pipeline.md). Storage and search are co
 format in [contract.md](contract.md), and how quality is measured in [bench.md](bench.md). Ingestion module paths are
 relative to `ingestion/src/axelrod_ingest/`, and world-model paths to `world_model/src/axelrod_wm/`.
 
+To watch stages 1 to 5 run on a file, with each stage's input, output, decision and timing and nothing written, use the stage debugger of the
+[ingestion console](console.md).
+
 <!-- toc -->
 **Contents**
 
