@@ -6,7 +6,10 @@ import hashlib
 from datetime import UTC, datetime
 
 import pytest
+from fastapi.testclient import TestClient
 
+from axelrod_ingest.lake.remote import RemoteLake
+from axelrod_ingest.lake.server import create_lake_app
 from axelrod_ingest.lake.sqlite import SQLiteLake
 from axelrod_ingest.lake.store import Chunk, Document, content_id
 
@@ -35,8 +38,28 @@ def add_doc(lake: SQLiteLake, data: bytes, texts: list[str], **kw) -> Document:
     return doc
 
 
+TOKEN = "test-token"
+
+
+def remote_of(backing: SQLiteLake) -> RemoteLake:
+    """A `RemoteLake` against the data service over `backing`, in process (no network)."""
+    return RemoteLake("http://lake", TOKEN, TestClient(create_lake_app(backing, TOKEN), base_url="http://lake"),
+                      sleep=lambda _s: None)
+
+
 @pytest.fixture
-def lake(tmp_path):
+def local_lake(tmp_path):
     store = SQLiteLake(tmp_path / "lk")
     yield store
     store.close()
+
+
+@pytest.fixture(params=["local", "remote"])
+def lake(request, tmp_path):
+    """The behaviours every store has, held by the SQLite lake and by the same lake behind the data service."""
+    backing = SQLiteLake(tmp_path / "lk")
+    store = backing if request.param == "local" else remote_of(backing)
+    yield store
+    store.close()
+    if request.param == "remote":
+        backing.close()

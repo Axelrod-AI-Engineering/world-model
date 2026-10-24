@@ -118,7 +118,19 @@ class PlayBody(BaseModel):
 async def health(request: Request) -> dict:
     st = S(request)
     version = st.runner.controller.engine.version if st.runner is not None and st.runner.loaded else 0
-    return {"ok": True, "version": version, "build": _build()}
+    return {"ok": True, "version": version, "build": _build(), "services": await _services(request)}
+
+
+async def _services(request: Request) -> dict:
+    """Where the lakehouse and ingestion run: in process (`local`) or on a service (`remote`, and whether it answers).
+    Never the address or the token."""
+    import anyio.to_thread
+
+    out = {}
+    for name, obj in (("lake", request.app.state.lake), ("ingestion", request.app.state.ingestor)):
+        ping = getattr(obj, "ping", None)
+        out[name] = {"mode": "local"} if ping is None else {"mode": "remote", "reachable": await anyio.to_thread.run_sync(ping)}
+    return out
 
 
 @router.get("/session")

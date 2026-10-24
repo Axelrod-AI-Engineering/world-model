@@ -11,6 +11,7 @@ prefix, meaning, and graph. It is the workspace member `ingestion/` (distributio
 - [Pages](#pages)
 - [The package](#the-package)
 - [Running it](#running-it)
+- [As services](#as-services)
 <!-- /toc -->
 
 ## Pages
@@ -39,9 +40,12 @@ ingestion/
     dedupe.py                       one disclosure across language and basis
     gazetteer.py extract.py llm.py  recognition, rules-first extraction, the optional cached LLM step
     pipeline.py       the Ingestor: store, parse, type, index, recognize, extract, bundle
+    service.py        the ingestion service (axelrod-ingest): the Ingestor behind HTTP, and /v1/embed
+    ingest_client.py  RemoteIngestor and RemoteEmbedder: the world model's side of that service
     pack.py           a folder with a manifest into a lake, a report on each file, the determinism digest
     bench.py text.py  scoring, and how words are cut and compared
-    lake/             store.py (the interface), sqlite.py, search.py, embed.py
+    lake/             store.py (the interface), sqlite.py, search.py, embed.py,
+                      server.py (the data service, axelrod-lake), remote.py (RemoteLake, lake_from_env)
     testing.py        a pytest plugin: an isolated lake per test, the hashing embedder, no LLM step
   tests/              contract/ ingest/ lake/ test_boundary.py fixtures/
   scripts/            ingest_bench.py, ingest_pack.py
@@ -59,3 +63,18 @@ uv run python ingestion/scripts/ingest_pack.py <pack> --world-view <file> --lake
 
 The tests run with no client data and no model download: each gets a lake of its own, the exact `hashing` embedder,
 and no LLM step. Every document and sentence in them is invented.
+
+## As services
+
+Two console scripts run the member as services (they need `--extra service`; the tests have it in the dev group). The base
+package stays importable without FastAPI: only `lake/server.py` and `service.py` need it.
+
+| Script | Entry point | Needs | Does |
+|---|---|---|---|
+| `axelrod-lake` | `axelrod_ingest.lake.server:main` | `LAKE_TOKEN`; `LAKE_DIR`, `PORT` | The lake behind HTTP: the only process that opens the SQLite file ([lake.md](lake.md#as-a-service)) |
+| `axelrod-ingest` | `axelrod_ingest.service:main` | `INGEST_TOKEN`; `WORLD_MODEL_LAKE_URL` and `_TOKEN` (else a local lake), `PORT` | `POST /v1/ingest` (files and a world view), `POST /v1/process`, `POST /v1/embed`, `GET /health`. Stateless: it writes no file bytes to disk, keeps its OCR cache in temporary storage, and is the only embedder |
+
+The world model reaches them with `RemoteIngestor` (`ingest_client.py`), whose `embedder` is a `RemoteEmbedder`, and
+`RemoteLake` (`lake/remote.py`). Results are equal to the in-process path's: the same bundle ids and the same lake digest
+(`pack.lake_digest`). Images are `ingestion/Dockerfile` (with tesseract and the embedding model) and `ingestion/Dockerfile.lake`
+(neither); see [deployment.md](../../docs/deployment.md#three-services).

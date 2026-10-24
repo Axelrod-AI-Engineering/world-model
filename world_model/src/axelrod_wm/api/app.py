@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 import threading
 import time
 from collections.abc import Callable
@@ -462,15 +461,23 @@ def create_app(config_path: str | None = None, scenario: str = "oil_shock_demo",
     app.add_middleware(GZipMiddleware, minimum_size=2048, compresslevel=5)
     app.state.axelrod = state
     app.state.axelrod_by_login = by_login
-    # the lakehouse and the ingestion pipeline behind the outward service (Oct 17): one store, partitioned by login
+    # the lakehouse and the ingestion pipeline behind the outward service (Oct 17): one store, partitioned by login. Each is
+    # in process unless the environment names a service (Oct 24): WORLD_MODEL_LAKE_URL, the data service (nothing is then
+    # opened or created on this volume), and WORLD_MODEL_INGEST_URL, the ingestion service (the only embedder and parser)
+    from axelrod_ingest.ingest_client import ingestor_from_env
     from axelrod_ingest.lake.embed import LazyEmbedder
+    from axelrod_ingest.lake.remote import RemoteLake, lake_from_env
     from axelrod_ingest.lake.sqlite import SQLiteLake
     from axelrod_ingest.llm import provider_from_env
     from axelrod_ingest.pipeline import Ingestor
 
-    app.state.lake = SQLiteLake(Path(lake_dir or os.environ.get("WORLD_MODEL_LAKE_DIR") or "var/lake"))
+    app.state.lake = SQLiteLake(Path(lake_dir)) if lake_dir else lake_from_env()
     provider = provider_from_env()
-    app.state.ingestor = Ingestor(app.state.lake, LazyEmbedder(), provider=provider)
+    remote_ingestor = ingestor_from_env()
+    if remote_ingestor is not None and not isinstance(app.state.lake, RemoteLake):
+        raise ValueError("WORLD_MODEL_INGEST_URL needs WORLD_MODEL_LAKE_URL: the ingestion service writes to the data "
+                         "service, so this process must read it there")
+    app.state.ingestor = remote_ingestor or Ingestor(app.state.lake, LazyEmbedder(), provider=provider)
     # the nested superentities' optional names (api/hierarchy.py): cached beside the ingestion step's answers; with no
     # provider configured nothing is ever called
     from axelrod_wm.api import hierarchy

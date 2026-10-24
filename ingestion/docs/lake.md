@@ -7,6 +7,7 @@ Where everything ingestion reads and produces is kept, and how it is searched. T
 **Contents**
 
 - [The lakehouse](#the-lakehouse)
+- [As a service](#as-a-service)
 - [Search](#search)
 <!-- /toc -->
 
@@ -47,6 +48,27 @@ bundle), and `needs_ocr` (a scan with no text layer and no OCR engine). Its `met
 Organizations are tenants: a credential sees only its organization's documents. Storage sits behind an interface (`ingestion/src/axelrod_ingest/lake/store.py`,
 `LakeStore`), so a warehouse such as Postgres, or Parquet on object storage, can replace SQLite without changing the
 pipeline or the API.
+
+## As a service
+
+The lake can run as its own process, so one service owns the SQLite file and every other service reaches it over HTTP
+(the three-service deployment is in [deployment.md](../../docs/deployment.md#three-services)).
+
+- **Server** (`lake/server.py`, `axelrod-lake`): `create_lake_app(store, token)` is a FastAPI app with one route per `LakeStore`
+  method under `/v1/lake`. Records are JSON, the pydantic records of `store.py`; a document goes up as a multipart file part and
+  comes back as an octet-stream (never base64); embeddings go up as float32 bytes, and `nearest` runs in the service against its
+  cached matrix, so only the query vector travels. Every route but `GET /health` needs `Authorization: Bearer <LAKE_TOKEN>`
+  (constant-time compare); failures are RFC 9457 problems: a `KeyError` is a 404, a `ValueError` a 422, a lookup that finds
+  nothing a 404 with code `absent`. `LAKE_DIR` (default `/data/lake`), `LAKE_TOKEN` (required), and `PORT` configure it.
+- **Client** (`lake/remote.py`): `RemoteLake(url, token, client=None)` is a `LakeStore`. It returns the same records in the same
+  order and raises the store's own exceptions, so the lake's tests run unchanged against it (the `lake` fixture is parametrized
+  over the local store and the remote one). Reads are retried three times on connection errors, timeouts, and 5xx answers;
+  writes are sent once (a repeated write cannot duplicate anything, because ids are content hashes and puts replace, but retrying
+  is the caller's choice). A service that is down is a `RemoteLakeError`.
+- **Choosing**: `lake_from_env` returns the remote lake when `WORLD_MODEL_LAKE_URL` (and `WORLD_MODEL_LAKE_TOKEN`) are set, else the
+  SQLite lake in `WORLD_MODEL_LAKE_DIR` (default `var/lake`). With neither set, nothing is remote.
+
+A remote client holds no files, no vectors, and no matrix: each lives only in the service.
 
 ## Search
 

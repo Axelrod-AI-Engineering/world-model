@@ -67,6 +67,18 @@ approves each item before it is folded in.
 | Read again | `POST …/documents/{doc}/bundles` | `Ingestor.process` on the stored bytes, against the model as it is now |
 | Pack | `ingestion/scripts/ingest_pack.py` → `pack.run` | Every file of a folder with a manifest, then duplicate linking, then a digest of the lake |
 
+**Where each stage runs.** Locally and in tests, everything runs in one process. Deployed, it is split into three
+services, each holding one kind of data ([deployment.md](../../docs/deployment.md)):
+
+| Service | Runs | Holds |
+|---|---|---|
+| `world-model-data` (`axelrod-lake`, `lake/server.py`) | Every `LakeStore` method over HTTP, including `nearest` (stage 5's matrix search) | The lake: `lake.sqlite3` and the raw files |
+| `world-model-ingestion` (`axelrod-ingest`, `service.py`) | Stages 1–9 through `Ingestor`, reading and writing the lake through `RemoteLake`, plus `POST /v1/embed` | Nothing durable. The embedding weights and the OCR page cache are rebuildable caches |
+| `world-model` | The routes above, sending uploads and reads to the other two services (`ingest_client.py`) and running search over `RemoteLake` | Client worlds and scenarios |
+
+Each mode is chosen by environment variable: `WORLD_MODEL_LAKE_URL` and `WORLD_MODEL_INGEST_URL`. With neither set, the
+services run in process. The remote path gives byte-identical bundles, digests and search results.
+
 The world model hands ingestion a `WorldView` (`contract/world_view.py`, built by `intake/world_view.py`). It holds
 the entities, values (with unit, scale and current posterior) and links, sorted by id, and it is the only thing
 ingestion knows about the model.
