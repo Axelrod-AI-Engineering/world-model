@@ -12,12 +12,12 @@ _module = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_module)
 
 
-def plan(changes):
+def plan(changes, environment="dev"):
     return {
         "ok": True,
         "currentEnvironment": {
             "projectId": "ee19a1df-2ce5-4193-932a-6139f034bbce",
-            "environmentName": "dev",
+            "environmentName": environment,
         },
         "changeSet": {"changes": changes},
     }
@@ -31,6 +31,21 @@ def test_clean_and_known_persistence_gaps():
         "details": ['deploy.restartPolicyType (null → "ON_FAILURE")',
                     'deploy.sleepApplication (null → false)'],
     }]))
+
+
+def test_each_environment_owns_its_own_services():
+    gap = ['deploy.sleepApplication (null → false)']
+
+    def update(name):
+        return {"kind": "resource.update", "severity": "safe", "summary": f"Update {name} deploy.sleepApplication",
+                "details": list(gap)}
+
+    _module.verify(plan([update("world-model-ingestion")]))
+    _module.verify(plan([update("world-model-data")], "production"))
+    with pytest.raises(ValueError):
+        _module.verify(plan([update("world-model-data")]))
+    with pytest.raises(ValueError):
+        _module.verify(plan([update("world-model")], "production"))
 
 
 @pytest.mark.parametrize("change", [
@@ -50,6 +65,6 @@ def test_rejects_unrelated_or_destructive_drift(change):
 
 def test_rejects_wrong_environment():
     wrong = plan([])
-    wrong["currentEnvironment"]["environmentName"] = "production"
+    wrong["currentEnvironment"]["environmentName"] = "staging"
     with pytest.raises(ValueError):
         _module.verify(wrong)

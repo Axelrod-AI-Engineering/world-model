@@ -13,7 +13,8 @@ COPY ingestion/src ./ingestion/src
 COPY world_model/pyproject.toml ./world_model/pyproject.toml
 COPY world_model/src ./world_model/src
 # The semantic extra (fastembed: bge-small on ONNX, CPU) serves semantic search; it forwards to axelrod-ingest[semantic].
-# Its model is cached on the volume.
+# Its model is cached on the volume. Only the in-process lakehouse uses it: with WORLD_MODEL_INGEST_URL set the ingestion
+# service is the only embedder, and this image loads no model and downloads none (docs/deployment.md#three-services).
 RUN uv sync --frozen --no-dev --no-editable --package axelrod-world-model --extra semantic
 # The package is installed, not editable, so it finds the files it serves through AXELROD_ROOT (axelrod_wm/paths.py):
 # <root>/configs (stage settings) and <root>/world_model/{examples,taxonomy,configs,web}.

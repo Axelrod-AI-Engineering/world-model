@@ -15,12 +15,24 @@ dependencies = [
 semantic = [
     "fastembed>=0.4",
 ]
+service = [
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
+    "python-multipart>=0.0.9",
+]
 
 [dependency-groups]
 dev = [
     "pytest>=8.0",
     "pytest-cov>=5.0",
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
+    "python-multipart>=0.0.9",
 ]
+
+[project.scripts]
+axelrod-lake = "axelrod_ingest.lake.server:main"
+axelrod-ingest = "axelrod_ingest.service:main"
 
 [build-system]
 requires = ["hatchling"]

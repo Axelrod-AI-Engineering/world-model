@@ -19,6 +19,7 @@ a separate step (the import, reviewed item by item), so storing and processing s
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 import time
 from collections.abc import Callable
@@ -37,7 +38,15 @@ from axelrod_ingest.dates import resolve as resolve_dates
 from axelrod_ingest.extract import Reading, Rules, claims_of_chunk, item_of, keep_best
 from axelrod_ingest.gazetteer import Gazetteer
 from axelrod_ingest.lake.embed import Embedder
-from axelrod_ingest.lake.store import BundleRecord, Document, LakeStore, Mention, content_id, digest
+from axelrod_ingest.lake.store import (
+    BundleRecord,
+    Document,
+    LakeStore,
+    Mention,
+    canonical_json,
+    content_id,
+    digest,
+)
 from axelrod_ingest.llm import Provider, propose
 from axelrod_ingest.ocr import Ocr
 from axelrod_ingest.parse import PARSER_VERSION, Parsed, ParseError, mime_of, parse
@@ -73,6 +82,28 @@ class IngestResult:
     llm_signals: int = 0
     warnings: list[str] = field(default_factory=list)
     timings: dict[str, float] = field(default_factory=dict)   # seconds per stage (benchmarks); never in the bundle
+
+    def to_dict(self) -> dict[str, Any]:
+        """The result as plain JSON data (what the ingestion service answers with)."""
+        return {"document": self.document.model_dump(mode="json"), "new": self.new,
+                "bundle": None if self.bundle is None else self.bundle.model_dump(mode="json"),
+                "chunks": self.chunks, "mentions": self.mentions, "signals": self.signals,
+                "llm_signals": self.llm_signals, "warnings": list(self.warnings), "timings": dict(self.timings)}
+
+    @classmethod
+    def from_dict(cls, body: dict[str, Any]) -> IngestResult:
+        return cls(document=Document.model_validate(body["document"]), new=body["new"],
+                   bundle=None if body["bundle"] is None else BundleRecord.model_validate(body["bundle"]),
+                   chunks=body["chunks"], mentions=body["mentions"], signals=body["signals"],
+                   llm_signals=body["llm_signals"], warnings=list(body["warnings"]), timings=dict(body["timings"]))
+
+    def to_json(self) -> str:
+        """Canonical JSON: the same result always gives the same string, and `from_json` rebuilds it exactly."""
+        return canonical_json(self.to_dict())
+
+    @classmethod
+    def from_json(cls, text: str) -> IngestResult:
+        return cls.from_dict(json.loads(text))
 
 
 class Stopwatch:

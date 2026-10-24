@@ -1,13 +1,18 @@
-"""Reject drift outside the two documented Railway persistence gaps (the service source is declared in IaC)."""
+"""Reject drift outside the two documented Railway persistence gaps (the service source is declared in IaC).
+
+Each environment owns its own services: dev the world model and the ingestion service, production the data service."""
 
 import json
 import sys
 
+SERVICES = {"dev": ("world-model", "world-model-ingestion"), "production": ("world-model-data",)}
+
 
 def verify(plan):
     target = plan.get("currentEnvironment", {})
-    if not plan.get("ok") or target.get("projectId") != "ee19a1df-2ce5-4193-932a-6139f034bbce" or target.get("environmentName") != "dev":
-        raise ValueError("Expected a successful Axelrod dev plan")
+    services = SERVICES.get(target.get("environmentName"))
+    if not plan.get("ok") or target.get("projectId") != "ee19a1df-2ce5-4193-932a-6139f034bbce" or services is None:
+        raise ValueError("Expected a successful Axelrod dev or production plan")
     allowed = {
         'deploy.restartPolicyType (null → "ON_FAILURE")',
         'deploy.sleepApplication (null → false)',
@@ -20,7 +25,7 @@ def verify(plan):
         details = change.get("details")
         if (change.get("kind") != "resource.update"
                 or change.get("severity") != "safe"
-                or not change.get("summary", "").startswith("Update world-model ")
+                or not change.get("summary", "").startswith(tuple(f"Update {name} " for name in services))
                 or not isinstance(details, list) or not details):
             raise ValueError(f"Unexpected drift: {change.get('summary')}")
         for detail in details:

@@ -54,7 +54,8 @@ def test_missing_document_reads_as_none(lake):
     assert lake.raw_bytes("acme", "nope") is None
 
 
-def test_raw_bytes_is_none_when_the_raw_file_is_gone(lake):
+def test_raw_bytes_is_none_when_the_raw_file_is_gone(local_lake):
+    lake = local_lake      # reaches into the SQLite files, so it runs on the local store only
     data = b"bytes"
     doc, _ = lake.put_document(make_doc(data), data)
     lake._raw_path("acme", doc).unlink()
@@ -80,7 +81,8 @@ def test_tenants_whose_names_sanitize_alike_keep_separate_raw_files(lake):
     assert lake.raw_bytes("acme", make_doc(data).id) == data
 
 
-def test_raw_path_sanitizes_tenant_and_extension(lake):
+def test_raw_path_sanitizes_tenant_and_extension(local_lake):
+    lake = local_lake      # reaches into the SQLite files, so it runs on the local store only
     doc = make_doc(b"x", filename="../../Report.Final.P-D-F!!LONGEXTENSION")
     p = lake._raw_path("../Evil Tenant/", doc)
     assert p.parent.parent.parent == lake.root
@@ -130,7 +132,8 @@ def test_update_document_changes_the_stored_fields(lake):
         lake.update_document("bravo", doc.id, status="failed")
 
 
-def test_delete_document_removes_everything_it_owns(lake):
+def test_delete_document_removes_everything_it_owns(local_lake):
+    lake = local_lake      # reaches into the SQLite files, so it runs on the local store only
     doc = add_doc(lake, b"del", ["oil prices rose", "dollar weakened"])
     keep = add_doc(lake, b"keep", ["oil prices fell"])
     lake.put_mentions("acme", doc.id, [mention(doc.id, 0, "oil")])
@@ -148,7 +151,8 @@ def test_delete_document_removes_everything_it_owns(lake):
     assert lake.delete_document("acme", doc.id) is False
 
 
-def test_delete_document_tolerates_a_missing_raw_file(lake):
+def test_delete_document_tolerates_a_missing_raw_file(local_lake):
+    lake = local_lake      # reaches into the SQLite files, so it runs on the local store only
     data = b"gone"
     doc, _ = lake.put_document(make_doc(data), data)
     lake._raw_path("acme", doc).unlink()

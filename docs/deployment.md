@@ -6,6 +6,7 @@ The full demo is hosted on Railway's `dev` environment at **https://world-model-
 **Contents**
 
 - [What runs](#what-runs)
+- [Three services](#three-services)
 - [Ownership in the shared project](#ownership-in-the-shared-project)
 - [Releasing](#releasing)
 - [Verifying a release](#verifying-a-release)
@@ -37,9 +38,76 @@ The service's settings, from `.railway/railway.ts`:
 
 The demo needs no database server (the lakehouse is SQLite on the volume) and no model-provider credentials (the LLM extraction step is off unless one is set). Everyone who opens it shares one session and one engine: a review approved there is approved for everyone.
 
+## Three services
+
+The deployment is three Railway services. Each kind of data has one home, and no service keeps a copy of another's.
+
+| Service | Code | Image | State | Role |
+|---|---|---|---|---|
+| `world-model` (dev) | `axelrod_wm` | `Dockerfile` | Volume at `/app/var`: client worlds, scenarios, model caches | The model API and UI. Sends uploads to ingestion; reads the lake and searches it through the data service |
+| `world-model-ingestion` (dev) | `axelrod_ingest.service` (`axelrod-ingest`) | `ingestion/Dockerfile` | None | Parses, chunks, embeds, recognizes, extracts, and bundles. The only embedder. Reads and writes the lake through the data service |
+| `world-model-data` (production) | `axelrod_ingest.lake.server` (`axelrod-lake`) | `ingestion/Dockerfile.lake` | Volume at `/data`: `lake/lake.sqlite3` and the raw files | The only process that opens the SQLite file. Serves every `LakeStore` method over HTTP, including `nearest`, the cached matrix search |
+
+```text
+browser / API client ──▶ world-model ──upload, process, embed (query)──▶ world-model-ingestion
+                              │                                                │
+                              └──── lake reads, search (nearest) ───▶ world-model-data ◀── lake reads and writes
+                                                                       (SQLite + raw files)
+```
+
+### Where each kind of data lives
+
+| Data | Home |
+|---|---|
+| lake (SQLite and raw files) | data service volume |
+| client worlds and scenarios | world-model volume |
+| embedding weights | ingestion service (baked into its image under `/tmp/models`) |
+| vector matrix cache | data service memory |
+| OCR page cache | ingestion service, ephemeral (it is a cache, keyed by content) |
+
+The OCR page cache used to sit under the lake directory (`WORLD_MODEL_LAKE_DIR/ocr`). The ingestion service keeps it in temporary storage instead (`$TMPDIR/axelrod-ocr`, unless `AXELROD_OCR_CACHE` says otherwise), so no volume holds it and a restart re-reads scans. File bytes are held in memory while a document is processed and are never written to disk by the ingestion service. In remote mode the world model opens no `SQLiteLake`, creates no `/app/var/lake`, loads no embedding model, and holds no vectors.
+
+### The data flow
+
+- **Upload** (`POST /v1/world-models/{id}/documents`): the world model sends the files and a `WorldView` of its model to `POST /v1/ingest` on the ingestion service. That service stores the file, text, chunks, mentions, embeddings, and bundle in the lake through the data service, and returns the results as JSON, which the world model turns into the same job result as before. Reading a stored document again is `POST /v1/process`.
+- **Search**: the world model embeds the query through the ingestion service (`POST /v1/embed`, the one query vector), then asks the data service for the nearest chunks (`nearest`, computed there against its cached matrix) and the keyword hits. Vectors never cross the network except that one query vector.
+- **Everything else the lake holds** (documents, bundles, imports, the registry, the audit log, idempotency keys, jobs, the LLM cache): the world model reads and writes it through the data service.
+
+### Variables
+
+| Service | Variable | Meaning |
+|---|---|---|
+| data | `LAKE_TOKEN` | Required. The bearer token every route but `GET /health` needs |
+| data | `LAKE_DIR` | The lake folder (default `/data/lake`) |
+| data | `PORT` | Port (default 8000; Railway sets 8080) |
+| ingestion | `INGEST_TOKEN` | Required. The bearer token for `/v1/ingest`, `/v1/process`, `/v1/embed` |
+| ingestion | `WORLD_MODEL_LAKE_URL`, `WORLD_MODEL_LAKE_TOKEN` | The data service's URL and token |
+| ingestion | `WORLD_MODEL_EMBEDDER` | `fastembed`, `hashing`, or `auto`. Set only here: the ingestion service is the only embedder, so there is nothing to match in the world model |
+| ingestion | `WORLD_MODEL_LLM_PROVIDER`, `WORLD_MODEL_LLM_MODEL`, `ANTHROPIC_API_KEY` | The optional LLM step |
+| ingestion | `AXELROD_OCR_CACHE`, `AXELROD_OCR_LANG` | OCR cache folder (default in temporary storage) and languages (the image sets `eng+chi_sim+chi_tra+kor`) |
+| world-model | `WORLD_MODEL_LAKE_URL`, `WORLD_MODEL_LAKE_TOKEN` | When set, the lake is the data service. Unset: the in-process SQLite lake in `WORLD_MODEL_LAKE_DIR` |
+| world-model | `WORLD_MODEL_INGEST_URL`, `WORLD_MODEL_INGEST_TOKEN` | When set, uploads and query embedding go to the ingestion service. Needs the lake variables too, or the process refuses to start (the ingestion service writes to the data service, so the model must read it there). Unset: the in-process pipeline |
+
+Remote mode is opt-in: with none of these set, everything runs in process as it always has. `Dockerfile` keeps the `semantic` extra for that local mode; a remote-mode deployment never loads it. `/api/health` reports `services.lake` and `services.ingestion` as `local`, or `remote` with whether the service answers (never the address or the token). An unreachable service does not fail the health check, so a data outage does not restart the world model.
+
+### Across environments
+
+The data service runs in `production` only. Dev and staging reach it through its public URL (`https://world-model-data.up.railway.app`) with `WORLD_MODEL_LAKE_URL` and the token, so there is one lake, with organizations as tenants. Anything that can reach the URL and hold the token can read and write every tenant, so treat `LAKE_TOKEN` as the lake's root credential: set it in Railway only, rotate it by changing it on all three services together, and never put it in the repository.
+
+### Config files and redeploys
+
+Each service reads its own config file, set as its Railway config-as-code path: `railway.json` (world-model), `ingestion/railway.json` (ingestion), and `ingestion/railway.lake.json` (data). Each lists the paths its image copies as `watchPatterns`, so a change under `ingestion/` redeploys all three services and a change under `world_model/` redeploys only the world model. `.railway/railway.ts` declares the services as code; it is documentation plus IaC and is not applied automatically.
+
+### Moving an existing lake into the data service
+
+1. Stop writes: stop the world model (or its ingestion) that holds the lake.
+2. Checkpoint the WAL so the main file holds everything: `sqlite3 lake.sqlite3 'PRAGMA wal_checkpoint(TRUNCATE);'`.
+3. Copy `lake.sqlite3` and the raw folders (`<org>/raw/`) into the data volume's `lake/` folder (`/data/lake`), then start the data service and check `GET /health`.
+4. Point the services at it (`WORLD_MODEL_LAKE_URL` and the token), and remove the old lake from the world model's volume once a search and a document read answer.
+
 ## Ownership in the shared project
 
-The service lives in the shared Axelrod Railway project. This repository owns only `service.world-model` and `volume.world-model-volume`, through the named IaC partial `world-model`. The configuration throws for any environment other than `dev`. Other services and their secrets stay outside the partial. See [Railway multi-repo ownership](https://docs.railway.com/infrastructure-as-code#multi-repo-projects).
+The service lives in the shared Axelrod Railway project. This repository owns `world-model` and `world-model-ingestion` with `world-model-volume` in `dev`, and `world-model-data` with `world-model-data-volume` in `production`, through the named IaC partial `world-model`. The configuration throws for any other environment, and in production it declares the data service and nothing else: the world model and ingestion stay dev-only, and the data service is the one resource that must not live in dev, because dev, staging, and prod all read it. The drift verifier knows each environment's services. Other services and their secrets stay outside the partial. See [Railway multi-repo ownership](https://docs.railway.com/infrastructure-as-code#multi-repo-projects).
 
 Railway requires every IaC repository that targets an environment with named partials to export a partial. Axelrod/core still uses whole-project IaC. Before Core's next `dev` plan or apply, Core must move to its own named partial, with a CLI that supports partials, and claim only its resources. **Do not apply Core's older whole-project plan against `dev`:** it can propose deleting services owned by other repositories. This repository does not edit Core.
 

@@ -1,0 +1,18 @@
+# The data service (axelrod-lake): the lakehouse behind HTTP, the only process that opens the SQLite file. The build context is
+# the repository root (a uv workspace). No embedding model and no OCR: it stores, indexes, and searches vectors it is given.
+# Mount the volume at /data; the lake is /data/lake. Needs LAKE_TOKEN (the service refuses to start without it).
+FROM python:3.12-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+ENV PATH="/app/.venv/bin:$PATH"
+WORKDIR /app
+
+RUN pip install --no-cache-dir uv==0.9.2
+COPY pyproject.toml uv.lock README.md ./
+COPY ingestion/pyproject.toml ./ingestion/pyproject.toml
+COPY ingestion/src ./ingestion/src
+# the workspace names both members, so uv reads the second one's metadata (none of its code is installed)
+COPY world_model/pyproject.toml ./world_model/pyproject.toml
+RUN uv sync --frozen --no-dev --no-editable --package axelrod-ingest --extra service
+ENV LAKE_DIR=/data/lake
+CMD ["axelrod-lake"]
