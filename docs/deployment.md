@@ -99,7 +99,7 @@ All three services run in `dev` (Oct 24). The data service has no public domain:
 
 ### Config files and redeploys
 
-Each service reads its own config file, set as its Railway config-as-code path: `railway.json` (world-model), `ingestion/railway.json` (ingestion), and `ingestion/railway.lake.json` (data). Each lists the paths its image copies as `watchPatterns`, so a change under `ingestion/` redeploys all three services and a change under `world_model/` redeploys only the world model. `.railway/railway.ts` declares the services as code; it is documentation plus IaC and is not applied automatically.
+Each service has its own config file: `railway.json` (world-model), `ingestion/railway.json` (ingestion), and `ingestion/railway.lake.json` (data). Railway no longer accepts a config-as-code path on a new service, so the ingestion and data services carry the same settings directly (Dockerfile path, watch patterns, healthcheck, restart policy, one replica in us-west2), set from those files when the services were created; change both together. Each file lists the paths its image copies as `watchPatterns`, so a change under `ingestion/` redeploys all three services and a change under `world_model/` redeploys only the world model. `.railway/railway.ts` declares the services as code; it is documentation plus IaC and is not applied automatically.
 
 ### Moving an existing lake into the data service
 

@@ -361,7 +361,8 @@ def main() -> None:
     if not token:
         raise SystemExit("LAKE_TOKEN is required: the data service does not run open")
     app = create_lake_app(SQLiteLake(os.environ.get("LAKE_DIR") or "/data/lake"), token)
-    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT") or 8000))
+    # "::" listens on IPv6 and IPv4 alike: Railway's private network reaches a service over IPv6, its healthcheck over IPv4
+    uvicorn.run(app, host="::", port=int(os.environ.get("PORT") or 8000))
 
 
 __all__ = ["create_lake_app", "main"]
