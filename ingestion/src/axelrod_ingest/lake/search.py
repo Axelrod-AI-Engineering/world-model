@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from axelrod_ingest.contract.world_view import WorldView
 from axelrod_ingest.gazetteer import Gazetteer
-from axelrod_ingest.lake.embed import Embedder, cosine
+from axelrod_ingest.lake.embed import Embedder
 from axelrod_ingest.lake.store import Hit, LakeStore
 from axelrod_ingest.text import norm, tokens
 
@@ -66,8 +66,7 @@ class Searcher:
         if not q.strip():
             return []
         qv = self.embedder.embed([q])[0]
-        scored = sorted(((round(cosine(qv, v), 6), d, o) for d, o, v in self.store.embeddings(tenant, self.embedder.name)),
-                        key=lambda x: (-x[0], x[1], x[2]))[:limit]
+        scored = self.store.nearest(tenant, self.embedder.name, qv, limit)
         return [self._chunk_hit(tenant, d, o, s, ["semantic"]) for s, d, o in scored]
 
     def graph_search(self, tenant: str, q: str, limit: int = 20) -> list[Hit]:

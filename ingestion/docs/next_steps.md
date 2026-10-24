@@ -71,7 +71,7 @@ The import code is in `sim/imports.py` and `intake/structured.py` (the translato
 |---|---|
 | `keyword` | FTS5 with Porter stemming, ranked by BM25: every word first, then any word if that finds nothing |
 | `prefix` | the unstemmed FTS5 index, with the last word as a prefix, plus the model's entities and values whose names start that way |
-| `semantic` | cosine similarity between the query's embedding and every passage's, computed in Python |
+| `semantic` | cosine similarity between the query's embedding and every passage's, computed exactly as one NumPy matrix product over the tenant's vectors, held in memory until they change |
 | `graph` | the entities and values the query names, their neighbours through the model's relationships, then the passages that mention them |
 | `hybrid` | the default: reciprocal-rank fusion (k = 60) of keyword, semantic and graph |
 
@@ -160,7 +160,10 @@ is sources, citations and baselines, which the lake already holds.
 
 ### 4. Scale and storage
 
-**Why:** semantic search compares vectors in Python, which is fine for thousands of passages but not for many packs.
+**Why:** semantic search is exact: it scores every passage. Since Oct 24 it does so as one NumPy matrix product over
+a tenant's vectors, held in memory. That is under a millisecond per query at 15,000 passages (it was 0.4 s in pure
+Python), with identical results. An exact scan still grows with the lake, and every service process holds its own copy
+of the vectors, so millions of passages need an index.
 
 **Scope:**
 - Put an approximate nearest-neighbour index (sqlite-vec, or pgvector) behind `LakeStore`.
