@@ -278,4 +278,8 @@ class LakeStore(ABC):
     def stats(self, tenant: str) -> dict[str, int]: ...
 
     @abstractmethod
+    def tenants(self) -> list[str]:
+        """The tenants that hold at least one document, sorted."""
+
+    @abstractmethod
     def close(self) -> None: ...

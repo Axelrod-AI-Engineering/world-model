@@ -20,6 +20,7 @@ prefix, meaning, and graph. It is the workspace member `ingestion/` (distributio
 |---|---|
 | Follow a file from upload to bundle: the steps, the two times, typing, OCR, Chinese and Korean text, the yen sign, duplicates, packs, the rules, determinism | [pipeline.md](pipeline.md) |
 | See how each stage is implemented: the method (rules, learned model, workflow), its parameters, its module, and why it repeats | [implementation.md](implementation.md) |
+| Inspect and debug ingestion in a browser: the lake, adding files, search, and a dry run of each stage | [console.md](console.md) |
 | Know where everything is kept, and how search works | [lake.md](lake.md) |
 | Know what ingestion exchanges with the world model: the bundle format and the world view | [contract.md](contract.md) |
 | Measure speed and extraction against a gold set | [bench.md](bench.md) |
@@ -39,6 +40,7 @@ ingestion/
     dates.py sources.py             published date and period; document type and the manifest reader
     dedupe.py                       one disclosure across language and basis
     gazetteer.py extract.py llm.py  recognition, rules-first extraction, the optional cached LLM step
+    console.py console/ debug.py    the debugging console (page and routes) and the stage dry run
     pipeline.py       the Ingestor: store, parse, type, index, recognize, extract, bundle
     service.py        the ingestion service (axelrod-ingest): the Ingestor behind HTTP, and /v1/embed
     ingest_client.py  RemoteIngestor and RemoteEmbedder: the world model's side of that service
@@ -72,7 +74,7 @@ package stays importable without FastAPI: only `lake/server.py` and `service.py`
 | Script | Entry point | Needs | Does |
 |---|---|---|---|
 | `axelrod-lake` | `axelrod_ingest.lake.server:main` | `LAKE_TOKEN`; `LAKE_DIR`, `PORT` | The lake behind HTTP: the only process that opens the SQLite file ([lake.md](lake.md#as-a-service)) |
-| `axelrod-ingest` | `axelrod_ingest.service:main` | `INGEST_TOKEN`; `WORLD_MODEL_LAKE_URL` and `_TOKEN` (else a local lake), `PORT` | `POST /v1/ingest` (files and a world view), `POST /v1/process`, `POST /v1/embed`, `GET /health`. Stateless: it writes no file bytes to disk, keeps its OCR cache in temporary storage, and is the only embedder |
+| `axelrod-ingest` | `axelrod_ingest.service:main` | `INGEST_TOKEN` (and `INGEST_MAX_BYTES`); `WORLD_MODEL_LAKE_URL` and `_TOKEN` (else a local lake), `PORT` | `POST /v1/ingest` (files and a world view), `POST /v1/process`, `POST /v1/embed`, `GET /health`, and the [console](console.md) at `/`. Stateless: it writes no file bytes to disk, keeps its OCR cache in temporary storage, and is the only embedder |
 
 The world model reaches them with `RemoteIngestor` (`ingest_client.py`), whose `embedder` is a `RemoteEmbedder`, and
 `RemoteLake` (`lake/remote.py`). Results are equal to the in-process path's: the same bundle ids and the same lake digest

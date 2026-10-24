@@ -51,7 +51,7 @@ from axelrod_ingest.llm import Provider, propose
 from axelrod_ingest.ocr import Ocr
 from axelrod_ingest.parse import PARSER_VERSION, Parsed, ParseError, mime_of, parse
 from axelrod_ingest.sources import SOURCE_OF, Kind, classify
-from axelrod_ingest.units import language_of, resolve_yen
+from axelrod_ingest.units import Yen, language_of, resolve_yen
 
 KIND_OF = {"data": "data", "filing": "filing", "broker_research": "analyst", "expert_call": "analyst",
            "client_model": "analyst"}
@@ -120,6 +120,51 @@ class Stopwatch:
         self.t = now
 
 
+@dataclass
+class Analysis:
+    """What is read from a parsed document before it is chunked: its dates, language, yen, and type (stage 3)."""
+
+    dates: Dates
+    language: str
+    yen: Yen
+    kind: Kind
+    needs_ocr: list
+    screened: bool
+
+
+def upload_date(doc: Document) -> datetime | None:
+    """The date the upload gave, which stays the upload's on a second reading (one this pipeline derived is derived again)."""
+    return doc.published_at if doc.meta.get("dates", {}).get("published_source", "upload") == "upload" else None
+
+
+def analyze(parsed: Parsed, filename: str, *, source_type: str, manifest: dict, given: datetime | None,
+            ingested_at: datetime, issuer: str | None, screen: bool, ignore_future_dates: bool) -> Analysis:
+    """Stage 3, shared by `Ingestor.process` and the console's dry run (debug.py), so the two cannot drift: the published
+    date and period, the language, the yen, and the document's type."""
+    dates = resolve_dates(parsed.text, filename, upload=given, manifest=bool(manifest),
+                          not_after=ingested_at if ignore_future_dates else None)
+    language = language_of(parsed.text)
+    yen = resolve_yen(parsed.text, language=language, issuer=issuer)
+    needs_ocr = parsed.meta.get("needs_ocr", [])
+    screened = screen and parsed.format in SCREENED and source_type == "other"
+    kind = classify(filename, parsed.text, url=manifest.get("url", ""), section=manifest.get("section", ""),
+                    judge=screened and not needs_ocr, fmt=parsed.format)
+    if kind.type == "news":                  # a story is about when it ran: any month or quarter it mentions is no period
+        dates = Dates(dates.published, dates.source)
+    return Analysis(dates, language, yen, kind, needs_ocr, screened)
+
+
+def derived_meta(parsed: Parsed, a: Analysis) -> dict[str, Any]:
+    """The metadata `process` derives from a parse and its analysis (the keys of DERIVED_META)."""
+    return {"format": parsed.format, **{k: v for k, v in parsed.meta.items() if k != "bundle"},
+            "language": a.language, "dates": a.dates.meta(), "currency": {"yen": a.yen.meta()}, "doc_type": a.kind.meta()}
+
+
+def typed_source(source_type: str, kind: Kind) -> str:
+    """A document's source type: the one it was given, else the one its type implies."""
+    return source_type if source_type != "other" else SOURCE_OF[kind.type]
+
+
 GUIDANCE = re.compile(r"guidance|outlook|forecast|budget", re.I)     # a file named for what it plans, not what happened
 
 
@@ -184,24 +229,16 @@ class Ingestor:
             return IngestResult(doc, False, None, warnings=[str(err)], timings=sw.laps)
         sw.lap("parse")
         manifest = doc.meta.get("manifest") or {}
-        # a date the upload gave stays the upload's on a second reading; one this pipeline derived is derived again
-        given = doc.published_at if doc.meta.get("dates", {}).get("published_source", "upload") == "upload" else None
-        dates = resolve_dates(parsed.text, doc.filename, upload=given, manifest=bool(manifest),
-                                not_after=doc.ingested_at if self.ignore_future_dates else None)
-        language = language_of(parsed.text)
-        yen = resolve_yen(parsed.text, language=language, issuer=(doc.meta.get("hints") or {}).get("issuer_country"))
-        needs_ocr = parsed.meta.get("needs_ocr", [])
-        screened = self.screen and parsed.format in SCREENED and doc.source_type == "other"
-        kind = classify(doc.filename, parsed.text, url=manifest.get("url", ""), section=manifest.get("section", ""),
-                        judge=screened and not needs_ocr, fmt=parsed.format)
-        if kind.type == "news":                  # a story is about when it ran: any month or quarter it mentions is no period
-            dates = Dates(dates.published, dates.source)
+        a = analyze(parsed, doc.filename, source_type=doc.source_type, manifest=manifest,
+                    given=upload_date(doc), ingested_at=doc.ingested_at,
+                    issuer=(doc.meta.get("hints") or {}).get("issuer_country"), screen=self.screen,
+                    ignore_future_dates=self.ignore_future_dates)
+        dates, language, yen, kind, needs_ocr = a.dates, a.language, a.yen, a.kind, a.needs_ocr
         meta = {k: v for k, v in doc.meta.items() if k not in DERIVED_META}
-        meta.update({"format": parsed.format, **{k: v for k, v in parsed.meta.items() if k != "bundle"},
-                     "language": language, "dates": dates.meta(), "currency": {"yen": yen.meta()}, "doc_type": kind.meta()})
+        meta.update(derived_meta(parsed, a))
         if manifest.get("sha256"):
             meta["manifest"] = {**manifest, "sha256_matches": manifest["sha256"] == doc.sha256}
-        source_type = doc.source_type if doc.source_type != "other" else SOURCE_OF[kind.type]
+        source_type = typed_source(doc.source_type, kind)
         published = dates.published
         fields = {"title": doc.title or parsed.title or doc.filename, "published_at": published, "source_type": source_type,
                   "event_time": published or doc.ingested_at, "meta": meta}

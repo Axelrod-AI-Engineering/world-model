@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Ingestion console</title>
+<link rel="stylesheet" href="/ui/app.css">
+</head>
+<body>
+<header id="top">
+  <span class="brand">ingestion console</span>
+  <nav id="tabs" aria-label="Tabs">
+    <button type="button" data-tab="lake" class="on"><kbd>1</kbd> Lake</button>
+    <button type="button" data-tab="add"><kbd>2</kbd> Add files</button>
+    <button type="button" data-tab="search"><kbd>3</kbd> Search</button>
+    <button type="button" data-tab="debug"><kbd>4</kbd> Stage debugger</button>
+  </nav>
+  <span class="spacer"></span>
+  <label class="tenant">tenant <input id="tenant" list="tenants" autocomplete="off" spellcheck="false"></label>
+  <datalist id="tenants"></datalist>
+  <button type="button" id="signout" hidden>Sign out</button>
+</header>
+
+<main>
+  <section id="gate" hidden>
+    <h1>Bearer token</h1>
+    <p class="muted">The service's <code>INGEST_TOKEN</code>. It is kept for this browser tab only and sent as an
+      <code>Authorization</code> header.</p>
+    <form id="gate-form">
+      <input id="token" type="password" autocomplete="off" aria-label="Token" required>
+      <button type="submit" class="primary">Continue</button>
+    </form>
+    <p id="gate-error" class="error" hidden></p>
+  </section>
+
+  <div id="app">
+    <section id="tab-lake" class="tab">
+      <div id="summary"></div>
+      <form id="filters" class="row">
+        <select id="f-status" aria-label="Status"><option value="">any status</option></select>
+        <select id="f-type" aria-label="Type"><option value="">any type</option></select>
+        <select id="f-language" aria-label="Language"><option value="">any language</option></select>
+        <input id="f-q" placeholder="file name or title" aria-label="File name or title" autocomplete="off">
+        <select id="f-order" aria-label="Sort by">
+          <option value="ingested_at">ingested time</option>
+          <option value="event_time">event time</option>
+        </select>
+        <select id="f-dir" aria-label="Direction"><option value="desc">newest first</option><option value="asc">oldest first</option></select>
+        <button type="submit">Apply</button>
+      </form>
+      <div id="table"></div>
+      <div id="detail"></div>
+    </section>
+
+    <section id="tab-add" class="tab" hidden>
+      <p class="muted">Documents go through the whole pipeline: stored, parsed, typed, chunked and embedded. Without a world
+        view file an empty one is used, so <strong>nothing is recognized</strong> and no signals are extracted.</p>
+      <form id="add-form" class="stack">
+        <div id="drop" class="drop" tabindex="0">Drop files here, or <button type="button" id="pick">choose files</button>
+          <input id="files" type="file" multiple hidden></div>
+        <ul id="picked" class="plain"></ul>
+        <div class="row">
+          <label>tenant <input id="a-tenant" autocomplete="off"></label>
+          <label>source <input id="a-source" autocomplete="off"></label>
+          <label>source type <select id="a-type"></select></label>
+          <label>published <input id="a-published" type="date"></label>
+        </div>
+        <div class="row">
+          <label>world view <input id="a-view" type="file" accept=".json,application/json"></label>
+          <span id="a-view-note" class="muted">none: an empty world view</span>
+        </div>
+        <div><button type="submit" class="primary" id="a-send">Ingest</button></div>
+      </form>
+      <div id="add-results"></div>
+    </section>
+
+    <section id="tab-search" class="tab" hidden>
+      <form id="search-form" class="stack">
+        <div class="row">
+          <input id="s-q" class="grow" placeholder="query" aria-label="Query" autocomplete="off">
+          <select id="s-mode" aria-label="Mode">
+            <option value="hybrid">hybrid</option><option value="keyword">keyword</option>
+            <option value="prefix">prefix</option><option value="semantic">semantic</option>
+            <option value="graph" disabled>graph (needs a world view)</option>
+          </select>
+          <input id="s-limit" type="number" min="1" max="200" value="10" aria-label="Limit">
+          <button type="submit" class="primary">Search</button>
+          <button type="button" id="s-compare">Compare modes</button>
+        </div>
+        <div class="row">
+          <label>world view <input id="s-view" type="file" accept=".json,application/json"></label>
+          <span id="s-view-note" class="muted">none: graph mode and model-name prefix hits are off</span>
+        </div>
+      </form>
+      <div id="search-results"></div>
+    </section>
+
+    <section id="tab-debug" class="tab" hidden>
+      <p class="muted">A dry run of stages 1 to 5: nothing is written to the lake.</p>
+      <form id="debug-form" class="stack">
+        <div class="row">
+          <label><input type="radio" name="d-from" value="file" checked> upload a file</label>
+          <label><input type="radio" name="d-from" value="stored"> a stored document</label>
+        </div>
+        <div class="row" id="d-file-row">
+          <input id="d-file" type="file">
+          <label>source type <select id="d-type"></select></label>
+          <label>published <input id="d-published" type="date"></label>
+        </div>
+        <div class="row" id="d-stored-row" hidden>
+          <select id="d-doc" aria-label="Stored document"></select>
+        </div>
+        <div><button type="submit" class="primary">Run</button></div>
+      </form>
+      <div id="debug-results"></div>
+    </section>
+  </div>
+  <div id="toast" role="status" hidden></div>
+</main>
+<script src="/ui/app.js"></script>
+</body>
+</html>

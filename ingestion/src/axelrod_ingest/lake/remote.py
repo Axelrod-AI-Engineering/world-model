@@ -274,6 +274,9 @@ class RemoteLake(LakeStore):
     def stats(self, tenant: str) -> dict[str, int]:
         return self._call("GET", "/stats", read=True, params={"tenant": tenant})
 
+    def tenants(self) -> list[str]:
+        return self._call("GET", "/tenants", read=True)
+
     def close(self) -> None:
         self.client.close()
 
