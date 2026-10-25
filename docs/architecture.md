@@ -72,7 +72,7 @@ ingestion and the v1 plumbing, so they move with ingestion if it is ever served 
 | `data/`, `feedback/`, `var/` | Local and gitignored: client content, meeting notes, runtime data |
 | `scripts/` | The coverage gate and the docs tools (contents, diagrams, links) |
 | `tests/` | The repository's own tests: the Railway drift verifier, the gate, the links |
-| `.railway/`, `Dockerfile`, `ingestion/Dockerfile*`, `railway.json` | The hosted deployment, three services (world model, ingestion, data): IaC, start and release scripts, the Railway CLI's `package.json` ([deployment.md](deployment.md#three-services)) |
+| `.railway/`, `Dockerfile`, `ingestion/Dockerfile*` | The hosted deployment, three services (world model, ingestion, data): IaC, start and release scripts, the Railway CLI's `package.json` ([deployment.md](deployment.md#three-services)) |
 
 `world_model/src/axelrod_wm/paths.py` is the one source of the roots: `REPO_ROOT` (which holds `data/`, `var/`,
 `configs/`) and `WM_ROOT` (`world_model/`, which holds `examples/`, `taxonomy/`, `configs/` and `web/`). The Docker

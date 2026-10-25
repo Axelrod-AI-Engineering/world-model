@@ -97,9 +97,17 @@ Remote mode is opt-in: with none of these set, everything runs in process as it 
 
 All three services run in `dev` (Oct 24). The data service has no public domain: the world model and ingestion reach it on Railway's private network (`WORLD_MODEL_LAKE_URL=http://world-model-data.railway.internal:8080`) with the token, so there is one lake, with organizations as tenants. Anything that holds the token on that network can read and write every tenant, so treat `LAKE_TOKEN` as the lake's root credential: set it in Railway only, rotate it on all three services together, and never put it in the repository. Staging and production have no lake yet. Because Railway volumes and private networks are per environment, serving them later means either giving the data service a public domain they call with the token, or a data service of their own.
 
-### Config files and redeploys
+### Service settings
 
-Each service has its own config file: `railway.json` (world-model), `ingestion/railway.json` (ingestion), and `ingestion/railway.lake.json` (data). Railway no longer accepts a config-as-code path on a new service, so the ingestion and data services carry the same settings directly (Dockerfile path, watch patterns, healthcheck, restart policy, one replica in us-west2), set from those files when the services were created; change both together. Each file lists the paths its image copies as `watchPatterns`, so a change under `ingestion/` redeploys all three services and a change under `world_model/` redeploys only the world model. `.railway/railway.ts` declares the services as code; it is documentation plus IaC and is not applied automatically.
+Railway has deprecated config-as-code files (`railway.json`), and a root one overrides every service built from this repository, so there are none. Each service keeps its settings on the service itself:
+
+| Service | Dockerfile | Healthcheck | Watch patterns |
+|---|---|---|---|
+| `world-model` | `Dockerfile` | `/api/health`, 600 s | `Dockerfile`, `pyproject.toml`, `uv.lock`, `README.md`, `ingestion/**`, `world_model/**`, `configs/**`, `.railway/start-railway.sh` |
+| `world-model-ingestion` | `ingestion/Dockerfile` | `/health`, 300 s | `ingestion/**`, `uv.lock`, `pyproject.toml`, `world_model/pyproject.toml` |
+| `world-model-data` | `ingestion/Dockerfile.lake` | `/health`, 120 s | the same as ingestion |
+
+All three restart on failure (two retries), never sleep, and run one replica in us-west2. The watch patterns are the paths each image copies, so a change under `ingestion/` redeploys all three services and a change under `world_model/` redeploys only the world model. `.railway/railway.ts` declares the same services as code; it is documentation plus IaC and is not applied automatically. Change a setting there and on the service together.
 
 ### Moving an existing lake into the data service
 
