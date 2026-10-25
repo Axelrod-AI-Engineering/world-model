@@ -243,7 +243,7 @@ def test_main_serves_the_lake_in_lake_dir_and_refuses_to_run_open(tmp_path, monk
     monkeypatch.setenv("LAKE_DIR", str(tmp_path / "vol"))
     monkeypatch.setenv("PORT", "9123")
     server.main()
-    assert served["port"] == 9123 and served["host"] == "::" and (tmp_path / "vol" / "lake.sqlite3").exists()
+    assert served["port"] == 9123 and served["host"] == "" and (tmp_path / "vol" / "lake.sqlite3").exists()
     assert TestClient(served["app"]).get("/health").status_code == 200
     # the defaults are /data/lake and 8000 (the lake class is swapped for a recorder so no such folder is made)
     monkeypatch.delenv("LAKE_DIR")
