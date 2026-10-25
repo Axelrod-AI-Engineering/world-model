@@ -118,7 +118,9 @@ def _pdf(data: bytes, ocr: Ocr | None = None) -> Parsed:
                 except OcrError:
                     needs.append(k + 1)
             pages.append(text)
-        title = normalize(str(doc.get_metadata_dict().get("Title") or ""))
+        info = doc.get_metadata_dict()
+        title = normalize(str(info.get("Title") or ""))
+        author = normalize(str(info.get("Author") or ""))
     finally:
         doc.close()
     meta: dict = {"pages": len(pages)}
@@ -126,6 +128,8 @@ def _pdf(data: bytes, ocr: Ocr | None = None) -> Parsed:
         meta["ocr"] = {**(ocr.meta if ocr else {}), "pages": done}
     if needs:
         meta["needs_ocr"] = needs
+    if author:
+        meta["publisher"] = author[:160]
     return Parsed("pdf", tuple(Segment(t, page=k + 1) for k, t in enumerate(pages)), title=title, meta=meta)
 
 
@@ -243,7 +247,8 @@ class _Table:
 
 
 MAX_SPAN = 30                    # a colspan or rowspan beyond this is a typo
-DATA_CELL_CHARS = 160            # a table of cells longer than this on average lays out a page; it is not data
+PUBLISHER_META = ("publisher", "og:site_name", "dc.publisher", "application-name", "author")   # a page's <meta> words, best first
+DATA_CELL_CHARS = 160           # a table of cells longer than this on average lays out a page; it is not data
 
 
 def _span(attrs: list, name: str) -> int:
@@ -267,6 +272,7 @@ class _Text(HTMLParser):
         self.title: list[str] = []
         self.in_title = False
         self.tables: list[_Table] = []
+        self.publisher: dict[str, str] = {}              # the page's own word for who published it (a <meta> tag)
 
     def _sink(self) -> list[str]:
         """Where text goes: the open cell of the innermost table, else the page."""
@@ -326,6 +332,11 @@ class _Text(HTMLParser):
         self._sink().append(self._break() + self._break().join(lines) + self._break())
 
     def handle_starttag(self, tag: str, attrs: list) -> None:
+        if tag == "meta":
+            a = {k.lower(): (v or "").strip() for k, v in attrs}
+            name = (a.get("name") or a.get("property") or "").lower()
+            if name in PUBLISHER_META and a.get("content"):
+                self.publisher.setdefault(name, a["content"])
         if tag == "title":
             self.in_title = True
         if tag in self.SKIP:
@@ -373,7 +384,10 @@ def _html(data: bytes) -> Parsed:
     p.feed(d.text)
     p.close()
     text = normalize("".join(p.out))
-    return Parsed("html", (Segment(text),), title=normalize("".join(p.title))[:160], meta={"encoding": _encoding(d)})
+    meta = {"encoding": _encoding(d)}
+    if publisher := next((p.publisher[k] for k in PUBLISHER_META if k in p.publisher), ""):
+        meta["publisher"] = normalize(publisher)[:160]
+    return Parsed("html", (Segment(text),), title=normalize("".join(p.title))[:160], meta=meta)
 
 
 def _csv(data: bytes) -> Parsed:

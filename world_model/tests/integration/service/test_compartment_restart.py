@@ -89,7 +89,7 @@ def test_only_internal_staff_reset_the_unified_model(tmp_path):
 
 
 def test_a_well_attributed_item_from_a_compartment_is_applied_by_the_standards_gate(tmp_path):
-    with service(SIGNER, tmp_path, scenario="unified_demo", **ENV) as c:
+    with service(SIGNER, tmp_path, scenario="unified_demo", review=None, **ENV) as c:
         assert c.app.state.axelrod.runner.controller.config.review.policy == "standards"
         sign_in(c, "nw")
         ok = bundle("R-3", 15, document="Statement 7", coverage="full", plausible=True, confidence=0.8)

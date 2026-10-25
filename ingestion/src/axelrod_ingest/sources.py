@@ -34,6 +34,7 @@ from urllib.parse import urlsplit
 # -- the manifest -----------------------------------------------------------------------------------------------
 LINK = re.compile(r"\[([^\]]*)\]\(([^)]*)\)")
 SEPARATOR = re.compile(r"^\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?$")
+PUBLISHER_COLUMN = re.compile(r"publisher|issuer|outlet|author|published by", re.I)
 FILE_NAME = re.compile(r"[^/\\\s]+\.[A-Za-z0-9]{2,5}$")
 
 
@@ -45,6 +46,7 @@ class ManifestEntry:
     url: str = ""                          # the source URL the manifest gives
     sha256: str = ""                       # the hash the manifest gives for its bytes
     cells: tuple[tuple[str, str], ...] = ()    # every cell by its column heading, as written
+    publisher: str = ""                    # the cell under a "Publisher" (or "Issuer", "Outlet", "Author") column, when the pack has one
 
 
 @dataclass(frozen=True)
@@ -96,8 +98,9 @@ def read_manifest(text: str) -> Manifest:
                     row = dict(zip(header, cells, strict=False))
                     url = next((u for h, (_t, u) in row.items() if re.search(r"url|source", h, re.I) and u), "")
                     sha = next((t for h, (t, _u) in row.items() if "sha" in h.lower()), "")
+                    who = next((t for h, (t, _u) in row.items() if PUBLISHER_COLUMN.fullmatch(h.strip()) and t), "")
                     entries.append(ManifestEntry(name, section, ranks, url, sha.lower(),
-                                                 tuple((h, t) for h, (t, _u) in row.items())))
+                                                 tuple((h, t) for h, (t, _u) in row.items()), who))
         else:
             header = None if not ln.strip() else header
     return Manifest(title, updated, tuple(entries), tuple((h, tuple(v)) for h, v in notes.items()))

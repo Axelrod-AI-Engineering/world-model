@@ -364,12 +364,24 @@ rules nothing.
   - its source and kind;
   - a category and stance derived from the signals;
   - tags: `doc_type:`, `lang:` and `period:`.
+- **Attribution (Oct 25).** Each item also carries the six fields the world model's `standards` gate reads
+  (`extract.provenance_of`; the rules are in [contract.md](contract.md#attribution-fields)):
+  - `document`: the lake document id (content hash), which finds the stored text and chunks again; `url` is the
+    manifest's address when there is one.
+  - `publisher`: the manifest's publisher column, else `hints.publisher`, else the document's own metadata (an HTML
+    `<meta>`, a PDF's author), else the host of the manifest URL; empty when none says (`pipeline.publisher_of`).
+  - `basis`: `direct` for an issuer's own filing about itself; `proxy` for third-party levels and sized changes;
+    `context_only` for third-party links and bare directions; otherwise none.
+  - `citation`: for an item that states a link or a support, the document id, page and character span of its sentence.
+  - `coverage`: `partial` for a part of a total or a year's flow from a part-year report, else `full`.
+  - `plausible`: whether every number passed the extractor's band.
 - **Period.** When the document reports on a period and isn't forward-looking, `occurred_at` is the period's end, so a
   figure is dated by when it happened, not when it was published.
 - **Validation and id.** The bundle is validated against `ImportBundle` (pydantic). Its id is the hash of its content
   without `collected_at`, so the same file against the same model gives the same id.
 - **Storage.** It is stored in `bundles` with its source documents and extractor version.
-- **Pass-through.** A JSON bundle uploaded as a file is validated and stored as it is.
+- **Pass-through.** A JSON bundle uploaded as a file is validated and stored as it is; ingestion adds no attribution to
+  research it did not read, so the gate sends it to review unless its author filled the fields.
 
 ## 10. Link duplicates (packs)
 

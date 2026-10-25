@@ -76,9 +76,11 @@ def env(keys: str = f"tester:{KEY}:default:{ALL_BUT_APPROVE}", **extra: str) -> 
 
 @contextmanager
 def service(signer: Signer | None = None, root: Path | None = None, scenario: str = "acme_demo",
-            headers: dict | None = None, **settings: str) -> Iterator[TestClient]:
+            headers: dict | None = None, review: str | None = "review_all", **settings: str) -> Iterator[TestClient]:
     """The service on its own engine and lakehouse, with keys and a trusted issuer (`settings` adds to or replaces the
-    environment; pass WORLD_MODEL_API_KEYS="" and WORLD_MODEL_TRUSTED_ISSUERS="" for an open local run)."""
+    environment; pass WORLD_MODEL_API_KEYS="" and WORLD_MODEL_TRUSTED_ISSUERS="" for an open local run).
+    `review` is the scenario's review policy: the tests of the human review path hold everything for a person
+    (review_all); review=None keeps the scenario's own default (standards, which applies what is well attributed)."""
     mp = pytest.MonkeyPatch()
     for k, v in {**env(), **settings}.items():
         mp.setenv(k, v)
@@ -89,6 +91,9 @@ def service(signer: Signer | None = None, root: Path | None = None, scenario: st
                      lake_dir=root / "lake" if root is not None else None)
     try:
         with TestClient(app, headers={"Authorization": f"Bearer {KEY}", **(headers or {})}) as c:
+            if review:
+                for state in (app.state.axelrod, *app.state.axelrod_by_login.values()):
+                    state.controller.set_review_policy(review, by="test")
             yield c
     finally:
         mp.undo()
