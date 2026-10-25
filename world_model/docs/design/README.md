@@ -143,6 +143,8 @@ The deployment is drawn in [docs/deployment.md](../../../docs/deployment.md).
 - [api.md](api.md): the outward API's design (domain model, conventions, routes, decisions), with its contract
   ([../api/openapi.yaml](../api/openapi.yaml)) and reference ([../api/README.md](../api/README.md)).
 - [core-mcp-auth.md](core-mcp-auth.md): how core's MCP server and other callers authenticate to it.
+- [unified-model.md](unified-model.md): one unified world model served in compartments (D-20): persistent imports, the
+  standards gate, and a compartment per login.
 - [specificity.md](specificity.md): the rules a model must meet to be specific enough (R1–R21), and where each is
   enforced.
 
