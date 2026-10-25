@@ -219,10 +219,9 @@ def test_a_forecast_pinned_on_a_compartment_is_kept_in_its_own_layer(view):
 
 def test_a_view_starts_again_when_the_main_engine_is_rebuilt(client, view):
     old = view.controller
-    view.runs.add("UPD-1")
     view._engine = object()                         # as after a reset: the main controller has another engine
     assert view.ensure_loaded() is view.runner
-    assert view.controller is not old and view.runs == set()
+    assert view.controller is not old
 
 
 def test_the_browser_refuses_a_compartment_what_is_for_the_whole_model(client):

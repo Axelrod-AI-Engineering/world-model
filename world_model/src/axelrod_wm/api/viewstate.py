@@ -274,6 +274,9 @@ class ViewController:
     def evaluate(self, *_a: Any, **_k: Any) -> Any:
         raise CompartmentError("a backtest runs on the whole unified model, not on a compartment")
 
+    def request_update(self, *_a: Any, **_k: Any) -> Any:
+        raise CompartmentError("an update run is the unified model's: a compartment imports documents instead")
+
     def set_review_policy(self, *_a: Any, **_k: Any) -> Any:
         raise CompartmentError("the review policy belongs to the unified model")
 
@@ -362,8 +365,7 @@ class ViewRunner:
         return {**out, "overlaps": [w for w in out["overlaps"] if not self.view.focus_result().leaks(w)]}
 
     def import_items(self, bundle: Any, ids: list[str] | None = None) -> dict:
-        out = self.view.unified_runner().import_items(self.narrow(bundle), ids)
-        self.view.runs.add(out["update_id"])
+        out = self.view.unified_runner().import_items(self.narrow(bundle), ids, origin=self.view.focus.id)
         return {**out, "overlaps": [w for w in out["overlaps"] if not self.view.focus_result().leaks(w)]}
 
     def __getattr__(self, name: str) -> Any:
@@ -381,7 +383,6 @@ class ViewState:
         self.login = login
         self.org = org
         self.scenario = self.first_scenario = comp.id
-        self.runs: set[str] = set()                 # the update runs this view's imports started on the main engine
         self.tracer = BroadcastTracer(run_id=f"view-{login}")
         self.interactive = True
         self.play_task = self.update_task = self.schedule_task = self.switch_task = None
@@ -392,6 +393,12 @@ class ViewState:
         self._runner = ViewRunner(self)
 
     # -- the compartment and the main engine ------------------------------------------------------------------------
+    @property
+    def runs(self) -> set[str]:
+        """The update runs this compartment's imports started on the main engine: read from the main runner, which keeps
+        each batch's origin in its ledger entry, so they are the same after a restart."""
+        return {u for u, o in self.unified_runner().batch_origin.items() if o == self.focus.id}
+
     def focus_result(self) -> Any:
         return focus_result(self.focus.spec)
 
@@ -424,7 +431,6 @@ class ViewState:
             with self.main.lock:                  # the controller reads the narrowed state once, as it is built
                 self._controller = ViewController(self, NarrowedEngine(engine, self.focus, self.tracer, self.main.lock))
                 self._engine = engine
-                self.runs.clear()
         return self._runner
 
     @property

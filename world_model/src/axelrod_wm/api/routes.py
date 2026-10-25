@@ -46,6 +46,17 @@ def _memory(st: Any) -> tuple[Any, Any]:
     return eng.wm, eng.ltm
 
 
+def _internal_only(request: Request, st: Any, what: str) -> None:
+    """A reset of the main engine, when compartments are served from it, wipes every account's imported state: it is for
+    the internal organizations (the main login's, and `WORLD_MODEL_INTERNAL_ORGS`). A compartment's view refuses it itself."""
+    from axelrod_wm.api.auth import org_of
+    from axelrod_wm.api.v1.compartments import internal_orgs
+
+    if st is request.app.state.axelrod and request.app.state.views:
+        if org_of(request.scope.get("axelrod_login")) not in internal_orgs(org_of(None)):
+            raise HTTPException(403, f"a {what} of the unified model is for internal staff: it would wipe every account's imports")
+
+
 def _json(model: Any) -> Any:
     if isinstance(model, BaseModel):
         return model.model_dump(mode="json")
@@ -1016,6 +1027,7 @@ async def sim_load(request: Request, body: LoadBody | None = None) -> dict:
 async def sim_reset_all(request: Request) -> dict:
     """Every demo this login has opened back to its original state, and the login's first demo served (Oct 15)."""
     st = S(request)
+    _internal_only(request, st, "reset")
     await _stop_play(st)
     status = await st.call(st.reset_all)
     return status.model_dump(mode="json")
@@ -1118,6 +1130,7 @@ async def sim_pause(request: Request) -> dict:
 @router.post("/sim/reset")
 async def sim_reset(request: Request) -> dict:
     st = S(request)
+    _internal_only(request, st, "reset")
     await _stop_play(st)
     runner = st.ensure_loaded()
     return (await st.call(runner.reset)).model_dump(mode="json")
