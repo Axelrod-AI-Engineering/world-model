@@ -9,7 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from axelrod_wm.api.app import create_app
-from axelrod_wm.repo.snapshots import MemoryBackend
+from axelrod_wm.repo.snapshots import FilesBackend, MemoryBackend
 
 
 def wait_for(client: TestClient, demo: str, timeout: float = 120.0, headers: dict | None = None) -> dict:
@@ -98,7 +98,8 @@ def test_a_login_switches_only_its_own_engine(monkeypatch, tmp_path):
     monkeypatch.setenv("WORLD_MODEL_BASIC_AUTH_USERNAME", "manav")
     monkeypatch.setenv("WORLD_MODEL_BASIC_AUTH_PASSWORD", "test-password")
     monkeypatch.setenv("WORLD_MODEL_LOGINS", "eve:other-password:acme_demo")
-    app = create_app(scenario="small_demo", storage=MemoryBackend(), trace_dir=None)
+    # the main engine on files, so each login's engine is stored beside it (var/axelrod/demo-<login>)
+    app = create_app(scenario="small_demo", storage=FilesBackend(path=tmp_path / "var" / "axelrod" / "demo"), trace_dir=None)
 
     with TestClient(app) as c:
         _sign_in(c, "eve", "other-password")
