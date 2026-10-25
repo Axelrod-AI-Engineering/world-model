@@ -38,11 +38,12 @@ class Model:
 
 # -- the registry -----------------------------------------------------------------------------------------------------
 def build_registry(app: Any) -> dict[str, Model]:
-    """One world model per engine: the main engine's scenario, and each login's. An id two engines would share is
-    prefixed by the login. Each is recorded in the lakehouse's registry with its owner."""
+    """One world model per engine: the main engine's scenario, each login's own, and each compartment login's view of
+    the main one (api/viewstate.py). An id two would share is prefixed by the login. Each is recorded in the lakehouse's
+    registry with its owner."""
     from axelrod_wm.api.auth import org_of
 
-    engines = [(None, app.state.axelrod), *app.state.axelrod_by_login.items()]
+    engines = [(None, app.state.axelrod), *app.state.axelrod_by_login.items(), *app.state.views.items()]
     taken = [st.first_scenario for _l, st in engines]
     out: dict[str, Model] = {}
     for login, st in engines:

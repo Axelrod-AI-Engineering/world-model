@@ -23,10 +23,10 @@ from axelrod_wm.engine.initialize import (
     read_seeds,
 )
 from axelrod_wm.sim.scenario import ScenarioScript, scenario_raw
+from tests.where import ACME_WORLD as ACME
 from tests.where import FIXTURE_CLIENTS
+from tests.where import NORTHWIND_WORLD as NORTHWIND
 
-ACME = FIXTURE_CLIENTS / "worlds" / "acme_demo"
-NORTHWIND = FIXTURE_CLIENTS / "worlds" / "northwind_demo"
 SEEDS = [FIXTURE_CLIENTS / "scenarios" / "acme_demo" / "superentity_seeds.yaml",
          FIXTURE_CLIENTS / "scenarios" / "unified_demo" / "northwind_seeds.yaml"]
 

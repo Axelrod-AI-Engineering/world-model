@@ -4,6 +4,8 @@
 **Contents**
 
 - [Declare a focus](#declare-a-focus)
+- [One base from several worlds](#one-base-from-several-worlds)
+- [A compartment per login](#a-compartment-per-login)
 - [What a focus keeps](#what-a-focus-keeps)
 - [Check it](#check-it)
 - [Export it](#export-it)
@@ -34,6 +36,61 @@ context_pack: {domain_pack_id: ..., name: ..., slug: ..., file_index: "037", edg
 ```
 
 Only seeded import scenarios (`imports: true`) take a focus.
+
+## One base from several worlds
+
+A client's world is a folder (`entities.yaml`, `interactions.yaml`, `construction/<company>.yaml`, `taxonomy/`). The
+unified model is one base built from every client's world, so its scenario names the folders, in the order they merge:
+
+```yaml
+id: unified
+canvas: seeded
+imports: true
+start: 2026-08-03
+initialization:
+  construction_dirs: [worlds/client_a, worlds/client_b]    # or construction_dir: worlds/client_a, for one; not both
+  taxonomy_dir: worlds/client_a/taxonomy                   # one taxonomy for the merged model
+  seeds: [scenarios/client_a/superentity_seeds.yaml, scenarios/unified/client_b_seeds.yaml]   # one file, or a list
+```
+
+Every path resolves against the root that holds the scenario, like any other (`axelrod_wm/clients.py`).
+`read_construction` reads each folder alone and merges them in order. An id two folders both define (a shared market
+such as an oil price, a rate, a currency) is kept once when the definitions are identical. When they differ, the load
+stops with an error that names both files and the id (`entity 'crude_oil' is defined differently in
+client_a/entities.yaml and client_b/entities.yaml`): nothing is merged by hand. The same holds for interactions, paths,
+compositions, identities, stock-flows, and matrices, and for the entries of the seed files (patterns, superentity labels,
+frontier seeds, palettes). Each id a construction file adds keeps its origin, the file's stem and the world folder, so a
+focus still drops a whole company with its construction file. The first folder also supplies the world's question
+templates (`templates.yaml`) and the data feed's series map.
+
+Templates, `theses.yaml`, `expected_paths.yaml`, and `watchlist.yaml` are read from the scenario's own folder, so the
+unified scenario carries the ready-made questions of the whole model; a compartment keeps the ones it holds.
+
+## A compartment per login
+
+A login (`WORLD_MODEL_LOGINS`, `username:password:scenario`) whose scenario is a focus whose `base` is the main engine's
+scenario is a **compartment**: it opens no engine of its own, but a view onto the main one (`api/viewstate.py`), and
+the organization of the login owns the compartment. Every read, forecast, and thesis of that login runs on the main
+engine's memory narrowed by this focus (`narrow` and `narrow_ltm`, `api/v1/compartments.py`), so the same rules apply
+to the browser's routes, to `/v1`, to search, and to `/mcp`:
+
+- **Nothing outside it shows**: an entity, value, link, group, or passage outside the compartment is a 404 by id and
+  no hit in search. Hypotheses, pending refinements, forecasts, prior episodes, stored explanations, the ledger, and the
+  trace are cut or kept apart, so no answer, explanation, graph payload, or error carries them.
+- **Forecasts and theses** run on a graph overlay over the narrowed memory with `learn=False`. They, their
+  explanations, annotations, and trace are the login's own, in memory. The main engine's state, version, and forecast
+  layer do not change.
+- **Writes** go to the main engine, through its review: a document or bundle is narrowed to the compartment first
+  (`narrow_bundle`: an item about another company, or with a signal on another company's value, is dropped whole), then
+  imported by the main runner. The login reviews the proposals its own imports raised, and only those that name nothing
+  outside. The lake partition stays the login's organization. Other changes (an edit, a structure change, a rewind, an
+  update run, the review policy, a demo switch, the commit log, a backtest) are refused with a 409: they belong to the
+  unified model.
+- **The demo menu** offers a compartment login only itself, and `/api/scenarios` lists only it.
+- **Internal organizations** (`WORLD_MODEL_INTERNAL_ORGS`) and the main login read the whole model and every
+  compartment (`/v1/erid`). A compartment is also served at `/v1/erid/compartments/{id}` to its owner.
+
+A login whose scenario is a focus over some other base, or any other scenario, keeps an engine of its own.
 
 ## What a focus keeps
 

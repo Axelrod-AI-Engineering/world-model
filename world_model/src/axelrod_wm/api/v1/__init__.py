@@ -34,7 +34,9 @@ def install(app: Any) -> None:
     app.include_router(routes_erid.router)
     app.state.world_models = build_registry(app)
     # the unified world model (erid) is the main engine's: a deployment runs its fullest scenario there
-    app.state.erid = routes_erid.build(app.state.world_models, app.state.axelrod.first_scenario)
+    # a compartment login owns its compartment
+    app.state.erid = routes_erid.build(app.state.world_models, app.state.axelrod.first_scenario,
+                                       {v.focus.id: v.org for v in app.state.views.values()})
     app.state.theses = {}
     app.state.proposing = set()             # world models with a proposal starting (POST .../changes)
     app.add_exception_handler(StarletteHTTPException, not_found_handler(http_exception_handler))

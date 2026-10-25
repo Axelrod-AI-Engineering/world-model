@@ -9,7 +9,7 @@ from axelrod_wm.paths import REPO_ROOT, WM_ROOT
 
 TESTS = Path(__file__).resolve().parent
 FIXTURES = TESTS / "fixtures"
-FIXTURE_CLIENTS = FIXTURES / "clients"              # the synthetic client: scenarios acme_demo, worlds acme_demo
+FIXTURE_CLIENTS = FIXTURES / "clients"              # the synthetic client: scenarios acme_demo, worlds acme_demo, northwind_demo
 IMPORT_BUNDLE_SAMPLE = FIXTURES / "import_bundle_sample.json"
 INNER_LOOP_SUITE = FIXTURES / "inner_loop"          # a small invented suite: questions, fixtures, excerpts
 INNER_LOOP_EXPORT = FIXTURES / "inner_loop_export"     # a tiny invented export for the agent tools
@@ -24,6 +24,8 @@ OIL_YAML = OIL_DIR / "scenario.yaml"
 SMALL_DEMO_DIR = EXAMPLES / "scenarios" / "small_demo"
 ACME_SCENARIO = FIXTURE_CLIENTS / "scenarios" / "acme_demo" / "scenario.yaml"
 ACME_WORLD = FIXTURE_CLIENTS / "worlds" / "acme_demo"
+NORTHWIND_WORLD = FIXTURE_CLIENTS / "worlds" / "northwind_demo"                  # a second synthetic client world
+UNIFIED_SCENARIO = FIXTURE_CLIENTS / "scenarios" / "unified_demo" / "scenario.yaml"      # merges the two worlds
 
 SRC = WM_ROOT / "src" / "axelrod_wm"
 SCRIPTS = WM_ROOT / "scripts"

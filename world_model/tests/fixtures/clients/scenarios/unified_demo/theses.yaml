@@ -1,0 +1,47 @@
+# The unified demo's ready-made questions: a synthetic test fixture (invented companies and themes). A compartment keeps the ones
+# whose shock and targets it holds (engine/focus.py).
+theses:
+- id: U-T1
+  question: 'An oil supply shock: an outage sends crude up 30% for six months. Who is squeezed?'
+  mode: scaffolded
+  horizon_days: 180
+  targets:
+  - crude_oil.price
+  - jet_fuel.price
+  - northwind_air.fuel_cost
+  - harbor_steel.operating_profit
+  - acme_motors.operating_profit
+  event:
+    kind: hypothetical
+    event_type: policy
+    occurred_at: '2026-10-15 00:00:00+00:00'
+    ops:
+    - op: change_value
+      target:
+        kind: concrete
+        subentity_id: crude_oil.price
+      delta: 0.3
+      mode: relative
+      persistence: step
+      at: '2026-10-15 00:00:00+00:00'
+- id: U-T2
+  question: 'The central bank cuts 100 bp: yields fall. What happens to the reinsurer''s reinvestment?'
+  mode: scaffolded
+  horizon_days: 365
+  targets:
+  - central_bank.policy_rate
+  - gov_bonds.yield_10y
+  - acme_re.domestic_pc_profit
+  event:
+    kind: hypothetical
+    event_type: policy
+    occurred_at: '2026-10-15 00:00:00+00:00'
+    ops:
+    - op: change_value
+      target:
+        kind: concrete
+        subentity_id: central_bank.policy_rate
+      delta: -1.0
+      mode: absolute
+      persistence: step
+      at: '2026-10-15 00:00:00+00:00'
