@@ -240,8 +240,8 @@ The same file read against the same model gives the same bundle, byte for byte. 
 - **Every list is sorted.** That covers chunks, mentions, signals, items, search hits (ties broken by id), and
   every SQL query.
 - **The extractor and parser are versioned** (`ingest-1.1`, `parse-1.1`), and each bundle records both.
-- **Embeddings.** Tests use a hashing embedder, which is exact and needs no model. The deploy uses bge-small through
-  ONNX on one thread, with vectors rounded to 6 decimals.
+- **Embeddings.** Tests use a hashing embedder, which is exact and needs no model. The deploy uses IBM's granite-embedding-small
+  through ONNX on one thread, with unit vectors rounded to 6 decimals.
 - **OCR** runs one fixed configuration on one thread and is cached by content, so a page is read once.
 - **Dates and clocks.** A date is read from the file or its name, never from the clock, unless nothing dates the document; the pack
   runner fixes the clock, so nothing in a lake depends on when it was built.

@@ -55,7 +55,7 @@ exactly:
 | Where | Model | How it is pinned |
 |---|---|---|
 | OCR | Tesseract's LSTM engine (`--oem 1`) | A fixed configuration and one thread. Page text is cached by content |
-| Semantic search | BAAI/bge-small-en-v1.5 sentence embedder (ONNX, 384 dimensions) | CPU, single-threaded, vectors rounded to 6 decimals. Used for search only, never extraction |
+| Semantic search | IBM granite-embedding-small-english-r2 sentence embedder (open, Apache-2.0, from a US developer; ONNX, 384 dimensions; no query prefix). It replaced BAAI/bge-small-en-v1.5 on Oct 25 | CPU, single-threaded, vectors L2-normalized and rounded to 6 decimals. Used for search only, never extraction |
 | LLM step | A configured Anthropic or OpenAI model | Off by default. Temperature 0, and each answer is cached by digest and replayed |
 | Fold into the model | A linear-Gaussian state-space model with a joint Kalman update | Closed-form algebra with no sampling |
 
@@ -226,7 +226,8 @@ Each chunk keeps its exact span in the document's text, and its page.
 - **Prefix:** a second, unstemmed FTS5 index, because a stemmed index stores "oper" for "operating", so the prefix
   "opera" would miss it.
 - **Embeddings** (`lake/embed.py`, chosen by `WORLD_MODEL_EMBEDDER`):
-  - `fastembed`: BAAI/bge-small-en-v1.5 in ONNX on the CPU, 384 dimensions, single-threaded, rounded to 6 decimals,
+  - `fastembed`: IBM granite-embedding-small-english-r2 in ONNX on the CPU, 384 dimensions, single-threaded,
+    L2-normalized and rounded to 6 decimals,
     so no text leaves the deploy;
   - `hashing`: words and word pairs hashed (BLAKE2b) into 256 signed buckets, then L2-normalized. It needs no model
     and is exact. Tests use it, and it is the fallback when fastembed is missing;
@@ -497,7 +498,7 @@ Ingestion ends at the bundle. These steps belong to the world model and are summ
 | Direction-only move | 0.5 sd | `extract.UNDIRECTED_SD` |
 | Proposed link effect | 0.3 | `extract.LINK_EFFECT` |
 | Level plausibility | within 6·sd + 4·scale of the posterior mean; lognormal band ≥ 0.15 | `extract.plausible_level`, `MIN_LOG_BAND` |
-| Embedder | bge-small-en-v1.5 (384-d) or 256-bucket hashing | `lake/embed.py` |
+| Embedder | granite-embedding-small-english-r2 (384-d) or 256-bucket hashing | `lake/embed.py` |
 | Hybrid fusion | reciprocal rank, k = 60 | `lake/search.RRF_K` |
 | Duplicate test | ≥ 5 significant digits; containment ≥ 0.8; ≥ 40 shared figures | `dedupe.py` |
 | LLM prompt version | `llm-signals-1`, temperature 0, 60 s timeout | `llm.py` |

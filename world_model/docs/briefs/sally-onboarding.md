@@ -163,7 +163,7 @@ Pull requests are stacked. Merging to `main` deploys, so nothing below merges wi
   removed with v1 on Oct 18.)
 - **Lakehouse.** A SQLite catalog plus raw files, siloed per organization, on the Railway volume. Documents are indexed by
   ingestion time and event time, so late-arriving data folds into the next day and is flagged `late`.
-- **Search.** Keyword (BM25), prefix, semantic (bge-small, CPU), graph, and hybrid (reciprocal-rank fusion).
+- **Search.** Keyword (BM25), prefix, semantic (IBM granite-embedding-small, CPU), graph, and hybrid (reciprocal-rank fusion).
 - **Determinism.** Ids are content hashes. The same file always gives the same document, chunks, signals and bundle,
   and the same bundle imported into the same state always gives the same version and hash.
 - **The LLM step is optional.** It proposes only what the deterministic extractor misses, and it is off until a

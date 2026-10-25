@@ -23,7 +23,7 @@ class FakeTextEmbedding:
     def embed(self, texts, batch_size=None):
         assert batch_size == 32
         for t in texts:
-            yield [len(t) + 0.12345678, 1 / 3]
+            yield [1.0 * len(t), 2.0 * len(t)]
 
 
 @pytest.fixture
@@ -91,8 +91,8 @@ def test_auto_falls_back_when_the_embedder_class_raises_import_error(monkeypatch
 def test_fastembed_is_selected_single_threaded_with_its_cache_dir(fake_fastembed):
     e = embedder_from_env({"WORLD_MODEL_EMBEDDER": "fastembed", "WORLD_MODEL_EMBED_CACHE": "/models"})
     assert isinstance(e, FastEmbedder)
-    assert (e.name, e.dim) == ("fastembed:BAAI/bge-small-en-v1.5", 384)
-    assert fake_fastembed.calls == [{"model": "BAAI/bge-small-en-v1.5", "threads": 1, "cache_dir": "/models"}]
+    assert (e.name, e.dim) == ("fastembed:ibm-granite/granite-embedding-small-english-r2", 384)
+    assert fake_fastembed.calls == [{"model": "ibm-granite/granite-embedding-small-english-r2", "threads": 1, "cache_dir": "/models"}]
 
 
 def test_auto_selects_fastembed_without_a_cache_dir_when_installed(fake_fastembed):
@@ -100,9 +100,10 @@ def test_auto_selects_fastembed_without_a_cache_dir_when_installed(fake_fastembe
     assert fake_fastembed.calls[-1]["cache_dir"] is None
 
 
-def test_fastembed_vectors_are_rounded_to_six_decimals(fake_fastembed):
+def test_fastembed_vectors_are_unit_length_and_rounded_to_six_decimals(fake_fastembed):
     e = FastEmbedder()
-    assert e.embed(["ab", "abcd"]) == [[2.123457, 0.333333], [4.123457, 0.333333]]
+    # granite's raw vectors are not unit length; they are normalized, and a zero vector stays zero
+    assert e.embed(["ab", "abcd", ""]) == [[0.447214, 0.894427], [0.447214, 0.894427], [0.0, 0.0]]
     assert e.embed(["ab"]) == e.embed(["ab"])
 
 

@@ -351,7 +351,7 @@ signing key, lives in core's own `.creds.<stage>`.
 | `WORLD_MODEL_INTERNAL_ORGS` | the main world model's organization | organizations whose principals read the whole unified world model (`/v1/erid`) |
 | `WORLD_MODEL_COMPARTMENTS` | none | `compartment=org` entries: the organization each compartment of the unified world model is assigned to |
 | `WORLD_MODEL_LAKE_DIR` | `var/lake` | the lakehouse: the SQLite catalog (documents, bundles, the world model registry, the audit log, idempotency keys, jobs) and raw files per organization |
-| `WORLD_MODEL_EMBEDDER` | `auto` | `fastembed` (bge-small), `hashing` (exact; used in tests), or `auto` |
+| `WORLD_MODEL_EMBEDDER` | `auto` | `fastembed` (IBM granite-embedding-small), `hashing` (exact; used in tests), or `auto` |
 | `WORLD_MODEL_EMBED_CACHE` | fastembed's default | where the embedding model is cached |
 | `WORLD_MODEL_LLM_PROVIDER` | off | `anthropic` or `openai` for the optional extraction step (LLM: large language model) |
 | `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `WORLD_MODEL_LLM_MODEL` | none | the provider's key and model |
