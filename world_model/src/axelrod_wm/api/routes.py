@@ -31,7 +31,6 @@ from axelrod_wm.evaluation.backtest import EvaluationRequest
 from axelrod_wm.events.graph_update import GraphUpdateEvent
 from axelrod_wm.events.thesis import Thesis
 from axelrod_wm.model.hypothesis import Hypothesis
-from axelrod_wm.sim.scenario import list_scenarios
 from axelrod_wm.trace import Phase
 
 router = APIRouter(prefix="/api")
@@ -39,6 +38,23 @@ router = APIRouter(prefix="/api")
 
 def S(request: Request) -> AppState:
     return state_for(request.app, request.scope)
+
+
+def _memory(st: Any) -> tuple[Any, Any]:
+    """The memory a read is of, taken under the engine's lock (a compartment narrows it when it is first read)."""
+    eng = st.controller.engine
+    return eng.wm, eng.ltm
+
+
+def _internal_only(request: Request, st: Any, what: str) -> None:
+    """A reset of the main engine, when compartments are served from it, wipes every account's imported state: it is for
+    the internal organizations (the main login's, and `WORLD_MODEL_INTERNAL_ORGS`). A compartment's view refuses it itself."""
+    from axelrod_wm.api.auth import org_of
+    from axelrod_wm.api.v1.compartments import internal_orgs
+
+    if st is request.app.state.axelrod and request.app.state.views:
+        if org_of(request.scope.get("axelrod_login")) not in internal_orgs(org_of(None)):
+            raise HTTPException(403, f"a {what} of the unified model is for internal staff: it would wipe every account's imports")
 
 
 def _json(model: Any) -> Any:
@@ -227,22 +243,19 @@ async def get_versions(request: Request) -> list:
 @router.get("/entities/{entity_id}")
 async def get_entity(request: Request, entity_id: str) -> dict:
     st = S(request)
-    eng = st.controller.engine
-    return await st.call(entity_view, entity_id, eng.wm, eng.ltm)
+    return await st.call(lambda: entity_view(entity_id, *_memory(st)))
 
 
 @router.get("/interactions/{interaction_id}")
 async def get_interaction(request: Request, interaction_id: str) -> dict:
     st = S(request)
-    eng = st.controller.engine
-    return await st.call(interaction_view, interaction_id, eng.wm, eng.ltm)
+    return await st.call(lambda: interaction_view(interaction_id, *_memory(st)))
 
 
 @router.get("/superentities/{pattern_id}")
 async def get_pattern(request: Request, pattern_id: str) -> dict:
     st = S(request)
-    eng = st.controller.engine
-    return await st.call(pattern_view, pattern_id, eng.wm, eng.ltm)
+    return await st.call(lambda: pattern_view(pattern_id, *_memory(st)))
 
 
 @router.get("/taxonomies/{kind}")
@@ -250,7 +263,7 @@ async def get_taxonomy(request: Request, kind: str) -> dict:
     if kind not in ("object", "interaction"):
         raise HTTPException(404, f"unknown taxonomy {kind!r}")
     st = S(request)
-    return await st.call(taxonomy_view, kind, st.controller.engine.ltm, st.controller.config)
+    return await st.call(lambda: taxonomy_view(kind, _memory(st)[1], st.controller.config))
 
 
 @router.get("/find")
@@ -274,8 +287,7 @@ async def get_checks(request: Request) -> dict:
 @router.get("/memory")
 async def get_memory(request: Request) -> dict:
     st = S(request)
-    eng = st.controller.engine
-    return await st.call(memory_summary, eng.wm, eng.ltm, st.controller.config)
+    return await st.call(lambda: memory_summary(*_memory(st), st.controller.config))
 
 
 @router.get("/learning-tasks")
@@ -533,6 +545,7 @@ async def stage_proposal(request: Request, proposal_id: str, keep: str | None = 
     from axelrod_wm.control.stage import stage
 
     st = S(request)
+    st.require_main("staged review")
     kept = None if keep is None else [int(x) for x in keep.split(",") if x.strip()]
     oc = _op_confidence(opconf)
     return await st.call(lambda: stage(st.controller, proposal_id, kept, with_graph=graph, confidence=conf,
@@ -777,6 +790,7 @@ async def proposal_paths(request: Request, proposal_id: str, method: str = "rele
     from axelrod_wm.control.stage import stage
 
     st = S(request)
+    st.require_main("staged review")
     kept = None if keep is None else [int(x) for x in keep.split(",") if x.strip()]
     outs = [x for x in (outputs or "").split(",") if x.strip()] or None
 
@@ -969,8 +983,8 @@ async def resolve_decision(request: Request, decision_id: str) -> dict:
 
 # -- scenarios and layouts -----------------------------------------------------------------------
 @router.get("/scenarios")
-async def get_scenarios() -> list:
-    return list_scenarios()
+async def get_scenarios(request: Request) -> list:
+    return S(request).scenarios()
 
 
 @router.get("/demos")
@@ -1013,6 +1027,7 @@ async def sim_load(request: Request, body: LoadBody | None = None) -> dict:
 async def sim_reset_all(request: Request) -> dict:
     """Every demo this login has opened back to its original state, and the login's first demo served (Oct 15)."""
     st = S(request)
+    _internal_only(request, st, "reset")
     await _stop_play(st)
     status = await st.call(st.reset_all)
     return status.model_dump(mode="json")
@@ -1115,6 +1130,7 @@ async def sim_pause(request: Request) -> dict:
 @router.post("/sim/reset")
 async def sim_reset(request: Request) -> dict:
     st = S(request)
+    _internal_only(request, st, "reset")
     await _stop_play(st)
     runner = st.ensure_loaded()
     return (await st.call(runner.reset)).model_dump(mode="json")
@@ -1221,6 +1237,7 @@ async def repo_log(request: Request, limit: int = Query(50, ge=1, le=500), befor
     from axelrod_wm.repo.history import log
 
     st = S(request)
+    st.require_main("the commit log")
     return await st.call(lambda: [c.model_dump(mode="json") for c in log(
         st.controller.engine, limit=limit, before_version=before, processes=set(process or []) or None,
         memory=memory)])
@@ -1231,6 +1248,7 @@ async def repo_show(request: Request, version: int) -> dict:
     from axelrod_wm.repo.history import show
 
     st = S(request)
+    st.require_main("the commit log")
 
     def run() -> dict:
         out = show(st.controller.engine, version)
@@ -1247,6 +1265,7 @@ async def repo_diff(request: Request, from_version: int = Query(..., alias="from
     from axelrod_wm.repo.history import diff
 
     st = S(request)
+    st.require_main("the commit log")
     return await st.call(diff, st.controller.engine, from_version, to_version)
 
 

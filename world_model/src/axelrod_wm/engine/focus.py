@@ -36,7 +36,7 @@ import yaml
 from pydantic import BaseModel, ConfigDict
 
 from axelrod_wm.clients import EXAMPLES_DIR, find_scenario, load_scenario_yaml
-from axelrod_wm.engine.initialize import ConstructionError, read_construction, resolve_path
+from axelrod_wm.engine.initialize import ConstructionError, as_paths, read_construction, read_seeds
 from axelrod_wm.paths import yaml_files
 
 SCENARIOS_DIR = EXAMPLES_DIR / "scenarios"      # the repository's own; client scenarios: axelrod_wm/clients.py
@@ -87,6 +87,17 @@ def _strings(x: Any) -> list[str]:
     return []
 
 
+def _tokens(x: Any) -> list[str]:
+    """Every string in a JSON-ready value, dict keys included (ids key many records)."""
+    if isinstance(x, str):
+        return [x]
+    if isinstance(x, dict):
+        return [t for k, v in x.items() for t in (*_tokens(k), *_tokens(v))]
+    if isinstance(x, list):
+        return [t for v in x for t in _tokens(v)]
+    return []
+
+
 class FocusResult:
     """A focused world: the narrowed construction, groups, theses, expected paths, and watchlist, and the report."""
 
@@ -98,11 +109,11 @@ class FocusResult:
             raise ConstructionError(f"focus base {spec.base!r} is itself a focused scenario")
         ini = raw.get("initialization") or {}
         self.base_dir = base_dir
-        self.world_dir = resolve_path(ini["construction_dir"])
-        self.seeds_path = resolve_path(ini["seeds"]) if ini.get("seeds") else None
-        data, origin = read_construction(self.world_dir)
+        self.world_dirs = as_paths(ini["construction_dir"])         # one folder, or a unified scenario's several
+        self.seeds_paths = as_paths(ini.get("seeds"))
+        data, origin = read_construction(self.world_dirs)
         self._base = data
-        files = sorted(p.stem for p in yaml_files(self.world_dir / "construction"))
+        files = sorted({p.stem for d in self.world_dirs for p in yaml_files(d / "construction")})
         ent_ids = {e["id"] for e in data["entities"]}
         self.covered = [f for f in files if f in ent_ids]
         unknown = [c for c in spec.companies if c not in self.covered]
@@ -110,6 +121,7 @@ class FocusResult:
             raise ConstructionError(f"focus companies must be covered companies of {spec.base} ({', '.join(self.covered)}): "
                                     f"{', '.join(unknown) or 'none given'}")
         self.focus = list(spec.companies)
+        self._gone: set[str] | None = None
         self.dropped_companies = [c for c in self.covered if c not in self.focus]
         self._names = self._removed_names(data)
         self._narrow_construction(data, origin)
@@ -216,7 +228,7 @@ class FocusResult:
 
     # -- groups ---------------------------------------------------------------------------------------------------
     def _narrow_seeds(self) -> None:
-        raw = (yaml.safe_load(self.seeds_path.read_text()) or {}) if self.seeds_path else {}
+        raw = read_seeds(self.seeds_paths) if self.seeds_paths else {}
         companies = {e["id"] for e in self._base["entities"] if e.get("kind") == "company"}
         kept: list[dict] = []
         self.groups_dropped: dict[str, str] = {}
@@ -318,6 +330,15 @@ class FocusResult:
         return dict(raw, entities=[e for e in raw.get("entities") or [] if e in self.entities],
                     **({k: v for k, v in self.spec.overrides.get("watchlist", {}).items()}))
 
+    # -- what the focus must not show -----------------------------------------------------------------------------
+    def leaks(self, x: Any) -> bool:
+        """True when `x` (any JSON-ready value) names something the focus removed: an entity, value, link, or group by
+        id, or a removed company by name. A compartment (api/v1/compartments.py) shows only what does not."""
+        if self._gone is None:
+            subs = {s["id"] for e in self._base["entities"] for s in e.get("subentities") or []}
+            self._gone = set(self.dropped_ids()) | {s for s in subs if not self.keeps_value(s)}
+        return any(t in self._gone for t in _tokens(x)) or bool(self._mentions(x))
+
     # -- imports --------------------------------------------------------------------------------------------------
     def narrow_bundle(self, bundle: dict) -> tuple[dict, dict]:
         """An import bundle with the items about removed companies dropped and every signal on a removed value left
@@ -403,11 +424,9 @@ def _versions(spec: FocusSpec) -> tuple:
     d = find_scenario(spec.base) or SCENARIOS_DIR / spec.base
     raw = load_scenario_yaml(d / "scenario.yaml")
     ini = raw.get("initialization") or {}
-    world = resolve_path(ini.get("construction_dir", ""))
-    files = [d / "scenario.yaml", *yaml_files(d), *yaml_files(world),
-             *yaml_files(world / "construction")]
-    if ini.get("seeds"):
-        files.append(resolve_path(ini["seeds"]))
+    worlds = as_paths(ini.get("construction_dir"))
+    files = [d / "scenario.yaml", *yaml_files(d), *(f for w in worlds for f in yaml_files(w)),
+             *(f for w in worlds for f in yaml_files(w / "construction")), *as_paths(ini.get("seeds"))]
     return tuple((str(f), f.stat().st_mtime_ns) for f in files if Path(f).exists())
 
 

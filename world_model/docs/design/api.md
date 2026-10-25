@@ -18,6 +18,13 @@ consumers use those truths; keep both independent of implementation details.*
 - [2. The domain model](#2-the-domain-model)
 - [3. API conventions](#3-api-conventions)
 - [4. Resources and routes](#4-resources-and-routes)
+  - [Entities and attributes](#entities-and-attributes)
+  - [Relationships and evidence](#relationships-and-evidence)
+  - [Events, documents and research](#events-documents-and-research)
+  - [Changes and versions](#changes-and-versions)
+  - [Theses and simulations](#theses-and-simulations)
+  - [The rest](#the-rest)
+  - [The unified world model: erid (built Oct 19)](#the-unified-world-model-erid-built-oct-19)
 - [5. Workflow reads](#5-workflow-reads)
 - [6. From document to committed version](#6-from-document-to-committed-version)
 - [7. Terms, grounded](#7-terms-grounded)
@@ -261,6 +268,13 @@ served in compartments.
   focused world: the companies in scope, every player upstream of their values, and one link downstream. The contract
   test checks that the compartment's entities and relationships equal the focused scenario's. Because it narrows the
   live graph, what the unified model learns through review reaches every compartment it belongs to.
+- **A login is a compartment too** (Oct 25). A login in `WORLD_MODEL_LOGINS` whose scenario is a focus over the main
+  engine's scenario opens no engine: it is a view onto the main one (`api/viewstate.py`), and its organization owns
+  the compartment, so it needs no `WORLD_MODEL_COMPARTMENTS` entry. Its own `/v1/world-models/{compartment id}`
+  reads, searches, simulates, and proposes on the compartment; the same narrowing serves `/v1/erid` with `compartment`,
+  and now narrows the long-term memory (concepts, groups, memories, the frontier) as well as the graph. Its changes go
+  to the main engine, in its review queue; its simulations are its own and leave the main engine untouched
+  ([focus.md](../construction/focus.md#a-compartment-per-login)).
 - **Access.** The whole graph is for internal staff: an organization in `WORLD_MODEL_INTERNAL_ORGS` (default: the
   organization that owns the backing world model). A compartment is read by internal staff, or by the organization it
   is assigned to in `WORLD_MODEL_COMPARTMENTS` (`compartment=org`). To anyone else it does not exist (`404

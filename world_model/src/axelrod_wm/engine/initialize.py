@@ -176,25 +176,54 @@ class InteractionSpec(_Spec):
     state: ResponseState | None = None    # Oct 18: asymmetric, threshold and sign-flip responses (compiled to parameters)
 
 
-def read_construction(d: Path) -> tuple[dict, dict[str, str]]:
-    """A world folder's construction as plain data (entities.yaml, interactions.yaml, and construction/*.yaml merged),
-    and the origin of each item a construction file adds: entity, value, interaction, path, composition, identity,
-    stock-flow, or matrix id -> the file's stem."""
+class FileOrigin(str):
+    """The file stem a construction item came from (`toyota` for construction/toyota.yaml), with the world folder it was
+    read from in `world`. It compares and hashes as its stem, so a focus keeps dropping whole companies by stem."""
+
+    world: str
+
+    def __new__(cls, stem: str, world: str = "") -> FileOrigin:
+        out = super().__new__(cls, stem)
+        out.world = world
+        return out
+
+
+LIST_KEYS = ("interactions", "paths", "compositions", "identities", "stock_flows", "matrices")
+KIND_NAMES = {"entities": "entity", "interactions": "interaction", "paths": "path", "compositions": "composition",
+              "identities": "identity", "stock_flows": "stock-flow", "matrices": "matrix"}
+
+
+def as_paths(p: str | Path | list[str] | list[Path] | None) -> list[Path]:
+    """A scenario's `construction_dir` or `seeds` (one path, or a list of them) as resolved paths, in order."""
+    if p is None:
+        return []
+    return [resolve_path(x) for x in ([p] if isinstance(p, str | Path) else p)]
+
+
+def _read_world(d: Path) -> tuple[dict, dict[str, FileOrigin], dict[tuple[str, str], str]]:
+    """One world folder: its data, the origin of each construction item, and the file each item was written in (for
+    the error that names two files)."""
     ent = yaml.safe_load((d / "entities.yaml").read_text()) or {}
     inter = yaml.safe_load((d / "interactions.yaml").read_text()) or {}
     data = {"decision_variables": ent.get("decision_variables", []), "entities": ent.get("entities", []),
             "interactions": inter.get("interactions", []),
             "entity_link_labels": inter.get("entity_link_labels", {}) or {}, "paths": [], "compositions": [],
             "identities": [], "stock_flows": [], "matrices": []}
-    origin: dict[str, str] = {}
+    origin: dict[str, FileOrigin] = {}
+    where: dict[tuple[str, str], str] = {}
+    for key, name in (("entities", "entities.yaml"), ("interactions", "interactions.yaml")):
+        where.update({(key, str(x.get("id"))): f"{d.name}/{name}" for x in data[key]})
     # Oct 17: a world's business construction, one file per company (construction/*.yaml): values added to its
     # entities, new entities, interactions, readable paths, and compositions
     for f in yaml_files(d / "construction") if (d / "construction").is_dir() else []:
         doc = yaml.safe_load(f.read_text()) or {}
+        here = f"{d.name}/construction/{f.name}"
+        stem = FileOrigin(f.stem, d.name)
         # a file's own entities first, so its top-level `subentities:` may name them (and an earlier file's)
         for e in doc.get("entities", []) or []:
-            origin[str(e.get("id"))] = f.stem
-            origin.update({str(s.get("id")): f.stem for s in e.get("subentities", []) or []})
+            origin[str(e.get("id"))] = stem
+            where[("entities", str(e.get("id")))] = here
+            origin.update({str(s.get("id")): stem for s in e.get("subentities", []) or []})
         data["entities"] += doc.get("entities", []) or []
         by_id = {e.get("id"): e for e in data["entities"]}
         for extra in doc.get("subentities", []) or []:
@@ -202,18 +231,89 @@ def read_construction(d: Path) -> tuple[dict, dict[str, str]]:
             if owner is None:
                 raise ConstructionError(f"{f.name}: value {extra.get('id')!r} names unknown entity {extra.get('entity')!r}")
             owner.setdefault("subentities", []).append({k: v for k, v in extra.items() if k != "entity"})
-            origin[str(extra.get("id"))] = f.stem
+            origin[str(extra.get("id"))] = stem
         by_id = {e.get("id"): e for e in data["entities"]}
         for act in doc.get("corporate_actions", []) or []:
             owner = by_id.get(act.get("entity"))
             if owner is None:
                 raise ConstructionError(f"{f.name}: corporate action names unknown entity {act.get('entity')!r}")
             owner.setdefault("corporate_actions", []).append({k: v for k, v in act.items() if k != "entity"})
-        for key in ("interactions", "paths", "compositions", "identities", "stock_flows", "matrices"):
+        for key in LIST_KEYS:
             items = doc.get(key, []) or []
             data[key] += items
-            origin.update({str(x.get("id")): f.stem for x in items})
+            origin.update({str(x.get("id")): stem for x in items})
+            where.update({(key, str(x.get("id"))): here for x in items})
+    return data, origin, where
+
+
+def read_construction(d: Path | list[Path]) -> tuple[dict, dict[str, FileOrigin]]:
+    """A world folder's construction as plain data (entities.yaml, interactions.yaml, and construction/*.yaml merged),
+    and the origin of each item a construction file adds: entity, value, interaction, path, composition, identity,
+    stock-flow, or matrix id -> the file's stem (a `FileOrigin`, which also names its world folder).
+
+    Given several folders (a unified scenario's `construction_dirs`), each is read alone and they are merged in order.
+    An id two folders both define is kept once when the definitions are identical, and stops the load, naming both
+    files and the id, when they differ."""
+    parts = [_read_world(x) for x in (d if isinstance(d, list) else [d])]
+    if len(parts) == 1:
+        return parts[0][0], parts[0][1]
+    data: dict = {"decision_variables": [], "entities": [], "entity_link_labels": {}}
+    data.update({k: [] for k in LIST_KEYS})
+    origin: dict[str, FileOrigin] = {}
+    seen: dict[tuple[str, str], tuple[Any, str]] = {}
+    for world, stems, where in parts:
+        for key in ("entities", *LIST_KEYS):
+            for item in world[key]:
+                ident = (key, str(item.get("id")))
+                if ident not in seen:
+                    seen[ident] = (item, where[ident])
+                    data[key].append(item)
+                elif seen[ident][0] != item:
+                    raise ConstructionError(f"{KIND_NAMES[key]} {ident[1]!r} is defined differently in "
+                                            f"{seen[ident][1]} and {where[ident]}")
+        data["decision_variables"] += [v for v in world["decision_variables"] if v not in data["decision_variables"]]
+        for k, v in world["entity_link_labels"].items():
+            if data["entity_link_labels"].setdefault(k, v) != v:
+                raise ConstructionError(f"entity link label {k!r} is defined differently in two worlds")
+        for k, v in stems.items():
+            origin.setdefault(k, v)
     return data, origin
+
+
+def read_seeds(paths: list[Path]) -> dict:
+    """The seed files as plain data, merged in order: patterns, superentity labels, and frontier seeds are added (an id
+    two files define is kept once when identical, and an error naming both files when not); palettes are merged by
+    name under the same rule. A single file is returned as it is."""
+    docs = [(p, yaml.safe_load(p.read_text()) or {}) for p in paths]
+    if len(docs) == 1:
+        return docs[0][1]
+    out: dict = {"patterns": [], "super_interaction_labels": [], "frontier_seeds": [], "palettes": {}}
+    first: dict[tuple[str, str], tuple[Any, str]] = {}
+
+    def keep(kind: str, ident: str, item: Any, p: Path) -> bool:
+        """True the first time an id is seen; False for an identical repeat; an error for a different definition."""
+        if (kind, ident) not in first:
+            first[(kind, ident)] = (item, p.name)
+            return True
+        if first[(kind, ident)][0] != item:
+            raise ConstructionError(f"seed {kind} {ident!r} is defined differently in {first[(kind, ident)][1]} and "
+                                    f"{p.name}")
+        return False
+
+    for p, doc in docs:
+        for x in doc.get("patterns") or []:
+            if keep("pattern", x["id"], x, p):
+                out["patterns"].append(x)
+        for x in doc.get("super_interaction_labels") or []:
+            if keep("label", f"{x['source']}->{x['target']}", x, p):
+                out["super_interaction_labels"].append(x)
+        for x in doc.get("frontier_seeds") or []:
+            if keep("frontier seed", f"{x['earlier']}->{x['later']}", x, p):
+                out["frontier_seeds"].append(x)
+        for name, x in (doc.get("palettes") or {}).items():
+            if keep("palette", name, x, p):
+                out["palettes"][name] = x
+    return out
 
 
 class ConstructionSpec(_Spec):
@@ -231,13 +331,15 @@ class ConstructionSpec(_Spec):
     focus: list[str] | None = None   # a focused world (engine/focus.py): the ids it dropped, kept out of the taxonomy
 
     @classmethod
-    def load(cls, construction_dir: str | Path, taxonomy_dir: str | Path | None = None,
+    def load(cls, construction_dir: str | Path | list[str], taxonomy_dir: str | Path | None = None,
              focus: Any = None) -> ConstructionSpec:
         """The spec, with each kind's default subentities and links filled in from the object taxonomy
         (`taxonomy_dir`; else the world's own `taxonomy/` folder if it has one; else the shared world_model/taxonomy).
         With `focus` (engine/focus.FocusSpec), the world is first narrowed to its focus companies and the players
-        they connect to (engine/focus.py); `spec.focus` then lists the ids it dropped."""
-        d = resolve_path(construction_dir)
+        they connect to (engine/focus.py); `spec.focus` then lists the ids it dropped. `construction_dir` may be a list of
+        world folders (a unified scenario's `construction_dirs`), merged in order by `read_construction`."""
+        dirs = as_paths(construction_dir)
+        d = dirs[0]
         dropped: list[str] | None = None
         if focus is not None:
             from axelrod_wm.engine.focus import focus_result
@@ -245,7 +347,7 @@ class ConstructionSpec(_Spec):
             fr = focus_result(focus)
             data, dropped = fr.construction(), fr.dropped_ids()
         else:
-            data, _origin = read_construction(d)
+            data, _origin = read_construction(dirs)
         try:
             spec = cls.model_validate(data)
         except Exception as exc:  # pydantic's message names the field
@@ -685,14 +787,14 @@ class SeedFile(_Spec):
     palettes: dict[str, dict[str, str]] = {}
 
     @classmethod
-    def load(cls, path: str | Path, focus: Any = None) -> SeedFile:
-        """The seed file; with `focus` (engine/focus.FocusSpec), its groups restricted to the focused world."""
+    def load(cls, path: str | Path | list[str], focus: Any = None) -> SeedFile:
+        """The seed file (or the list of them, merged in order by `read_seeds`); with `focus` (engine/focus.FocusSpec),
+        its groups restricted to the focused world."""
         if focus is not None:
             from axelrod_wm.engine.focus import focus_result
 
             return cls.model_validate(focus_result(focus).seeds())
-        p = resolve_path(path)
-        return cls.model_validate(yaml.safe_load(p.read_text()) or {})
+        return cls.model_validate(read_seeds(as_paths(path)))
 
 
 # ---------------------------------------------------------------------------------------------

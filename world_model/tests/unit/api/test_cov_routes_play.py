@@ -178,7 +178,7 @@ def test_stop_play_cancels_a_task_that_will_not_stop(monkeypatch):
 
 
 def request_for(st):
-    return SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(axelrod=st, axelrod_by_login={})), scope={})
+    return SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(axelrod=st, axelrod_by_login={}, views={})), scope={})
 
 
 def test_play_while_playing_and_play_while_waiting_on_review():

@@ -64,6 +64,8 @@ class AppState:
     in a worker thread, outside the lock, while the current one keeps serving; it then swaps in under the lock. A demo
     opened before is kept as it was left, with its own storage and trace stream."""
 
+    is_view = False                 # a compartment's `ViewState` (api/viewstate.py) is True
+
     def __init__(self, scenario: str, config_path: str | None, *, storage: StorageBackend | None = None,
                  trace_dir: str | Path | None = None, play_delay: float = 0.4,
                  cache_dir: str | Path | None = None) -> None:
@@ -191,6 +193,16 @@ class AppState:
             out.append({"id": sid, "label": label, "note": note, "current": sid == self.scenario,
                         "ready": ready, "cold": cold})
         return {"current": self.scenario, "demos": out, "switching": self.switch_progress()}
+
+    def scenarios(self) -> list[dict]:
+        """The scenarios this login may list (GET /api/scenarios): every one on the repository and the client roots."""
+        from axelrod_wm.sim.scenario import list_scenarios
+
+        return list_scenarios()
+
+    def require_main(self, what: str) -> None:
+        """A route that is only for an engine of one's own (the commit log, staged review) calls this; a compartment's
+        view (api/viewstate.py) refuses it."""
 
     def switch_progress(self) -> dict | None:
         sw = self.switching
@@ -389,9 +401,11 @@ async def _daily_schedule(state: AppState) -> None:
         state.start_drive(run_id)
 
 
-def state_for(app: Any, scope: Any) -> AppState:
-    """The engine a request's login opens (api/auth.py): its own, or the main one."""
-    return app.state.axelrod_by_login.get(scope.get("axelrod_login"), app.state.axelrod)
+def state_for(app: Any, scope: Any) -> Any:
+    """The engine a request's login opens (api/auth.py): its own, a view onto the main one (a compartment), or the main
+    one."""
+    login = scope.get("axelrod_login")
+    return app.state.views.get(login) or app.state.axelrod_by_login.get(login, app.state.axelrod)
 
 
 def create_app(config_path: str | None = None, scenario: str = "oil_shock_demo", *,
@@ -400,7 +414,9 @@ def create_app(config_path: str | None = None, scenario: str = "oil_shock_demo",
                cache_dir: str | Path | None = None, start_example: str | None = None,
                lake_dir: str | Path | None = None) -> FastAPI:
     from axelrod_wm import settings
-    from axelrod_wm.api.auth import extra_logins
+    from axelrod_wm.api.auth import extra_logins, org_of
+    from axelrod_wm.api.v1.compartments import compartment_of
+    from axelrod_wm.api.viewstate import ViewState
     from axelrod_wm.repo.snapshots import FilesBackend
 
     settings.load()             # the stage's checked-in profile and, locally, its .creds file (settings.py)
@@ -413,8 +429,15 @@ def create_app(config_path: str | None = None, scenario: str = "oil_shock_demo",
     # DECISION (Oct 11): a login from WORLD_MODEL_LOGINS gets an engine of its own, on its own scenario, storage, and
     # trace stream (api/auth.py), so Emily's login opens her demo while the main login keeps the shared demo. Each
     # engine is still one shared session for everyone who signs in with that login.
+    # Oct 25: a login whose scenario is a focus over this engine's scenario (a compartment of the unified model) gets no
+    # engine: it is a view onto this one (api/viewstate.py)
     by_login: dict[str, AppState] = {}
+    views: dict[str, ViewState] = {}
     for login in extra_logins():
+        comp = compartment_of(login.scenario, scenario)
+        if comp is not None:
+            views[login.username] = ViewState(state, comp, login.username, org_of(login.username))
+            continue
         if find_scenario(login.scenario) is None:
             # a client scenario not on this machine or volume (WORLD_MODEL_CLIENT_DIR): the login opens the main engine
             # rather than stopping the server at startup
@@ -439,6 +462,8 @@ def create_app(config_path: str | None = None, scenario: str = "oil_shock_demo",
             await anyio.to_thread.run_sync(state.ensure_loaded)
             for other in by_login.values():
                 await anyio.to_thread.run_sync(other.ensure_loaded)
+            for view in views.values():
+                await anyio.to_thread.run_sync(view.ensure_loaded)
             if start_example and hasattr(state.runner, "run_example"):
                 # a demo opened at an example: the examples before it are played, and it waits for review
                 await state.call(state.runner.run_example, start_example)
@@ -463,6 +488,7 @@ def create_app(config_path: str | None = None, scenario: str = "oil_shock_demo",
     app.add_middleware(GZipMiddleware, minimum_size=2048, compresslevel=5)
     app.state.axelrod = state
     app.state.axelrod_by_login = by_login
+    app.state.views = views
     # the lakehouse and the ingestion pipeline behind the outward service (Oct 17): one store, partitioned by login. Each is
     # in process unless the environment names a service (Oct 24): WORLD_MODEL_LAKE_URL, the data service (nothing is then
     # opened or created on this volume), and WORLD_MODEL_INGEST_URL, the ingestion service (the only embedder and parser)

@@ -172,6 +172,8 @@ Every page, static file, API call, the API docs, and the WebSocket stream requir
 
 The top bar's demo menu ([demos.md](../world_model/docs/guides/demos.md#switching-demos)) switches only the signed-in login's engine. Each demo a login opens keeps its own storage next to that login's storage (`var/axelrod/demo-<username>-<demo>`), and it stays in memory until the server restarts. The first time the production or full demo opens on a fresh container, its history is replayed, which takes a few minutes.
 
+A login whose scenario is a focus over the main engine's scenario is a **compartment** (Oct 25): it gets no engine and no storage of its own, but a view onto the main engine, narrowed to its companies ([focus.md](../world_model/docs/construction/focus.md#a-compartment-per-login)). `create_app` decides this when it reads the logins: the scenario is looked up under the client roots, and its `focus.base` is compared with the main engine's scenario (`WORLD_MODEL_SCENARIO`). The login's organization (its name, or `WORLD_MODEL_OWNERS`) owns the compartment, so `/v1/erid` serves it to that organization and to the internal ones. To set it up, the main engine runs the unified scenario, and each client's login names a focus over it.
+
 To switch logins, **Sign out** (☰ menu, or `/logout`) and sign in again, or use a private window.
 
 Emily's and Sally's research (everything under `data/`) is never uploaded (`.gitignore`, `.dockerignore`). On the hosted demo, import it with the file picker; Sally's daily files can be chosen several at a time.
@@ -190,6 +192,18 @@ Client scenarios, worlds, configs, and construction pages are not in the reposit
 The root is `WORLD_MODEL_CLIENT_DIR`. It defaults to `data/clients` (gitignored) in a checkout; on dev, `.railway/railway.ts` sets it to `/app/var/clients`, on the volume. The service finds scenarios in `world_model/examples/scenarios` first, then in the client root's `scenarios/`, so the demo menu lists a client demo only when its folder is there. The variable may name several roots separated by `:`, searched in order.
 
 A path in a client `scenario.yaml` (`construction_dir`, `taxonomy_dir`, `seeds`, `layout`, `config_overrides`, `imports_dir`) is read against the root that holds the scenario, then against the repository, so a client scenario writes `worlds/<name>` for its own world and `world_model/taxonomy` for the shared one (`world_model/src/axelrod_wm/clients.py`).
+
+**The unified model and its compartments** are client content too. In the client root (placeholder names; the shapes are in [focus.md](../world_model/docs/construction/focus.md#one-base-from-several-worlds)):
+
+```
+<client root>/worlds/<client_a>/ , <client_b>/ ...        each client's world, as above
+<client root>/scenarios/<unified>/scenario.yaml           canvas: seeded, imports: true, initialization.construction_dirs: [worlds/<client_a>, worlds/<client_b>], taxonomy_dir, seeds: [one file per world]
+<client root>/scenarios/<unified>/theses.yaml, watchlist.yaml, expected_paths.yaml     (optional) the ready-made questions of the whole model
+<client root>/scenarios/<compartment_a>/scenario.yaml     focus: {base: <unified>, companies: [...], overrides: {...}}, context_pack
+<client root>/scenarios/<compartment_b>/scenario.yaml     one per client
+```
+
+Then set `WORLD_MODEL_SCENARIO` to `<unified>` (the main engine), and `WORLD_MODEL_LOGINS` to `<client_a>:<password>:<compartment_a>,<client_b>:<password>:<compartment_b>`. Two worlds that define the same id differently stop the load with an error naming both files; make the shared definition identical in each, or move it to one world.
 
 A login in `WORLD_MODEL_LOGINS` whose scenario is not under any client root opens the main engine, with a warning in the log, instead of stopping the server. To put a client's content on dev, copy its folders to `/app/var/clients` on the volume (for example `COPYFILE_DISABLE=1 tar cz --exclude='._*' --exclude='.DS_Store' -C data/clients scenarios worlds configs docs | railway ssh -s world-model -e dev -- tar xz -C /app/var/clients`, after `railway ssh keys add`), then redeploy. The two flags keep a Mac's resource forks out of the archive: `._*.yaml` files from a Mac copy took dev down on Oct 22 (a loader fix that ignores hidden files is in PR #41).
 

@@ -48,11 +48,14 @@ class Erid:
     owners: dict[str, str]                  # compartment -> the organization it is assigned to
 
 
-def build(world_models: dict[str, Model], main_id: str) -> Erid:
+def build(world_models: dict[str, Model], main_id: str, assigned: dict[str, str] | None = None) -> Erid:
+    """The unified model and its compartments. `assigned` is compartment -> organization for the logins that are
+    compartments (api/viewstate.py); WORLD_MODEL_COMPARTMENTS adds the rest."""
     from axelrod_wm.api.v1.compartments import discover
 
     m = world_models[main_id]
-    return Erid(model=m, internal=internal_orgs(m.org), compartments=discover(m.st.first_scenario), owners=owners())
+    return Erid(model=m, internal=internal_orgs(m.org), compartments=discover(m.st.first_scenario),
+                owners={**owners(), **(assigned or {})})
 
 
 # -- its own routes -----------------------------------------------------------------------------------------------------

@@ -1,0 +1,34 @@
+# Northwind's world (northwind_demo): a synthetic test fixture. Invented companies; it shares the crude-oil market with
+# acme_demo, defined the same way, so a unified scenario can merge the two. Nothing here describes a real company or client.
+entity_link_labels: {}
+interactions:
+- id: m01
+  source: crude_oil.supply
+  target: crude_oil.price
+  label: tightens
+  effect:
+    mu: -0.6
+  kernel:
+    delay_days: 5
+    lag_days: 30
+    duration_days: 240
+- id: n01
+  source: crude_oil.price
+  target: jet_fuel.price
+  label: feeds
+  effect:
+    mu: 0.8
+  kernel:
+    delay_days: 5
+    lag_days: 20
+    duration_days: 120
+- id: n02
+  source: jet_fuel.price
+  target: northwind_air.fuel_cost
+  label: raises
+  effect:
+    mu: 0.7
+  kernel:
+    delay_days: 10
+    lag_days: 45
+    duration_days: 240

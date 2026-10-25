@@ -1,0 +1,27 @@
+# Northwind's superentities: a synthetic test fixture (invented companies).
+patterns:
+- id: N1
+  name: Fuel and airlines
+  description: Crude feeds jet fuel, which sets the airline's costs.
+  palette: h5
+  members:
+  - crude_oil
+  - jet_fuel
+  - northwind_air
+  interactions:
+  - n01
+  - n02
+  - n03
+  support: 3
+- id: N2
+  name: Steel and demand
+  description: Industrial demand lifts steel; energy weighs on it.
+  palette: h6
+  members:
+  - crude_oil
+  - industrial_demand
+  - harbor_steel
+  interactions:
+  - n04
+  - n05
+  support: 3

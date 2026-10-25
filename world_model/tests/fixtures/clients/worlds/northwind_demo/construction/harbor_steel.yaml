@@ -1,0 +1,45 @@
+# Northwind's world (northwind_demo): a synthetic test fixture. Invented companies; it shares the crude-oil market with
+# acme_demo, defined the same way, so a unified scenario can merge the two. Nothing here describes a real company or client.
+entities:
+- id: harbor_steel
+  name: Harbor Steel Works
+  short: Harbor Steel
+  kind: company
+  category_tags:
+  - SC
+  description: A steelmaker. Orders follow industrial demand; furnaces run on energy.
+  features:
+    sector: steel
+    region: NW
+  aliases:
+  - HSTL
+  - Harbor Steel
+  levels:
+    share_price: 17.0
+subentities:
+- entity: harbor_steel
+  id: harbor_steel.operating_profit
+  name: Harbor Steel operating profit
+  attribute_kind: revenue_flow
+  unit: $m/yr
+  family: lognormal
+  mean: 640.0
+  scale: 0.1
+interactions:
+- id: n04
+  source: industrial_demand.index
+  target: harbor_steel.operating_profit
+  label: lifts
+  effect:
+    mu: 0.5
+  kernel: &id001
+    delay_days: 10
+    lag_days: 45
+    duration_days: 240
+- id: n05
+  source: crude_oil.price
+  target: harbor_steel.operating_profit
+  label: weighs on
+  effect:
+    mu: -0.2
+  kernel: *id001

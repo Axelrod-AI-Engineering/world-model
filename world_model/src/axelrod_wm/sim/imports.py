@@ -30,6 +30,7 @@ from axelrod_wm.engine.initialize import (
     ConstructionSpec,
     Initializer,
     SeedFile,
+    as_paths,
     load_vocabulary,
     read_construction,
     resolve_path,
@@ -70,9 +71,7 @@ class ImportRunner(ScenarioRunner):
 
     # -- load, resume ------------------------------------------------------------------------------
     def _construction_dirs(self) -> list[Path]:
-        ini = self.script.initialization
-        names = getattr(ini, "construction_dirs", None) or [ini.construction_dir]
-        return [resolve_path(n) for n in names]
+        return as_paths(self.script.initialization.construction_dir)       # one folder, or a unified scenario's several
 
     def _inputs(self, cfg: Any) -> dict[str, str]:
         """SHA-256 of everything the base model is built from (sim/import_state.py): a stored model built from other
@@ -81,7 +80,7 @@ class ImportRunner(ScenarioRunner):
         focus = ini.focus.model_dump(mode="json") if ini.focus is not None else None
         settings = {"scenario": self.script.id, "start": str(self.script.start), "seed": int(cfg.seed), "focus": focus}
         return construction_files([*self._construction_dirs(), resolve_path(ini.taxonomy_dir)],
-                                  [resolve_path(ini.seeds)] if ini.seeds else [], settings)
+                                  as_paths(ini.seeds), settings)
 
     def _origin(self) -> dict[str, str]:
         out: dict[str, str] = {}
@@ -192,6 +191,8 @@ class ImportRunner(ScenarioRunner):
                     self.import_skips[me_id] = {int(k): v for k, v in pl["skips"][it.id].items()}
             self.import_log.append({"title": pl["title"], "items": [i.id for i in items], "update_id": pl["update_id"],
                                     "at": pl["at"], "closed": True})
+            if pl.get("origin") is not None:
+                self.batch_origin[pl["update_id"]] = pl["origin"]
         for e in entries:
             if e.kind == LedgerKind.MARKET_EVENT:
                 me = MarketEvent.model_validate(e.payload)
@@ -332,6 +333,7 @@ class ImportRunner(ScenarioRunner):
         self.imported: dict[str, ImportItem] = {}     # market event id -> the item it came from
         self.import_skips: dict[str, dict[int, str]] = {}   # market event id -> signals not folded (intake/overlap.py)
         self.import_log: list[dict] = []
+        self.batch_origin: dict[str, str] = {}      # update id -> the compartment whose login imported it (if any)
         ctl.import_context = self._import_context
         tr = StructuredTranslator(ctl.config, runner=self)
         for kind in MarketEventKind:
@@ -427,8 +429,9 @@ class ImportRunner(ScenarioRunner):
                 "description": b.description, "items": rows, "model_date": ctl.now.isoformat(),
                 "overlaps": overlaps, "overlap_rule": OVERLAP_RULE}
 
-    def import_items(self, bundle: dict | ImportBundle, ids: list[str] | None = None) -> dict:
-        """Fold the chosen items in, in date order, through one update run that pauses at each one's review."""
+    def import_items(self, bundle: dict | ImportBundle, ids: list[str] | None = None, *, origin: str | None = None) -> dict:
+        """Fold the chosen items in, in date order, through one update run that pauses at each one's review. `origin` names
+        the compartment whose login imports them; it is kept in the batch's ledger entry, so it survives a restart."""
         b = self.parse(self.narrow(bundle))
         with self.lock:
             ctl = self.controller
@@ -452,7 +455,7 @@ class ImportRunner(ScenarioRunner):
                 "state": "import_batch", "title": b.title, "synthetic": b.synthetic,
                 "items": [i.model_dump(mode="json") for i in chosen], "update_id": ctl.ids.peek("UPD"),
                 "skips": {i.id: {str(k): v for k, v in skips[i.id].items()} for i in chosen if i.id in skips},
-                "at": datetime.now(UTC).isoformat()}, recorded_at=ctl.now)
+                "at": datetime.now(UTC).isoformat(), "origin": origin}, recorded_at=ctl.now)
             last = max(chosen[-1].published_at, ctl.now)
             # Oct 17: when every item is older than the model's last processed day, the run would have no day to
             # process and would end before collecting them; it runs through the next day instead, so they queue
@@ -464,6 +467,8 @@ class ImportRunner(ScenarioRunner):
             run = ctl.request_update(UpdateRequest(requested_by="import", until=last.date(), requested_at=last,
                                                    user_market_events=events, sources=[]), run_to_end=True)
             self.update_ids.append(run.id)
+            if origin is not None:
+                self.batch_origin[run.id] = origin
             if run.state == UpdateState.DONE:
                 ctl.engine.save_snapshot()          # a finished import is a restart point: a resume replays few change sets
             self.import_log.append({"title": b.title, "items": [i.id for i in chosen], "update_id": run.id,
