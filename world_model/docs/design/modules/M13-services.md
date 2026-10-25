@@ -35,7 +35,7 @@ The product's commands. Each service owns one workflow, persists its records thr
 
 A thin `WorldModelController` facade keeps today's callers working.
 
-**Slot:** `review_policy` (default, auto_approve_all, review_all): `ReviewPolicy.assess(proposal, wm) -> ReviewRequirement`.
+**Slot:** `review_policy` (default, auto_approve_all, review_all, standards): `ReviewPolicy.assess(proposal, wm) -> ReviewRequirement`.
 
 ## Depends on
 

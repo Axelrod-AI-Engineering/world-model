@@ -64,8 +64,6 @@ def test_a_model_without_seeds_loads_with_no_superentities():
     ctl = r.controller
     assert r.loaded and not ctl.engine.wm.graph.instances
     assert r.status().imports and r.status().canvas == "seeded"
-    with pytest.raises(ControllerError, match="not kept between sessions"):
-        r.resume({})
 
 
 def test_parse_accepts_a_bundle_and_names_the_first_problem(tmp_path):

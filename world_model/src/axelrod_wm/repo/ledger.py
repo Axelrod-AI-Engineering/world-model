@@ -25,6 +25,7 @@ class LedgerKind(StrEnum):
     DECISION = "decision"
     OUTCOME = "outcome"
     CONSOLIDATION = "consolidation"
+    REVIEW_POLICY = "review_policy"    # the review policy changed: its name and who set it (Oct 25; resume restores it)
     ANNOTATION = "annotation"          # a reader's note on a forecast brief: logged, never state (Oct 14)
 
 

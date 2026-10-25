@@ -401,7 +401,8 @@ class UpdateCycle:
                     if pause and not run.cancel_requested:
                         run.waiting_on = pid
                         run.state = UpdateState.AWAITING_REVIEW
-                        self._ledger(run, "awaiting_review", proposal_id=pid, day=d)
+                        # the run's own state goes in the entry, so a restart can pick the run up where it paused
+                        self._ledger(run, "awaiting_review", proposal_id=pid, day=d, run_state=run.model_dump(mode="json"))
                         eng.tracer.emit(Phase.UPDATE, "update.awaiting_review", refs=[run.id, pid],
                                         update_id=run.id, day=d, date=dev.date_of(d).isoformat(),
                                         proposal_ids=[pid])
