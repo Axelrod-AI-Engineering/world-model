@@ -1,0 +1,49 @@
+# Northwind's world (northwind_demo): a synthetic test fixture. Invented companies; it shares the crude-oil market with
+# acme_demo, defined the same way, so a unified scenario can merge the two. Nothing here describes a real company or client.
+entities:
+- id: northwind_air
+  name: Northwind Air Holdings
+  short: Northwind Air
+  kind: company
+  category_tags:
+  - SC
+  description: An airline. Fuel is its largest cost after labour.
+  features:
+    sector: airlines
+    region: NW
+  aliases:
+  - NWAIR
+  - Northwind Air
+  levels:
+    share_price: 41.0
+subentities:
+- entity: northwind_air
+  id: northwind_air.fuel_cost
+  name: Northwind Air fuel cost
+  attribute_kind: cost_index
+  unit: index
+  family: lognormal
+  mean: 100.0
+  scale: 0.07
+- entity: northwind_air
+  id: northwind_air.operating_margin
+  name: Northwind Air operating margin
+  attribute_kind: margin
+  unit: pct
+  family: gaussian
+  prior:
+    family: gaussian
+    mu: 6.0
+    sigma: 1.5
+  scale: 1.5
+interactions:
+- id: n03
+  source: northwind_air.fuel_cost
+  target: northwind_air.operating_margin
+  label: squeezes
+  effect:
+    mu: -0.5
+  kernel:
+    delay_days: 10
+    lag_days: 45
+    duration_days: 240

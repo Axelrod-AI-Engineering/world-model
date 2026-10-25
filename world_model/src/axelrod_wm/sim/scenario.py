@@ -30,9 +30,11 @@ class HistorySpec(BaseModel):
 
 
 class InitializationSpec(_M):
-    construction_dir: str
+    # one world folder, or a list of them (`construction_dirs` in scenario.yaml: a unified scenario, merged in order by
+    # engine/initialize.read_construction); `seeds` is likewise one file or a list, merged by read_seeds
+    construction_dir: str | list[str]
     taxonomy_dir: str
-    seeds: str | None = None          # a blank canvas (the small demo) has no seeds and no history
+    seeds: str | list[str] | None = None          # a blank canvas (the small demo) has no seeds and no history
     layout: str | None = None
     history: dict[str, Any] | None = None
     focus: FocusSpec | None = None    # set from the scenario's `focus`: the world is narrowed on load (engine/focus.py)

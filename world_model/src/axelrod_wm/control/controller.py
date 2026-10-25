@@ -105,12 +105,13 @@ class WorldModelController:
             self._world_dir = None
             p = self.scenario_dir / "scenario.yaml" if self.scenario_dir is not None else None
             if p is not None and p.exists():
-                from axelrod_wm.engine.initialize import resolve_path
+                from axelrod_wm.engine.initialize import as_paths
                 from axelrod_wm.sim.scenario import scenario_raw
 
                 # a focused scenario's world is its base's (sim/scenario.scenario_raw)
                 d = (scenario_raw(p).get("initialization") or {}).get("construction_dir")
-                self._world_dir = resolve_path(d) if d else None
+                # a unified scenario names several worlds: the first holds the templates and the data feed's series map
+                self._world_dir = as_paths(d)[0] if d else None
         return self._world_dir
 
     def translator_for(self, kind: str) -> Any:

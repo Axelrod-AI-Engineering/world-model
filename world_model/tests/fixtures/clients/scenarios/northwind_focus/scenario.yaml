@@ -1,0 +1,13 @@
+# A compartment of the unified demo (engine/focus.py): Northwind Air and the players it connects to. A synthetic test fixture (invented companies).
+id: northwind_focus
+title: 'Unified demo, Northwind compartment: Northwind Air and the players it connects to'
+focus:
+  base: unified_demo
+  companies:
+  - northwind_air
+context_pack:
+  domain_pack_id: PACK_NORTHWIND_COMPARTMENT
+  name: Northwind Compartment
+  slug: northwind_compartment
+  file_index: '039'
+  edge_id_start: 60

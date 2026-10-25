@@ -80,8 +80,18 @@ def anchor_paths(raw: dict[str, Any], root: Path) -> dict[str, Any]:
     """`raw` (a scenario.yaml as data) with every path it names anchored by the rule above."""
     out = dict(raw)
     ini = dict(raw.get("initialization") or {})
+    if "construction_dirs" in ini:
+        # a unified scenario names several worlds; everything downstream reads them as `construction_dir`, a list
+        dirs = ini.pop("construction_dirs")
+        if ini.get("construction_dir"):
+            raise ValueError("a scenario names construction_dir or construction_dirs, not both")
+        if not isinstance(dirs, list) or not dirs:
+            raise ValueError("construction_dirs is a list of world folders")
+        ini["construction_dir"] = dirs
     for key in ("construction_dir", "taxonomy_dir", "seeds", "layout"):
-        if ini.get(key):
+        if isinstance(ini.get(key), list):
+            ini[key] = [anchor(x, root) for x in ini[key]]
+        elif ini.get(key):
             ini[key] = anchor(ini[key], root)
     if ini.get("history"):
         ini["history"] = {**ini["history"], "regimes": anchor(ini["history"]["regimes"], root)}

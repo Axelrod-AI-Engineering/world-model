@@ -37,7 +37,13 @@ import yaml
 
 from axelrod_wm.clients import find_world, load_scenario_yaml, scenario_dirs
 from axelrod_wm.engine.construction_edit import EditError, edit_calibration, interaction_file
-from axelrod_wm.engine.initialize import ConstructionSpec, load_vocabulary, resolve_path, world_taxonomy_dir
+from axelrod_wm.engine.initialize import (
+    ConstructionSpec,
+    as_paths,
+    load_vocabulary,
+    resolve_path,
+    world_taxonomy_dir,
+)
 from axelrod_wm.model.calibrate import (
     SIDES,
     SUPPORTS,
@@ -61,8 +67,9 @@ def thesis_shocks(world: Path, scenarios: Path | None = None) -> dict[str, list[
     out: dict[str, list[str]] = {}
     for f in sorted(p for d in ([scenarios] if scenarios else scenario_dirs()) for p in d.glob("*/scenario.yaml")):
         raw = load_scenario_yaml(f)
-        built_on = (raw.get("initialization") or {}).get("construction_dir")
-        if not built_on or resolve_path(built_on).resolve() != world.resolve():
+        # built on `world`: it is the scenario's world, or one of the worlds a unified scenario merges
+        built_on = as_paths((raw.get("initialization") or {}).get("construction_dir"))
+        if world.resolve() not in {p.resolve() for p in built_on}:
             continue
         theses = f.parent / "theses.yaml"
         for t in (yaml.safe_load(theses.read_text()) or {}).get("theses", []) if theses.exists() else []:

@@ -35,6 +35,7 @@ from axelrod_wm.engine.initialize import (
     ConstructionSpec,
     Initializer,
     SeedFile,
+    as_paths,
     load_vocabulary,
     resolve_path,
 )
@@ -161,7 +162,7 @@ class ScenarioRunner:
     def _init_key(self, cfg: EngineConfig) -> str:
         ini = self.script.initialization
         hist = ini.history_spec()
-        files = [resolve_path(ini.construction_dir), resolve_path(ini.taxonomy_dir), resolve_path(ini.seeds),
+        files = [*as_paths(ini.construction_dir), resolve_path(ini.taxonomy_dir), *as_paths(ini.seeds),
                  resolve_path(hist.regimes), resolve_path(self.script.world.truth),
                  self.scenario_dir / "market_events.jsonl"]
         # DECISION: the key also covers the package's source, so a code change rebuilds the cache.

@@ -1,0 +1,88 @@
+# Northwind's world (northwind_demo): a synthetic test fixture. Invented companies; it shares the crude-oil market with
+# acme_demo, defined the same way, so a unified scenario can merge the two. Nothing here describes a real company or client.
+decision_variables: []
+entities:
+- id: crude_oil
+  name: Crude oil
+  kind: market
+  description: 'Crude oil: price and supply. A sustained rise feeds headline inflation within a quarter, lifts freight, and
+    weighs on growth after two.'
+  category_tags:
+  - MF
+  features:
+    market: commodity
+  aliases:
+  - oil
+  - crude
+  - oil prices
+  subentities:
+  - id: crude_oil.price
+    name: Crude oil price
+    attribute_kind: commodity_price
+    unit: $/bbl
+    family: lognormal
+    mean: 85.0
+    scale: 0.08
+    aliases:
+    - oil price
+    - crude price
+    - price of crude
+    - crude oil
+  - id: crude_oil.supply
+    name: Crude oil supply
+    attribute_kind: production_flow
+    unit: index
+    family: lognormal
+    mean: 100.0
+    scale: 0.04
+    aliases:
+    - oil supply
+    - oil output
+    - crude supply
+    - supply outage
+- id: jet_fuel
+  name: Jet fuel
+  kind: market
+  category_tags:
+  - MF
+  description: 'Jet fuel: refined from crude, so its price follows crude within weeks.'
+  features:
+    market: refined_products
+  aliases:
+  - jet fuel
+  - aviation fuel
+  subentities:
+  - id: jet_fuel.price
+    name: Jet fuel price
+    attribute_kind: commodity_price
+    unit: $/gal
+    family: lognormal
+    mean: 2.6
+    scale: 0.08
+    aliases:
+    - jet fuel price
+    - price of jet fuel
+- id: industrial_demand
+  name: Northwind industrial demand
+  kind: macro_factor
+  category_tags:
+  - MF
+  description: Factory orders and construction activity in the Northwind region.
+  features:
+    region: NW
+  aliases:
+  - industrial demand
+  - factory orders
+  subentities:
+  - id: industrial_demand.index
+    name: Industrial demand index
+    attribute_kind: condition_index
+    unit: index
+    family: gaussian
+    prior:
+      family: gaussian
+      mu: 52.0
+      sigma: 2.0
+    scale: 2.0
+    aliases:
+    - factory orders index

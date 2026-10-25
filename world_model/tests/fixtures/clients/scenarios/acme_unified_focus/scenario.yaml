@@ -1,0 +1,14 @@
+# A compartment of the unified demo (engine/focus.py): Acme Motors and Acme Re and the players they connect to. A synthetic test fixture (invented companies).
+id: acme_unified_focus
+title: 'Unified demo, Acme compartment: Acme Motors and Acme Re and the players they connect to'
+focus:
+  base: unified_demo
+  companies:
+  - acme_motors
+  - acme_re
+context_pack:
+  domain_pack_id: PACK_ACME_COMPARTMENT
+  name: Acme Compartment
+  slug: acme_compartment
+  file_index: '040'
+  edge_id_start: 60

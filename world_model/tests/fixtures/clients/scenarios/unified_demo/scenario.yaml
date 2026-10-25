@@ -1,0 +1,23 @@
+# The unified scenario: acme_demo's and northwind_demo's worlds merged into one base (initialization.construction_dirs): a synthetic test fixture (invented companies and themes; nothing here describes a real company or client).
+id: unified_demo
+title: 'Unified demo: every invented world in one model, served to each account in its own compartment'
+canvas: seeded
+imports: true
+start: 2026-08-03
+seed: 17
+initialization:
+  construction_dirs:
+  - worlds/acme_demo
+  - worlds/northwind_demo
+  taxonomy_dir: worlds/acme_demo/taxonomy
+  seeds:
+  - scenarios/acme_demo/superentity_seeds.yaml
+  - scenarios/unified_demo/northwind_seeds.yaml
+config_overrides: configs/acme_demo.yaml
+steps: []
+context_pack:
+  domain_pack_id: PACK_UNIFIED_DEMO
+  name: Unified Demo
+  slug: unified_demo
+  file_index: '038'
+  edge_id_start: 60

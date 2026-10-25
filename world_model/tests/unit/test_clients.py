@@ -141,7 +141,7 @@ def test_the_synthetic_client_is_on_the_roots_and_its_scenarios_are_found():
     ids = [s["id"] for s in list_scenarios()]
     assert {"acme_demo", "acme_focus", "small_demo", "oil_shock_demo"} <= set(ids)
     focused = focus_result(FocusSpec(base="acme_demo", companies=["acme_motors", "acme_re"]))
-    assert focused.world_dir == FIXTURE_CLIENTS / "worlds" / "acme_demo"
+    assert focused.world_dirs == [FIXTURE_CLIENTS / "worlds" / "acme_demo"]
 
 
 def test_the_module_exposes_the_variable_name():
