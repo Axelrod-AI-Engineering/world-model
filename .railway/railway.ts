@@ -25,7 +25,7 @@ export default defineRailway((ctx) => {
     // Railway builds and deploys every push to main from this repository (Oct 11). Declared here so an apply keeps
     // the link instead of removing it.
     source: repo,
-    // The watch patterns (railway.json at the root) are every path this image copies; a change under ingestion/ redeploys
+    // The watch patterns (set on the service, docs/deployment.md#service-settings) are every path this image copies; a change under ingestion/ redeploys
     // all three services, one under world_model/ only this one.
     build: { builder: "DOCKERFILE", dockerfilePath: "Dockerfile" },
     deploy: {

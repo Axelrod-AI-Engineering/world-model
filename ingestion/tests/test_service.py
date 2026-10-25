@@ -160,13 +160,13 @@ def test_main_serves_the_pipeline_and_refuses_to_run_open(tmp_path, monkeypatch)
     with pytest.raises(SystemExit, match="INGEST_TOKEN"):
         service.main()
     served, seen = {}, {}
-    monkeypatch.setattr(uvicorn, "run", lambda app, host, port: served.update(app=app, port=port))
+    monkeypatch.setattr(uvicorn, "run", lambda app, host, port: served.update(app=app, host=host, port=port))
     monkeypatch.setattr(ocr, "ocr_from_env", lambda env: seen.update(env) or None)
     monkeypatch.setenv("INGEST_TOKEN", "ingest-token")
     monkeypatch.delenv("PORT", raising=False)
     monkeypatch.delenv("AXELROD_OCR_CACHE", raising=False)
     service.main()
-    assert served["port"] == 8000 and TestClient(served["app"]).get("/health").status_code == 200
+    assert served["port"] == 8000 and served["host"] == "" and TestClient(served["app"]).get("/health").status_code == 200
     # OCR's page cache is a cache keyed by content: temporary storage, never the lake's volume
     assert seen["AXELROD_OCR_CACHE"].endswith("axelrod-ocr")
     monkeypatch.setenv("AXELROD_OCR_CACHE", str(tmp_path / "ocr"))

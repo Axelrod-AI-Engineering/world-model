@@ -169,7 +169,9 @@ def main() -> None:
     env.setdefault("AXELROD_OCR_CACHE", str(Path(tempfile.gettempdir()) / "axelrod-ocr"))
     app = create_ingest_app(lake_from_env(env), LazyEmbedder(env), provider_from_env(env), ocr_from_env(env), token,
                             max_bytes=int(env.get("INGEST_MAX_BYTES") or MAX_BYTES))
-    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT") or 8000))
+    # "" is every address of both families (asyncio opens one IPv4 and one IPv6 socket; "::" alone would be IPv6-only):
+    # Railway's private network reaches a service over IPv6, its healthcheck over IPv4
+    uvicorn.run(app, host="", port=int(os.environ.get("PORT") or 8000))
 
 
 __all__ = ["create_ingest_app", "main"]
