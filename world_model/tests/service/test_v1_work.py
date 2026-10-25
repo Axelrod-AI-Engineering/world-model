@@ -446,3 +446,15 @@ def test_the_same_content_gets_the_same_answer_whoever_sends_it(c):
     b1 = c.post(f"{WM}/bundles", json={**SUPPORT, "title": "Content-keyed"})
     b2 = c.post(f"{WM}/bundles", json={**SUPPORT, "title": "Content-keyed"}, headers=person)
     assert b1.status_code == b2.status_code == 201 and b1.json() == b2.json()
+
+
+# -- the default review policy ------------------------------------------------------------------------------------------------------
+def test_under_standards_a_well_attributed_upload_is_applied_without_a_person():
+    with service(SIGNER, review=None) as c:
+        before = c.get(WM).json()["meta"]["version"]["number"]
+        res = upload(c, OIL_NOTE, "2026-09-01_data.txt", source="Data desk", source_type="data")
+        propose(c, res["bundle_id"])
+        assert not data(c.get(f"{WM}/changes"))
+        (ch,) = data(c.get(f"{WM}/changes", params={"status": "all"}))
+        assert ch["status"] == "auto_applied" and ch["decided_by"]["sub"] == "policy:standards", ch
+        assert ch["version_after"] > before
