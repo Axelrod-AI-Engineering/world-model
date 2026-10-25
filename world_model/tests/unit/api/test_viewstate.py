@@ -15,7 +15,7 @@ from axelrod_wm.api.viewstate import CompartmentError, ViewController, ViewState
 from axelrod_wm.control.controller import ControllerError
 from axelrod_wm.control.updates import UpdateState
 from axelrod_wm.events.thesis import Thesis
-from axelrod_wm.repo.snapshots import MemoryBackend
+from axelrod_wm.repo.snapshots import FilesBackend, MemoryBackend
 from tests.service.helpers import service
 
 ENV = {"WORLD_MODEL_BASIC_AUTH_USERNAME": "admin", "WORLD_MODEL_BASIC_AUTH_PASSWORD": "pw-admin",
@@ -269,3 +269,17 @@ def test_a_login_on_another_focus_keeps_its_own_engine(tmp_path, monkeypatch):
     other = create_app(scenario="acme_demo", storage=MemoryBackend(), trace_dir=None, lake_dir=tmp_path / "lake2",
                        load_on_startup=False)
     assert set(other.state.views) == {"a"} and set(other.state.axelrod_by_login) == {"n"}
+
+
+def test_a_login_engine_is_stored_beside_the_main_engine(tmp_path, monkeypatch):
+    """A login's own engine keeps its storage next to the main engine's (demo -> demo-<login>), never under the working
+    directory, and in memory when the main engine is."""
+    for k, v in {**ENV, "WORLD_MODEL_LOGINS": "own:pw-own:acme_focus"}.items():
+        monkeypatch.setenv(k, v)
+    app = create_app(scenario="unified_demo", storage=FilesBackend(path=tmp_path / "demo"), trace_dir=None,
+                     lake_dir=tmp_path / "lake", load_on_startup=False)
+    assert app.state.axelrod_by_login["own"].storage.path == tmp_path / "demo-own"
+    mem = create_app(scenario="unified_demo", storage=MemoryBackend(), trace_dir=None, lake_dir=tmp_path / "lake2",
+                     load_on_startup=False)
+    assert isinstance(mem.state.axelrod_by_login["own"].storage, MemoryBackend)
+

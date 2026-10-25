@@ -40,8 +40,9 @@ export default defineRailway((ctx) => {
     },
     variables: {
       PORT: "8080",
-      // the scenario the main login opens on (.railway/start-railway.sh reads it); Emily's login opens hers (below)
-      WORLD_MODEL_SCENARIO: "prod_demo",
+      // the scenario the main engine runs (.railway/start-railway.sh reads it): the unified model (Oct 25,
+      // world_model/docs/design/unified-model.md), a client scenario on the volume; each client login opens a compartment of it
+      WORLD_MODEL_SCENARIO: "unified",
       // client scenarios, worlds, and configs are never in the image or the repository: they are loaded from the
       // volume (world_model/src/axelrod_wm/clients.py, docs/deployment.md#client-content)
       WORLD_MODEL_CLIENT_DIR: "/app/var/clients",

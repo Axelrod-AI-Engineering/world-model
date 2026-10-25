@@ -417,7 +417,7 @@ def create_app(config_path: str | None = None, scenario: str = "oil_shock_demo",
     from axelrod_wm.api.auth import extra_logins, org_of
     from axelrod_wm.api.v1.compartments import compartment_of
     from axelrod_wm.api.viewstate import ViewState
-    from axelrod_wm.repo.snapshots import FilesBackend
+    from axelrod_wm.repo.snapshots import FilesBackend, MemoryBackend
 
     settings.load()             # the stage's checked-in profile and, locally, its .creds file (settings.py)
     if storage is None:
@@ -444,8 +444,12 @@ def create_app(config_path: str | None = None, scenario: str = "oil_shock_demo",
             logger.warning("login %s: scenario %s not found under the client roots; it opens the main engine",
                            login.username, login.scenario)
             continue
+        # beside the main engine's storage (var/axelrod/demo -> var/axelrod/demo-<login>), so a test's app keeps every
+        # engine under its own directory; in memory when the main engine is
+        own = (FilesBackend(path=storage.path.with_name(f"{storage.path.name}-{login.username}"))
+               if isinstance(storage, FilesBackend) else MemoryBackend())
         by_login[login.username] = AppState(
-            login.scenario, config_path, storage=FilesBackend(path=Path(f"var/axelrod/demo-{login.username}")),
+            login.scenario, config_path, storage=own,
             trace_dir=Path(trace_dir) / login.username if trace_dir is not None else None, play_delay=play_delay,
             cache_dir=cache_dir)
 
