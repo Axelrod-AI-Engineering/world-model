@@ -1,14 +1,12 @@
 """I4. A restart, as a deploy restarts: a second service on the same snapshot and lakehouse directories.
 
-What it proves today:
+What it proves:
 - The lakehouse survives whole: documents, their text, chunks and raw bytes, bundles, the audit log, the world model
   registry, idempotency keys and jobs (kept forever), and search.
-- The model does not: a service loads its scenario from the initial snapshot and resets the snapshot store
-  (sim/runner.py, `_session_storage`), so the versions committed before the restart are gone (404 version_not_found).
-- Replaying the stored bundle, with the same decisions, reproduces the lost state exactly: the same version and state
-  hash. The lakehouse's bundles and its audit log of decisions are therefore enough to rebuild the model.
-
-When versions should survive a restart, the second half of this test changes to expect them; the replay check stays.
+- The model survives too (Oct 25, unified-model.md): the service resumes from its snapshot store at the version it
+  stopped at, with the versions before the restart still readable.
+- Without its snapshot store, replaying the stored bundle with the same decisions reproduces the state exactly: the
+  same version and state hash. The lakehouse's bundles and its audit log of decisions are enough to rebuild the model.
 """
 
 from __future__ import annotations
@@ -75,13 +73,17 @@ def test_the_lakehouse_survives_a_restart_and_a_replay_rebuilds_the_model(tmp_pa
         again = upload(c, RATES_NOTE, "2026-09-01_data.txt")
         assert again["new"] is True and again["bundle_id"] == res["bundle_id"]     # the first upload's answer
 
-        # the model: back at its initial state; the versions before the restart are gone
+        # the model: resumed at the version it stopped at, its earlier versions still readable
         now = version(c)
-        assert (now["number"], now["state_hash"]) == (start["number"], start["state_hash"])
-        problem(c.get(f"{WM}/versions/{moved['number']}"), 404, "version_not_found")
-        problem(c.get(f"{WM}/graph", params={"entities": "crude_oil", "version": moved["number"]}), 404, "version_not_found")
+        assert (now["number"], now["state_hash"]) == (moved["number"], moved["state_hash"])
+        assert data(c.get(f"{WM}/versions/{moved['number']}"))["number"] == moved["number"]
+        assert attribute(c, "crude_oil", "price")["data"] == crude
 
-        # a replay of the stored bundle, with the same decisions, rebuilds the same state, exactly
+    # without the snapshot store, a replay of the stored bundle, with the same decisions, rebuilds the same state
+    (tmp_path / "snapshots").rename(tmp_path / "snapshots.gone")
+    with service(SIGNER, tmp_path) as c:
+        fresh = version(c)
+        assert (fresh["number"], fresh["state_hash"]) == (start["number"], start["state_hash"])
         propose(c, res["bundle_id"])
         review_all(c, note="matches the release")
         replay = version(c)
