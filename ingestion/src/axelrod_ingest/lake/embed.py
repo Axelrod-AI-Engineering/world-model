@@ -1,8 +1,10 @@
 """Embedders for semantic search (Oct 17).
 
-`fastembed` runs a small sentence embedder (BAAI/bge-small-en-v1.5, 384 dimensions, ONNX) on the CPU, inside the
-service: no text leaves the deploy. It runs single-threaded and its vectors are rounded to 6 decimals, so the same
-text always embeds to the same vector. `hashing` needs no model: words and word pairs hashed into 256 signed buckets,
+`fastembed` runs a small sentence embedder on the CPU, inside the service: no text leaves the deploy. The model is IBM's
+granite-embedding-small-english-r2 (Oct 25): open (Apache-2.0) and from a US developer, 384 dimensions, ONNX, and it
+needs no query or passage prefix, so a query and a passage embed the same way. It replaced BAAI/bge-small-en-v1.5. It runs
+single-threaded, and its vectors are L2-normalized (granite's are not, as they come) and rounded to 6 decimals, so the
+same text always embeds to the same unit vector. `hashing` needs no model: words and word pairs hashed into 256 signed buckets,
 L2-normalized. It is exact and instant, so the tests use it, and it is the fallback when fastembed is not installed.
 
 WORLD_MODEL_EMBEDDER selects one: fastembed, hashing, or auto (the default: fastembed when installed).
@@ -49,7 +51,7 @@ class HashingEmbedder:
 
 
 class FastEmbedder:
-    MODEL = "BAAI/bge-small-en-v1.5"
+    MODEL = "ibm-granite/granite-embedding-small-english-r2"
 
     def __init__(self, cache_dir: str | None = None) -> None:
         from fastembed import TextEmbedding
@@ -59,7 +61,11 @@ class FastEmbedder:
         self.dim = 384
 
     def embed(self, texts: list[str]) -> list[list[float]]:
-        return [[round(float(x), 6) for x in v] for v in self.model.embed(texts, batch_size=32)]
+        out = []
+        for v in self.model.embed(texts, batch_size=32):
+            n = math.sqrt(sum(float(x) * float(x) for x in v)) or 1.0
+            out.append([round(float(x) / n, 6) for x in v])
+        return out
 
 
 def embedder_from_env(env: dict[str, str] | None = None) -> Embedder:

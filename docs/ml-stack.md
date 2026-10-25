@@ -26,7 +26,7 @@ Small and deterministic first; a language model only where the rules are silent,
 | Recognize | A gazetteer over the model's own names (a trie of word tokens, longest match first, slots resolved to the nearest owner), built from the world view | `gazetteer.py` |
 | Extract | **Rules first**: sentence patterns for levels, moves, directions, causal claims, with exact quotes, and rules against forecasts, history, other actors' figures, and wrong periods | `extract.py`, `tables.py` |
 | Extract, optional | **A cached LLM step** on chunks that name values where the rules found nothing: the same signal schema, every answer checked (ids exist, the quote appears verbatim), confidence 0.5, replayed from a cache keyed by content so a re-run is byte-identical | `llm.py` |
-| Embed | A hashing embedder (exact, no model; the tests and the fallback), or bge-small (BAAI/bge-small-en-v1.5, 384 dimensions, ONNX on CPU) through fastembed | `lake/embed.py` |
+| Embed | A hashing embedder (exact, no model; the tests and the fallback), or IBM's granite-embedding-small-english-r2 (open, Apache-2.0, US; 384 dimensions, ONNX on CPU, unit vectors) through fastembed | `lake/embed.py` |
 | Search | BM25 over a stemmed full-text index, an unstemmed prefix index, cosine over embeddings, graph expansion from the names a query holds, and **reciprocal-rank fusion** (k = 60) of keyword, semantic, and graph for the hybrid mode | `lake/search.py`, `lake/sqlite.py` |
 | Measure | Recall against a gold set with dev and test splits, precision from labels, speed per stage | `bench.py`, [bench.md](../ingestion/docs/bench.md) |
 

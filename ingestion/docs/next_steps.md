@@ -76,7 +76,7 @@ The import code is in `sim/imports.py` and `intake/structured.py` (the translato
 | `hybrid` | the default: reciprocal-rank fusion (k = 60) of keyword, semantic and graph |
 
 Embeddings (`lake/embed.py`), chosen by `WORLD_MODEL_EMBEDDER`:
-- **`fastembed`:** BAAI/bge-small-en-v1.5, 384 dimensions, ONNX on the CPU inside the service, so no text leaves the
+- **`fastembed`:** IBM granite-embedding-small-english-r2 (open, from a US developer), 384 dimensions, ONNX on the CPU inside the service, so no text leaves the
   deploy.
 - **`hashing`:** an exact 256-bucket hash of words and word pairs, with no model. The tests use it, and it is the
   fallback when fastembed is not installed.
