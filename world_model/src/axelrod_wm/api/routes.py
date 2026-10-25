@@ -172,12 +172,12 @@ async def get_config(request: Request) -> dict:
 @router.patch("/config/review")
 async def patch_review(request: Request, body: PolicyBody) -> dict:
     st = S(request)
-    if body.policy not in ("review_all", "default", "auto_approve_all"):
+    if body.policy not in ("review_all", "default", "auto_approve_all", "standards"):
         raise HTTPException(422, f"unknown review policy {body.policy!r}")
 
     def run() -> tuple[dict, str | None]:
         ctl = st.controller
-        ctl.set_review_policy(body.policy)
+        ctl.set_review_policy(body.policy, by=body.by)
         drive = None
         if body.approve_pending and body.policy == "auto_approve_all":
             # auto-accept from now on, and for what already waits: approve the queue, then let the run go on (the

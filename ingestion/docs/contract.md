@@ -42,8 +42,10 @@ the other.
 | Level | Fields |
 |---|---|
 | Bundle | `format`, `title`, `collected_by`, `collected_at`, `description`, `synthetic`, `items` |
-| Item | `id`, `published_at`, `occurred_at`, `source`, `source_type` (broker_research, expert_call, news, …), `kind` (news, data, analyst, filing), `headline`, `summary`, `url`, `entities`, `tickers`, `category`, `stance`, `relevance` (0–1), `confidence` (0–1), `tags`, `signals` |
+| Item | `id`, `published_at`, `occurred_at`, `source`, `source_type` (broker_research, expert_call, news, …), `kind` (news, data, analyst, filing), `headline`, `summary`, `url`, `entities`, `tickers`, `category`, `stance`, `relevance` (0–1), `confidence` (0–1), `tags`, `document`, `publisher`, `basis` (direct, proxy, context_only), `citation`, `coverage` (full, partial), `plausible`, `signals` |
 | Signal | `observe` (`value_of`, `value`) · `move` (`value_of`, `delta`, `mode`) · `link` (`source`, `target`, `label`, `effect`, `delay_days`, `lag_days`, `duration_days`) · `support` / `contradict` (`source`, `target`, `strength`); each with the `quote` that makes it and a `note` |
+
+The last six item fields name what the world model's `standards` review gate checks (R18-R21): an item that leaves one out is still valid, but waits for a person.
 
 ```json
 {"format": "axelrod.import/v1", "title": "...", "collected_by": "...", "items": [

@@ -63,6 +63,7 @@ class WorldModelController:
         self._known_keys: dict[str, str] = {}   # dedup key -> market event id
         self._effects_applied: set[str] = set()
         self.listeners: list[Any] = []          # callables (kind, **info), e.g. the scenario checklist
+        self.import_context: Any = None         # market event id -> repo.review.ImportContext, set by an import runner
 
     # ---------------------------------------------------------------------------------------
     # plumbing
@@ -201,7 +202,7 @@ class WorldModelController:
                         reasons=[], subject_id=subject_id, market_event_id=p.market_event_id, world_event=world,
                         update_id=p.update_id)
             if not world:
-                self._apply_model_edit(p, by="policy", note=None, auto=True)
+                self._apply_model_edit(p, by=self.auto_actor(), note=None, auto=True)
         return p
 
     def submit_graph_update(self, event: GraphUpdateEvent, by: str, update_id: str | None = None) -> Proposal:
@@ -345,7 +346,7 @@ class WorldModelController:
         verb = {ProposalKind.SUPERENTITY_ADMISSION: "Collapse", ProposalKind.SUPERENTITY_DISSOLUTION: "Expand",
                 ProposalKind.FRONTIER_PROMOTION: "Promote"}.get(p.kind, "Structure")
         with eng.mutator.begin(cause=p.id, at=self.now, process="structural", proposal_id=p.id,
-                               vetted_by="policy" if auto else by, message=f"{verb}: {what or p.kind} ({p.id})") as txn:
+                               vetted_by=self.auto_actor() if auto else by, message=f"{verb}: {what or p.kind} ({p.id})") as txn:
             self._apply_effects(p, txn)
             if ev.ops:
                 eng.structural.apply(ev, self.now, str(p.kind))
@@ -403,14 +404,14 @@ class WorldModelController:
                 txn.remove("wm.late_queue", p.id)
         effects_cs = eng.mutator.last_changeset if eng.ledger.next_seq > before_seq else None
         if p.event.ops:
-            vetted_by = "policy" if auto else (p.decided_by or "reviewer")
+            vetted_by = self.auto_actor() if auto else (p.decided_by or "reviewer")
             result = eng.learning.run(p.event, now, day, headline=headline, proposal_id=p.id, vetted_by=vetted_by)
         cs = (result.working.commit if result is not None and result.working is not None
               and result.working.commit is not None else effects_cs)
         p.folded_day = day
         p.late_from = late_from
         if auto:
-            self._mark_decided(p, ProposalStatus.AUTO_APPLIED, "policy", None, cs, day=day)
+            self._mark_decided(p, ProposalStatus.AUTO_APPLIED, self.auto_actor(), None, cs, day=day)
         else:
             if cs is not None:
                 p.changeset_id = cs.id
@@ -602,11 +603,26 @@ class WorldModelController:
     def pending_proposals(self) -> list[Proposal]:
         return [p for p in self.proposals.values() if p.status == ProposalStatus.PENDING and p.needs_review]
 
-    def set_review_policy(self, name: str) -> None:
+    def import_context_of(self, market_event_id: str) -> Any:
+        """The imported item behind a market event, for the standards gate (None outside an import runner)."""
+        return self.import_context(market_event_id) if self.import_context is not None else None
+
+    def set_review_policy(self, name: str, by: str = "system", *, record: bool | None = None) -> None:
+        """Choose the review policy. A change is logged (REVIEW_POLICY, with who set it) so a resumed model has the
+        policy it stopped with; `record` logs it even when the name is the same (an import runner's first choice)."""
         with self.lock:
+            changed = name != self.config.review.policy
             policy = registry("review_policy").create(name, config=self.config)
+            if hasattr(policy, "bind"):
+                policy.bind(self.import_context_of)
             self.engine.components["review_policy"] = policy
             self.config.review.policy = name
+            if record or (record is None and changed):
+                self.engine.ledger.append(LedgerKind.REVIEW_POLICY, {"policy": name, "by": by}, recorded_at=self.now)
+
+    def auto_actor(self) -> str:
+        """Who an automatic approval is recorded as: the review policy that made it."""
+        return getattr(self.engine.components["review_policy"], "actor", "policy")
 
     # ---------------------------------------------------------------------------------------
     # update runs (§7.8)

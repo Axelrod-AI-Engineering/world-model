@@ -96,6 +96,14 @@ class ImportItem(BaseModel):
     relevance: float = Field(0.5, ge=0, le=1)     # to the book, as the agent judged it
     confidence: float = Field(0.7, ge=0, le=1)    # in its own reading
     tags: list[str] = []
+    # Attribution and standards (Oct 25; read by the world model's `standards` review gate, repo/review.py). Each is
+    # optional; an item that leaves one out is not rejected, it just waits for a person.
+    document: str = ""                 # the source document, by name or reference (R21)
+    publisher: str = ""                # who published third-party material (R21)
+    basis: Literal["direct", "proxy", "context_only"] | None = None   # how the calibration register matches it (R21)
+    citation: str = ""                 # the passage or document that establishes a link between two companies (R20)
+    coverage: Literal["full", "partial"] | None = None   # full: the entity's own statements; partial: a part of a total (R18)
+    plausible: bool | None = None      # the extractor's plausibility band: True in band, False out, None not checked
     signals: list[Signal] = []
 
 

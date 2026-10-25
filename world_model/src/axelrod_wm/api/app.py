@@ -160,6 +160,8 @@ class AppState:
             self.switching = None
             self.runners.clear()
             self.build(self.first_scenario, True)
+            if hasattr(self.runner, "discard_saved"):
+                self.runner.discard_saved()         # an imported model is kept across restarts; a reset forgets it
             status = self.runner.load()
             self.runner.controller.auto_resume = False
             self.runner.progress = {"phase": "ready"}
