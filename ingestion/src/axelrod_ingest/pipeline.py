@@ -26,6 +26,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
+from urllib.parse import urlsplit
 
 from pydantic import ValidationError
 
@@ -35,7 +36,7 @@ from axelrod_ingest.contract.bundle import FORMAT, ImportBundle
 from axelrod_ingest.contract.world_view import WorldView
 from axelrod_ingest.dates import Dates
 from axelrod_ingest.dates import resolve as resolve_dates
-from axelrod_ingest.extract import Reading, Rules, claims_of_chunk, item_of, keep_best
+from axelrod_ingest.extract import Reading, Rules, claims_of_chunk, item_of, keep_best, provenance_of
 from axelrod_ingest.gazetteer import Gazetteer
 from axelrod_ingest.lake.embed import Embedder
 from axelrod_ingest.lake.store import (
@@ -62,7 +63,7 @@ SCREENED = ("html", "pdf")      # the formats whose pages can hold no content (a
 
 # what process() derives and writes again each time (a key the caller gave, "manifest" or "hints", is kept)
 DERIVED_META = {"format", "pages", "slides", "sheets", "encoding", "needs_ocr", "ocr", "language", "dates", "currency",
-                "doc_type", "shared_origin"}
+                "doc_type", "shared_origin", "publisher"}
 
 
 def bundle_id(bundle: dict) -> str:
@@ -177,6 +178,16 @@ def _period_end(dates: Dates) -> datetime | None:
     """The end of the period a document reports on, when it ended before the document was published."""
     p = dates.period
     return None if p is None or dates.forward else datetime(p.end.year, p.end.month, p.end.day, tzinfo=UTC)
+
+
+def publisher_of(doc: Document) -> tuple[str, str | None]:
+    """Who published a document, and its address, for the bundle's attribution fields. The manifest's publisher column, else
+    the one the caller gave (`hints.publisher`), else the document's own metadata (an HTML page's <meta>, a PDF's author),
+    else the host of the manifest's URL; empty when none of these says (the world model's gate then waits for a person)."""
+    manifest, hints = doc.meta.get("manifest") or {}, doc.meta.get("hints") or {}
+    url = manifest.get("url") or None
+    host = urlsplit(url or "").netloc.removeprefix("www.")
+    return (manifest.get("publisher") or hints.get("publisher") or doc.meta.get("publisher") or host).strip(), url
 
 
 def _utc(t: datetime) -> datetime:
@@ -295,6 +306,7 @@ class Ingestor:
         reading = Reading(subject=subject, region=region, date=doc.event_time, ref=_period_end(dates),
                           forward=bool(GUIDANCE.search(doc.filename)), partial=_partial(dates))
         n_llm = 0
+        publisher, url = publisher_of(doc)
         prefix = f"D{doc.id[:10]}"
         read = []
         for c in chunks:
@@ -316,6 +328,8 @@ class Ingestor:
                            source_type=doc.source_type, kind=KIND_OF.get(doc.source_type, "news"), title=doc.title,
                            extra=sigs)
             if item is not None:
+                item.update(provenance_of(rules, item, doc_id=doc.id, chunk=c, subject=subject, partial=reading.partial,
+                                          publisher=publisher, url=url))
                 item["tags"] = [*item["tags"], *tags]
                 if dates.period is not None and not dates.forward:   # the period the figures are about, beside when they were published
                     item["occurred_at"] = datetime(*dates.period.end.timetuple()[:3], tzinfo=UTC).isoformat()

@@ -22,7 +22,7 @@ def _zip(files: dict[str, str | bytes]) -> bytes:
     return buf.getvalue()
 
 
-def pdf(pages: list[str], title: str | None = None) -> bytes:
+def pdf(pages: list[str], title: str | None = None, author: str | None = None) -> bytes:
     """A real PDF: one Helvetica text line per page (each string is drawn with Tj), with a correct xref table."""
     n = len(pages)
     font = 3 + 2 * n
@@ -39,8 +39,9 @@ def pdf(pages: list[str], title: str | None = None) -> bytes:
         objs.append(b"<< /Length %d >>\nstream\n" % len(stream) + stream + b"\nendstream")
     objs.append(b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>")
     info = None
-    if title is not None:
-        objs.append(f"<< /Title ({title}) >>".encode("latin-1"))
+    if title is not None or author is not None:
+        fields = ([f"/Title ({title})"] if title is not None else []) + ([f"/Author ({author})"] if author is not None else [])
+        objs.append(f"<< {' '.join(fields)} >>".encode("latin-1"))
         info = len(objs)
     out = bytearray(b"%PDF-1.4\n")
     offsets = []

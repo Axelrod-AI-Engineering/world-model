@@ -125,7 +125,7 @@ def ingest_pack(root: Path, ingestor: Ingestor, graph: WorldView, *, tenant: str
         source = ""
         if entry is not None:
             meta["manifest"] = {"file": entry.file, "url": entry.url, "section": entry.section, "rank": entry.rank,
-                                "sha256": entry.sha256}
+                                "sha256": entry.sha256, "publisher": entry.publisher}
             source = urlsplit(entry.url).netloc
         res = ingestor.ingest_file(tenant, path.read_bytes(), path.name, graph, source=source, meta=meta)
         doc = res.document

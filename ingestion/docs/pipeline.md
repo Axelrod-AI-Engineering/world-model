@@ -17,6 +17,7 @@ it, see [the API reference](../../world_model/docs/api/README.md).
 - [Duplicates across language and basis](#duplicates-across-language-and-basis)
 - [Packs](#packs)
 - [Extraction: rules first, an LLM only where the rules are silent](#extraction-rules-first-an-llm-only-where-the-rules-are-silent)
+- [Attribution on every item](#attribution-on-every-item)
 - [Determinism](#determinism)
 - [Limits and next steps](#limits-and-next-steps)
 <!-- /toc -->
@@ -231,6 +232,17 @@ existing link. LLM signals carry lower confidence (0.5) and are tagged `llm:<mod
 cached by (provider, model, prompt version, prompt, and the model's names), so reading a document again never calls
 the LLM again and gives the same bundle.
 
+## Attribution on every item
+
+An item says where it came from, so the world model's `standards` review gate can approve a well-attributed one and send
+the rest to a person. The fields and their rules are in [contract.md](contract.md#attribution-fields). In short:
+`document` is the lake id, `publisher` comes from the manifest, the caller's hint, the document's own metadata or the URL's
+host, `basis` is set only where a rule decides (an issuer's own filing is `direct`; third-party figures are `proxy`;
+third-party links are `context_only`), `citation` is the page and character span of a link's sentence, `coverage` is
+`partial` for a part of a total or a part-year report's flow, and `plausible` is the extractor's band check. A field that
+cannot be decided stays empty, and the gate fails closed. Adding the fields changed every bundle id, so the extractor
+version moved from `ingest-1.1` to `ingest-1.2` and stored bundles of the old version are not reused.
+
 ## Determinism
 
 The same file read against the same model gives the same bundle, byte for byte. This is tested
@@ -239,7 +251,7 @@ The same file read against the same model gives the same bundle, byte for byte. 
 - **Ids are content hashes.** Document id = sha256 of the bytes. Bundle id = a digest of its canonical JSON.
 - **Every list is sorted.** That covers chunks, mentions, signals, items, search hits (ties broken by id), and
   every SQL query.
-- **The extractor and parser are versioned** (`ingest-1.1`, `parse-1.1`), and each bundle records both.
+- **The extractor and parser are versioned** (`ingest-1.2`, `parse-1.1`), and each bundle records both.
 - **Embeddings.** Tests use a hashing embedder, which is exact and needs no model. The deploy uses IBM's granite-embedding-small
   through ONNX on one thread, with unit vectors rounded to 6 decimals.
 - **OCR** runs one fixed configuration on one thread and is cached by content, so a page is read once.

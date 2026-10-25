@@ -1673,3 +1673,73 @@ def item_of(graph: WorldView, claims: ChunkClaims, *, doc_prefix: str, published
         "confidence": round(conf, 3), "tags": ["extracted", *(["llm"] if extra else [])],
         "signals": [f.signal() for f in claims.found] + extra,
     }
+
+
+# -- provenance (Oct 25): what the world model's standards gate reads beside an item's signals ------------------------
+THIRD_PARTY = ("broker_research", "expert_call", "news", "other")      # R21: not the company's own, not a regulator's
+
+
+def signal_plausible(rules: Rules, sig: dict) -> bool | None:
+    """Whether a signal's number is inside the band the extractor accepts: a level inside the value's band (6 sd + 4 scale,
+    or six standard units on a log scale), a sized move inside the size it takes (a relative move up to 90%, an absolute one
+    up to MAX_POINTS). None when there is no number to check (a link, a support, a bare direction)."""
+    if sig["type"] == "observe":
+        return rules.plausible_level(sig["value_of"], sig["value"])
+    if sig["type"] == "move" and sig["mode"] != "standardized":
+        return 0 < abs(sig["delta"]) <= (0.9 if sig["mode"] == "relative" else MAX_POINTS)
+    return None
+
+
+def plausible_of(rules: Rules, signals: list[dict]) -> bool | None:
+    """True only when every signal was checked and is inside its band; False when one is outside; else None."""
+    checks = [signal_plausible(rules, s) for s in signals]
+    return None if any(c is None for c in checks) else all(checks)
+
+
+def basis_of(rules: Rules, signals: list[dict], source_type: str, subject: str | None) -> str | None:
+    """R21, conservatively. An issuer's own filing about itself (every value is the document's subject's) is `direct`.
+    Third-party material is `proxy` when every signal is the quantity itself (a level, or a sized change of it) and
+    `context_only` when none is (a link, a support, a bare direction); a mix, or anything else, is None (a person decides)."""
+    if source_type == "filing":
+        own = all(s["type"] in ("observe", "move") and rules.graph.values[s["value_of"]].entity_id == subject
+                  for s in signals)
+        return "direct" if own else None
+    if source_type not in THIRD_PARTY:
+        return None
+    quantity = [s["type"] == "observe" or (s["type"] == "move" and s["mode"] != "standardized") for s in signals]
+    return "proxy" if all(quantity) else "context_only" if not any(quantity) else None
+
+
+def coverage_of(rules: Rules, signals: list[dict], partial: bool) -> str | None:
+    """R18: `partial` when a value is a part of a total the model also holds (a segment, a region, through an accounting or
+    identity link), or a year's flow read from a document that reports a month, a quarter or a half; else `full`. None when
+    no signal is about a value (a link has no coverage)."""
+    values = [s["value_of"] for s in signals if s["type"] in ("observe", "move")]
+    if not values:
+        return None
+    part = any(rules._totals_of(v) or (partial and rules.graph.values[v].unit.endswith("/yr")) for v in values)
+    return "partial" if part else "full"
+
+
+def citation_of(doc_id: str, chunk: Any, signals: list[dict]) -> str:
+    """Where a link was read: the document, the page, and the character span (in the document's text) of the sentence
+    that makes the first link or support; the chunk's number when the sentence is not found in it. Empty when the item
+    states no link."""
+    sig = next((s for s in signals if s["type"] in ("link", "support", "contradict")), None)
+    if sig is None:
+        return ""
+    at = chunk.text.find(sig["quote"]) if sig["quote"] else -1
+    page = f" p.{chunk.page}" if chunk.page is not None else ""
+    if at < 0:
+        return f"{doc_id}{page} chunk {chunk.ord}"
+    return f"{doc_id}{page} chars {chunk.start + at}-{chunk.start + at + len(sig['quote'])}"
+
+
+def provenance_of(rules: Rules, item: dict, *, doc_id: str, chunk: Any, subject: str | None, partial: bool,
+                  publisher: str, url: str | None) -> dict[str, Any]:
+    """The attribution fields of one item (see contract.md): the document, who published it, how the calibration register
+    would match it, the citation of a link, the coverage, and the plausibility of its numbers."""
+    sigs = item["signals"]
+    return {"document": doc_id, "publisher": publisher, "url": url or None,
+            "basis": basis_of(rules, sigs, item["source_type"], subject), "citation": citation_of(doc_id, chunk, sigs),
+            "coverage": coverage_of(rules, sigs, partial), "plausible": plausible_of(rules, sigs)}
