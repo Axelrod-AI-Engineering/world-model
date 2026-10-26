@@ -10,6 +10,10 @@ bytes to disk (a document is held in memory while it is processed) and keeps its
 
     POST /v1/ingest    multipart: `files`, `world_view` (WorldView.to_json), `meta` (JSON: tenant, inverted, source,
                        source_type, published_at, uploaded_by, mime, meta)
+                       `?mode=async` (or `Prefer: respond-async`): answers 202 with `Location: /v1/jobs/{id}` at once and runs
+                       the work on a background worker (jobs.py), one job at a time; the default is synchronous
+    GET  /v1/jobs/{id} an async job: status (queued, running, succeeded, failed), progress, results, error; a progress
+                       handle held in memory (404 for an unknown id, which a restart makes of every one), not a record
     POST /v1/process   JSON: tenant, doc_id, world_view, inverted (a stored document read again)
     POST /v1/embed     JSON: texts; answers name, dim, and the vectors as exact JSON floats (no texts: just name and dim)
     GET  /health
@@ -30,11 +34,12 @@ from __future__ import annotations
 import hmac
 import os
 import tempfile
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from fastapi import Depends, FastAPI, File, Form, Request, UploadFile
+from fastapi import Depends, FastAPI, File, Form, Query, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, ConfigDict
@@ -42,6 +47,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from axelrod_ingest.console import mount_console
 from axelrod_ingest.contract.world_view import WorldView
+from axelrod_ingest.jobs import BACKLOG, HISTORY, JobQueue
 from axelrod_ingest.lake.embed import Embedder
 from axelrod_ingest.lake.server import Problem, problem
 from axelrod_ingest.lake.store import LakeStore, canonical_json
@@ -81,12 +87,14 @@ class ProcessBody(BaseModel):
 
 
 def create_ingest_app(store: LakeStore, embedder: Embedder, provider: Provider | None, ocr: Ocr | None, token: str,
-                      max_bytes: int = MAX_BYTES, **ingestor: Any) -> FastAPI:
+                      max_bytes: int = MAX_BYTES, job_history: int = HISTORY, job_backlog: int = BACKLOG,
+                      **ingestor: Any) -> FastAPI:
     """The ingestion service over `store`. `ingestor` passes the rest of `Ingestor`'s options (clock, screen, ...)."""
     if not token:
         raise ValueError("an ingestion token is required")
     app = FastAPI(title="Axelrod Ingestion Service", version="1", docs_url=None, redoc_url=None, openapi_url=None)
     want = token.encode()
+    jobs = app.state.jobs = JobQueue(job_history, job_backlog)
 
     def authorize(request: Request) -> None:
         scheme, _, given = request.headers.get("authorization", "").partition(" ")
@@ -124,7 +132,10 @@ def create_ingest_app(store: LakeStore, embedder: Embedder, provider: Provider |
         return {"ok": True, "service": "ingestion"}
 
     @app.post("/v1/ingest", dependencies=[Depends(authorize)])
-    def ingest(meta: str = Form(...), world_view: UploadFile = File(...), files: list[UploadFile] = File(...)) -> Response:
+    def ingest(request: Request, meta: str = Form(...), world_view: UploadFile = File(...),
+               files: list[UploadFile] = File(...), mode: str | None = Query(None)) -> Response:
+        if mode not in (None, "sync", "async"):
+            raise ValueError(f"mode is sync or async, not {mode!r}")
         m = IngestMeta.model_validate_json(meta)
         graph = WorldView.from_json(world_view.file.read().decode())
         extra = {k: v for k, v in m.model_dump().items() if k not in ("tenant", "inverted")}
@@ -132,8 +143,29 @@ def create_ingest_app(store: LakeStore, embedder: Embedder, provider: Provider |
         for blob, name in blobs:
             if len(blob) > max_bytes:
                 raise Problem(413, f"{name} is {len(blob)} bytes; the limit is {max_bytes}")
-        results = ingestor_for(m.inverted).ingest_many(m.tenant, blobs, graph, **extra)
-        return _json({"results": [r.to_dict() for r in results]})
+        if mode != "async" and not (mode is None and _prefers_async(request)):
+            results = ingestor_for(m.inverted).ingest_many(m.tenant, blobs, graph, **extra)
+            return _json({"results": [r.to_dict() for r in results]})
+
+        def work(progress: Callable[[int, str], None]) -> list[dict]:
+            ing, done = ingestor_for(m.inverted), []
+            for blob, name in blobs:
+                progress(len(done), name)
+                done.append(ing.ingest_file(m.tenant, blob, name, graph, **extra))
+            progress(len(done), "")
+            return [r.to_dict() for r in sorted(done, key=lambda r: (r.document.event_time, r.document.id))]
+
+        try:
+            job = jobs.submit(blobs, work)
+        except OverflowError as exc:
+            raise Problem(503, str(exc), headers={"Retry-After": "30"}) from exc
+        return Response(canonical_json({"id": job.id, "status": "queued", "files": job.files}), status_code=202,
+                        media_type="application/json",
+                        headers={"Location": f"/v1/jobs/{job.id}", "Preference-Applied": "respond-async"})
+
+    @app.get("/v1/jobs/{job_id}", dependencies=[Depends(authorize)])
+    def job(job_id: str) -> Response:
+        return _json(jobs.get(job_id).to_dict())
 
     @app.post("/v1/process", dependencies=[Depends(authorize)])
     def process(body: ProcessBody) -> Response:
@@ -146,6 +178,12 @@ def create_ingest_app(store: LakeStore, embedder: Embedder, provider: Provider |
 
     mount_console(app, store=store, embedder=embedder, ocr=ocr, authorize=authorize, max_bytes=max_bytes, **ingestor)
     return app
+
+
+def _prefers_async(request: Request) -> bool:
+    """RFC 7240: a `Prefer` header with the `respond-async` preference."""
+    return any(p.split(";")[0].strip().lower() == "respond-async"
+               for p in request.headers.get("prefer", "").split(","))
 
 
 def _json(body: dict) -> Response:

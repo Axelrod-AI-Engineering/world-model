@@ -407,7 +407,8 @@ async function findSimilar(into, tenant, id, ord) {
 }
 
 // ---- 2. Add files ----------------------------------------------------------------------------------------------
-// Files and folders go into a queue, one or two at a time to POST /v1/ingest. Unsupported types are left out here (the
+// Files and folders go into a queue, a few at a time to POST /v1/ingest?mode=async: the service answers 202 with a job at
+// once (a proxy cuts a request at 300 s, and a scanned PDF takes longer), and each row polls /v1/jobs/{id} until it ends. Unsupported types are left out here (the
 // service says which: /v1/supported), a MANIFEST.md in a folder is read by the service (/v1/manifest) and its entries
 // label the files beside it, and every file keeps its own state, so a failure never stops the rest.
 const Q = { items: [], running: false, cancel: false, aborts: new Set(), manifests: {}, supported: { extensions: [], mimes: [] },
@@ -501,22 +502,68 @@ function metaFor(it, tenant) {
   return { tenant, source, source_type: $("a-type").value, inverted: state.view ? state.view.inverted : [],
     ...(published ? { published_at: `${published}T00:00:00Z` } : {}), ...(entry ? { meta: { manifest: entry } } : {}) };
 }
+const sleep = (ms) => new Promise((ok) => setTimeout(ok, ms));
+const pollDelay = (since) => { const s = (Date.now() - since) / 1000; return s < 30 ? 1000 : s < 120 ? 2000 : 5000; };
+const elapsed = (since) => { const s = Math.floor((Date.now() - since) / 1000); return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m`; };
+// the document's id in the lake: the first 24 hex digits of the file's SHA-256 (empty where the browser has no SubtleCrypto)
+async function contentId(file) {
+  try {
+    const sum = new Uint8Array(await crypto.subtle.digest("SHA-256", await file.arrayBuffer()));
+    return [...sum.slice(0, 12)].map((b) => b.toString(16).padStart(2, "0")).join("");
+  } catch (e) { return ""; }
+}
+function finishItem(it, r) {
+  state.timings[r.document.id] = r.timings;
+  it.state = r.new ? "new" : "already stored";
+  it.result = { id: r.document.id, status: r.document.status, warnings: r.warnings, error: r.document.error, timings: r.timings };
+}
+// The service no longer knows the job (a restart loses them, and the queue may be long gone): did the file reach the lake?
+async function lostJob(it, tenant) {
+  try {
+    const d = (await api(lakePath(tenant, `/documents/${encodeURIComponent(it.contentId)}`))).document;
+    it.state = "already stored"; it.note = "stored (the service lost its job record)";
+    it.result = { id: d.id, status: d.status, warnings: [], error: d.error || "", timings: null };
+  } catch (err) {
+    it.state = "failed";
+    it.error = err.status === 404 ? "the service lost this job (a restart) before the file was stored: send it again" : err.message;
+  }
+}
+// Poll the job until it ends, 1 s at first, then 2 s, then 5 s. Cancel does not stop this: a running job cannot be cancelled.
+async function follow(it, tenant) {
+  let misses = 0;
+  for (;;) {
+    await sleep(pollDelay(it.since));
+    let job;
+    try { job = await api(`/v1/jobs/${encodeURIComponent(it.job)}`); misses = 0; } catch (err) {
+      if (err.status === 401) { it.state = "failed"; it.error = err.message; Q.cancel = true; return; }
+      if (err.status === 404 || ++misses >= 5) { await lostJob(it, tenant); return; }
+      continue;
+    }
+    if (job.status === "succeeded") { finishItem(it, job.results[0]); return; }
+    if (job.status === "failed") { it.state = "failed"; it.error = job.error || "the job failed"; return; }
+    it.state = job.status === "running" ? "running" : "waiting";
+    it.progress = job.progress;
+    drawQueue();
+  }
+}
 async function sendOne(it, tenant) {
   const form = new FormData(), ctl = new AbortController();
+  it.contentId = it.contentId || await contentId(it.file);
   form.append("meta", JSON.stringify(metaFor(it, tenant)));
   form.append("world_view", new Blob([viewJson()], { type: "application/json" }), "world_view.json");
   form.append("files", it.file, it.file.name);
   Q.aborts.add(ctl);
+  let job;
   try {
-    const r = (await api("/v1/ingest", { method: "POST", body: form, signal: ctl.signal })).results[0];
-    state.timings[r.document.id] = r.timings;
-    it.state = r.new ? "new" : "already stored";
-    it.result = { id: r.document.id, status: r.document.status, warnings: r.warnings, error: r.document.error, timings: r.timings };
+    job = await api("/v1/ingest?mode=async", { method: "POST", body: form, signal: ctl.signal });
   } catch (err) {
     if (ctl.signal.aborted) { it.state = "cancelled"; }
     else if ((err.status === undefined || err.status >= 502) && it.tries < 1) { it.tries++; it.state = "queued"; }     // the network, once more
     else { it.state = "failed"; it.error = err.message; if (err.status === 401) Q.cancel = true; }
+    return;
   } finally { Q.aborts.delete(ctl); }
+  it.job = job.id; it.since = Date.now(); it.state = "waiting"; drawQueue();
+  await follow(it, tenant);
 }
 async function runQueue() {
   const tenant = $("a-tenant").value.trim();
@@ -532,10 +579,12 @@ async function runQueue() {
       drawQueue();
     }
   };
+  const tick = setInterval(drawQueue, 1000);                          // the elapsed time of a running job
   await Promise.all(Array.from({ length: +$("a-conc").value || 1 }, worker));
+  clearInterval(tick);
   Q.running = false; drawQueue();
   const left = Q.items.filter((i) => i.state === "failed").length;
-  toast(Q.cancel ? "Cancelled." : left ? `Finished, ${left} failed.` : "Finished.");
+  toast(Q.cancel ? "Cancelled: nothing more is sent." : left ? `Finished, ${left} failed.` : "Finished.");
   if (state.tab === "lake") loadLake({ quiet: true });
 }
 function cancelQueue() {
@@ -545,7 +594,7 @@ function cancelQueue() {
   drawQueue();
 }
 function retryFailed() {
-  for (const it of Q.items) if (it.state === "failed" || it.state === "cancelled") { it.state = "queued"; it.tries = 0; it.error = ""; }
+  for (const it of Q.items) if (it.state === "failed" || it.state === "cancelled") { it.state = "queued"; it.tries = 0; it.error = ""; it.note = ""; }
   runQueue();
 }
 
@@ -554,7 +603,16 @@ function drawQueue() {
   Q.drawing = true;
   requestAnimationFrame(() => { Q.drawing = false; paintQueue(); });
 }
-const QSTATES = ["new", "already stored", "failed", "cancelled", "sending", "queued"];
+const QSTATES = ["new", "already stored", "failed", "cancelled", "running", "waiting", "sending", "queued"];
+const chipFor = (it) => h("span", { class: `chip ${it.state}` },
+  it.state === "running" || it.state === "waiting" ? `${it.state}… ${elapsed(it.since)}` : it.state);
+function detailOf(it) {
+  const r = it.result, p = it.progress;
+  if (r) return [it.note, r.warnings.join("; ") || r.error || stages(r.timings)].filter(Boolean).join(" ");
+  if (it.state === "waiting") return "queued on the service behind earlier jobs";
+  if (it.state === "running") return p && p.current ? `working on ${p.current}` : "";
+  return "";
+}
 function paintQueue() {
   const by = (s) => Q.items.filter((i) => i.state === s);
   const total = Q.items.length, counts = Object.fromEntries(QSTATES.map((s) => [s, by(s).length]));
@@ -570,15 +628,16 @@ function paintQueue() {
   $("a-clear").disabled = Q.running || !(counts.new + counts["already stored"]);
   if (!total) { show($("queue")); return; }
   // a long queue shows what matters: what failed, what is in flight, the latest finished, the next to go
-  const CAP = { failed: 100, cancelled: 20, sending: 4, new: 15, "already stored": 15, queued: 25 };
-  const shown = [...by("failed").slice(0, CAP.failed), ...by("cancelled").slice(0, CAP.cancelled), ...by("sending"),
+  const CAP = { failed: 100, cancelled: 20, running: 4, waiting: 8, sending: 4, new: 15, "already stored": 15, queued: 25 };
+  const shown = [...by("failed").slice(0, CAP.failed), ...by("cancelled").slice(0, CAP.cancelled), ...by("running"),
+    ...by("waiting").slice(0, CAP.waiting), ...by("sending"),
     ...[...by("new"), ...by("already stored")].slice(-CAP.new), ...by("queued").slice(0, CAP.queued)];
   const hidden = total - shown.length;
   show($("queue"), h("table", {}, h("thead", {}, h("tr", {}, ["file", "state", "document", "detail", ""].map((t) => h("th", {}, t)))),
     h("tbody", {}, shown.map((it) => {
       const r = it.result;
-      return h("tr", {}, h("td", { class: "mono wrap" }, it.path), h("td", {}, chip(it.state)), h("td", {}, r ? chip(r.status) : null),
-        h("td", { class: `wrap ${it.state === "failed" ? "error" : "muted"}` }, it.error || (r ? (r.warnings.join("; ") || r.error || stages(r.timings)) : "")),
+      return h("tr", {}, h("td", { class: "mono wrap" }, it.path), h("td", {}, chipFor(it)), h("td", {}, r ? chip(r.status) : null),
+        h("td", { class: `wrap ${it.state === "failed" ? "error" : "muted"}` }, it.error || detailOf(it)),
         h("td", {}, r ? h("a", { onclick: () => openDoc($("a-tenant").value.trim(), r.id) }, "open in Lake") : null));
     }))),
     hidden ? h("div", { class: "muted" }, `${hidden} more not shown (finished earlier or still waiting)`) : null);

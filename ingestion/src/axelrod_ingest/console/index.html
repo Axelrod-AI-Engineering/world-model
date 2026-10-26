@@ -81,7 +81,7 @@
           <label>source <input id="a-source" autocomplete="off"></label>
           <label>source type <select id="a-type"></select></label>
           <label>published <input id="a-published" type="date"></label>
-          <label>at once <select id="a-conc"><option>1</option><option>2</option></select></label>
+          <label>jobs submitted at once <select id="a-conc"><option>1</option><option>2</option><option>4</option></select></label>
         </div>
         <div class="row">
           <label>world view <input id="a-view" type="file" accept=".json,application/json"></label>
@@ -89,7 +89,7 @@
         </div>
         <div class="row">
           <button type="submit" class="primary" id="a-send" disabled>Ingest</button>
-          <button type="button" id="a-cancel" disabled>Cancel</button>
+          <button type="button" id="a-cancel" disabled title="Stops sending files. A job the service already has cannot be cancelled: it finishes.">Cancel</button>
           <button type="button" id="a-retry" disabled>Retry failed</button>
           <button type="button" id="a-clear" disabled>Clear finished</button>
         </div>
