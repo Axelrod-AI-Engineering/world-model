@@ -49,8 +49,8 @@ from axelrod_ingest.lake.store import (
 )
 
 PROBLEM_BASE = "https://docs.axelrod.ai/problems/"
-TITLES = {401: "Authentication required", 404: "Not found", 413: "Payload too large", 422: "Invalid request"}
-CODES = {401: "authentication_required", 404: "not_found", 413: "payload_too_large", 422: "invalid_request"}
+TITLES = {401: "Authentication required", 404: "Not found", 413: "Payload too large", 422: "Invalid request", 503: "Service unavailable"}
+CODES = {401: "authentication_required", 404: "not_found", 413: "payload_too_large", 422: "invalid_request", 503: "unavailable"}
 TIMES = ("published_at", "event_time", "ingested_at")      # the Document fields that are datetimes
 
 

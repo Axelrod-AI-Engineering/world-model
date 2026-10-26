@@ -354,7 +354,9 @@ def test_every_route_the_page_calls_exists(lake):
         assert (_method(opts), shape("/v1/lake/{}" + suffix)) in have, suffix
     called = {p for _q, p, _o in calls}
     assert called >= {"/v1/tenants", "/v1/search", "/v1/similar", "/v1/ingest", "/v1/debug/stages", "/v1/supported",
-                      "/v1/manifest", "/v1/process"}
+                      "/v1/manifest", "/v1/process", "/v1/jobs/${encodeURIComponent(it.job)}"}
+    assert 'api("/v1/ingest?mode=async"' in js and "/v1/ingest\"" not in js       # every file goes as a job, polled until it ends
+    assert ("GET", "/v1/jobs/{}") in have and ("POST", "/v1/ingest") in have
     assert {s for _q, s, _b in lakes} >= {"/summary", "/documents", "/documents/${encodeURIComponent(id)}/raw", "/changes",
                                           "/activity", "/documents/${encodeURIComponent(id)}"}
     assert ("DELETE", "/v1/lake/{}/documents/{}") in {(_method(o), shape("/v1/lake/{}" + s)) for _q, s, o in lakes}

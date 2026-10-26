@@ -74,7 +74,7 @@ package stays importable without FastAPI: only `lake/server.py` and `service.py`
 | Script | Entry point | Needs | Does |
 |---|---|---|---|
 | `axelrod-lake` | `axelrod_ingest.lake.server:main` | `LAKE_TOKEN`; `LAKE_DIR`, `PORT` | The lake behind HTTP: the only process that opens the SQLite file ([lake.md](lake.md#as-a-service)) |
-| `axelrod-ingest` | `axelrod_ingest.service:main` | `INGEST_TOKEN` (and `INGEST_MAX_BYTES`); `WORLD_MODEL_LAKE_URL` and `_TOKEN` (else a local lake), `PORT` | `POST /v1/ingest` (files and a world view), `POST /v1/process`, `POST /v1/embed`, `GET /health`, and the [console](console.md) at `/`. Stateless: it writes no file bytes to disk, keeps its OCR cache in temporary storage, and is the only embedder |
+| `axelrod-ingest` | `axelrod_ingest.service:main` | `INGEST_TOKEN` (and `INGEST_MAX_BYTES`); `WORLD_MODEL_LAKE_URL` and `_TOKEN` (else a local lake), `PORT` | `POST /v1/ingest` (files and a world view; `?mode=async` answers 202 with a job) and `GET /v1/jobs/{id}` (its progress), `POST /v1/process`, `POST /v1/embed`, `GET /health`, and the [console](console.md) at `/`. Stateless: it writes no file bytes to disk, keeps its OCR cache in temporary storage, and is the only embedder |
 
 The world model reaches them with `RemoteIngestor` (`ingest_client.py`), whose `embedder` is a `RemoteEmbedder`, and
 `RemoteLake` (`lake/remote.py`). Results are equal to the in-process path's: the same bundle ids and the same lake digest
