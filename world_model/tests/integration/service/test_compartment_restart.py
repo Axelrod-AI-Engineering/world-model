@@ -106,3 +106,29 @@ def test_a_well_attributed_item_from_a_compartment_is_applied_by_the_standards_g
         assert c.get(f"{WN}/entities/jet_fuel/attributes/price", headers=NW).json()["data"]["level"]["mean"] != before
         assert data(c.get(U + "/entities/jet_fuel/attributes/price", headers=MAIN))["level"]["mean"] != before
         assert {e["id"] for e in c.get("/api/state").json()["entities"]} == NW_OWN
+
+
+def test_under_standards_a_compartments_pending_item_does_not_block_imports_and_is_decided_later(tmp_path):
+    ok = {"document": "Statement 9", "coverage": "full", "plausible": True, "confidence": 0.8}
+    with service(SIGNER, tmp_path, scenario="unified_demo", review=None, **ENV) as c:
+        sign_in(c, "nw")
+        first = c.post("/api/import", json={"bundle": bundle("R-4", 16)}).json()       # no document named: it waits
+        assert first["state"] == "done" and first["waiting_on"] is None
+        second = c.post("/api/import", json={"bundle": bundle("R-5", 17, **ok)}).json()    # and the next one goes through
+        assert second["state"] == "done"
+        (pid,) = pending(c)
+        assert [p["proposal"]["status"] for p in c.get("/api/proposals").json()] == ["pending", "auto_applied"]
+        reasons = c.get("/api/proposals?status=pending").json()[0]["review_reasons"]
+        assert any("source document" in r for r in reasons)
+        sign_in(c, "acme")
+        assert pending(c) == []
+
+    with service(SIGNER, tmp_path, scenario="unified_demo", review=None, **ENV) as c:      # a restart
+        sign_in(c, "acme")
+        assert pending(c) == [] and c.post(f"/api/proposals/{pid}/approve", json={"by": "acme"}).status_code == 409
+        sign_in(c, "nw")
+        assert pending(c) == [pid]
+        done = c.post(f"/api/proposals/{pid}/approve", json={"by": "nw person"})
+        assert done.status_code == 200 and done.json()["proposal"]["status"] == "approved"
+        assert pending(c) == []
+        assert c.app.state.axelrod.runner.controller.proposals[pid].folded_day is not None

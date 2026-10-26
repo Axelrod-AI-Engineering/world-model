@@ -269,6 +269,13 @@ curl -s -H "$AUTH" $WM/simulations/<simulation-id>/coverage
 
 `$REVIEWER` is a person's credential: a session or a core-web token. A key cannot approve.
 
+Under the default `standards` review policy a proposal never blocks the next one: items that meet the standards apply
+(their changes read `auto_applied`), items that do not stay `pending`, and each carries `review_reasons`, the checks it
+failed, one string each (for example `third-party material without its publisher (R21)`). A pending change is decided
+at any later time, against the model as it is then: approving it commits a new version, and answers `409 conflict`
+(nothing changes, the change stays pending) when a value, link or entity it names has since been retired; rejecting
+closes it. Only under `review_all` does an unreviewed change hold the next proposal (`409 update_in_progress`).
+
 ## MCP
 
 `/mcp` is an MCP (Model Context Protocol) server (`axelrod-world-model`) over stateless Streamable HTTP, built on the

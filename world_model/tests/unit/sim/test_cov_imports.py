@@ -42,6 +42,7 @@ def runner(imports_dir: str | None = None, seeds: bool = True) -> ImportRunner:
     r = ImportRunner(None, None, script(imports_dir, seeds), True, storage=MemoryBackend(),
                      tracer=RecordingTracer(run_id="imp"))
     r.load()
+    r.controller.set_review_policy("review_all", by="test")      # the run pauses at each item, as these tests step it
     return r
 
 

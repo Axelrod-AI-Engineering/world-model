@@ -41,7 +41,7 @@ person, so a pack of hundreds of documents cannot populate a model at all.
 | | What | Done when |
 |---|---|---|
 | **P0** | Imports persist | A restart or redeploy reopens the model at its last version, with its imported items and review policy; importing the same bundle again changes nothing |
-| **P0** | The standards gate | An item applies without a person only when every check below passes; any other item waits in review, with the failed check as its reason |
+| **P0** | The standards gate | An item applies without a person only when every check below passes; any other item becomes a pending proposal, with the failed check as its reason, and the import goes on |
 | **P0** | One unified base | One engine loads every client world's construction files together; a clash of ids between worlds stops the load |
 | **P0** | A compartment per login | A login whose scenario is a focus over the unified base reads, forecasts, and asks theses on its compartment of the one engine, not on an engine of its own |
 | **P1** | Per-account learning | An account's own reviews, edits and theses are kept in an overlay for that account, persisted, and promoted to the base only through review |
@@ -68,8 +68,21 @@ person, so a pack of hundreds of documents cannot populate a model at all.
    - **Plausible and confident:** it passes the extractor's plausibility band, and its confidence is at least 0.6.
    - **Labelled coverage:** when the source covers only part of a total, the item carries a `partial` label (R18).
 
-   An item that fails waits in review with the failed checks as its reasons. The gate never widens what a deletion,
-   a structural change or a text translation may do without a person.
+   An item that fails becomes a pending proposal with the failed checks as its reasons (`review_reasons`). The gate
+   never widens what a deletion, a structural change or a text translation may do without a person.
+
+   **A run pauses for review only under `review_all`.** Under any other policy (`standards`, `default`,
+   `auto_approve_all`) an import run goes to the end: items the policy approves apply as `policy:standards`, items that
+   need a person stay pending (`Proposal.queued`), and the run completes. A completed run never blocks the next import,
+   so one item waiting for a person cannot stop a bulk import. Under `review_all` the run still pauses at each item,
+   in date order, as the review screen expects. In code the rule is `ReviewPolicy.pauses_run`, read by
+   `ImportRunner.import_items`, which sets `UpdateRequest.on_review`.
+
+   **Deciding a pending proposal later** applies it to the model as it stands then, as a new version: approving stores
+   the proposal's side effects and folds its operations in on the first unprocessed day (the late fold). Before it
+   applies, each operation is checked against the current graph (`stale_reason`). If something it names is gone (a
+   retired value, link or entity), the approval fails with `409 conflict` naming it, nothing changes and the proposal
+   stays pending, so a person can reject it. Rejecting closes it. Every decision is a ledger entry.
 6. **Determinism.** The same bundles in the same order give the same versions and hashes, before and after a restart.
 7. **No client content in the repository.** Worlds, scenarios and compartments stay in the client root on the volume
    ([deployment.md](../../../docs/deployment.md#client-content)).
@@ -118,7 +131,9 @@ companies.
 **Persistence.** `ImportRunner.load` resets storage only when it holds no versions. Otherwise it resumes, as
 `ScenarioRunner.resume` does: it restores the latest version, verifies its hash, and rebuilds the imported-item map
 from the `MARKET_EVENT` ledger entries (`IM-<item id>`). It also rebuilds the review policy (a ledger entry when it
-changes) and pending proposals (`PROPOSAL` entries without a decision). A snapshot is taken after each import, so a
+changes) and pending proposals (`PROPOSAL` entries without a decision, and a `queued` entry that says which day and
+run left one pending, so it can be approved after a restart). A compartment's view sees and decides only the pending
+proposals its own imports raised. A snapshot is taken after each import, so a
 resume replays few change sets. Storage is `var/axelrod/unified` on the volume, and does not depend on the login.
 
 **The gate.** `StandardsPolicy` is registered as `standards` in the `review_policy` registry. It is the default for
@@ -135,6 +150,7 @@ the data service. A redeploy restarts the engine, which resumes from the volume.
 - **Ledger:** `REVIEW_POLICY` entries, with the policy name and who set it. Imported items keep `MARKET_EVENT` with the
   `IM-` prefix.
 - **Proposal:** `review_reasons` carries the gate's failed checks, and `by="policy:standards"` marks an automatic
-  approval.
+  approval. `queued` marks one a run left pending. `/v1` changes carry `review_reasons` too.
+- **Ledger:** a `queued` decision entry (`day`, `update_id`) when a run leaves a proposal pending.
 - **Login:** `WORLD_MODEL_LOGINS` is unchanged (`user:password:scenario`). A login is a compartment when its scenario's
   `focus.base` is the main scenario.

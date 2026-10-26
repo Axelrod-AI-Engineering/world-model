@@ -20,6 +20,7 @@ SAMPLE = json.loads(IMPORT_BUNDLE_SAMPLE.read_text())
 def client():
     app = create_app(scenario="acme_demo", storage=MemoryBackend(), trace_dir=None, play_delay=0.0)
     with TestClient(app) as c:
+        app.state.axelrod.controller.set_review_policy("review_all", by="test")      # a run pauses at each item
         yield c
 
 

@@ -117,6 +117,8 @@ def restore_proposals(entries: list[LedgerEntry]) -> dict[str, Proposal]:
                 after = pl["diff"]["after"]
                 p.event = with_confidence(p.event, after["confidence"],
                                           {int(i): v for i, v in after["ops"].items()}, after["ripple"])
+            elif act == "queued":                   # left pending by a run that did not pause
+                p.queued, p.due_day, p.update_id = True, pl["day"], pl["update_id"]
             else:                                   # "folded"
                 p.folded_day, p.late_from = pl["day"], pl.get("late_from")
                 p.changeset_id = pl.get("changeset_id") or p.changeset_id

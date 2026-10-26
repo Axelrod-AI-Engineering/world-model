@@ -3,6 +3,7 @@ theses and simulations, and jobs. Documents, bundles, and search are routes_inge
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime
 from typing import Any, Literal
 
@@ -167,17 +168,22 @@ async def create_changes(request: Request, world_model_id: str, body: s.ChangeCr
     sub = principal(request).sub
     claims: set = request.app.state.proposing
 
-    def claim() -> bool:
+    def claim() -> str:
         # under the engine's lock: no update active and no other proposal starting, so two at once cannot both pass
-        if m.st.controller.active_update is not None or m.id in claims:
-            return False
+        ctl = m.st.controller
+        if ctl.active_update is not None:
+            return "update"
+        if m.id in claims:
+            return "busy"
         claims.add(m.id)
-        return True
+        return "claimed"
 
     async def make() -> Response:
-        if not await m.st.call(claim):
-            raise ApiError("update_in_progress", "another update is running or waiting for review; decide its "
-                                                 "changes first")
+        while (got := await m.st.call(claim)) != "claimed":
+            if got == "update" or await m.st.call(lambda: m.st.controller.engine.components["review_policy"].pauses_run):
+                raise ApiError("update_in_progress", "another update is running or waiting for review; decide its "
+                                                     "changes first")
+            await asyncio.sleep(0.02)           # one import at a time: this one starts when the other is done
         try:
             return await propose_job()
         finally:
@@ -278,7 +284,10 @@ async def decide(request: Request, world_model_id: str, change_id: str, approve:
         if str(prop.status) != "pending":
             raise ApiError("already_decided", f"change {change_id} is {prop.status}")
         if approve:
-            ctl.approve(change_id, by=p.sub, note=note or None)
+            try:
+                ctl.approve(change_id, by=p.sub, note=note or None)
+            except ControllerError as err:          # a change an import left pending, on a model that has moved on
+                raise ApiError("conflict", str(err)) from err
         else:
             ctl.reject(change_id, by=p.sub, note=note)
 

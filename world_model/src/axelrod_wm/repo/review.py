@@ -63,6 +63,7 @@ class Proposal(BaseModel):
     version_after: int | None = None
     world_event: bool = False                 # folded on its day by the update run (§7.6); else a model edit
     needs_review: bool = True                 # from the review policy's assessment
+    queued: bool = False                      # left pending by a run that did not pause: decided later, on the model as it is
     update_id: str | None = None              # the update run that raised it
     due_day: int | None = None                # world events: the day it belongs to
     late_from: int | None = None              # set when it is folded on a later day (deferred, then approved)
@@ -77,6 +78,10 @@ class ReviewRequirement(BaseModel):
 
 
 class ReviewPolicy(ABC):
+    # An import run stops at an item that needs a person only when the policy says every change is reviewed in order
+    # (review_all). Under any other policy the run goes on: the item stays pending and a person decides it later.
+    pauses_run: bool = False
+
     @abstractmethod
     def assess(self, proposal: Proposal, wm: WorkingMemory) -> ReviewRequirement: ...
 
@@ -153,6 +158,8 @@ class AutoApproveAllPolicy(ReviewPolicy):
 class ReviewAllPolicy(ReviewPolicy):
     """Every change waits for a person, data releases included (the demos use it, so each example ends at the
     human review)."""
+
+    pauses_run = True
 
     def __init__(self, config: Any = None) -> None:
         self.config = config

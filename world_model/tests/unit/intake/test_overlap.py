@@ -128,6 +128,7 @@ def runner(tmp_path):
         "initialization": {"construction_dir": str(d), "taxonomy_dir": str(tax)}, "steps": []})
     r = ImportRunner(None, None, script, True, storage=MemoryBackend(), tracer=RecordingTracer(run_id="acme"))
     r.load()
+    r.controller.set_review_policy("review_all", by="test")      # the run pauses at each item, as these tests step it
     return r
 
 

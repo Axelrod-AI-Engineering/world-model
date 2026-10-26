@@ -102,6 +102,7 @@ def test_a_resumed_model_is_the_one_that_stopped_and_an_import_repeated_changes_
 
 def test_pending_reviews_and_the_review_policy_survive_and_the_run_goes_on(tmp_path):
     def history(r):
+        r.controller.set_review_policy("review_all", by="eve")      # a run pauses for review only under review_all
         r.import_items(bundle(good("A", "2026-08-04T09:00:00Z", 0.5), bare("B", "2026-08-05T09:00:00Z", 0.75),
                               good("C", "2026-08-06T09:00:00Z", 1.0)))
 
@@ -111,14 +112,13 @@ def test_pending_reviews_and_the_review_policy_survive_and_the_run_goes_on(tmp_p
     history(first)
     before = kept(first)
     assert len(before["queue"]) == 1 and first.status().state == "awaiting_review"
-    reasons = before["reasons"][0]
-    assert any("source document" in r for r in reasons) and any("coverage is not labelled" in r for r in reasons)
-    first.controller.set_review_policy("standards", by="eve", record=True)
+    assert before["reasons"][0] == ["every change is reviewed"]       # (the gate's reasons: test_deferred_imports.py)
+    first.controller.set_review_policy("review_all", by="eve", record=True)
     first.controller.engine.storage.close()
 
     again = runner(FilesBackend(path=tmp_path / "s"))
     assert {**kept(again), "ids": None} == {**before, "ids": None} and again.status().state == "awaiting_review"
-    assert again.controller.translations["IM-B"].events and again.controller.market_status["IM-B"] == "awaiting review"
+    assert again.controller.translations["IM-A"].events and again.controller.market_status["IM-A"] == "awaiting review"
     assert again.controller.active_update == before["active"]
     approve_all(again)                      # approving the awaited item resumes the run, which folds C
     approve_all(control)
@@ -158,6 +158,7 @@ def test_the_overlap_guards_held_signals_come_back(tmp_path, monkeypatch):
 
 def test_a_run_decided_just_before_the_restart_goes_on(tmp_path):
     first = runner(FilesBackend(path=tmp_path / "s"))
+    first.controller.set_review_policy("review_all", by="eve")
     first.import_items(bundle(bare("B", "2026-08-05T09:00:00Z", 0.75)))
     first.controller.auto_resume = False
     first.controller.approve(first.controller.pending_proposals()[0].id, "eve")      # decided; the run did not go on
@@ -282,16 +283,14 @@ def test_a_replay_stops_when_the_new_base_asks_for_a_decision_nobody_recorded(tm
     ctl = r.controller
     key = ("IM-A", "graph_update")
     with pytest.raises(ControllerError, match=r"stopped at PR-\d+ \(IM-A\): it now waits for a decision nobody recorded"):
-        ImportRunner._replay_decisions(ctl, "t", {}, last=True)
+        ImportRunner._replay_decisions(ctl, "t", {})
     undecided = {key: [[NS(payload={"action": "deferred", "by": "x"})]]}
-    assert ImportRunner._replay_decisions(ctl, "t", undecided, last=True) is False         # pending then too: stays
-    with pytest.raises(ControllerError, match="nobody recorded"):
-        ImportRunner._replay_decisions(ctl, "t", undecided, last=False)
+    ImportRunner._replay_decisions(ctl, "t", undecided)             # pending in the old model too: it stays pending
+    assert len(ctl.pending_proposals()) == 1
     by_policy = {key: [[NS(payload={"action": "auto_applied", "by": "policy:standards"})]]}
     with pytest.raises(ControllerError, match="nobody recorded"):
-        ImportRunner._replay_decisions(ctl, "t", by_policy, last=True)       # applied by policy, now needs a person
-    assert ImportRunner._replay_decisions(ctl, "t", {key: [[NS(payload={
-        "action": "approved", "by": "eve", "note": None})]]}, last=True)
+        ImportRunner._replay_decisions(ctl, "t", by_policy)         # applied by policy, now needs a person
+    ImportRunner._replay_decisions(ctl, "t", {key: [[NS(payload={"action": "approved", "by": "eve", "note": None})]]})
     assert not ctl.pending_proposals()
 
 
