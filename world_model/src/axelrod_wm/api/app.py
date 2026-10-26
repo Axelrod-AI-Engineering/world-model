@@ -30,6 +30,7 @@ from axelrod_wm.sim.runner import ScenarioRunner, build_runner
 from axelrod_wm.trace import BroadcastTracer
 
 logger = logging.getLogger(__name__)
+logging.getLogger("httpx").setLevel(logging.WARNING)    # a line per lake request would flood the service's logs
 
 T = TypeVar("T")
 
