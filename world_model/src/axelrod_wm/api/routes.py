@@ -194,7 +194,7 @@ async def patch_review(request: Request, body: PolicyBody) -> dict:
     def run() -> tuple[dict, str | None]:
         ctl = st.controller
         ctl.set_review_policy(body.policy, by=body.by)
-        drive = None
+        drive = ctl.active_update if _running(ctl) else None            # a run released by the new policy
         if body.approve_pending and body.policy == "auto_approve_all":
             # auto-accept from now on, and for what already waits: approve the queue, then let the run go on (the
             # rest of it is approved by the policy as it arrives)
@@ -477,6 +477,11 @@ def _proposal_after(st: AppState, proposal_id: str) -> dict:
     runner.status()              # leaves awaiting_review once the queue is empty
     runner._broadcast()
     return proposal_view(ctl.proposals[proposal_id], ctl.engine.wm, ctl.engine.ltm)
+
+
+def _running(ctl: Any) -> bool:
+    run = ctl.updates.get(ctl.active_update) if ctl.active_update else None
+    return run is not None and run.state == UpdateState.RUNNING
 
 
 def _resume_if_awaited(st: AppState, proposal_id: str) -> str | None:

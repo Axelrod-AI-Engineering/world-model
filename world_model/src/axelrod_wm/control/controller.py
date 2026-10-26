@@ -670,6 +670,18 @@ class WorldModelController:
             self.config.review.policy = name
             if record or (record is None and changed):
                 self.engine.ledger.append(LedgerKind.REVIEW_POLICY, {"policy": name, "by": by}, recorded_at=self.now)
+            self.release_paused(run_to_end=self.auto_resume)
+
+    def release_paused(self, *, run_to_end: bool = True) -> UpdateRun | None:
+        """When the policy in force does not pause runs, a run still paused for review (it paused under review_all, or
+        under an older rule) is released: see `UpdateCycle.release`. Returns the run it released."""
+        with self.lock:
+            run = self.updates.get(self.active_update) if self.active_update else None
+            if run is None or run.state != UpdateState.AWAITING_REVIEW:
+                return None
+            if self.engine.components["review_policy"].pauses_run:
+                return None
+            return self.cycle.release(run, run_to_end=run_to_end)
 
     def auto_actor(self) -> str:
         """Who an automatic approval is recorded as: the review policy that made it."""

@@ -78,6 +78,13 @@ person, so a pack of hundreds of documents cannot populate a model at all.
    in date order, as the review screen expects. In code the rule is `ReviewPolicy.pauses_run`, read by
    `ImportRunner.import_items`, which sets `UpdateRequest.on_review`.
 
+   **A run paused under an older rule is released.** Whenever the active run is awaiting review while the policy in force
+   does not pause runs (the model resumed a run stored as paused, or the policy was switched at runtime, e.g. `PATCH
+   /api/config/review` from `review_all` to `standards`), `UpdateCycle.release` turns it into a queueing run: the proposal it
+   awaited becomes a queued pending proposal (a `queued` decision entry, decidable later), an `update` ledger entry with
+   state `released` records it, and the run processes its remaining items under the current policy and completes, so the
+   next import is not refused. A restart reproduces the same version and hash. Under `review_all` the run stays paused.
+
    **Deciding a pending proposal later** applies it to the model as it stands then, as a new version: approving stores
    the proposal's side effects and folds its operations in on the first unprocessed day (the late fold). Before it
    applies, each operation is checked against the current graph (`stale_reason`). If something it names is gone (a

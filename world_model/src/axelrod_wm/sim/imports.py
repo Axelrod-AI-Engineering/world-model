@@ -227,6 +227,8 @@ class ImportRunner(ScenarioRunner):
                 ctl.proposals[pid].due_day = day
         if ctl.proposals[run.waiting_on].status not in (ProposalStatus.PENDING, ProposalStatus.DEFERRED):
             ctl.cycle.resume(run)           # it was decided just before the restart: go on from there
+        else:
+            ctl.release_paused()            # paused under a rule the policy now in force does not have: let it go on
 
     def _replay(self, cfg: Any, storage: Any, entries: list, inputs: dict[str, str], rec: dict | None) -> RunnerStatus:
         """The construction files changed since the stored model was built (or it holds no record of them): rebuild

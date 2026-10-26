@@ -129,3 +129,37 @@ def test_two_imports_at_once_take_turns_under_standards_and_are_refused_under_re
                     "update_in_progress")
         finally:
             claims.discard("acme_demo")
+
+
+def test_a_run_stored_as_paused_is_released_on_restart_and_the_next_import_goes_through(tmp_path):
+    from axelrod_wm.repo.ledger import LedgerKind
+
+    with service(SIGNER, tmp_path) as c:                            # review_all: a run waits at its first item
+        propose(c, post_bundle(c, item("A", 4, 0.5)))
+        ctl = c.app.state.world_models["acme_demo"].st.controller
+        assert ctl.active_update is not None
+        ctl.engine.ledger.append(LedgerKind.REVIEW_POLICY, {"policy": "standards", "by": "legacy"}, recorded_at=ctl.now)
+    with service(SIGNER, tmp_path, review=None) as c:               # after the deploy: standards resumes the stored run
+        ctl = c.app.state.world_models["acme_demo"].st.controller
+        assert ctl.active_update is None
+        (waiting,) = changes(c)
+        assert waiting["event_id"] == "IM-A" and waiting["review_reasons"]
+        propose(c, post_bundle(c, item("B", 5, 0.75)))              # no 409 update_in_progress
+        assert data(decide(c, waiting["id"], True), 201)["status"] == "approved"
+        version = c.get(WM).headers["etag"]
+    with service(SIGNER, tmp_path, review=None) as c:               # and a second restart changes nothing
+        assert c.get(WM).headers["etag"] == version and changes(c) == []
+
+
+def test_switching_the_policy_over_the_api_releases_a_paused_run(tmp_path):
+    with service(SIGNER, tmp_path) as c:
+        propose(c, post_bundle(c, item("A", 4, 0.5)))
+        ctl = c.app.state.world_models["acme_demo"].st.controller
+        assert ctl.active_update is not None
+        assert c.patch("/api/config/review", json={"policy": "standards"}).json()["review_policy"] == "standards"
+        for _ in range(100):                                        # the released run is driven in the background
+            if ctl.active_update is None:
+                break
+            time.sleep(0.05)
+        assert ctl.active_update is None and [x["event_id"] for x in changes(c)] == ["IM-A"]
+        propose(c, post_bundle(c, item("B", 5, 0.75)))

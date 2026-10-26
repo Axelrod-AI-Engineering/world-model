@@ -465,6 +465,29 @@ class UpdateCycle:
                 raise
         return run
 
+    def release(self, run: UpdateRun, *, run_to_end: bool = True) -> UpdateRun:
+        """A run paused for review goes on as a run that does not pause (on_review="queue"): the proposal it waits on
+        stays pending and becomes a queued one, as any item a non-pausing run leaves, to be decided later; the rest of the
+        run is processed under the policy now in force. Used when the policy no longer pauses runs (it was switched, or
+        the run was stored under an older rule and resumed). The `released` entry makes a restart reproduce it."""
+        if run.state != UpdateState.AWAITING_REVIEW:
+            return run
+        pid = run.waiting_on
+        run.request = run.request.model_copy(update={"on_review": "queue"})
+        run.waiting_on = None
+        run.state = UpdateState.RUNNING
+        self._ledger(run, "released", proposal_id=pid, day=run.current_day,
+                     reason="the review policy no longer pauses a run for review")
+        self.engine.tracer.emit(Phase.UPDATE, "update.released", refs=[run.id, pid], update_id=run.id,
+                                day=run.current_day)
+        if run_to_end:
+            try:
+                self.run_days(run)
+            except Exception as exc:
+                self._fail(run, exc)
+                raise
+        return run
+
     def cancel(self, run: UpdateRun) -> UpdateRun:
         """Never leaves a day half done: defers the awaited proposal, walks the rest of the current day
         with every event that would need review deferred, closes that day, and stops. Cursors are put
