@@ -23,7 +23,7 @@ info:
 
     - **Writes.** POSTs that create take `Idempotency-Key`. Keys are permanent (kept in the lakehouse catalog, no expiry),
     and document and bundle creation is also keyed on content, so the same content always gives the same answer. Long work
-    answers `202` with a job. A decision on a change needs `If-Match` with the ETag (entity tag: an opaque version identifier,
+    answers `202` with a job; send `Prefer: respond-async` to get the 202 at once while the job runs in the background. A decision on a change needs `If-Match` with the ETag (entity tag: an opaque version identifier,
     here the state hash) of the version it was reviewed against; ETag and If-Match are under review (Manav).
 
     - **Identity and tenancy.** The organization and the person come from a verified credential: a core-minted service token
@@ -1479,6 +1479,7 @@ paths:
       - *id004
       - &id012
         $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/Prefer'
       - *id001
       responses:
         '202':
@@ -1780,6 +1781,7 @@ paths:
       - *id004
       - *id011
       - *id012
+      - $ref: '#/components/parameters/Prefer'
       - *id001
       responses:
         '202':
@@ -2025,6 +2027,7 @@ paths:
       parameters:
       - *id004
       - *id012
+      - $ref: '#/components/parameters/Prefer'
       - *id001
       responses:
         '202':
@@ -2449,6 +2452,7 @@ paths:
       - *id004
       - *id016
       - *id012
+      - $ref: '#/components/parameters/Prefer'
       - *id001
       responses:
         '202':
@@ -4168,6 +4172,7 @@ components:
       - job_not_found
       - invalid_token
       - issuer_unavailable
+      - internal_error
       - human_approval_required
       - conflict
       - update_in_progress
@@ -7058,6 +7063,17 @@ components:
         type: string
         minLength: 1
         maxLength: 255
+    Prefer:
+      name: Prefer
+      in: header
+      required: false
+      description: 'Send `respond-async` (RFC 7240) to have the job run in the background: the answer is `202` at once with the
+        job in status `running` and `Preference-Applied: respond-async`, and the job at its Location becomes `succeeded` (with
+        `result`) or `failed` (with an RFC 9457 `error`) when the work ends. Without it the work runs before the answer. Poll
+        the Location either way. A job still running when the service restarts is lost; send the request again.'
+      schema:
+        type: string
+        example: respond-async
     IfMatch:
       name: If-Match
       in: header

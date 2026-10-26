@@ -38,5 +38,6 @@ def install(app: Any) -> None:
     app.state.erid = routes_erid.build(app.state.world_models, app.state.axelrod.first_scenario,
                                        {v.focus.id: v.org for v in app.state.views.values()})
     app.state.theses = {}
+    app.state.job_tasks = set()             # background jobs (Prefer: respond-async), kept until they end
     app.state.proposing = set()             # world models with a proposal starting (POST .../changes)
     app.add_exception_handler(StarletteHTTPException, not_found_handler(http_exception_handler))

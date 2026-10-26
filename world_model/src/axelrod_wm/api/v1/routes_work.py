@@ -215,10 +215,7 @@ async def create_changes(request: Request, world_model_id: str, body: s.ChangeCr
                 raise ApiError("update_in_progress", "another update is running or waiting for review; decide its "
                                                      "changes first")
             await asyncio.sleep(0.02)           # one import at a time: this one starts when the other is done
-        try:
-            return await propose_job()
-        finally:
-            request.app.state.proposing.discard(m.id)
+        return await propose_job()
 
     async def propose_job() -> Response:
         async def work() -> dict:
@@ -231,7 +228,8 @@ async def create_changes(request: Request, world_model_id: str, body: s.ChangeCr
                 detail["update_id"] = r["out"]["update_id"]
             return {"resource": "changes", "ids": r["proposed"], "detail": detail}
 
-        return await run_job(request, m, "change_proposal", work)
+        return await run_job(request, m, "change_proposal", work,
+                             cleanup=lambda: request.app.state.proposing.discard(m.id))
 
     return await idempotent(request, m, fingerprint(body.model_dump()), make)
 

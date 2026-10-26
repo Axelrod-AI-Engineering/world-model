@@ -3,9 +3,11 @@ other answers 404), the state a read is pinned to, cursors, envelopes, idempoten
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import hashlib
 import json
+import logging
 import secrets
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
@@ -24,6 +26,8 @@ from axelrod_wm.api.app import AppState
 from axelrod_wm.api.tokens import Principal
 from axelrod_wm.api.v1.problems import ApiError, as_api_error, problem_body
 from axelrod_wm.intake.world_view import world_view_of
+
+log = logging.getLogger(__name__)
 
 
 @dataclass
@@ -180,11 +184,11 @@ def jsonable(x: Any) -> Any:
 
 
 def one(request: Request, data: Any, ref: dict | None = None, *, status: int = 200, tag: bool = False,
-        location: str | None = None) -> JSONResponse:
+        location: str | None = None, headers: dict[str, str] | None = None) -> JSONResponse:
     meta: dict = {"request_id": request.state.request_id}
     if ref is not None:
         meta["version"] = ref
-    headers = {}
+    headers = dict(headers or {})
     if tag and ref is not None:
         headers["ETag"] = etag(ref)
     if location:
@@ -248,29 +252,73 @@ def audit(request: Request, m: Model, status: int, resource_ids: list[str]) -> N
 
 
 # -- jobs -------------------------------------------------------------------------------------------------------------
-async def run_job(request: Request, m: Model, kind: str, work: Callable[[], Awaitable[dict]]) -> JSONResponse:
-    """Record a job, run it, and answer 202 with it. The work runs before the answer; the contract has the client
-    poll, so moving it to a queue later changes no client."""
+def wants_async(request: Request) -> bool:
+    """Whether the caller sent `Prefer: respond-async` (RFC 7240): answer 202 at once and run the job in the background."""
+    prefs = [p.split(";")[0].strip().lower() for part in request.headers.getlist("prefer") for p in part.split(",")]
+    return "respond-async" in prefs
+
+
+async def run_job(request: Request, m: Model, kind: str, work: Callable[[], Awaitable[dict]],
+                  cleanup: Callable[[], None] | None = None) -> JSONResponse:
+    """Record a job, run it, and answer 202 with it. By default the work runs before the answer; with
+    `Prefer: respond-async` the answer comes at once (status `running`, with `Preference-Applied: respond-async`) and the
+    work runs on the app's loop, the job record updated when it ends. Either way the client polls the Location.
+    `cleanup` (a claim the route holds while the work runs) is called exactly once, when the work ends."""
     jid = f"job_{secrets.token_hex(8)}"
     job = {"id": jid, "type": kind, "status": "running", "created_at": datetime.now(UTC).isoformat(),
            "finished_at": None, "result": None, "error": None}
-    lake(request.app).put_job(m.org, m.id, job)
+    started = False
     try:
-        job["result"] = await work()
-        job["status"] = "succeeded"
-    except Exception as exc:
-        err = as_api_error(exc)
-        if err is None:
-            raise
-        job["status"] = "failed"
-        job["error"] = problem_body(err.status, err.code, err.detail, request.url.path, request.state.request_id,
-                                    err.errors)
-    job["finished_at"] = datetime.now(UTC).isoformat()
-    lake(request.app).put_job(m.org, m.id, job)            # jobs are kept, like the answers that name them
-    result = job["result"] or {}
-    linked = [v for k, v in sorted((result.get("detail") or {}).items()) if k.endswith("_id") and isinstance(v, str)]
-    audit(request, m, 202, [jid, *result.get("ids", []), *linked])
+        lake(request.app).put_job(m.org, m.id, job)
+        if wants_async(request):
+            task = asyncio.create_task(_background(request, m, job, work, cleanup))
+            request.app.state.job_tasks.add(task)
+            task.add_done_callback(request.app.state.job_tasks.discard)
+            started = True
+            return one(request, dict(job), status=202, location=f"/v1/world-models/{m.id}/jobs/{jid}",
+                       headers={"Preference-Applied": "respond-async"})
+        started = True
+        await _finish(request, m, job, work, cleanup, background=False)
+    finally:
+        if cleanup is not None and not started:
+            cleanup()
     return one(request, job, status=202, location=f"/v1/world-models/{m.id}/jobs/{jid}")
+
+
+async def _background(request: Request, m: Model, job: dict, work: Callable[[], Awaitable[dict]],
+                      cleanup: Callable[[], None] | None) -> None:
+    """The work of a job that was answered already; nothing it raises may reach the loop (a storage failure here is
+    logged, the lakehouse being what would have held the record)."""
+    try:
+        await _finish(request, m, job, work, cleanup, background=True)
+    except Exception:
+        log.exception("job %s could not be recorded", job["id"])
+
+
+async def _finish(request: Request, m: Model, job: dict, work: Callable[[], Awaitable[dict]],
+                  cleanup: Callable[[], None] | None, *, background: bool) -> None:
+    try:
+        try:
+            job["result"] = await work()
+            job["status"] = "succeeded"
+        except Exception as exc:
+            err = as_api_error(exc)
+            if err is None and not background:
+                raise                       # in the request, a bug is the framework's 500
+            if err is None:
+                log.exception("job %s failed", job["id"])
+                err = ApiError("internal_error", "the job failed unexpectedly")
+            job["status"] = "failed"
+            job["error"] = problem_body(err.status, err.code, err.detail, request.url.path, request.state.request_id,
+                                        err.errors)
+        job["finished_at"] = datetime.now(UTC).isoformat()
+        lake(request.app).put_job(m.org, m.id, job)        # jobs are kept, like the answers that name them
+        result = job["result"] or {}
+        linked = [v for k, v in sorted((result.get("detail") or {}).items()) if k.endswith("_id") and isinstance(v, str)]
+        audit(request, m, 202, [job["id"], *result.get("ids", []), *linked])
+    finally:
+        if cleanup is not None:
+            cleanup()
 
 
 def job_of(request: Request, m: Model, job_id: str) -> dict:
