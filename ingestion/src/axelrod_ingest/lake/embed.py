@@ -52,6 +52,11 @@ class HashingEmbedder:
 
 class FastEmbedder:
     MODEL = "ibm-granite/granite-embedding-small-english-r2"
+    # granite reads up to 8192 tokens, and its attention mask grows with batch x heads x length^2: a batch of long
+    # texts overflows ONNX Runtime's 4 GB tensor limit (seen Oct 25 on OCR'd and tabular pages). A chunk is at most
+    # CHUNK_CHARS units, so the cap only bites on a pathological chunk or a long query; small batches bound the rest.
+    MAX_CHARS = 1500
+    BATCH = 8
 
     def __init__(self, cache_dir: str | None = None) -> None:
         from fastembed import TextEmbedding
@@ -62,7 +67,7 @@ class FastEmbedder:
 
     def embed(self, texts: list[str]) -> list[list[float]]:
         out = []
-        for v in self.model.embed(texts, batch_size=32):
+        for v in self.model.embed([t[: self.MAX_CHARS] for t in texts], batch_size=self.BATCH):
             n = math.sqrt(sum(float(x) * float(x) for x in v)) or 1.0
             out.append([round(float(x) / n, 6) for x in v])
         return out
