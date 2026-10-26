@@ -213,7 +213,7 @@ here are its outline.
 | `GET /documents?published_from=&ingested_from=` / `{document_id}` | documents |
 | `GET /documents/{document_id}/chunks` / `{chunk_id}` | passages and the names recognized in each |
 | `GET /documents/{document_id}/content?format=text\|raw` | the extracted text, or the original |
-| `POST /documents/{document_id}/bundles` | read again against the model as it is now |
+| `POST /documents/{document_id}/bundles` | read again against the model as it is now; proposing it assesses the pending changes of the same items again (`regated_change_ids`) |
 | `DELETE /documents/{document_id}` | remove it; its events and changes stay as history |
 | `POST /bundles` / `GET /bundles` / `{bundle_id}` / `{bundle_id}/items` | research read by an agent: dated items with signals |
 | `GET /search?q=&mode=&scope=` | search over chunks and names |
@@ -222,7 +222,7 @@ here are its outline.
 
 | Route | Does |
 |---|---|
-| `POST /changes` with `{"bundle_id", "item_ids"?}` (`Idempotency-Key`) | proposes one change per item, in event-time order |
+| `POST /changes` with `{"bundle_id", "item_ids"?}` (`Idempotency-Key`) | proposes one change per item, in event-time order; items already imported refresh their still-pending changes (`regated_change_ids`, see unified-model.md) |
 | `GET /changes?status=` / `{change_id}` / `{change_id}/diff` | changes; one; what approving it would do |
 | `POST /changes/{change_id}/approvals` (`If-Match: "<version etag>"`) | approve: commits a version (`412` if the model moved) |
 | `POST /changes/{change_id}/rejections` with `{"reason"}` | reject |

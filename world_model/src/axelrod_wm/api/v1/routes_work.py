@@ -173,7 +173,8 @@ def claim_proposal(app: Any, m: Model) -> str:
 
 def run_proposal(m: Model, rec: Any, item_ids: list[str] | None) -> dict:
     """Propose a stored bundle's items on the model (under the engine's lock): the ids imported, the late ones, the
-    changes proposed, and the version before. A compartment's view narrows the bundle first (sim/imports.py)."""
+    changes proposed, the pending changes assessed again on a better read of their items (`regated`), and the version
+    before. A compartment's view narrows the bundle first (sim/imports.py)."""
     from axelrod_wm.api.routes import _importer
 
     ctl = m.st.controller
@@ -187,9 +188,10 @@ def run_proposal(m: Model, rec: Any, item_ids: list[str] | None) -> dict:
     except ControllerError as err:
         if "nothing new" not in str(err):
             raise
-        out = {"update_id": None, "imported": []}
+        out = {"update_id": None, "imported": [], "regated": []}
     proposed = sorted(p.id for p in ctl.pending_proposals() if p.id not in before)
-    return {"out": out, "late": late, "proposed": proposed, "version_before": version_before}
+    return {"out": out, "late": late, "proposed": proposed, "regated": out["regated"],
+            "version_before": version_before}
 
 
 def record_import(app: Any, m: Model, bundle_id: str, r: dict, by: str) -> None:
@@ -223,7 +225,8 @@ async def create_changes(request: Request, world_model_id: str, body: s.ChangeCr
             r = await m.st.call(run_proposal, m, rec, body.item_ids)
             record_import(request.app, m, body.bundle_id, r, sub)
             detail = {"bundle_id": body.bundle_id, "imported_item_ids": r["out"]["imported"],
-                      "late_item_ids": r["late"], "version_before": r["version_before"]}
+                      "late_item_ids": r["late"], "regated_change_ids": r["regated"],
+                      "version_before": r["version_before"]}
             if r["out"]["update_id"]:
                 detail["update_id"] = r["out"]["update_id"]
             return {"resource": "changes", "ids": r["proposed"], "detail": detail}

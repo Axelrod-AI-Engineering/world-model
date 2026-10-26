@@ -524,7 +524,23 @@ class WorldModelController:
             p.queued, p.due_day, p.update_id = True, day, update_id
             self._decision_entry(p, "queued", "update", None, day=day, update_id=update_id)
 
-    def _approve_queued(self, p: Proposal, by: str, note: str | None) -> ChangeSet | None:
+    def regate(self, proposal_id: str) -> Proposal:
+        """Assess a proposal a run left pending again, after what the gate reads about it changed (a better read of its
+        document). The reasons are updated and logged. When it now passes it is applied as a passing proposal is: decided
+        by the review policy, on the model as it stands. One that no longer applies stays pending, and says so."""
+        with self.lock:
+            p = self._get_open(proposal_id)
+            eng = self.engine
+            req = eng.components["review_policy"].assess(p, eng.wm)
+            why = None if req.needs_review else stale_reason(p.event, eng.wm.graph)
+            reasons = req.reasons + ([f"no longer applies to the model: {why}"] if why else [])
+            p.review_reasons, p.needs_review = reasons, bool(reasons)
+            self._decision_entry(p, "regated", "update", None, reasons=reasons)
+            if not reasons:
+                self._approve_queued(p, self.auto_actor(), None, auto=True)
+            return p
+
+    def _approve_queued(self, p: Proposal, by: str, note: str | None, auto: bool = False) -> ChangeSet | None:
         """Approve a proposal a run left pending: its operations apply now, on the model as it stands, as a new version.
         The operations were made when the run reached the item, so each is checked against the current graph first.
         When one no longer applies (what it works on is gone), nothing changes and the proposal stays pending."""
@@ -539,7 +555,7 @@ class WorldModelController:
                                    vetted_by=by, message=f"Approved {p.id}") as txn:
                 self._apply_effects(p, txn)
             cs = eng.mutator.last_changeset if eng.ledger.next_seq > before_seq else None
-            self._mark_decided(p, ProposalStatus.APPROVED, by, note, cs)
+            self._mark_decided(p, ProposalStatus.AUTO_APPLIED if auto else ProposalStatus.APPROVED, by, note, cs)
             return self.fold_world_event(p, day, late_from=int(p.due_day or day))
 
     def set_confidence(self, proposal_id: str, confidence: float | None = None,

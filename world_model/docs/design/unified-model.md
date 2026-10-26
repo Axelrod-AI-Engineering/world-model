@@ -90,6 +90,20 @@ person, so a pack of hundreds of documents cannot populate a model at all.
    applies, each operation is checked against the current graph (`stale_reason`). If something it names is gone (a
    retired value, link or entity), the approval fails with `409 conflict` naming it, nothing changes and the proposal
    stays pending, so a person can reject it. Rejecting closes it. Every decision is a ledger entry.
+
+   **A better read re-assesses a pending proposal.** Re-reading a document (`POST .../documents/{id}/bundles`) makes a
+   new bundle whose items have the same ids, so proposing it finds them already imported. For each such item whose
+   proposal is still pending and queued (never approved, rejected or applied) and whose signals are identical, the
+   proposal takes the new read's attribution (document, publisher, url, basis, citation, coverage, plausibility,
+   confidence) and the review policy assesses it again (`ImportRunner._regate`, `WorldModelController.regate`). If it
+   now passes, it is applied as a fresh passing proposal is: `auto_applied` by `policy:standards`, folded in as a new
+   version, after the same `stale_reason` check (a proposal that no longer applies stays pending and says why). If not,
+   its `review_reasons` are replaced. Items whose signals differ, and decided proposals, are left as they are, since
+   the change itself would differ. The ids come back as `regated_change_ids` in the change job's detail and as
+   `regated` in the import result, and a proposal that only re-assessed old items is no longer `nothing new`. The
+   re-read is an `import_regate` ledger entry (the refreshed items and the proposals) and each assessment a `regated`
+   decision entry (the reasons), written before any auto-apply, so a restart restores the refreshed items and reasons
+   and a replay on changed construction files repeats the re-read at its place in the order.
 6. **Determinism.** The same bundles in the same order give the same versions and hashes, before and after a restart.
 7. **No client content in the repository.** Worlds, scenarios and compartments stay in the client root on the volume
    ([deployment.md](../../../docs/deployment.md#client-content)).
@@ -178,6 +192,7 @@ the data service. A redeploy restarts the engine, which resumes from the volume.
   `IM-` prefix.
 - **Proposal:** `review_reasons` carries the gate's failed checks, and `by="policy:standards"` marks an automatic
   approval. `queued` marks one a run left pending. `/v1` changes carry `review_reasons` too.
-- **Ledger:** a `queued` decision entry (`day`, `update_id`) when a run leaves a proposal pending.
+- **Ledger:** a `queued` decision entry (`day`, `update_id`) when a run leaves a proposal pending. A re-read writes an
+  `import_regate` update entry and, per proposal assessed again, a `regated` decision entry (`reasons`).
 - **Login:** `WORLD_MODEL_LOGINS` is unchanged (`user:password:scenario`). A login is a compartment when its scenario's
   `focus.base` is the main scenario.
