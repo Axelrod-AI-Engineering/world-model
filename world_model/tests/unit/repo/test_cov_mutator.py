@@ -136,3 +136,14 @@ def test_replay_rejects_changes_that_do_not_fit_their_collection(change, error, 
     ltm.prior_states.episodes["EP-1"] = _episode()
     with pytest.raises(error, match=match):
         apply_change(wm, ltm, change)
+
+
+def test_a_set_field_dumps_sorted_whatever_the_hash_seed():
+    """A field's adapter keeps its `Annotated` serializer, so a `StrSet` dumps in one order and a state's hash does not
+    depend on the process's hash seed (a restore once failed its hash check this way)."""
+    from axelrod_wm.model.superentity import SuperentityPattern
+    from axelrod_wm.repo.mutator import field_adapter
+
+    ids = {f"pat-{i:06d}" for i in range(64)}          # 64 strings: their set order is all but never sorted
+    assert field_adapter(SuperentityPattern, "rival_ids").dump_python(ids, mode="json") == sorted(ids)
+    assert field_adapter(SuperentityPattern, "name").dump_json("n") == b'"n"'     # a plain field as before

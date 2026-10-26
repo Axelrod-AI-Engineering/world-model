@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import typing
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, TypeAdapter
 
@@ -241,10 +241,14 @@ _ITEM_ADAPTERS: dict[tuple[type, str], TypeAdapter] = {}
 
 
 def field_adapter(cls: type[BaseModel], name: str) -> TypeAdapter:
+    """Adapter for a field as the model declares it, its metadata included: pydantic keeps a field's `Annotated`
+    metadata apart from its annotation, and without it a `StrSet` would dump in the process's set order, so a state's
+    hash would depend on the hash seed."""
     key = (cls, name)
     ad = _ADAPTERS.get(key)
     if ad is None:
-        ad = _ADAPTERS[key] = TypeAdapter(cls.model_fields[name].annotation)
+        f = cls.model_fields[name]
+        ad = _ADAPTERS[key] = TypeAdapter(Annotated[(f.annotation, *f.metadata)] if f.metadata else f.annotation)
     return ad
 
 
