@@ -159,6 +159,12 @@ def test_the_plausibility_band_and_the_confidence_floor():
     assert check_plausible_confident(gate(it=item())) is None
     assert "no plausibility band" in check_plausible_confident(gate())
     assert check_plausible_confident(gate(it=item(plausible=None))) == "plausibility was not checked"
+    bare = {"type": "move", "value_of": "a.x", "delta": -0.5, "mode": "standardized"}
+    assert check_plausible_confident(gate(it=item(plausible=None, signals=[bare]))) == \
+        "a direction with no size from evidence (R4)"
+    link = {"type": "support", "source": "a.x", "target": "a.y"}
+    assert check_plausible_confident(gate(it=item(plausible=None, signals=[link]))) == \
+        "a link whose size is not from evidence (R4)"
     assert "outside the extractor's plausibility band" in check_plausible_confident(gate(it=item(plausible=False)))
     assert "below 0.6" in check_plausible_confident(gate(it=item(confidence=0.5)))
     assert "below 0.6" in check_plausible_confident(gate(proposal(confidence=0.4), item()))

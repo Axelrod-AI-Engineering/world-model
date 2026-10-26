@@ -280,12 +280,22 @@ def check_one_basis(g: GateInput) -> str | None:
     return None
 
 
+def _unsized(item: ImportItem) -> str:
+    """Why an item has no plausibility band: the signal with no number to check (R4), else the extractor never checked."""
+    for sig in item.signals:
+        if sig.type == "move" and sig.mode == "standardized":
+            return "a direction with no size from evidence (R4)"
+        if sig.type in ("link", "support", "contradict"):
+            return "a link whose size is not from evidence (R4)"
+    return "plausibility was not checked"
+
+
 def check_plausible_confident(g: GateInput) -> str | None:
     item = g.item
     if item is None:
         return "not an imported item: no plausibility band"
     if item.plausible is None:
-        return "plausibility was not checked"
+        return _unsized(item)
     if not item.plausible:
         return "outside the extractor's plausibility band"
     ev = g.proposal.event
