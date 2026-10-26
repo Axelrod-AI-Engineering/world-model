@@ -180,14 +180,27 @@ def _period_end(dates: Dates) -> datetime | None:
     return None if p is None or dates.forward else datetime(p.end.year, p.end.month, p.end.day, tzinfo=UTC)
 
 
+def publisher_in_name(filename: str) -> str:
+    """The publisher a research file's name gives, else empty. Aggregators name files `YYYYMMDD - Publisher - Ticker - Title -
+    N pages.pdf`; only a name that fits this exactly is read, and any other name says nothing."""
+    stem, _, ext = filename.rpartition(".")
+    fields = stem.split(" - ")
+    last = fields[-1].removesuffix(" pages") if fields[-1].endswith(" pages") else ""
+    date = fields[0]
+    ok = bool(ext) and len(fields) >= 4 and len(date) == 8 and date.isascii() and date.isdigit()
+    return fields[1].strip() if ok and last.isascii() and last.isdigit() else ""
+
+
 def publisher_of(doc: Document) -> tuple[str, str | None]:
     """Who published a document, and its address, for the bundle's attribution fields. The manifest's publisher column, else
     the one the caller gave (`hints.publisher`), else the document's own metadata (an HTML page's <meta>, a PDF's author),
-    else the host of the manifest's URL; empty when none of these says (the world model's gate then waits for a person)."""
+    else the publisher in a research file's name (`publisher_in_name`), else the host of the manifest's URL; empty when
+    none of these says (the world model's gate then waits for a person)."""
     manifest, hints = doc.meta.get("manifest") or {}, doc.meta.get("hints") or {}
     url = manifest.get("url") or None
     host = urlsplit(url or "").netloc.removeprefix("www.")
-    return (manifest.get("publisher") or hints.get("publisher") or doc.meta.get("publisher") or host).strip(), url
+    return (manifest.get("publisher") or hints.get("publisher") or doc.meta.get("publisher")
+            or publisher_in_name(doc.filename) or host).strip(), url
 
 
 def _utc(t: datetime) -> datetime:

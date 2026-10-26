@@ -18,7 +18,7 @@ from axelrod_ingest.extract import (
     signal_plausible,
 )
 from axelrod_ingest.parse import parse
-from axelrod_ingest.pipeline import bundle_id, publisher_of
+from axelrod_ingest.pipeline import bundle_id, publisher_in_name, publisher_of
 from axelrod_ingest.sources import read_manifest
 from tests.ingest.builders import pdf
 
@@ -130,8 +130,8 @@ def test_provenance_of_gathers_the_fields(rules):
 
 
 # -- publisher ------------------------------------------------------------------------------------------------------
-def doc(**meta):
-    return NS(meta=meta)
+def doc(filename="", **meta):
+    return NS(meta=meta, filename=filename)
 
 
 def test_the_publisher_is_the_manifests_then_the_callers_then_the_documents_then_the_urls_host():
@@ -145,6 +145,29 @@ def test_the_publisher_is_the_manifests_then_the_callers_then_the_documents_then
     del both["publisher"]
     assert publisher_of(doc(**both)) == ("wire.example", "https://www.wire.example/a/b")
     assert publisher_of(doc()) == ("", None)
+
+
+NAMED = "20260924 - Synthetic Securities - ACME - Q3 Preview Loans - 285 pages.pdf"
+
+
+def test_the_publisher_is_read_from_an_aggregator_file_name_only_when_it_fits():
+    assert publisher_in_name(NAMED) == "Synthetic Securities"
+    assert publisher_in_name("20260924 -  Synthetic Research  - ACME - 3 pages.PDF") == "Synthetic Research"
+    for name in ["C - ExpertCall_document_dated_10-10-2026 (1).pdf", "20260924 - Synthetic Securities.pdf", "",
+                 "20260924 - Synthetic Securities - ACME - Title.pdf",          # no page count
+                 "20260924 - Synthetic Securities - ACME - x pages.pdf",       # count not digits
+                 "20260924 - Synthetic Securities - 12 pages.pdf",             # no ticker or title
+                 "2026092 - Synthetic Securities - ACME - 5 pages.pdf",         # short date
+                 "2026092x - Synthetic Securities - ACME - 5 pages.pdf",        # date not digits
+                 "20260924 - Synthetic Securities - ACME - 5 pages"]:           # no extension
+        assert publisher_in_name(name) == ""
+
+
+def test_a_file_name_publisher_comes_after_the_documents_and_before_the_urls_host():
+    url = {"manifest": {"url": "https://www.wire.example/a"}}
+    assert publisher_of(doc(NAMED, **url))[0] == "Synthetic Securities"
+    assert publisher_of(doc(NAMED, publisher="Meta Author", **url))[0] == "Meta Author"
+    assert publisher_of(doc("C - notes.pdf", **url))[0] == "wire.example"
 
 
 def test_an_html_page_names_its_publisher_in_a_meta_tag():
