@@ -14,6 +14,7 @@ clients. Recognition, extraction and bundles are out of scope except as read-onl
 - [Routes](#routes)
 - [Safety](#safety)
 - [In the code](#in-the-code)
+- [Ingest jobs](#ingest-jobs)
 <!-- /toc -->
 
 ## Reaching it
