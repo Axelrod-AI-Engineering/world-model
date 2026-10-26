@@ -194,7 +194,8 @@ def publisher_in_name(filename: str) -> str:
 def publisher_of(doc: Document) -> tuple[str, str | None]:
     """Who published a document, and its address, for the bundle's attribution fields. The manifest's publisher column, else
     the one the caller gave (`hints.publisher`), else the document's own metadata (an HTML page's <meta>, a PDF's author),
-    else the publisher in a research file's name (`publisher_in_name`), else the host of the manifest's URL; empty when none of these says (the world model's gate then waits for a person)."""
+    else the publisher in a research file's name (`publisher_in_name`), else the host of the manifest's URL; empty when
+    none of these says (the world model's gate then waits for a person)."""
     manifest, hints = doc.meta.get("manifest") or {}, doc.meta.get("hints") or {}
     url = manifest.get("url") or None
     host = urlsplit(url or "").netloc.removeprefix("www.")
