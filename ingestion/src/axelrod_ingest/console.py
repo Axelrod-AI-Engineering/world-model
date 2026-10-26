@@ -34,7 +34,7 @@ from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, FastAPI, Query, Request
 from fastapi.responses import Response
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from starlette.concurrency import run_in_threadpool
 
 from axelrod_ingest.contract.world_view import WorldView
@@ -82,7 +82,7 @@ class SimilarBody(BaseModel):
 class ManifestBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    text: str
+    text: str = Field(max_length=1_000_000)     # a manifest is a page of tables; a megabyte is far beyond any real one
 
 
 class DebugBody(BaseModel):

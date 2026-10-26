@@ -28,7 +28,7 @@ a:hover { text-decoration: underline; }
 .error { color: var(--bad); }
 header#top {
   display: flex; flex-wrap: wrap; align-items: center; gap: 16px; padding: 10px 24px; border-bottom: 1px solid var(--line);
-  background: color-mix(in srgb, var(--bg) 92%, transparent); position: sticky; top: 0; z-index: 5;
+  background: var(--bg); position: sticky; top: 0; z-index: 5;
 }
 .brand { font-weight: 600; }
 .spacer { flex: 1; }

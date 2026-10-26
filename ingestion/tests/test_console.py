@@ -377,3 +377,17 @@ def test_the_page_never_turns_data_into_markup_or_keeps_the_token_anywhere_else(
     assert re.findall(r"<script\b[^>]*>", html) == ['<script src="/ui/app.js">']
     assert "<style" not in html and " style=" not in html and not re.search(r"""(?:src|href)=["']https?:""", html)
     assert "http://" not in js and "https://" not in (UI / "app.css").read_text()
+
+
+def test_the_manifest_reader_stays_linear_on_hostile_text():
+    """Cells of many "[", "!" or spaces (CodeQL py/polynomial-redos) read in well under a second."""
+    import time
+
+    from axelrod_ingest.sources import is_file_name, read_manifest
+
+    hostile = "# t\nUpdated:" + " " * 50_000 + "\n## s\n| File | URL |\n|---|---|\n| " + "[\\" * 20_000 + " | " + "!" * 50_000 + " |\n"
+    t = time.perf_counter()
+    m = read_manifest(hostile)
+    assert time.perf_counter() - t < 1.0 and m.entries == ()
+    assert is_file_name("Annual report 2025.pdf") and is_file_name("a/b/c.xlsx") and not is_file_name("no extension")
+
