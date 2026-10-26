@@ -5677,6 +5677,12 @@ components:
           - integer
           - 'null'
           description: The version its approval committed
+        review_reasons:
+          type: array
+          items:
+            type: string
+          description: 'The checks that sent the change to a person (the standards gate''s failed checks, one string
+            each); empty when a policy applied it'
       required:
       - id
       - kind
@@ -5689,6 +5695,7 @@ components:
       - decided_at
       - note
       - version_after
+      - review_reasons
       description: 'One proposed change to the model: an uncommitted diff.'
       examples:
       - id: PR-000001
@@ -5702,6 +5709,8 @@ components:
         decided_at: null
         note: null
         version_after: null
+        review_reasons:
+        - does not name its source document (R21)
     Operation:
       type: object
       additionalProperties: true

@@ -69,10 +69,11 @@ def test_a_path_step_whose_relationship_is_gone_is_left_out():
 def test_a_change_the_engine_decided_names_the_system():
     p = SimpleNamespace(id="PR-1", kind="graph_update", status="approved", market_event_id="ME-1",
                         created_at=datetime(2026, 10, 1, tzinfo=UTC), decided_by="review_policy",
-                        decided_at=datetime(2026, 10, 2, tzinfo=UTC), note=None, version_after=3, event=None)
+                        decided_at=datetime(2026, 10, 2, tzinfo=UTC), note=None, version_after=3, event=None,
+                        review_reasons=["translated from text"])
     ch = project.change(p, "acme", None, None)
     assert ch.decided_by.model_dump(exclude_none=True) == {"kind": "system", "org": "acme", "sub": "review_policy"}
-    assert ch.operation_count == 0
+    assert ch.operation_count == 0 and ch.review_reasons == ["translated from text"]
 
 
 def test_a_world_without_question_templates(tmp_path):

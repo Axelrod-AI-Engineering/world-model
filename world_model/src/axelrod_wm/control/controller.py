@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 from axelrod_wm.control.updates import UpdateCycle, UpdateRequest, UpdateRun, UpdateState
 from axelrod_wm.engine.registry import registry
-from axelrod_wm.events.graph_update import ChangeValue, EventKind, GraphUpdateEvent
+from axelrod_wm.events.graph_update import ChangeValue, ConcreteTarget, EventKind, GraphUpdateEvent, op_ends
 from axelrod_wm.events.market import MarketEvent
 from axelrod_wm.events.thesis import Thesis, ThesisMode
 from axelrod_wm.inference.decisions import DecisionError, DecisionRecord, DecisionTrace, Outcome
@@ -18,7 +18,7 @@ from axelrod_wm.intake.pipeline import IngestionPipeline
 from axelrod_wm.intake.scrapers import dedup_keys
 from axelrod_wm.memory.frontier import CoMovementStatus, pair_key
 from axelrod_wm.model.hypothesis import Hypothesis, HypothesisKind, HypothesisStatus
-from axelrod_wm.model.ids import IdFactory
+from axelrod_wm.model.ids import TEMP_PREFIX, IdFactory
 from axelrod_wm.repo.ledger import LedgerKind
 from axelrod_wm.repo.review import Proposal, ProposalKind, ProposalStatus
 from axelrod_wm.trace import Phase
@@ -33,6 +33,23 @@ if TYPE_CHECKING:
 
 class ControllerError(ValueError):
     pass
+
+
+def stale_reason(event: GraphUpdateEvent, graph: Any) -> str | None:
+    """Why an event's operations no longer apply to `graph` (a value, an entity or an interaction they name is gone), or
+    None when each still has what it works on. A new thing (a `new:` id) is not looked up."""
+    for op in event.ops:
+        ends = [t.subentity_id for _, t in op_ends(op) if isinstance(t, ConcreteTarget)]
+        missing = [i for i in ends if not i.startswith(TEMP_PREFIX) and i not in graph.subentities]
+        if missing:
+            return f"{missing[0]} is no longer in the model"
+        iid = getattr(op, "interaction_id", None)
+        if iid is not None and (iid not in graph.interactions or not graph.interactions[iid].active):
+            return f"interaction {iid} is no longer active"
+        eid = getattr(op, "entity_id", None)
+        if eid is not None and eid not in graph.entities:
+            return f"entity {eid} is no longer in the model"
+    return None
 
 
 class WorldModelController:
@@ -474,6 +491,8 @@ class WorldModelController:
                     self.edit(proposal_id, subset(p.event, kept), by=by)
                     p = self._get_open(proposal_id)
             eng = self.engine
+            if p.queued and not self.update_running():
+                return self._approve_queued(p, by, note)
             with eng.tracer.scoped(self.scope_of(p)):
                 if not p.world_event:
                     return self._apply_model_edit(p, by=by, note=note, auto=False)
@@ -491,6 +510,37 @@ class WorldModelController:
             if run is not None and self.auto_resume:
                 self.cycle.resume(run)
             return cs
+
+    def update_running(self) -> bool:
+        """Whether an update run is in progress (running, or paused for review)."""
+        run = self.updates.get(self.active_update) if self.active_update else None
+        return run is not None and run.state not in (UpdateState.DONE, UpdateState.CANCELLED, UpdateState.FAILED)
+
+    def queue_for_review(self, proposal_id: str, day: int, update_id: str) -> None:
+        """A run that does not pause leaves a proposal that needs a person pending, and goes on. The entry records the day
+        and run it came from, so a restart restores it as it was; a person decides it later (`approve`, `reject`)."""
+        with self.lock:
+            p = self._get_open(proposal_id)
+            p.queued, p.due_day, p.update_id = True, day, update_id
+            self._decision_entry(p, "queued", "update", None, day=day, update_id=update_id)
+
+    def _approve_queued(self, p: Proposal, by: str, note: str | None) -> ChangeSet | None:
+        """Approve a proposal a run left pending: its operations apply now, on the model as it stands, as a new version.
+        The operations were made when the run reached the item, so each is checked against the current graph first.
+        When one no longer applies (what it works on is gone), nothing changes and the proposal stays pending."""
+        eng = self.engine
+        why = stale_reason(p.event, eng.wm.graph)
+        if why is not None:
+            raise ControllerError(f"{p.id} no longer applies to the model: {why}; reject it, or re-import the item")
+        day = int(eng.wm.last_processed_day) + 1
+        with eng.tracer.scoped(self.scope_of(p)):
+            before_seq = eng.ledger.next_seq
+            with eng.mutator.begin(cause=f"approve:{p.id}", at=self.now, process="review", proposal_id=p.id,
+                                   vetted_by=by, message=f"Approved {p.id}") as txn:
+                self._apply_effects(p, txn)
+            cs = eng.mutator.last_changeset if eng.ledger.next_seq > before_seq else None
+            self._mark_decided(p, ProposalStatus.APPROVED, by, note, cs)
+            return self.fold_world_event(p, day, late_from=int(p.due_day or day))
 
     def set_confidence(self, proposal_id: str, confidence: float | None = None,
                        op_confidence: dict[int, float | None] | None = None,

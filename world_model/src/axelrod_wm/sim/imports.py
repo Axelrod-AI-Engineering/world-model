@@ -257,7 +257,7 @@ class ImportRunner(ScenarioRunner):
             for pid in sorted(old):
                 by_key.setdefault((old[pid].market_event_id, str(old[pid].kind)), []).append(recorded.get(pid, []))
             batches = batch_entries(entries)
-            for k, batch in enumerate(batches):
+            for batch in batches:
                 pl = batch.payload
                 name = policy_at(entries, batch.seq) or DEFAULT_POLICY
                 if name != ctl.config.review.policy:
@@ -265,8 +265,7 @@ class ImportRunner(ScenarioRunner):
                 bundle = ImportBundle(title=pl["title"], synthetic=pl["synthetic"],
                                       items=[ImportItem.model_validate(d) for d in pl["items"]])
                 self.import_items(bundle)
-                if not self._replay_decisions(ctl, pl["title"], by_key, last=k == len(batches) - 1):
-                    break
+                self._replay_decisions(ctl, pl["title"], by_key)
         finally:
             ctl.auto_resume = was
         final = policy_at(entries)
@@ -281,19 +280,22 @@ class ImportRunner(ScenarioRunner):
         return self.status()
 
     @staticmethod
-    def _replay_decisions(ctl: WorldModelController, title: str, by_key: dict, *, last: bool) -> bool:
-        """Apply the recorded decisions to the proposals the replay raised, in order. Returns False when a proposal
-        was left undecided in the old model too (it stays pending, as it was); raises when the new base raised a
-        proposal the old one did not, or one that was applied by policy and now needs a person."""
-        while ctl.pending_proposals():
-            p = ctl.pending_proposals()[0]
+    def _replay_decisions(ctl: WorldModelController, title: str, by_key: dict) -> None:
+        """Apply the recorded decisions to the proposals the replay raised, in order. A proposal left undecided in the old
+        model too stays pending, as it was (a run that does not pause leaves them; the last one may be a run paused for
+        review). Raises when the new base raised a proposal the old one did not, or one that was applied by policy and
+        now needs a person."""
+        left: set[str] = set()
+        while todo := [q for q in ctl.pending_proposals() if q.id not in left]:
+            p = todo[0]
             key = (p.market_event_id, str(p.kind))
             n = [q.id for q in ctl.proposals.values() if (q.market_event_id, str(q.kind)) == key].index(p.id)
             todo = by_key.get(key, [])
             recs = todo[n] if n < len(todo) else None
             decided = recs is not None and any(e.payload["action"] in ("approved", "rejected") for e in recs)
-            if recs is not None and not decided and last and not any(e.payload["action"] == "auto_applied" for e in recs):
-                return False
+            if recs is not None and not decided and not any(e.payload["action"] == "auto_applied" for e in recs):
+                left.add(p.id)
+                continue
             if not decided:
                 raise ControllerError(f"replaying “{title}” on the new construction stopped at {p.id} "
                                       f"({p.market_event_id}): it now waits for a decision nobody recorded. "
@@ -464,8 +466,12 @@ class ImportRunner(ScenarioRunner):
             lp = int(wm.last_processed_day)
             if wm.deviations.day_of(last) <= lp:
                 last = datetime.combine(wm.deviations.date_of(lp + 1), datetime.max.time().replace(microsecond=0), UTC)
+            # one rule: a run pauses for review only under a policy that reviews everything in order (review_all);
+            # otherwise it goes on to the end and what needs a person waits as a pending proposal
+            on_review = None if ctl.engine.components["review_policy"].pauses_run else "queue"
             run = ctl.request_update(UpdateRequest(requested_by="import", until=last.date(), requested_at=last,
-                                                   user_market_events=events, sources=[]), run_to_end=True)
+                                                   user_market_events=events, sources=[], on_review=on_review),
+                                     run_to_end=True)
             self.update_ids.append(run.id)
             if origin is not None:
                 self.batch_origin[run.id] = origin
@@ -474,8 +480,10 @@ class ImportRunner(ScenarioRunner):
             self.import_log.append({"title": b.title, "items": [i.id for i in chosen], "update_id": run.id,
                                     "at": datetime.now(UTC).isoformat()})
             first, end = chosen[0].published_at, chosen[-1].published_at
-            self.caption = (f"Imported {len(chosen)} item{'s' * (len(chosen) != 1)} from “{b.title}”, "
-                            f"{first:%b %-d} to {end:%b %-d}. Each waits for your review, in date order.")
+            what = f"Imported {len(chosen)} item{'s' * (len(chosen) != 1)} from “{b.title}”, {first:%b %-d} to {end:%b %-d}."
+            self.caption = (what + (" Each waits for your review, in date order." if on_review is None else
+                                    f" {run.report.pending} wait{'s' * (run.report.pending == 1)} for your decision; "
+                                    "the rest applied."))
             self._broadcast()
             return {"update_id": run.id, "imported": [i.id for i in chosen], "waiting_on": run.waiting_on,
                     "state": str(run.state), "overlaps": overlaps}

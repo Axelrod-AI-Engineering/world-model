@@ -410,6 +410,7 @@ class Change(Api):
     decided_at: datetime | None
     note: str | None
     version_after: int | None
+    review_reasons: list[str]
 
 
 class Decision(Api):

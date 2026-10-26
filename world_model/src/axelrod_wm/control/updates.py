@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from datetime import UTC, date, datetime, time
 from enum import StrEnum
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, ConfigDict
 
@@ -51,6 +51,9 @@ class UpdateRequest(BaseModel):
     user_market_events: list[MarketEvent | UserMarketEventInput] = []   # full MarketEvents only from scenario files
     user_graph_update_events: list[GraphUpdateEvent] = []   # drawn by the user; model edits only
     sources: list[str] | None = None                    # None: config.update.sources
+    # what a world event that needs a person does to the run: "pause" waits at its day for the decision, "queue" leaves
+    # it pending for a later decision and the run goes on. None: config.update.pause_for_review (pause, else defer)
+    on_review: Literal["pause", "queue"] | None = None
 
 
 class UpdateState(StrEnum):
@@ -75,6 +78,7 @@ class UpdateReport(BaseModel):
     approved: int
     rejected: int
     deferred: int
+    pending: int = 0                   # left for a later decision by a run that does not pause (on_review="queue")
     late_folded: int                   # from wm.late_queue
     pending_refinements_created: int
     model_edits_proposed: list[str]    # proposal ids raised during the run (promotions, admissions, ...)
@@ -361,15 +365,16 @@ class UpdateCycle:
     def _walk(self, run: UpdateRun, d: int) -> bool:
         """Walk the day's queue in published_at order from run.cursor. Returns False if it paused."""
         queue = run.queue.get(d, [])
-        pause = bool(self.engine.config.update.pause_for_review)
+        req = run.request.on_review
+        mode = req or ("pause" if self.engine.config.update.pause_for_review else "defer")
         while run.cursor < len(queue):
             me_id = queue[run.cursor]
-            if not self._walk_one(run, d, me_id, pause):
+            if not self._walk_one(run, d, me_id, mode):
                 return False
             run.cursor += 1
         return True
 
-    def _walk_one(self, run: UpdateRun, d: int, me_id: str, pause: bool) -> bool:
+    def _walk_one(self, run: UpdateRun, d: int, me_id: str, mode: str) -> bool:
         """One market event of the day: ingest it once, then fold, defer, or wait on its proposals."""
         from axelrod_wm.repo.review import ProposalStatus
 
@@ -398,7 +403,9 @@ class UpdateCycle:
                 elif p.status == ProposalStatus.APPROVED and p.folded_day is None:
                     c.fold_world_event(p, d, update_id=run.id)
                 elif p.status == ProposalStatus.PENDING:
-                    if pause and not run.cancel_requested:
+                    if mode == "queue" and not run.cancel_requested:
+                        c.queue_for_review(pid, d, run.id)      # left pending for a later decision; the run goes on
+                    elif mode == "pause" and not run.cancel_requested:
                         run.waiting_on = pid
                         run.state = UpdateState.AWAITING_REVIEW
                         # the run's own state goes in the entry, so a restart can pick the run up where it paused
@@ -407,7 +414,8 @@ class UpdateCycle:
                                         update_id=run.id, day=d, date=dev.date_of(d).isoformat(),
                                         proposal_ids=[pid])
                         return False
-                    c.defer(pid, by="update")
+                    else:
+                        c.defer(pid, by="update")
                 run.handled.append(pid)
         return True
 
@@ -535,6 +543,7 @@ class UpdateCycle:
             approved=sum(1 for p in world if p.status == ProposalStatus.APPROVED),
             rejected=sum(1 for p in world if p.status == ProposalStatus.REJECTED),
             deferred=sum(1 for p in world if p.status == ProposalStatus.DEFERRED),
+            pending=sum(1 for p in world if p.status == ProposalStatus.PENDING and p.needs_review),
             late_folded=run.late_folded, pending_refinements_created=pend_created,
             model_edits_proposed=list(run.model_edits), biggest_moves=moves[:10], reposed_theses=reposed,
             version_before=run.version_before, version_after=eng.version)

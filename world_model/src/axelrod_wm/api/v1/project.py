@@ -218,7 +218,8 @@ def change(p: Any, org: str, proposed_by: dict | None, decided_by: dict | None) 
     ops = getattr(getattr(p, "event", None), "ops", None) or []
     return s.Change(id=p.id, kind=str(p.kind), status=str(p.status), event_id=p.market_event_id,
                     created_at=p.created_at, operation_count=len(ops), proposed_by=proposed_by, decided_by=decided_by,
-                    decided_at=p.decided_at, note=p.note, version_after=p.version_after)
+                    decided_at=p.decided_at, note=p.note, version_after=p.version_after,
+                    review_reasons=list(p.review_reasons))
 
 
 def operation(op: Any) -> dict:
