@@ -158,28 +158,57 @@ def change_view(request: Request, m: Model, p: Any, who: tuple[dict, dict]) -> s
     return pj.change(p, m.org, who[0].get(p.update_id) if p.update_id else None, who[1].get(p.id))
 
 
-@router.post(W + "/changes", status_code=202, summary="Propose one change per bundle item")
-async def create_changes(request: Request, world_model_id: str, body: s.ChangeCreate) -> Response:
-    from axelrod_ingest.lake.store import ImportRecord
+def claim_proposal(app: Any, m: Model) -> str:
+    """Under the engine's lock: no update active and no other proposal starting, so two at once cannot both pass.
+    "claimed" (the caller then discards `app.state.proposing`'s entry), "update" (one is running or waiting for review),
+    or "busy" (another proposal is starting)."""
+    ctl = m.st.main_controller() if m.st.is_view else m.st.controller       # a compartment imports into the main engine
+    if ctl.active_update is not None:
+        return "update"
+    if m.id in app.state.proposing:
+        return "busy"
+    app.state.proposing.add(m.id)
+    return "claimed"
+
+
+def run_proposal(m: Model, rec: Any, item_ids: list[str] | None) -> dict:
+    """Propose a stored bundle's items on the model (under the engine's lock): the ids imported, the late ones, the
+    changes proposed, and the version before. A compartment's view narrows the bundle first (sim/imports.py)."""
     from axelrod_wm.api.routes import _importer
 
+    ctl = m.st.controller
+    runner = _importer(m.st)
+    before = {p.id for p in ctl.pending_proposals()}
+    preview = runner.preview(rec.bundle)
+    late = [x["id"] for x in preview["items"] if x["status"] == "late" and (item_ids is None or x["id"] in item_ids)]
+    version_before = ctl.engine.version
+    try:
+        out = runner.import_items(rec.bundle, item_ids)
+    except ControllerError as err:
+        if "nothing new" not in str(err):
+            raise
+        out = {"update_id": None, "imported": []}
+    proposed = sorted(p.id for p in ctl.pending_proposals() if p.id not in before)
+    return {"out": out, "late": late, "proposed": proposed, "version_before": version_before}
+
+
+def record_import(app: Any, m: Model, bundle_id: str, r: dict, by: str) -> None:
+    """Keep what a proposal imported as the lakehouse's import record."""
+    from axelrod_ingest.lake.store import ImportRecord
+
+    if r["out"]["imported"]:
+        lake(app).put_import(ImportRecord(tenant=m.org, bundle_id=bundle_id, imported_at=datetime.now(UTC),
+                                          update_id=r["out"]["update_id"], item_ids=r["out"]["imported"], by=by))
+
+
+@router.post(W + "/changes", status_code=202, summary="Propose one change per bundle item")
+async def create_changes(request: Request, world_model_id: str, body: s.ChangeCreate) -> Response:
     m = model(request, world_model_id, CHANGES)
     rec = bundle_of(request, m, body.bundle_id)
     sub = principal(request).sub
-    claims: set = request.app.state.proposing
-
-    def claim() -> str:
-        # under the engine's lock: no update active and no other proposal starting, so two at once cannot both pass
-        ctl = m.st.controller
-        if ctl.active_update is not None:
-            return "update"
-        if m.id in claims:
-            return "busy"
-        claims.add(m.id)
-        return "claimed"
 
     async def make() -> Response:
-        while (got := await m.st.call(claim)) != "claimed":
+        while (got := await m.st.call(claim_proposal, request.app, m)) != "claimed":
             if got == "update" or await m.st.call(lambda: m.st.controller.engine.components["review_policy"].pauses_run):
                 raise ApiError("update_in_progress", "another update is running or waiting for review; decide its "
                                                      "changes first")
@@ -187,32 +216,12 @@ async def create_changes(request: Request, world_model_id: str, body: s.ChangeCr
         try:
             return await propose_job()
         finally:
-            claims.discard(m.id)
+            request.app.state.proposing.discard(m.id)
 
     async def propose_job() -> Response:
         async def work() -> dict:
-            def run() -> dict:
-                ctl = m.st.controller
-                runner = _importer(m.st)
-                before = {p.id for p in ctl.pending_proposals()}
-                preview = runner.preview(rec.bundle)
-                late = [x["id"] for x in preview["items"] if x["status"] == "late"
-                        and (body.item_ids is None or x["id"] in body.item_ids)]
-                version_before = ctl.engine.version
-                try:
-                    out = runner.import_items(rec.bundle, body.item_ids)
-                except ControllerError as err:
-                    if "nothing new" not in str(err):
-                        raise
-                    out = {"update_id": None, "imported": []}
-                proposed = sorted(p.id for p in ctl.pending_proposals() if p.id not in before)
-                return {"out": out, "late": late, "proposed": proposed, "version_before": version_before}
-
-            r = await m.st.call(run)
-            if r["out"]["imported"]:
-                lake(request.app).put_import(ImportRecord(
-                    tenant=m.org, bundle_id=body.bundle_id, imported_at=datetime.now(UTC),
-                    update_id=r["out"]["update_id"], item_ids=r["out"]["imported"], by=sub))
+            r = await m.st.call(run_proposal, m, rec, body.item_ids)
+            record_import(request.app, m, body.bundle_id, r, sub)
             detail = {"bundle_id": body.bundle_id, "imported_item_ids": r["out"]["imported"],
                       "late_item_ids": r["late"], "version_before": r["version_before"]}
             if r["out"]["update_id"]:

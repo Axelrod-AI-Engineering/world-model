@@ -128,6 +128,26 @@ tenant is the login's organization, so passages stay with the account that sent 
 the login's compartment are dropped (`narrow_bundle`), so one client's documents never reshape another client's
 companies.
 
+**Lake sync.** A document added straight to the lake (through the ingestion console, or the ingestion service's
+`/v1/ingest`) was read with no world view, so nothing in it was recognized and nothing reached the model. The world model
+reads such documents again by itself. `api/lake_sync.py` runs one background task per process, started with the
+engines. Every `WORLD_MODEL_LAKE_SYNC_SECONDS` (default 30) it visits each world model the process serves: the main
+engine's, each per-login engine's, and each compartment's view (whose organization's tenant syncs into the main engine
+through the view's narrowing). In a tenant, in ingested order, it takes each document with status `stored` or
+`extracted`, with no mention recorded and no ledger entry for this model. It reads that document against the model
+(`POST .../documents/{id}/bundles`'s code) and, when the bundle has signals, imports it (`POST .../changes`'s code), so the
+gate and the narrowing behave exactly as they do for a call. Under `standards`, what is well attributed applies and the
+rest stays pending with its reasons. A document that already has mentions was read against a model by an upload through
+the API, and is left to whoever uploaded it. `excluded`, `failed`, `needs_ocr`, and `parsed` documents are left alone.
+Each document dealt with is recorded in the lake as an idempotency record under the operation `lake-sync` (organization,
+world model, document id), so a restart reads nothing twice and deleting a document forgets its entry. An engine with an
+update running or waiting for review (`review_all`), or with another import starting, is skipped for that tick. An error
+(the lake or the ingestion service unreachable) is kept in the status and backs the engine off, doubling up to ten
+minutes; the app keeps serving. `GET /v1/world-models/{id}/sync` reports the last tick, the documents seen, read,
+imported, skipped and waiting, the changes still pending, why a tick stopped early, and the last error. It is on by
+default exactly when `WORLD_MODEL_LAKE_URL` is set (the hosted three-service mode); `WORLD_MODEL_LAKE_SYNC=1` or `0`
+decides otherwise. The first tick after enabling it reads every old document of the tenant that has no mention.
+
 **Persistence.** `ImportRunner.load` resets storage only when it holds no versions. Otherwise it resumes, as
 `ScenarioRunner.resume` does: it restores the latest version, verifies its hash, and rebuilds the imported-item map
 from the `MARKET_EVENT` ledger entries (`IM-<item id>`). It also rebuilds the review policy (a ledger entry when it

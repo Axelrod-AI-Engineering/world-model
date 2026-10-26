@@ -412,7 +412,8 @@ def create_app(config_path: str | None = None, scenario: str = "oil_shock_demo",
                storage: StorageBackend | None = None, trace_dir: str | Path | None = "var/axelrod/traces",
                load_on_startup: bool = True, play_delay: float = 0.4,
                cache_dir: str | Path | None = None, start_example: str | None = None,
-               lake_dir: str | Path | None = None) -> FastAPI:
+               lake_dir: str | Path | None = None, lake_sync: bool | None = None,
+               lake_sync_seconds: float | None = None) -> FastAPI:
     from axelrod_wm import settings
     from axelrod_wm.api.auth import extra_logins, org_of
     from axelrod_wm.api.v1.compartments import compartment_of
@@ -474,7 +475,9 @@ def create_app(config_path: str | None = None, scenario: str = "oil_shock_demo",
             cfg = state.runner.controller.config if state.runner is not None and state.runner.loaded else None
             if cfg is not None and cfg.update.auto_daily:
                 state.schedule_task = asyncio.create_task(_daily_schedule(state))
+            app.state.lake_sync.start()
         yield
+        await app.state.lake_sync.stop()
         for st in (state, *by_login.values()):
             for task in (st.play_task, st.update_task, st.schedule_task):
                 if task is not None and not task.done():
@@ -515,6 +518,13 @@ def create_app(config_path: str | None = None, scenario: str = "oil_shock_demo",
     from axelrod_wm.api import hierarchy
 
     hierarchy.LABELS = hierarchy.ClusterLabels(app.state.lake, provider)
+
+    # the lake sync (api/lake_sync.py): documents added to the lake reach the model by themselves; one task per process,
+    # started with the engines. On by default exactly when the lake is a service (WORLD_MODEL_LAKE_URL).
+    from axelrod_wm.api.lake_sync import LakeSync, settings_from_env
+
+    sync_on, sync_every = settings_from_env(lake_sync, lake_sync_seconds)
+    app.state.lake_sync = LakeSync(app, enabled=sync_on, interval=sync_every)
 
     @app.exception_handler(UnboundThesis)
     async def _unbound(request: Request, exc: UnboundThesis) -> JSONResponse:

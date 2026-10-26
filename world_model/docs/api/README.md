@@ -383,7 +383,7 @@ repository.
 ## Reference
 
 <!-- reference:start -->
-All 83 operations, from the contract ([openapi.yaml](openapi.yaml)). Paths are under `/v1`; `{wm}` is `/world-models/{world_model_id}`.
+All 84 operations, from the contract ([openapi.yaml](openapi.yaml)). Paths are under `/v1`; `{wm}` is `/world-models/{world_model_id}`.
 
 ### World models
 
@@ -506,6 +506,7 @@ Uploaded files and their passages.
 | `GET {wm}/documents/{document_id}/chunks/{ordinal}` | One passage | `world_model:read` |  | 200, 401, 403, 404, 422, 503 |
 | `GET {wm}/documents/{document_id}/content` | The extracted text, or the file as uploaded | `world_model:read` |  | 200, 401, 403, 404, 409, 422, 503 |
 | `POST {wm}/documents/{document_id}/bundles` | Read a stored document again, against the model as it is now | `documents:create` |  | 202, 401, 403, 404, 422, 503 |
+| `GET {wm}/sync` | What the lake sync has done for this model | `world_model:read` |  | 200, 401, 403, 404, 503 |
 
 ### Bundles
 
@@ -704,6 +705,7 @@ Codes: `invalid_request`, `invalid_json`, `invalid_cursor`, `authentication_requ
 | `Brief` | A reader's summary of a simulation: bottom line, timing, exposures, indicators, evidence, and its coverage (workflow read). |
 | `Export` | The world model in the client's v4.1.4 format (that schema's own field names). |
 | `Graph` | A subgraph for an agent's context window: entities with the attributes reached, and the relationships between them (workflow read). |
+| `LakeSync` | What the lake sync has done for the model's organization: documents added to the lake are read against the model and imported by themselves. seen, skipped, waiting, and pending are as of the last tick; read and imported count since the process started. |
 | `CompartmentCounts` | How many of each object it holds now. |
 | `Compartment` | A client's view of the unified world model: its companies, every player upstream of their values, and one link downstream (as engine/focus.py defines a focused world). |
 | `UnifiedWorldModel` | erid: the unified world model, the whole graph. |
