@@ -36,7 +36,6 @@ from urllib.parse import urlsplit
 LINK = re.compile(r"\[([^\]\[\n]{0,500})\]\(([^()\s]{0,2000})\)")
 SEPARATOR = re.compile(r"^\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?$")
 PUBLISHER_COLUMN = re.compile(r"publisher|issuer|outlet|author|published by", re.I)
-FILE_NAME = re.compile(r"[^/\\\s]+\.[A-Za-z0-9]{2,5}")      # matched against the last path segment only (is_file_name)
 
 
 @dataclass(frozen=True)
@@ -65,9 +64,11 @@ class Manifest:
 
 
 def is_file_name(text: str) -> bool:
-    """Whether a cell names a file: its last path segment looks like name.ext (checked without backtracking)."""
+    """Whether a cell names a file: its last path segment is name.ext, with a 2-5 character ASCII alphanumeric extension
+    (string operations, not a pattern, so hostile text cannot make it slow)."""
     last = re.split(r"[/\\\s]", text.strip())[-1]
-    return FILE_NAME.fullmatch(last) is not None
+    name, dot, ext = last.rpartition(".")
+    return bool(name and dot) and 2 <= len(ext) <= 5 and ext.isascii() and ext.isalnum()
 
 
 def _cells(row: str) -> list[str]:
