@@ -148,3 +148,105 @@ def test_what_makes_an_operation_stale():
     assert stale_reason(ev.model_copy(update={"ops": [unknown]}), graph) == "interaction I-nope is no longer active"
     retire = RetireEntity(entity_id="nobody", reason="x")
     assert stale_reason(ev.model_copy(update={"ops": [retire]}), graph) == "entity nobody is no longer in the model"
+
+
+# -- a run stored as paused, under a policy that no longer pauses runs ---------------------------------------------------
+
+def legacy(path):
+    """A run paused for review at IM-B, stored under a policy that does not pause (as one stored before the rule)."""
+    r = runner(FilesBackend(path=path))
+    r.controller.set_review_policy("review_all", by="eve")
+    out = r.import_items(HISTORY[0])
+    assert out["state"] == "awaiting_review"
+    ctl = r.controller
+    ctl.engine.ledger.append(LedgerKind.REVIEW_POLICY, {"policy": "standards", "by": "legacy"}, recorded_at=ctl.now)
+    ctl.engine.storage.close()
+    return out
+
+
+def test_a_paused_run_stored_under_a_policy_that_does_not_pause_is_released_on_resume(tmp_path):
+    out = legacy(tmp_path / "s")
+    r = runner(FilesBackend(path=tmp_path / "s"))
+    ctl = r.controller
+    assert ctl.active_update is None and ctl.updates[out["update_id"]].state == UpdateState.DONE
+    first, b = ctl.pending_proposals()                              # the awaited one, then IM-B under the policy now in force
+    assert first.id == out["waiting_on"] and first.market_event_id == "IM-A" and first.queued and first.review_reasons
+    assert b.market_event_id == "IM-B" and b.queued and str(b.status) == "pending"
+    assert "IM-C" in r.imported                                      # the rest of the run was processed
+    states = [e.payload["state"] for e in ctl.engine.ledger.of_kind(LedgerKind.UPDATE)
+              if e.payload.get("update_id") == out["update_id"]]
+    assert "released" in states and states[-1] == "done"
+    assert any(e.payload["action"] == "queued" and e.payload["proposal_id"] == first.id
+               for e in ctl.engine.ledger.of_kind(LedgerKind.REVIEW_DECISION))
+    r.import_items(HISTORY[1])                                      # nothing is in its way
+
+
+def test_a_released_proposal_is_decided_later_as_a_new_version_and_a_restart_changes_nothing(tmp_path):
+    legacy(tmp_path / "s")
+    r = runner(FilesBackend(path=tmp_path / "s"))
+    ctl = r.controller
+    first, b = ctl.pending_proposals()
+    ctl.engine.storage.close()
+    again = runner(FilesBackend(path=tmp_path / "s"))               # a second restart: the same state
+    assert again.controller.engine.state_hash == ctl.engine.state_hash and again.controller.active_update is None
+    assert [p.id for p in again.controller.pending_proposals()] == [first.id, b.id]
+    ctl = again.controller
+    version = ctl.engine.version
+    ctl.approve(first.id, "eve", "checked")                         # applied as a new version
+    assert ctl.engine.version > version and [p.id for p in ctl.pending_proposals()] == [b.id]
+    ctl.reject(b.id, "eve", "no")
+    want = (ctl.engine.version, ctl.engine.state_hash)
+    ctl.engine.storage.close()
+    final = runner(FilesBackend(path=tmp_path / "s"))
+    assert (final.controller.engine.version, final.controller.engine.state_hash) == want
+    assert not final.controller.pending_proposals()
+
+
+def test_a_paused_run_under_review_all_stays_paused_on_resume(tmp_path):
+    r = runner(FilesBackend(path=tmp_path / "s"))
+    r.controller.set_review_policy("review_all", by="eve")
+    out = r.import_items(HISTORY[0])
+    r.controller.engine.storage.close()
+    again = runner(FilesBackend(path=tmp_path / "s"))
+    ctl = again.controller
+    assert ctl.active_update == out["update_id"] and ctl.updates[ctl.active_update].state == UpdateState.AWAITING_REVIEW
+    assert not any(p.queued for p in ctl.proposals.values())
+    assert ctl.release_paused() is None                             # the policy pauses runs: nothing to release
+
+
+def test_switching_the_policy_releases_a_paused_run():
+    r = runner(MemoryBackend())
+    ctl = r.controller
+    ctl.set_review_policy("review_all", by="eve")
+    out = r.import_items(HISTORY[0])
+    assert ctl.release_paused() is None and ctl.active_update == out["update_id"]
+    ctl.set_review_policy("standards", by="eve")
+    assert ctl.active_update is None and ctl.updates[out["update_id"]].state == UpdateState.DONE
+    assert [p.queued for p in ctl.pending_proposals()] == [True, True]
+    r.import_items(HISTORY[1])
+    assert ctl.release_paused() is None                             # no run waits
+
+
+def test_switching_the_policy_without_driving_leaves_the_released_run_running_for_the_caller():
+    r = runner(MemoryBackend())
+    ctl = r.controller
+    ctl.set_review_policy("review_all", by="eve")
+    out = r.import_items(HISTORY[0])
+    ctl.auto_resume = False
+    ctl.set_review_policy("standards", by="eve")
+    run = ctl.updates[out["update_id"]]
+    assert run.state == UpdateState.RUNNING and run.request.on_review == "queue"
+    ctl.cycle.run_days(run)
+    assert run.state == UpdateState.DONE and ctl.pending_proposals()[0].queued
+    assert ctl.cycle.release(run) is run                            # a run that is not paused is left alone
+
+
+def test_a_released_run_that_fails_is_marked_failed_and_frees_the_model(monkeypatch):
+    r = runner(MemoryBackend())
+    ctl = r.controller
+    ctl.set_review_policy("review_all", by="eve")
+    out = r.import_items(HISTORY[0])
+    monkeypatch.setattr(ctl.engine.learning, "close_day", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("disk")))
+    with pytest.raises(RuntimeError, match="disk"):
+        ctl.set_review_policy("standards", by="eve")
+    assert ctl.updates[out["update_id"]].state == UpdateState.FAILED and ctl.active_update is None
