@@ -268,6 +268,7 @@ export function initAdmin({ renderer, actions }) {
       <h4>Review</h4>
       <p class="small muted">What waits for a person before it changes the model.</p>
       <div class="seg" role="group"><button data-policy="review_all" aria-pressed="${pol === "review_all"}" title="Every change, data included, waits for review">Everything waits</button>
+        <button data-policy="review_queue" aria-pressed="${pol === "review_queue"}" title="Every change waits for review, and imports keep going: a waiting change never holds up the next upload">Everything queues</button>
         <button data-policy="default" aria-pressed="${pol === "default"}" title="New structure, text translations, and large or low-confidence changes wait; the rest applies">Structural changes wait</button>
         <button data-policy="auto_approve_all" aria-pressed="${pol === "auto_approve_all"}" title="Every change applies as it arrives; still logged and reversible by version">Auto-accept</button></div>
       <h4>Scenario</h4>

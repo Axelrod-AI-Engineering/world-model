@@ -188,7 +188,7 @@ async def get_config(request: Request) -> dict:
 @router.patch("/config/review")
 async def patch_review(request: Request, body: PolicyBody) -> dict:
     st = S(request)
-    if body.policy not in ("review_all", "default", "auto_approve_all", "standards"):
+    if body.policy not in ("review_all", "review_queue", "default", "auto_approve_all", "standards"):
         raise HTTPException(422, f"unknown review policy {body.policy!r}")
 
     def run() -> tuple[dict, str | None]:

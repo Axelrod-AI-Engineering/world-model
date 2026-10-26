@@ -42,6 +42,18 @@ def test_a_run_under_standards_completes_and_leaves_what_needs_a_person_pending(
     assert [q["proposal_id"] for q in queued] == [p.id for p in pending]
 
 
+def test_under_review_queue_every_change_waits_and_no_run_stops():
+    r = runner(MemoryBackend())
+    r.controller.set_review_policy("review_queue", by="eve")
+    outs = run_history(r)
+    ctl = r.controller
+    assert [o["state"] for o in outs] == ["done"] * 3 and ctl.active_update is None     # each import went to the end
+    pending = ctl.pending_proposals()
+    assert [p.market_event_id for p in pending] == ["IM-A", "IM-B", "IM-C", "IM-D", "IM-E", "IM-F"]
+    assert all(p.queued and p.review_reasons == ["every change is reviewed"] for p in pending)
+    assert "auto_applied" not in [str(p.status) for p in ctl.proposals.values()]
+
+
 def test_a_decision_later_is_a_new_version_on_the_model_as_it_is_and_a_rejection_just_closes():
     r = runner(MemoryBackend())
     run_history(r)

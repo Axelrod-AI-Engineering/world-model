@@ -79,7 +79,7 @@ class ReviewRequirement(BaseModel):
 
 class ReviewPolicy(ABC):
     # An import run stops at an item that needs a person only when the policy says every change is reviewed in order
-    # (review_all). Under any other policy the run goes on: the item stays pending and a person decides it later.
+    # (review_all). Under any other policy (review_queue included) the run goes on: the item stays pending and a person decides it later.
     pauses_run: bool = False
 
     @abstractmethod
@@ -166,6 +166,14 @@ class ReviewAllPolicy(ReviewPolicy):
 
     def assess(self, proposal: Proposal, wm: WorkingMemory) -> ReviewRequirement:
         return ReviewRequirement(needs_review=True, reasons=["every change is reviewed"])
+
+
+@register("review_policy", "review_queue")
+class ReviewQueuePolicy(ReviewAllPolicy):
+    """Every change waits for a person, as under review_all, but an import does not stop at it: the run goes on, the
+    changes wait in the review queue, and the next import (an upload, the lake sync) is never held up."""
+
+    pauses_run = False
 
 
 # -- the standards gate (Oct 25) -------------------------------------------------------------------------------

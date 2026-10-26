@@ -59,7 +59,7 @@ A slot is an ABC with a contract, registered by name; `configs/*.yaml` picks one
 | · distributed prediction | `rival_detector` · `scenario_weighter` · `coupler` | `groups(networks, ltm)` · `weights(scenarios, networks, wm, ltm, ctx)` · `couple(networks, forced_existence, shocks, model, ctx, n_samples)` | pattern_and_sign · support_fit_track (uniform) · union_graph (iterative_block) |
 | · unify | `unifier` | `plan(networks, wm, ltm, ctx)`; `combine(thesis, scenarios, coupled, baseline, local, networks, ctx) -> Forecast` | channels_and_rivals (weighted_mixture) |
 | · evaluate | `scorer` | `score(forecast, realized, cfg) -> dict` | omission_commission_calibration |
-| Review | `review_policy` | `assess(proposal, wm) -> ReviewRequirement` | default (auto_approve_all, review_all, standards) |
+| Review | `review_policy` | `assess(proposal, wm) -> ReviewRequirement` | default (auto_approve_all, review_all, review_queue, standards) |
 | Repo | `storage` | `append_ledger · read_ledger · save_snapshot · load_snapshot · versions · append_version · snapshot_versions · reset` | files (memory) |
 | Context *(planned)* | `context_retriever` | `retrieve(query, as_of, scope, k) -> list[Fact]` | find_plus_neighborhood |
 

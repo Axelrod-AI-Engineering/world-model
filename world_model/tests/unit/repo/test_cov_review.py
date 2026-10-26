@@ -10,6 +10,7 @@ from axelrod_wm.repo.review import (
     Proposal,
     ProposalKind,
     ReviewAllPolicy,
+    ReviewQueuePolicy,
 )
 from axelrod_wm.repo.snapshots import empty_state
 from tests.conftest import real_event
@@ -50,3 +51,5 @@ def test_the_fixed_policies():
     assert AutoApproveAllPolicy().assess(p, wm).needs_review is False
     req = ReviewAllPolicy().assess(p, wm)
     assert req.needs_review and req.reasons == ["every change is reviewed"]
+    queue = ReviewQueuePolicy().assess(p, wm)                       # every change waits, and the run does not stop
+    assert queue == req and ReviewAllPolicy.pauses_run and not ReviewQueuePolicy.pauses_run
