@@ -732,7 +732,8 @@ async function boot() {
       && window.confirm(`Auto-accept from now on. Also approve the ${waiting} change${waiting === 1 ? "" : "s"} waiting now?`);
     store.config = { ...(store.config ?? {}), ...(await api.setReviewPolicy(p, also)) };
     if (also) await refreshGraph();
-    toast({ review_all: "Every change now waits for your review.", default: "Structural changes now wait for your review; the rest applies at once.",
+    toast({ review_all: "Every change now waits for your review.",
+            review_queue: "Every change now waits in the review queue; imports keep going.", default: "Structural changes now wait for your review; the rest applies at once.",
             auto_approve_all: also ? `Auto-accept is on, and the ${waiting} waiting were approved.` : "Auto-accept is on: changes apply as they arrive." }[p]);
   });
   const setLayout = (mode) => {

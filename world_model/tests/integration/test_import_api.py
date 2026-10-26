@@ -91,6 +91,7 @@ def test_auto_accept_approves_what_waits_and_what_comes(client):
     assert client.get("/api/proposals?status=pending").json() == []
     assert client.post("/api/import/preview", json={"bundle": SAMPLE}).json()["items"][-1]["status"] == "imported"
     assert client.patch("/api/config/review", json={"policy": "review_all"}).json()["review_policy"] == "review_all"
+    assert client.patch("/api/config/review", json={"policy": "review_queue"}).json()["review_policy"] == "review_queue"
     assert client.patch("/api/config/review", json={"policy": "nonsense"}).status_code == 422
     standards = client.patch("/api/config/review", json={"policy": "standards", "by": "eve"}).json()
     assert standards["review_policy"] == "standards"

@@ -71,11 +71,12 @@ person, so a pack of hundreds of documents cannot populate a model at all.
    An item that fails becomes a pending proposal with the failed checks as its reasons (`review_reasons`). The gate
    never widens what a deletion, a structural change or a text translation may do without a person.
 
-   **A run pauses for review only under `review_all`.** Under any other policy (`standards`, `default`,
-   `auto_approve_all`) an import run goes to the end: items the policy approves apply as `policy:standards`, items that
+   **A run pauses for review only under `review_all`.** Under any other policy (`standards`, `review_queue`,
+   `default`, `auto_approve_all`) an import run goes to the end: items the policy approves apply as `policy:standards`, items that
    need a person stay pending (`Proposal.queued`), and the run completes. A completed run never blocks the next import,
    so one item waiting for a person cannot stop a bulk import. Under `review_all` the run still pauses at each item,
-   in date order, as the review screen expects. In code the rule is `ReviewPolicy.pauses_run`, read by
+   in date order, as the review screen expects. `review_queue` has every change wait for a person, as `review_all` does,
+   without pausing: use it to stop automatic approval while uploads keep reaching the model. In code the rule is `ReviewPolicy.pauses_run`, read by
    `ImportRunner.import_items`, which sets `UpdateRequest.on_review`.
 
    **A run paused under an older rule is released.** Whenever the active run is awaiting review while the policy in force
