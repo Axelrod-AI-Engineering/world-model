@@ -2828,6 +2828,40 @@ paths:
           $ref: '#/components/responses/NotFound'
         '503':
           $ref: '#/components/responses/ServiceUnavailable'
+  /world-models/{world_model_id}/sync:
+    get:
+      operationId: getLakeSync
+      summary: What the lake sync has done for this model
+      tags:
+      - Documents
+      x-required-scope: world_model:read
+      security:
+      - serviceToken: []
+      - apiKey: []
+      - session: []
+      parameters:
+      - *id004
+      - *id001
+      responses:
+        '200':
+          description: What the lake sync has done for this model
+          headers:
+            X-Request-Id: *id002
+            X-Axelrod-API-Version: *id003
+            traceparent:
+              $ref: '#/components/headers/traceparent'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LakeSyncResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /erid:
     get:
       operationId: getUnifiedWorldModel
@@ -6769,6 +6803,77 @@ components:
       - data
       - meta
       description: The credential.
+    LakeSync:
+      type: object
+      additionalProperties: false
+      description: 'What the lake sync has done for the model''s organization: documents added to the lake are read against the
+        model and imported by themselves. seen, skipped, waiting, and pending are as of the last tick; read and imported count
+        since the process started.'
+      properties:
+        enabled:
+          type: boolean
+        interval_seconds:
+          type: number
+        last_tick_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        seen:
+          type: integer
+          description: Documents in the organization's lake tenant.
+        read:
+          type: integer
+          description: Documents read against the model by the sync.
+        imported:
+          type: integer
+          description: Items the sync imported into the model.
+        pending:
+          type: integer
+          description: Changes the sync proposed that still wait for a person.
+        skipped:
+          type: integer
+          description: Documents the sync leaves alone (already read, excluded, failed, not yet parsed).
+        waiting:
+          type: integer
+          description: Documents the model has not read yet.
+        paused:
+          type:
+          - string
+          - 'null'
+          description: Why the last tick stopped early (an update is running or waiting for review; another import is starting).
+        failures:
+          type: integer
+          description: Ticks in a row that failed (the sync backs off).
+        last_error:
+          type:
+          - string
+          - 'null'
+      required:
+      - enabled
+      - interval_seconds
+      - last_tick_at
+      - seen
+      - read
+      - imported
+      - pending
+      - skipped
+      - waiting
+      - paused
+      - failures
+      - last_error
+    LakeSyncResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/LakeSync'
+        meta:
+          $ref: '#/components/schemas/Meta'
+      required:
+      - data
+      - meta
+      description: The lake sync's status.
     JobOnlyResponse:
       type: object
       additionalProperties: false

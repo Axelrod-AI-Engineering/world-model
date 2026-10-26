@@ -104,6 +104,8 @@ All under the service's bearer token; failures are RFC 9457 problems, and the pa
 | `POST /v1/similar` | `tenant`, `doc_id`, `ord`, `limit` |
 | `POST /v1/debug/stages` | a multipart `file` and `meta`, or JSON `{tenant, doc_id}`: the dry run |
 
+A file added here (or through `/v1/ingest`) is stored and read with no world view, so nothing in it is recognized yet. When the world model runs the lake sync (`WORLD_MODEL_LAKE_SYNC`, on by default in the hosted three-service mode), added files reach the model within about 30 seconds: it reads them against the model, imports what has signals, and keeps what needs a person pending with its reasons. See `GET /v1/world-models/{id}/sync` for its status.
+
 Unfiltered tables are paged by the store; a filter reads the tenant's documents (500 at a time) and filters them here.
 
 ## Safety

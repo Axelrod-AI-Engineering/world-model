@@ -358,6 +358,24 @@ class DocumentText(Api):
     text: str
 
 
+class LakeSync(Api):
+    """What the lake sync (api/lake_sync.py) has done for a world model's organization: its own counts, never a document's
+    content."""
+
+    enabled: bool
+    interval_seconds: float
+    last_tick_at: datetime | None
+    seen: int
+    read: int
+    imported: int
+    pending: int
+    skipped: int
+    waiting: int
+    paused: str | None
+    failures: int
+    last_error: str | None
+
+
 class BundleSummary(Api):
     id: str
     title: str

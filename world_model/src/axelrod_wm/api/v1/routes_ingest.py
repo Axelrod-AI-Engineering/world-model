@@ -51,10 +51,14 @@ SourceType = Literal["broker_research", "expert_call", "news", "central_bank", "
 
 
 # -- documents ---------------------------------------------------------------------------------------------------------------
-def ingestor_for(request: Request, m: Model) -> Ingestor:
-    ing: Ingestor = request.app.state.ingestor
+def ingestor_of(app: Any, m: Model) -> Ingestor:
+    ing: Ingestor = app.state.ingestor
     ing.inverted = frozenset(inverted_surfaces(m.st))
     return ing
+
+
+def ingestor_for(request: Request, m: Model) -> Ingestor:
+    return ingestor_of(request.app, m)
 
 
 def document_view(doc: Any) -> s.Document:
@@ -204,6 +208,12 @@ async def extract_document(request: Request, world_model_id: str, document_id: s
         return await run_job(request, m, "document_extraction", work)
 
     return await idempotent(request, m, fingerprint(document_id), make)
+
+
+@router.get(W + "/sync", summary="What the lake sync has done for this model")
+async def get_sync(request: Request, world_model_id: str) -> Response:
+    m = model(request, world_model_id, READ)
+    return one(request, s.LakeSync(**request.app.state.lake_sync.status_of(m.id)))
 
 
 # -- bundles -------------------------------------------------------------------------------------------------------------------
