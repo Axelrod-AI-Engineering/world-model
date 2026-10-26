@@ -60,6 +60,11 @@ def batch_entries(entries: list[LedgerEntry]) -> list[LedgerEntry]:
     return [e for e in entries if e.kind == LedgerKind.UPDATE and e.payload.get("state") == "import_batch"]
 
 
+def regate_entries(entries: list[LedgerEntry]) -> list[LedgerEntry]:
+    """The re-reads: items imported again whose pending changes were assessed again (`import_regate`)."""
+    return [e for e in entries if e.kind == LedgerKind.UPDATE and e.payload.get("state") == "import_regate"]
+
+
 def policy_at(entries: list[LedgerEntry], seq: int | None = None) -> str | None:
     """The review policy in force after the entries up to `seq` (all of them when None): the newest REVIEW_POLICY."""
     name = None
@@ -117,6 +122,8 @@ def restore_proposals(entries: list[LedgerEntry]) -> dict[str, Proposal]:
                 after = pl["diff"]["after"]
                 p.event = with_confidence(p.event, after["confidence"],
                                           {int(i): v for i, v in after["ops"].items()}, after["ripple"])
+            elif act == "regated":                  # assessed again after a better read of its document
+                p.review_reasons, p.needs_review = pl["reasons"], bool(pl["reasons"])
             elif act == "queued":                   # left pending by a run that did not pause
                 p.queued, p.due_day, p.update_id = True, pl["day"], pl["update_id"]
             else:                                   # "folded"

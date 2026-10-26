@@ -57,6 +57,7 @@ from axelrod_wm.sim.import_state import (
     decisions,
     loaded_record,
     policy_at,
+    regate_entries,
     restore_proposals,
 )
 from axelrod_wm.sim.runner import RunnerStatus, ScenarioRunner
@@ -64,6 +65,8 @@ from axelrod_wm.sim.scenario import load_theses
 from axelrod_wm.trace import Phase
 
 DEFAULT_POLICY = "standards"          # an imported model's review policy until a person chooses another
+
+REREAD_FIELDS = ("document", "publisher", "url", "basis", "citation", "coverage", "plausible", "confidence")   # what a re-read refreshes
 
 
 class ImportRunner(ScenarioRunner):
@@ -193,6 +196,9 @@ class ImportRunner(ScenarioRunner):
                                     "at": pl["at"], "closed": True})
             if pl.get("origin") is not None:
                 self.batch_origin[pl["update_id"]] = pl["origin"]
+        for e in regate_entries(entries):               # a re-read refreshed the item behind a pending change
+            for d in e.payload["items"]:
+                self.imported[self.event_id(ImportItem.model_validate(d))] = ImportItem.model_validate(d)
         for e in entries:
             if e.kind == LedgerKind.MARKET_EVENT:
                 me = MarketEvent.model_validate(e.payload)
@@ -256,18 +262,24 @@ class ImportRunner(ScenarioRunner):
             old = restore_proposals(entries)
             recorded = decisions(entries)
             by_key: dict[tuple, list] = {}
+            regated: set[tuple] = set()             # (key, n) of the changes a later re-read assessed again
+            reread = {pid for e in regate_entries(entries) for pid in e.payload["proposals"]}
             for pid in sorted(old):
-                by_key.setdefault((old[pid].market_event_id, str(old[pid].kind)), []).append(recorded.get(pid, []))
-            batches = batch_entries(entries)
-            for batch in batches:
+                key = (old[pid].market_event_id, str(old[pid].kind))
+                if pid in reread:
+                    regated.add((key, len(by_key.get(key, []))))
+                by_key.setdefault(key, []).append(recorded.get(pid, []))
+            for batch in sorted(batch_entries(entries) + regate_entries(entries), key=lambda e: e.seq):
                 pl = batch.payload
                 name = policy_at(entries, batch.seq) or DEFAULT_POLICY
                 if name != ctl.config.review.policy:
                     ctl.set_review_policy(name, by="replay")
-                bundle = ImportBundle(title=pl["title"], synthetic=pl["synthetic"],
-                                      items=[ImportItem.model_validate(d) for d in pl["items"]])
-                self.import_items(bundle)
-                self._replay_decisions(ctl, pl["title"], by_key)
+                items = [ImportItem.model_validate(d) for d in pl["items"]]
+                if pl["state"] == "import_regate":
+                    self._regate(items, pl["title"])
+                else:
+                    self.import_items(ImportBundle(title=pl["title"], synthetic=pl["synthetic"], items=items))
+                self._replay_decisions(ctl, pl["title"], by_key, regated)
         finally:
             ctl.auto_resume = was
         final = policy_at(entries)
@@ -282,11 +294,11 @@ class ImportRunner(ScenarioRunner):
         return self.status()
 
     @staticmethod
-    def _replay_decisions(ctl: WorldModelController, title: str, by_key: dict) -> None:
+    def _replay_decisions(ctl: WorldModelController, title: str, by_key: dict, regated: frozenset = frozenset()) -> None:
         """Apply the recorded decisions to the proposals the replay raised, in order. A proposal left undecided in the old
         model too stays pending, as it was (a run that does not pause leaves them; the last one may be a run paused for
-        review). Raises when the new base raised a proposal the old one did not, or one that was applied by policy and
-        now needs a person."""
+        review). A change a later re-read applied by policy waits for that re-read. Raises when the new base raised a
+        proposal the old one did not, or one that was applied by policy and now needs a person."""
         left: set[str] = set()
         while todo := [q for q in ctl.pending_proposals() if q.id not in left]:
             p = todo[0]
@@ -296,6 +308,9 @@ class ImportRunner(ScenarioRunner):
             recs = todo[n] if n < len(todo) else None
             decided = recs is not None and any(e.payload["action"] in ("approved", "rejected") for e in recs)
             if recs is not None and not decided and not any(e.payload["action"] == "auto_applied" for e in recs):
+                left.add(p.id)
+                continue
+            if not decided and (key, n) in regated:
                 left.add(p.id)
                 continue
             if not decided:
@@ -443,7 +458,15 @@ class ImportRunner(ScenarioRunner):
                                                                                   UpdateState.CANCELLED,
                                                                                   UpdateState.FAILED):
                 raise ControllerError("an update is still running: finish its reviews first")
-            chosen = [i for i in b.items if (ids is None or i.id in ids) and self.event_id(i) not in self.imported]
+            wanted = [i for i in b.items if ids is None or i.id in ids]
+            regated = self._regate([i for i in wanted if self.event_id(i) in self.imported], b.title)
+            chosen = [i for i in wanted if self.event_id(i) not in self.imported]
+            if not chosen and regated:
+                self.caption = (f"Read “{b.title}” again: {len(regated)} waiting change{'s' * (len(regated) != 1)} "
+                                "assessed again on the better read.")
+                self._broadcast()
+                return {"update_id": None, "imported": [], "waiting_on": None, "state": "regated", "overlaps": [],
+                        "regated": regated}
             if not chosen:
                 raise ControllerError("nothing new to import")
             chosen.sort(key=lambda x: x.published_at)
@@ -488,7 +511,32 @@ class ImportRunner(ScenarioRunner):
                                     "the rest applied."))
             self._broadcast()
             return {"update_id": run.id, "imported": [i.id for i in chosen], "waiting_on": run.waiting_on,
-                    "state": str(run.state), "overlaps": overlaps}
+                    "state": str(run.state), "overlaps": overlaps, "regated": regated}
+
+    def _regate(self, items: list[ImportItem], title: str) -> list[str]:
+        """Items read again whose ids are already imported: a change still waiting for a person (left pending by a run, never
+        decided) takes the new read's attribution (document, publisher, url, basis, citation, coverage, plausibility,
+        confidence) and is assessed again, so a better read can let it pass. Only when the signals are the same: the
+        change itself would differ otherwise. The re-read is logged first, so a restart replays it. Returns the ids of the
+        changes assessed again."""
+        ctl = self.controller
+        todo = []
+        for item in items:
+            me_id = self.event_id(item)
+            old = self.imported[me_id]
+            fresh = old.model_copy(update={f: getattr(item, f) for f in REREAD_FIELDS})
+            waiting = [p.id for p in ctl.pending_proposals() if p.market_event_id == me_id and p.queued]
+            if waiting and item.signals == old.signals and fresh != old:
+                todo.append((me_id, fresh, waiting))
+        if not todo:
+            return []
+        ctl.engine.ledger.append(LedgerKind.UPDATE, {
+            "state": "import_regate", "title": title, "items": [f.model_dump(mode="json") for _, f, _ in todo],
+            "proposals": [pid for _, _, w in todo for pid in w], "at": datetime.now(UTC).isoformat()},
+            recorded_at=ctl.now)
+        for me_id, fresh, _ in todo:
+            self.imported[me_id] = fresh
+        return [ctl.regate(pid).id for _, _, w in todo for pid in w]
 
     # -- status ------------------------------------------------------------------------------------
     def status(self) -> RunnerStatus:
