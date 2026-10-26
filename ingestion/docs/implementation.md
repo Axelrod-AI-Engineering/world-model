@@ -369,7 +369,8 @@ rules nothing.
   - `document`: the lake document id (content hash), which finds the stored text and chunks again; `url` is the
     manifest's address when there is one.
   - `publisher`: the manifest's publisher column, else `hints.publisher`, else the document's own metadata (an HTML
-    `<meta>`, a PDF's author), else the host of the manifest URL; empty when none says (`pipeline.publisher_of`).
+    `<meta>`, a PDF's author), else the publisher in a research file's name
+    (`YYYYMMDD - Publisher - Ticker - Title - N pages.pdf`), else the host of the manifest URL; empty when none says (`pipeline.publisher_of`).
   - `basis`: `direct` for an issuer's own filing about itself; `proxy` for third-party levels and sized changes;
     `context_only` for third-party links and bare directions; otherwise none.
   - `citation`: for an item that states a link or a support, the document id, page and character span of its sentence.
