@@ -21,7 +21,8 @@ class FakeTextEmbedding:
         FakeTextEmbedding.calls.append({"model": model, "threads": threads, "cache_dir": cache_dir})
 
     def embed(self, texts, batch_size=None):
-        assert batch_size == 32
+        assert batch_size == 8
+        FakeTextEmbedding.lengths = [len(t) for t in texts]
         for t in texts:
             yield [1.0 * len(t), 2.0 * len(t)]
 
@@ -129,3 +130,10 @@ def test_cosine():
     assert cosine([3.0, 4.0], [-3.0, -4.0]) == pytest.approx(-1.0)
     assert cosine([0.0, 0.0], [1.0, 1.0]) == 0.0
     assert cosine([0.0, 0.0], [0.0, 0.0]) == 0.0
+
+
+def test_fastembed_caps_each_text_and_batches_small(fake_fastembed):
+    e = FastEmbedder()
+    e.embed(["x" * 5000, "short"])
+    assert FakeTextEmbedding.lengths == [FastEmbedder.MAX_CHARS, 5]
+
