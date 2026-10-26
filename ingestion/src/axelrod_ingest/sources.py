@@ -32,10 +32,10 @@ from dataclasses import dataclass
 from urllib.parse import urlsplit
 
 # -- the manifest -----------------------------------------------------------------------------------------------
-LINK = re.compile(r"\[([^\]]*)\]\(([^)]*)\)")
+# bounded, so a cell of many "[" stays linear (a manifest can now arrive over HTTP: console /v1/manifest)
+LINK = re.compile(r"\[([^\]\[\n]{0,500})\]\(([^()\s]{0,2000})\)")
 SEPARATOR = re.compile(r"^\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?$")
 PUBLISHER_COLUMN = re.compile(r"publisher|issuer|outlet|author|published by", re.I)
-FILE_NAME = re.compile(r"[^/\\\s]+\.[A-Za-z0-9]{2,5}$")
 
 
 @dataclass(frozen=True)
@@ -63,6 +63,14 @@ class Manifest:
         return next((lines for h, lines in self.notes if h == heading), ())
 
 
+def is_file_name(text: str) -> bool:
+    """Whether a cell names a file: its last path segment is name.ext, with a 2-5 character ASCII alphanumeric extension
+    (string operations, not a pattern, so hostile text cannot make it slow)."""
+    last = re.split(r"[/\\\s]", text.strip())[-1]
+    name, dot, ext = last.rpartition(".")
+    return bool(name and dot) and 2 <= len(ext) <= 5 and ext.isascii() and ext.isalnum()
+
+
 def _cells(row: str) -> list[str]:
     return [c.strip() for c in row.strip().strip("|").split("|")]
 
@@ -77,7 +85,7 @@ def read_manifest(text: str) -> Manifest:
     """The structure of a MANIFEST.md: title, "Updated" line, file tables by section, and each other section's bullets."""
     lines = text.splitlines()
     title = next((ln[2:].strip() for ln in lines if ln.startswith("# ")), "")
-    updated = next((m.group(1).strip() for ln in lines if (m := re.match(r"^Updated:\s*(.+)$", ln))), "")
+    updated = next((m.group(1).strip() for ln in lines if (m := re.match(r"^Updated:\s*(\S.*)$", ln))), "")
     entries: list[ManifestEntry] = []
     notes: dict[str, list[str]] = {}
     section, header, ranks = "", None, 0
@@ -93,7 +101,7 @@ def read_manifest(text: str) -> Manifest:
             elif header is not None and not SEPARATOR.match(ln.strip()):
                 cells = [_plain(c) for c in _cells(ln)]
                 name = cells[0][0] if cells else ""
-                if "file" in header[0].lower() and FILE_NAME.search(name):
+                if "file" in header[0].lower() and is_file_name(name):
                     ranks += 1
                     row = dict(zip(header, cells, strict=False))
                     url = next((u for h, (_t, u) in row.items() if re.search(r"url|source", h, re.I) and u), "")

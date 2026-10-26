@@ -92,6 +92,11 @@ class NearestBody(_Body):
     limit: int = 20
 
 
+class ChunkCountsBody(_Body):
+    tenant: str
+    doc_ids: list[str] | None = None
+
+
 class FieldsBody(_Body):
     fields: dict[str, Any]
 
@@ -205,6 +210,10 @@ def create_lake_app(store: LakeStore, token: str) -> FastAPI:
     def delete_document(doc_id: str, tenant: str) -> dict:
         return {"deleted": store.delete_document(tenant, doc_id)}
 
+    @r.get("/overview")
+    def overview(tenant: str, since: datetime | None = None) -> dict:
+        return store.overview(tenant, since=since)
+
     # -- text, chunks, mentions, embeddings -----------------------------------------------------------------
     @r.put("/documents/{doc_id}/text")
     def put_text(doc_id: str, tenant: str, body: TextBody) -> dict:
@@ -224,6 +233,10 @@ def create_lake_app(store: LakeStore, token: str) -> FastAPI:
     @r.get("/documents/{doc_id}/chunks")
     def get_chunks(doc_id: str, tenant: str) -> list[dict]:
         return [c.model_dump(mode="json") for c in store.get_chunks(tenant, doc_id)]
+
+    @r.post("/chunk-counts")
+    def chunk_counts(body: ChunkCountsBody) -> dict:
+        return store.count_chunks(body.tenant, body.doc_ids)
 
     @r.put("/documents/{doc_id}/mentions")
     def put_mentions(doc_id: str, tenant: str, body: MentionsBody) -> dict:
@@ -278,6 +291,10 @@ def create_lake_app(store: LakeStore, token: str) -> FastAPI:
     @r.get("/bundles")
     def list_bundles(tenant: str, doc_id: str | None = None, limit: int = 100) -> list[dict]:
         return [b.model_dump(mode="json") for b in store.list_bundles(tenant, doc_id=doc_id, limit=limit)]
+
+    @r.delete("/documents/{doc_id}/bundles")
+    def delete_bundles_of(doc_id: str, tenant: str) -> dict:
+        return {"deleted": store.delete_bundles_of(tenant, doc_id)}
 
     @r.post("/imports")
     def put_import(rec: ImportRecord) -> dict:

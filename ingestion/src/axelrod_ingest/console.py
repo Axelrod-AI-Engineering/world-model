@@ -5,16 +5,22 @@ adding files, searching, and a dry run of the pipeline on one file. The page is 
 `app.css`, no framework, no build step, no network dependency) at `GET /` and `GET /ui`; it is open, and every JSON route is under
 the service's bearer token like the rest of `/v1`.
 
-    GET  /v1/tenants                                  the lake's tenants
-    GET  /v1/lake/{tenant}/summary                    stats, and documents by status, type, and language
+    GET  /v1/tenants                                  the lake's tenants, and each one's document count
+    GET  /v1/supported                                the file extensions and MIME types parse takes, and the source types
+    POST /v1/manifest                                 a MANIFEST.md's text: its entries by file name
+    GET  /v1/lake/{tenant}/changes                    a version and counts, cheap: what the page polls (`since`: how many are newer)
+    GET  /v1/lake/{tenant}/summary                    stats, and documents by status, type, and language (and the version)
+    GET  /v1/lake/{tenant}/activity                   the latest ingests, newest first
     GET  /v1/lake/{tenant}/documents                  the table: filters, sort, paging
     GET  /v1/lake/{tenant}/documents/{id}             metadata, text, chunks, counts
     GET  /v1/lake/{tenant}/documents/{id}/raw         the raw file
+    DELETE /v1/lake/{tenant}/documents/{id}           the document and what it owns, and its unshared, unimported bundles
     POST /v1/search                                   tenant, q, mode, limit, and an optional world view
     POST /v1/similar                                  tenant, doc_id, ord, limit: passages like a chunk
     POST /v1/debug/stages                             a multipart file and meta, or {tenant, doc_id}: the dry run (debug.py)
 
-It reads the lake and writes nothing: the dry run is `debug.dry_run`, and uploading is the existing `POST /v1/ingest`.
+It reads the lake: the dry run is `debug.dry_run`, uploading is the existing `POST /v1/ingest`, reprocessing the existing
+`POST /v1/process`, and the only write of its own is the delete.
 """
 
 from __future__ import annotations
@@ -28,7 +34,7 @@ from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, FastAPI, Query, Request
 from fastapi.responses import Response
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from starlette.concurrency import run_in_threadpool
 
 from axelrod_ingest.contract.world_view import WorldView
@@ -36,9 +42,11 @@ from axelrod_ingest.debug import dry_run
 from axelrod_ingest.lake.embed import Embedder
 from axelrod_ingest.lake.search import MODES, Searcher
 from axelrod_ingest.lake.server import Problem
-from axelrod_ingest.lake.store import Document, LakeStore
+from axelrod_ingest.lake.store import Document, LakeStore, digest
 from axelrod_ingest.ocr import Ocr
+from axelrod_ingest.parse import MIMES, PARSERS
 from axelrod_ingest.pipeline import SOURCE_TYPES, upload_date
+from axelrod_ingest.sources import read_manifest
 
 PAGE = Path(__file__).parent / "console"
 FILES = {"/": ("index.html", "text/html"), "/ui": ("index.html", "text/html"), "/ui/app.js": ("app.js", "text/javascript"),
@@ -69,6 +77,12 @@ class SimilarBody(BaseModel):
     doc_id: str
     ord: int
     limit: int = 10
+
+
+class ManifestBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    text: str = Field(max_length=1_000_000)     # a manifest is a page of tables; a megabyte is far beyond any real one
 
 
 class DebugBody(BaseModel):
@@ -110,15 +124,27 @@ def _count(docs: list[Document], key: Callable[[Document], str]) -> dict[str, in
     return dict(sorted(out.items()))
 
 
-def _row(store: LakeStore, d: Document) -> dict[str, Any]:
+def _rows(store: LakeStore, tenant: str, docs: list[Document]) -> list[dict[str, Any]]:
+    counts = store.count_chunks(tenant, [d.id for d in docs]) if docs else {}
+    return [_row(d, counts[d.id]) for d in docs]
+
+
+def _row(d: Document, chunks: int) -> dict[str, Any]:
     dates = d.meta.get("dates", {})
     pages = d.meta.get("pages") or d.meta.get("slides") or len(d.meta.get("sheets") or []) or None
     return {"id": d.id, "filename": d.filename, "title": d.title, "status": d.status, "type": _type(d),
             "language": _language(d), "published_at": d.published_at.isoformat() if d.published_at else None,
             "published_source": dates.get("published_source", ""), "period": dates.get("period", ""),
-            "pages": pages if isinstance(pages, int) else None, "chunks": len(store.get_chunks(d.tenant, d.id)),
+            "pages": pages if isinstance(pages, int) else None, "chunks": chunks,
             "size": d.size, "event_time": d.event_time.isoformat(), "ingested_at": d.ingested_at.isoformat(),
             "error": d.error}
+
+
+def _version(store: LakeStore, tenant: str, since: datetime | None = None) -> dict[str, Any]:
+    """The cheap facts about a tenant and a version that changes whenever any of them does."""
+    ov, stats = store.overview(tenant, since=since), store.stats(tenant)
+    return {"version": digest([stats, ov["statuses"], ov["last_ingested_at"]])[:16], "documents": stats["documents"],
+            "stats": stats, "statuses": ov["statuses"], "last_ingested_at": ov["last_ingested_at"], "new": ov["new"]}
 
 
 def mount_console(app: FastAPI, *, store: LakeStore, embedder: Embedder, ocr: Ocr | None, authorize: Callable[..., None],
@@ -141,12 +167,36 @@ def mount_console(app: FastAPI, *, store: LakeStore, embedder: Embedder, ocr: Oc
 
     @r.get("/tenants")
     def tenants() -> dict:
-        return {"tenants": store.tenants()}
+        names = store.tenants()
+        return {"tenants": names, "documents": {t: sum(store.overview(t)["statuses"].values()) for t in names}}
+
+    @r.get("/supported")
+    def supported() -> dict:
+        return {"extensions": sorted(PARSERS), "mimes": sorted(MIMES), "source_types": list(SOURCE_TYPES)}
+
+    @r.post("/manifest")
+    def manifest(body: ManifestBody) -> dict:
+        m = read_manifest(body.text)
+        return {"title": m.title, "updated": m.updated,
+                "entries": {e.file: {"file": e.file, "url": e.url, "section": e.section, "rank": e.rank,
+                                     "sha256": e.sha256, "publisher": e.publisher} for e in m.entries}}
+
+    @r.get("/lake/{tenant}/changes")
+    def changes(tenant: str, since: datetime | None = None) -> dict:
+        return _version(store, tenant, since)
+
+    @r.get("/lake/{tenant}/activity")
+    def activity(tenant: str, limit: int = Query(12, ge=1, le=100)) -> dict:
+        total = store.stats(tenant)["documents"]
+        n = min(limit, total)
+        docs = store.list_documents(tenant, order="ingested_at", limit=n, offset=total - n)[::-1] if n else []
+        return {"documents": _rows(store, tenant, docs)}
 
     @r.get("/lake/{tenant}/summary")
     def summary(tenant: str) -> dict:
+        v = _version(store, tenant)
         docs = _all(store, tenant)
-        return {"tenant": tenant, "stats": store.stats(tenant), "embedder": {"name": embedder.name, "dim": embedder.dim},
+        return {"tenant": tenant, "version": v["version"], "last_ingested_at": v["last_ingested_at"], "stats": store.stats(tenant), "embedder": {"name": embedder.name, "dim": embedder.dim},
                 "by_status": _count(docs, lambda d: d.status), "by_type": _count(docs, _type),
                 "by_language": _count(docs, _language)}
 
@@ -174,7 +224,7 @@ def mount_console(app: FastAPI, *, store: LakeStore, embedder: Embedder, ocr: Oc
                     and (not want or want in d.filename.lower() or want in d.title.lower())]
             docs = docs if dir == "asc" else docs[::-1]
             total, page_ = len(docs), docs[offset:offset + limit]
-        return {"total": total, "limit": limit, "offset": offset, "documents": [_row(store, d) for d in page_]}
+        return {"total": total, "limit": limit, "offset": offset, "documents": _rows(store, tenant, page_)}
 
     @r.get("/lake/{tenant}/documents/{doc_id}")
     def document(tenant: str, doc_id: str) -> dict:
@@ -188,6 +238,15 @@ def mount_console(app: FastAPI, *, store: LakeStore, embedder: Embedder, ocr: Oc
                 "mentions": len(store.mentions_of(tenant, doc_id=doc_id)),
                 "bundles": [{"id": b.id, "items": b.items, "signals": b.signals} for b in bundles],
                 "signals": sum(b.signals for b in bundles)}
+
+    @r.delete("/lake/{tenant}/documents/{doc_id}")
+    def delete(tenant: str, doc_id: str) -> dict:
+        if store.get_document(tenant, doc_id) is None:
+            raise KeyError(f"no document {doc_id}")
+        store.delete_document(tenant, doc_id)
+        removed = store.delete_bundles_of(tenant, doc_id)
+        return {"deleted": True, "bundles_removed": removed,
+                "bundles_kept": len(store.list_bundles(tenant, doc_id=doc_id, limit=1000))}
 
     @r.get("/lake/{tenant}/documents/{doc_id}/raw")
     def raw(tenant: str, doc_id: str) -> Response:

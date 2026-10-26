@@ -17,8 +17,10 @@
     <button type="button" data-tab="debug"><kbd>4</kbd> Stage debugger</button>
   </nav>
   <span class="spacer"></span>
-  <label class="tenant">tenant <input id="tenant" list="tenants" autocomplete="off" spellcheck="false"></label>
+  <label class="tenant">tenant <input id="tenant" class="mono" list="tenants" autocomplete="off" spellcheck="false"></label>
+  <span id="tenant-note" class="muted mono"></span>
   <datalist id="tenants"></datalist>
+  <button type="button" id="help-open" aria-label="Keyboard shortcuts" title="Keyboard shortcuts (?)">?</button>
   <button type="button" id="signout" hidden>Sign out</button>
 </header>
 
@@ -36,7 +38,18 @@
 
   <div id="app">
     <section id="tab-lake" class="tab">
+      <div id="live" class="row live">
+        <span id="live-dot" class="dot" aria-hidden="true"></span>
+        <span id="live-text" class="muted mono">not loaded yet</span>
+        <button type="button" id="new-chip" class="chip-button" hidden></button>
+        <button type="button" id="live-toggle" class="link">Pause</button>
+        <button type="button" id="live-now" class="link">Refresh now</button>
+      </div>
       <div id="summary"></div>
+      <details id="activity-card" class="card" open>
+        <summary><b>Recent activity</b><span id="activity-note" class="decision"></span></summary>
+        <div id="activity" class="inner"></div>
+      </details>
       <form id="filters" class="row">
         <select id="f-status" aria-label="Status"><option value="">any status</option></select>
         <select id="f-type" aria-label="Type"><option value="">any type</option></select>
@@ -47,6 +60,7 @@
           <option value="event_time">event time</option>
         </select>
         <select id="f-dir" aria-label="Direction"><option value="desc">newest first</option><option value="asc">oldest first</option></select>
+        <select id="f-limit" aria-label="Rows per page"><option>50</option><option>100</option><option>200</option></select>
         <button type="submit">Apply</button>
       </form>
       <div id="table"></div>
@@ -57,22 +71,34 @@
       <p class="muted">Documents go through the whole pipeline: stored, parsed, typed, chunked and embedded. Without a world
         view file an empty one is used, so <strong>nothing is recognized</strong> and no signals are extracted.</p>
       <form id="add-form" class="stack">
-        <div id="drop" class="drop" tabindex="0">Drop files here, or <button type="button" id="pick">choose files</button>
-          <input id="files" type="file" multiple hidden></div>
-        <ul id="picked" class="plain"></ul>
+        <div id="drop" class="drop" tabindex="0">Drop files or a folder here, or
+          <button type="button" id="pick">choose files</button> or <button type="button" id="pick-dir">choose a folder</button>
+          <div class="muted">A folder is read in full; a <code>MANIFEST.md</code> in it labels its files with publisher, URL and section.</div>
+          <input id="files" type="file" multiple hidden>
+          <input id="dir" type="file" webkitdirectory hidden></div>
         <div class="row">
-          <label>tenant <input id="a-tenant" autocomplete="off"></label>
+          <label>tenant <input id="a-tenant" class="mono" autocomplete="off"></label>
           <label>source <input id="a-source" autocomplete="off"></label>
           <label>source type <select id="a-type"></select></label>
           <label>published <input id="a-published" type="date"></label>
+          <label>at once <select id="a-conc"><option>1</option><option>2</option></select></label>
         </div>
         <div class="row">
           <label>world view <input id="a-view" type="file" accept=".json,application/json"></label>
           <span id="a-view-note" class="muted">none: an empty world view</span>
         </div>
-        <div><button type="submit" class="primary" id="a-send">Ingest</button></div>
+        <div class="row">
+          <button type="submit" class="primary" id="a-send" disabled>Ingest</button>
+          <button type="button" id="a-cancel" disabled>Cancel</button>
+          <button type="button" id="a-retry" disabled>Retry failed</button>
+          <button type="button" id="a-clear" disabled>Clear finished</button>
+        </div>
       </form>
-      <div id="add-results"></div>
+      <div id="queue-head" hidden>
+        <progress id="a-progress" max="1" value="0"></progress>
+        <div id="a-counts" class="mono muted"></div>
+      </div>
+      <div id="queue"></div>
     </section>
 
     <section id="tab-search" class="tab" hidden>
@@ -117,6 +143,18 @@
     </section>
   </div>
   <div id="toast" role="status" hidden></div>
+  <dialog id="help">
+    <h1>Keyboard</h1>
+    <dl class="kv" id="help-keys"></dl>
+    <form method="dialog"><button class="primary">Close</button></form>
+  </dialog>
+  <dialog id="confirm">
+    <form method="dialog">
+      <h1 id="confirm-title"></h1>
+      <p id="confirm-text" class="muted"></p>
+      <div class="row"><button value="no">Cancel</button><button value="yes" id="confirm-yes" class="primary">Confirm</button></div>
+    </form>
+  </dialog>
 </main>
 <script src="/ui/app.js"></script>
 </body>

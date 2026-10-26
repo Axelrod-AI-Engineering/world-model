@@ -5,7 +5,9 @@
 const $ = (id) => document.getElementById(id);
 const SOURCE_TYPES = ["other", "broker_research", "expert_call", "news", "central_bank", "data", "filing", "client_model"];
 const MODES = ["keyword", "prefix", "semantic", "hybrid", "graph"];
-const state = { token: "", tenant: "", tab: "lake", view: null, lake: { offset: 0, limit: 50, open: null }, files: [] };
+const state = { token: "", tenant: "", tab: "lake", view: null, counts: {}, timings: {},
+  lake: { offset: 0, limit: 50, open: null, version: null, baseline: null, latest: null, paused: false, fails: 0, err: "", timer: null,
+    seqs: {}, updated: null, newCount: 0, cur: -1 } };
 
 // ---- helpers ---------------------------------------------------------------------------------------------------
 function h(tag, attrs, ...kids) {
@@ -55,7 +57,7 @@ async function api(path, opts = {}) {
   const headers = { Authorization: `Bearer ${state.token}`, ...(opts.headers || {}) };
   let body = opts.body;
   if (opts.json !== undefined) { body = JSON.stringify(opts.json); headers["Content-Type"] = "application/json"; }
-  const resp = await fetch(path, { method: opts.method || "GET", headers, body });
+  const resp = await fetch(path, { method: opts.method || "GET", headers, body, signal: opts.signal });
   if (resp.status === 401) { keep(""); gate("That token was not accepted."); throw new Problem("Authentication required", "", 401); }
   if (!resp.ok) {
     let p = {};
@@ -73,44 +75,146 @@ const lakePath = (tenant, rest = "") => `/v1/lake/${encodeURIComponent(tenant)}$
 
 // ---- gate and tabs ---------------------------------------------------------------------------------------------
 function gate(message) {
+  stopPolling();
   $("gate").hidden = false; $("app").hidden = true; $("signout").hidden = true;
   $("gate-error").hidden = !message; $("gate-error").textContent = message || "";
   $("token").value = ""; $("token").focus();
 }
+function lastTenant() {
+  try { return localStorage.getItem("ingest-tenant") || ""; } catch (e) { return ""; }
+}
+async function loadTenants() {
+  try {
+    const { tenants, documents } = await api("/v1/tenants");
+    state.counts = documents;
+    show($("tenants"), tenants.map((t) => h("option", { value: t, label: `${documents[t]} documents` })));
+    showTenantNote();
+    return tenants;
+  } catch (err) {
+    if (err.status !== 401) toast(err.message);
+    return null;
+  }
+}
+function showTenantNote() {
+  const n = state.counts[state.tenant];
+  $("tenant-note").textContent = n === undefined ? "new tenant" : `${n} documents`;
+}
 async function enter() {
   $("gate").hidden = true; $("app").hidden = false; $("signout").hidden = false;
   try {
-    const { tenants } = await api("/v1/tenants");
-    show($("tenants"), tenants.map((t) => h("option", { value: t })));
-    if (!state.tenant) setTenant(tenants[0] || "default");
-  } catch (err) {
-    if (err.status === 401) return;                                 // the gate is showing again
-    toast(err.message);
-    if (!state.tenant) setTenant("default");
-    return;
-  }
+    const s = await api("/v1/supported");
+    Q.supported = s;
+    for (const sel of [$("a-type"), $("d-type")]) { const cur = sel.value; show(sel, s.source_types.map((t) => h("option", { value: t }, t))); sel.value = cur || "other"; }
+  } catch (err) { if (err.status === 401) return; toast(err.message); }
+  const tenants = await loadTenants();
+  if (tenants === null && !state.token) return;                     // the gate is showing again
+  if (!state.tenant) setTenant(tenants && tenants.includes(lastTenant()) ? lastTenant() : (tenants && tenants[0]) || "default");
   refresh();
 }
 function setTenant(t) {
   state.tenant = t; $("tenant").value = t; $("a-tenant").value = t;
+  try { localStorage.setItem("ingest-tenant", t); } catch (e) { /* no storage: the next visit starts at the first tenant */ }
+  showTenantNote();
 }
 function switchTab(tab) {
+  const changed = tab !== state.tab;
   state.tab = tab;
   for (const b of document.querySelectorAll("#tabs button")) b.classList.toggle("on", b.dataset.tab === tab);
   for (const s of document.querySelectorAll(".tab")) s.hidden = s.id !== `tab-${tab}`;
-  refresh();
+  if (changed) refresh();
 }
 function refresh() {
   if (!state.token) return;
-  if (state.tab === "lake") loadLake();
+  if (state.tab === "lake") loadLake().then(schedule); else stopPolling();
   if (state.tab === "debug") loadStored();
+}
+function ask(title, text, yes, danger) {
+  return new Promise((resolve) => {
+    const d = $("confirm");
+    $("confirm-title").textContent = title; $("confirm-text").textContent = text; $("confirm-yes").textContent = yes;
+    $("confirm-yes").classList.toggle("danger", !!danger);
+    d.returnValue = "";
+    d.addEventListener("close", () => resolve(d.returnValue === "yes"), { once: true });
+    d.showModal();
+  });
 }
 
 // ---- 1. Lake ---------------------------------------------------------------------------------------------------
-async function loadLake() {
-  show($("summary"), loading("summary"));
+// The tab stays current by itself: `poll` asks the cheap /changes route every few seconds and reads the summary, the
+// activity and the table again only when its version moved. Nothing the person is doing is reset by a refresh: filters,
+// the open document and the highlighted row stay, and the table keeps the row at the top of the window where it was.
+const L = state.lake;
+const EPOCH = "1970-01-01T00:00:00+00:00";
+const hms = (d) => d.toLocaleTimeString([], { hour12: false });
+const retry = (err, again) => h("div", { class: "error panel", role: "alert" }, err.message, " ", h("button", { type: "button", class: "link", onclick: again }, "Retry"));
+const seq = (name) => (L.seqs[name] = (L.seqs[name] || 0) + 1);
+
+function stopPolling() { clearTimeout(L.timer); L.timer = null; }
+function schedule() {
+  stopPolling();
+  setLive();
+  if (!state.token || state.tab !== "lake" || L.paused || document.visibilityState === "hidden") return;
+  L.timer = setTimeout(poll, L.fails ? Math.min(60000, 5000 * 2 ** L.fails) : 5000);
+}
+function setLive() {
+  const hidden = document.visibilityState === "hidden";
+  const when = L.updated ? hms(L.updated) : "";
+  const text = L.paused ? `paused, last updated ${when || "never"}` : L.fails ? `update failed (${L.err}), retrying` :
+    hidden ? `waiting: this tab is hidden, last updated ${when}` : L.updated ? `last updated ${when}` : "loading";
+  $("live-text").textContent = text;
+  $("live-dot").className = `dot ${L.paused || hidden ? "idle" : L.fails ? "bad" : "on"}`;
+  $("live-toggle").textContent = L.paused ? "Resume" : "Pause";
+}
+async function poll() {
+  stopPolling();
+  if (!state.token || state.tab !== "lake") return;
   try {
-    const s = await api(lakePath(state.tenant, "/summary"));
+    const c = await api(lakePath(state.tenant, "/changes") + q({ since: L.baseline }));
+    const ok = c.version === L.version ? true : await loadLake({ quiet: true });
+    if (ok) { L.fails = 0; L.updated = new Date(); } else { L.fails++; }
+    setNew(c.new);
+  } catch (err) {
+    if (err.status === 401) return;
+    L.fails++; L.err = err.message;
+  }
+  schedule();
+}
+function setNew(n) {
+  L.newCount = n;
+  const chip = $("new-chip");
+  chip.hidden = !n; chip.textContent = `${n} new`;
+  chip.title = "Rows ingested since you last looked. Click to mark them seen.";
+}
+function markSeen() {
+  L.baseline = L.latest || EPOCH; setNew(0); loadTable({ quiet: true });
+}
+
+// the row at the top of the window, so a redraw can put it back where it was
+function anchor() {
+  if (!window.scrollY) return null;
+  const row = [...document.querySelectorAll("#table tbody tr")].find((r) => r.getBoundingClientRect().bottom > 60);
+  return row ? { id: row.dataset.id, top: row.getBoundingClientRect().top } : null;
+}
+function restore(a) {
+  const row = a && [...document.querySelectorAll("#table tbody tr")].find((r) => r.dataset.id === a.id);
+  if (row) window.scrollBy(0, row.getBoundingClientRect().top - a.top);
+}
+
+async function loadLake({ quiet = false } = {}) {
+  const ok = await Promise.all([loadSummary(quiet), loadActivity(quiet), loadTable({ quiet })]);
+  if (ok.every(Boolean)) { L.updated = new Date(); L.fails = 0; }
+  setLive();
+  return ok.every(Boolean);
+}
+async function loadSummary(quiet) {
+  const mine = seq("summary");
+  if (!quiet) show($("summary"), loading("summary"));
+  try {
+    const [s] = await Promise.all([api(lakePath(state.tenant, "/summary")), quiet ? loadTenants() : null]);
+    if (mine !== L.seqs.summary) return true;
+    L.version = s.version; L.latest = s.last_ingested_at;
+    if (L.baseline === null) L.baseline = s.last_ingested_at || EPOCH;
+    state.counts[state.tenant] = s.stats.documents; showTenantNote();
     const stat = (n, label) => h("div", { class: "stat" }, h("b", {}, n), h("span", {}, label));
     const count = (title, o) => h("div", {}, h("b", {}, title), Object.entries(o).map(([k, v]) => h("span", { class: "mono" }, `${k} ${v}`)));
     show($("summary"),
@@ -121,33 +225,80 @@ async function loadLake() {
       show(sel, h("option", { value: "" }, sel.options[0].text), Object.keys(o).map((k) => h("option", { value: k === "unknown" ? "" : k }, k)));
       sel.value = cur;
     }
-  } catch (err) { show($("summary"), failure(err)); }
-  loadTable();
+    return true;
+  } catch (err) {
+    L.err = err.message;
+    if (!quiet) show($("summary"), retry(err, () => loadSummary(false)));
+    return false;
+  }
 }
-async function loadTable() {
-  const L = state.lake;
-  show($("table"), loading("documents"));
+const stages = (t) => (t ? Object.entries(t).map(([k, v]) => `${k} ${secs(v)}`).join("  ") : "");
+async function loadActivity(quiet) {
+  const mine = seq("activity"), box = $("activity");
+  if (!quiet) show(box, loading("activity"));
+  try {
+    const r = await api(lakePath(state.tenant, "/activity") + q({ limit: 8 }));
+    if (mine !== L.seqs.activity) return true;
+    $("activity-note").textContent = r.documents.length ? `the latest ${r.documents.length} ingests` : "";
+    if (!r.documents.length) { show(box, empty("Nothing has been ingested into this tenant yet.")); return true; }
+    show(box, h("table", { class: "feed" }, h("tbody", {}, r.documents.map((d) => h("tr", { class: d.status === "failed" ? "bad" : "" },
+      h("td", { class: "mono time" }, hms(new Date(d.ingested_at))),
+      h("td", { title: d.filename }, h("a", { onclick: () => openDoc(state.tenant, d.id) }, d.title || d.filename)),
+      h("td", {}, chip(d.status)), h("td", { class: "num" }, `${d.chunks} chunks`),
+      h("td", { class: "mono muted", title: d.error || stages(state.timings[d.id]) }, d.error || stages(state.timings[d.id])))))));
+    return true;
+  } catch (err) {
+    L.err = err.message;
+    if (!quiet) show(box, retry(err, () => loadActivity(false)));
+    return false;
+  }
+}
+
+async function loadTable({ quiet = false } = {}) {
+  const mine = seq("table");
+  if (!quiet) show($("table"), loading("documents"));
   const params = { status: $("f-status").value, type: $("f-type").value, language: $("f-language").value, q: $("f-q").value,
     order: $("f-order").value, dir: $("f-dir").value, limit: L.limit, offset: L.offset };
   try {
     const r = await api(lakePath(state.tenant, "/documents") + q(params));
-    if (!r.documents.length) { show($("table"), empty("No documents match.")); return; }
+    if (mine !== L.seqs.table) return true;
+    const keep = quiet ? anchor() : null;
+    if (!r.documents.length) {
+      const filtered = params.status || params.type || params.language || params.q;
+      show($("table"), empty(filtered ? "No documents match." : "This tenant holds no documents yet. Add files from the second tab."));
+      return true;
+    }
     const th = (t, cls) => h("th", { class: cls }, t);
-    const rows = r.documents.map((d) => h("tr", { class: `pick${L.open === d.id ? " sel" : ""}`, onclick: () => openDoc(state.tenant, d.id) },
-      h("td", { class: "wrap" }, d.title || d.filename, d.title && d.title !== d.filename ? h("div", { class: "muted mono" }, d.filename) : null),
+    const rows = r.documents.map((d, k) => h("tr", { class: `pick${L.open === d.id ? " sel" : ""}${d.ingested_at > L.baseline ? " fresh" : ""}${L.cur === k ? " cur" : ""}`,
+      "data-id": d.id, onclick: () => openDoc(state.tenant, d.id) },
+      h("td", { class: "wrap" }, h("span", { class: "dot", title: "new since you last looked" }), d.title || d.filename,
+        d.title && d.title !== d.filename ? h("div", { class: "muted mono" }, d.filename) : null),
       h("td", {}, chip(d.status)), h("td", {}, d.type), h("td", {}, d.language),
-      h("td", { class: "mono" }, d.published_at ? d.published_at.slice(0, 10) : "", d.published_source ? h("div", { class: "muted" }, d.published_source) : null),
-      h("td", { class: "mono" }, d.period), h("td", { class: "num" }, d.pages ?? ""), h("td", { class: "num" }, d.chunks),
+      h("td", { class: "mono opt" }, d.published_at ? d.published_at.slice(0, 10) : "", d.published_source ? h("div", { class: "muted" }, d.published_source) : null),
+      h("td", { class: "mono opt" }, d.period), h("td", { class: "num opt" }, d.pages ?? ""), h("td", { class: "num" }, d.chunks),
       h("td", { class: "num" }, bytes(d.size)), h("td", { class: "mono" }, when(d.ingested_at))));
     const last = Math.min(r.total, L.offset + r.documents.length);
     show($("table"),
-      h("table", {}, h("thead", {}, h("tr", {}, th("document"), th("status"), th("type"), th("lang"), th("published"), th("period"),
-        th("pages", "num"), th("chunks", "num"), th("size", "num"), th("ingested"))), h("tbody", {}, rows)),
+      h("table", {}, h("thead", {}, h("tr", {}, th("document"), th("status"), th("type"), th("lang"), th("published", "opt"), th("period", "opt"),
+        th("pages", "num opt"), th("chunks", "num"), th("size", "num"), th("ingested"))), h("tbody", {}, rows)),
       h("div", { class: "pager" },
-        h("button", { type: "button", disabled: L.offset === 0, onclick: () => { L.offset = Math.max(0, L.offset - L.limit); loadTable(); } }, "Previous"),
+        h("button", { type: "button", disabled: L.offset === 0, onclick: () => { L.offset = Math.max(0, L.offset - L.limit); L.cur = -1; loadTable(); } }, "Previous"),
         h("span", { class: "mono" }, `${L.offset + 1}-${last} of ${r.total}`),
-        h("button", { type: "button", disabled: last >= r.total, onclick: () => { L.offset += L.limit; loadTable(); } }, "Next")));
-  } catch (err) { show($("table"), failure(err)); }
+        h("button", { type: "button", disabled: last >= r.total, onclick: () => { L.offset += L.limit; L.cur = -1; loadTable(); } }, "Next")));
+    restore(keep);
+    return true;
+  } catch (err) {
+    L.err = err.message;
+    if (!quiet) show($("table"), retry(err, () => loadTable()));
+    return false;
+  }
+}
+function moveCur(step) {
+  const rows = [...document.querySelectorAll("#table tbody tr")];
+  if (!rows.length) return;
+  L.cur = Math.max(0, Math.min(rows.length - 1, L.cur + step));
+  rows.forEach((r, k) => r.classList.toggle("cur", k === L.cur));
+  rows[L.cur].scrollIntoView({ block: "nearest" });
 }
 
 function section(title, obj) {
@@ -155,11 +306,11 @@ function section(title, obj) {
   if (!rows.length) return null;
   return h("div", {}, h("h3", {}, title), h("dl", { class: "kv" }, rows.map(([k, v]) => [h("dt", {}, k), h("dd", {}, typeof v === "object" ? JSON.stringify(v) : String(v))])));
 }
-async function openDoc(tenant, id) {
-  if (tenant !== state.tenant) setTenant(tenant);
+async function openDoc(tenant, id, { scroll = true } = {}) {
+  if (tenant !== state.tenant) { setTenant(tenant); resetLake(); }
   if (state.tab !== "lake") { state.lake.open = id; switchTab("lake"); }
   state.lake.open = id;
-  for (const tr of document.querySelectorAll("#table tbody tr")) tr.classList.remove("sel");
+  for (const tr of document.querySelectorAll("#table tbody tr")) tr.classList.toggle("sel", tr.dataset.id === id);
   show($("detail"), loading("document"));
   try {
     const r = await api(lakePath(tenant, `/documents/${encodeURIComponent(id)}`));
@@ -172,6 +323,27 @@ async function openDoc(tenant, id) {
         document.body.append(a); a.click(); a.remove();
       } catch (err) { toast(err.message); }
     } }, "Download raw file");
+    const reprocess = h("button", { type: "button", onclick: async () => {
+      const how = state.view ? `recognized against ${state.view.name}` : "with an empty world view, so nothing is recognized and its mentions are cleared";
+      if (!await ask("Reprocess this document?", `It is parsed, typed, dated, chunked and embedded again, and extracted ${how}.`, "Reprocess")) return;
+      try {
+        const res = (await api("/v1/process", { method: "POST", json: { tenant, doc_id: id, world_view: viewJson(),
+          inverted: state.view ? state.view.inverted : [] } })).result;
+        state.timings[id] = res.timings;
+        toast(`Reprocessed: ${res.document.status}, ${res.chunks} chunks`);
+        openDoc(tenant, id, { scroll: false }); refreshNow();
+      } catch (err) { toast(err.message); }
+    } }, "Reprocess");
+    const remove = h("button", { type: "button", class: "danger", onclick: async () => {
+      const text = `Removes ${d.filename} from tenant ${tenant}: the file, its text, chunks, mentions and embeddings. Bundles made from this ` +
+        "document alone that no import used are removed too; a bundle built from other documents, or one already imported, is kept.";
+      if (!await ask("Delete this document?", text, "Delete", true)) return;
+      try {
+        const res = await api(lakePath(tenant, `/documents/${encodeURIComponent(id)}`), { method: "DELETE" });
+        toast(`Deleted. ${res.bundles_removed} bundles removed, ${res.bundles_kept} kept.`);
+        L.open = null; show($("detail")); refreshNow();
+      } catch (err) { toast(err.message); }
+    } }, "Delete");
     const view = { chunkPage: 0, listPage: 0 };
     const textBox = h("div", { class: "text" }), textPager = h("div", { class: "pager" });
     const listBox = h("div"), similar = h("div");
@@ -179,7 +351,7 @@ async function openDoc(tenant, id) {
     const drawList = () => drawChunkList(listBox, r.chunks, view, similar, tenant, id, drawList);
     show($("detail"),
       h("h2", {}, d.title || d.filename),
-      h("div", { class: "row" }, chip(d.status), h("span", { class: "mono muted" }, id), raw,
+      h("div", { class: "row" }, chip(d.status), h("span", { class: "mono muted" }, id), raw, reprocess, remove,
         h("a", { onclick: () => debugStored(tenant, id) }, "Run the stage debugger on it")),
       d.error ? h("div", { class: "error" }, d.error) : null,
       h("div", { class: "cols" },
@@ -193,7 +365,7 @@ async function openDoc(tenant, id) {
       h("h2", {}, `Text (${r.text.length} characters)`), textPager, h("div", { class: "panel" }, textBox),
       h("h2", {}, `Chunks (${r.chunks.length})`), listBox, similar);
     drawText(); drawList();
-    $("detail").scrollIntoView({ behavior: "smooth", block: "start" });
+    if (scroll) $("detail").scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (err) { show($("detail"), failure(err)); }
 }
 function pager(box, total, per, view, key, redraw) {
@@ -235,6 +407,14 @@ async function findSimilar(into, tenant, id, ord) {
 }
 
 // ---- 2. Add files ----------------------------------------------------------------------------------------------
+// Files and folders go into a queue, one or two at a time to POST /v1/ingest. Unsupported types are left out here (the
+// service says which: /v1/supported), a MANIFEST.md in a folder is read by the service (/v1/manifest) and its entries
+// label the files beside it, and every file keeps its own state, so a failure never stops the rest.
+const Q = { items: [], running: false, cancel: false, aborts: new Set(), manifests: {}, supported: { extensions: [], mimes: [] },
+  skipped: [], drawing: false };
+const EMPTY_VIEW = '{"entities":[],"values":[],"links":[]}';
+const viewJson = () => (state.view ? state.view.json : EMPTY_VIEW);
+
 function worldViewFile(input, note) {
   input.addEventListener("change", async () => {
     const f = input.files[0];
@@ -257,39 +437,151 @@ function syncView() {
   graph.disabled = !v;
   if (!v && $("s-mode").value === "graph") $("s-mode").value = "hybrid";
 }
-function drawPicked() {
-  show($("picked"), state.files.map((f) => h("li", { class: "mono" }, `${f.name}  `, h("span", { class: "muted" }, bytes(f.size)))));
+
+// what a drop holds, folders walked: [{file, path}]. The entries must be taken before the first await.
+async function collect(dt) {
+  const entries = [...(dt.items || [])].map((i) => (i.webkitGetAsEntry ? i.webkitGetAsEntry() : null)).filter(Boolean);
+  const out = [];
+  if (!entries.length) return [...dt.files].map((file) => ({ file, path: file.name }));
+  for (const e of entries) await walk(e, "", out);
+  return out;
 }
-async function sendFiles(ev) {
-  ev.preventDefault();
-  if (!state.files.length) { toast("Choose at least one file."); return; }
-  const out = $("add-results"), tenant = $("a-tenant").value.trim();
-  if (!tenant) { toast("A tenant is required."); return; }
-  $("a-send").disabled = true;
-  show(out, h("h2", {}, "Results"));
-  const body = h("tbody");
-  out.append(h("table", {}, h("thead", {}, h("tr", {}, ["file", "result", "status", "warnings", "stage timings", ""].map((t) => h("th", {}, t)))), body));
-  const published = $("a-published").value;
-  const view = state.view ? state.view.json : '{"entities":[],"values":[],"links":[]}';
-  for (const f of state.files) {
-    const row = h("tr", {}, h("td", { class: "mono wrap" }, f.name), h("td", { colspan: 5 }, "sending..."));
-    body.append(row);
-    const meta = { tenant, source: $("a-source").value, source_type: $("a-type").value, inverted: state.view ? state.view.inverted : [],
-      ...(published ? { published_at: `${published}T00:00:00Z` } : {}) };
-    const form = new FormData();
-    form.append("meta", JSON.stringify(meta));
-    form.append("world_view", new Blob([view], { type: "application/json" }), "world_view.json");
-    form.append("files", f, f.name);
-    try {
-      const r = (await api("/v1/ingest", { method: "POST", body: form })).results[0];
-      const d = r.document;
-      show(row, h("td", { class: "mono wrap" }, f.name), h("td", {}, r.new ? "new" : "already stored"), h("td", {}, chip(d.status)),
-        h("td", { class: "wrap" }, r.warnings.join("; ") || (d.error || "")),
-        h("td", { class: "mono" }, Object.entries(r.timings).map(([k, v]) => `${k} ${secs(v)}`).join("  ")),
-        h("td", {}, h("a", { onclick: () => openDoc(tenant, d.id) }, "open in Lake")));
-    } catch (err) { show(row, h("td", { class: "mono wrap" }, f.name), h("td", { colspan: 5, class: "error" }, err.message)); }
+async function walk(entry, dir, out) {
+  if (entry.isFile) {
+    out.push({ file: await new Promise((ok, no) => entry.file(ok, no)), path: dir + entry.name });
+  } else if (entry.isDirectory) {
+    const reader = entry.createReader();
+    for (let batch = await readBatch(reader); batch.length; batch = await readBatch(reader)) {
+      for (const child of batch) await walk(child, `${dir}${entry.name}/`, out);
+    }
   }
-  $("a-send").disabled = false;
+}
+const readBatch = (reader) => new Promise((ok, no) => reader.readEntries(ok, no));
+
+const extOf = (name) => (name.includes(".") ? name.slice(name.lastIndexOf(".")).toLowerCase() : "");
+const isManifest = (path) => /(^|\/)manifest\.md$/i.test(path);
+const dirOf = (path) => (path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "");
+function supportedFile(file) {
+  return Q.supported.extensions.includes(extOf(file.name)) || Q.supported.mimes.includes(file.type);
+}
+function manifestFor(path) {
+  for (let dir = dirOf(path); ; dir = dirOf(dir)) {
+    const m = Q.manifests[dir];
+    if (m && m[path.slice(path.lastIndexOf("/") + 1)]) return m[path.slice(path.lastIndexOf("/") + 1)];
+    if (!dir) return null;
+  }
+}
+async function enqueue(found) {
+  let manifests = 0;
+  for (const { file, path } of found.filter((f) => isManifest(f.path))) {
+    try {
+      const m = await api("/v1/manifest", { method: "POST", json: { text: await file.text() } });
+      Q.manifests[dirOf(path)] = m.entries; manifests++;
+    } catch (err) { toast(`${path}: ${err.message}`); }
+  }
+  let added = 0;
+  const have = new Set(Q.items.map((i) => `${i.path}|${i.file.size}|${i.file.lastModified}`));
+  for (const { file, path } of found) {
+    if (isManifest(path) || file.name.startsWith(".")) continue;     // a manifest labels files; it is not one of them
+    if (!supportedFile(file)) { Q.skipped.push(path); continue; }
+    const key = `${path}|${file.size}|${file.lastModified}`;
+    if (have.has(key)) continue;
+    have.add(key);
+    Q.items.push({ file, path, state: "queued", tries: 0, result: null, error: "" });
+    added++;
+  }
+  toast(`${added} queued${manifests ? `, ${manifests} manifest read` : ""}${Q.skipped.length ? `, ${Q.skipped.length} skipped (unsupported)` : ""}`);
+  drawQueue();
+}
+
+function metaFor(it, tenant) {
+  const published = $("a-published").value, entry = manifestFor(it.path);
+  let source = $("a-source").value;
+  if (entry && !source && entry.url) { try { source = new URL(entry.url).host; } catch (e) { /* not a URL: no source */ } }
+  return { tenant, source, source_type: $("a-type").value, inverted: state.view ? state.view.inverted : [],
+    ...(published ? { published_at: `${published}T00:00:00Z` } : {}), ...(entry ? { meta: { manifest: entry } } : {}) };
+}
+async function sendOne(it, tenant) {
+  const form = new FormData(), ctl = new AbortController();
+  form.append("meta", JSON.stringify(metaFor(it, tenant)));
+  form.append("world_view", new Blob([viewJson()], { type: "application/json" }), "world_view.json");
+  form.append("files", it.file, it.file.name);
+  Q.aborts.add(ctl);
+  try {
+    const r = (await api("/v1/ingest", { method: "POST", body: form, signal: ctl.signal })).results[0];
+    state.timings[r.document.id] = r.timings;
+    it.state = r.new ? "new" : "already stored";
+    it.result = { id: r.document.id, status: r.document.status, warnings: r.warnings, error: r.document.error, timings: r.timings };
+  } catch (err) {
+    if (ctl.signal.aborted) { it.state = "cancelled"; }
+    else if ((err.status === undefined || err.status >= 502) && it.tries < 1) { it.tries++; it.state = "queued"; }     // the network, once more
+    else { it.state = "failed"; it.error = err.message; if (err.status === 401) Q.cancel = true; }
+  } finally { Q.aborts.delete(ctl); }
+}
+async function runQueue() {
+  const tenant = $("a-tenant").value.trim();
+  if (Q.running) return;
+  if (!tenant) { toast("A tenant is required."); return; }
+  Q.running = true; Q.cancel = false; drawQueue();
+  const worker = async () => {
+    while (!Q.cancel) {
+      const it = Q.items.find((i) => i.state === "queued");
+      if (!it) return;
+      it.state = "sending"; drawQueue();
+      await sendOne(it, tenant);
+      drawQueue();
+    }
+  };
+  await Promise.all(Array.from({ length: +$("a-conc").value || 1 }, worker));
+  Q.running = false; drawQueue();
+  const left = Q.items.filter((i) => i.state === "failed").length;
+  toast(Q.cancel ? "Cancelled." : left ? `Finished, ${left} failed.` : "Finished.");
+  if (state.tab === "lake") loadLake({ quiet: true });
+}
+function cancelQueue() {
+  Q.cancel = true;
+  for (const ctl of Q.aborts) ctl.abort();
+  for (const it of Q.items) if (it.state === "queued") it.state = "cancelled";
+  drawQueue();
+}
+function retryFailed() {
+  for (const it of Q.items) if (it.state === "failed" || it.state === "cancelled") { it.state = "queued"; it.tries = 0; it.error = ""; }
+  runQueue();
+}
+
+function drawQueue() {
+  if (Q.drawing) return;
+  Q.drawing = true;
+  requestAnimationFrame(() => { Q.drawing = false; paintQueue(); });
+}
+const QSTATES = ["new", "already stored", "failed", "cancelled", "sending", "queued"];
+function paintQueue() {
+  const by = (s) => Q.items.filter((i) => i.state === s);
+  const total = Q.items.length, counts = Object.fromEntries(QSTATES.map((s) => [s, by(s).length]));
+  const finished = counts.new + counts["already stored"] + counts.failed + counts.cancelled;
+  $("queue-head").hidden = !total;
+  $("a-progress").max = Math.max(1, total); $("a-progress").value = finished;
+  show($("a-counts"), [`${finished} of ${total}`, ...QSTATES.filter((s) => counts[s]).map((s) => `${s} ${counts[s]}`),
+    Q.skipped.length ? h("span", { title: Q.skipped.slice(0, 50).join("\n") }, `skipped ${Q.skipped.length} unsupported`) : null]
+    .filter(Boolean).flatMap((x, k) => (k ? [" · ", x] : [x])));
+  $("a-send").disabled = Q.running || !counts.queued;
+  $("a-cancel").disabled = !Q.running;
+  $("a-retry").disabled = Q.running || !(counts.failed + counts.cancelled);
+  $("a-clear").disabled = Q.running || !(counts.new + counts["already stored"]);
+  if (!total) { show($("queue")); return; }
+  // a long queue shows what matters: what failed, what is in flight, the latest finished, the next to go
+  const CAP = { failed: 100, cancelled: 20, sending: 4, new: 15, "already stored": 15, queued: 25 };
+  const shown = [...by("failed").slice(0, CAP.failed), ...by("cancelled").slice(0, CAP.cancelled), ...by("sending"),
+    ...[...by("new"), ...by("already stored")].slice(-CAP.new), ...by("queued").slice(0, CAP.queued)];
+  const hidden = total - shown.length;
+  show($("queue"), h("table", {}, h("thead", {}, h("tr", {}, ["file", "state", "document", "detail", ""].map((t) => h("th", {}, t)))),
+    h("tbody", {}, shown.map((it) => {
+      const r = it.result;
+      return h("tr", {}, h("td", { class: "mono wrap" }, it.path), h("td", {}, chip(it.state)), h("td", {}, r ? chip(r.status) : null),
+        h("td", { class: `wrap ${it.state === "failed" ? "error" : "muted"}` }, it.error || (r ? (r.warnings.join("; ") || r.error || stages(r.timings)) : "")),
+        h("td", {}, r ? h("a", { onclick: () => openDoc($("a-tenant").value.trim(), r.id) }, "open in Lake") : null));
+    }))),
+    hidden ? h("div", { class: "muted" }, `${hidden} more not shown (finished earlier or still waiting)`) : null);
 }
 
 // ---- 3. Search -------------------------------------------------------------------------------------------------
@@ -489,20 +781,55 @@ function typing(ev) {
   const t = ev.target;
   return t && (t.tagName === "INPUT" || t.tagName === "SELECT" || t.tagName === "TEXTAREA" || t.isContentEditable);
 }
+const KEYS = [["1 2 3 4", "Lake, Add files, Search, Stage debugger"], ["/", "Search"], ["j k", "Next or previous row in the Lake table"],
+  ["Enter", "Open the highlighted row"], ["r", "Refresh the Lake now"], ["p", "Pause or resume the live refresh"],
+  ["n", "Mark new rows as seen"], ["?", "This list"], ["Esc", "Close a dialog"]];
+function toggleHelp() {
+  const d = $("help");
+  if (d.open) { d.close(); return; }
+  show($("help-keys"), KEYS.flatMap(([k, what]) => [h("dt", {}, h("kbd", {}, k)), h("dd", {}, what)]));
+  d.showModal();
+}
+const refreshNow = () => { L.version = null; poll(); };
+function togglePause() { L.paused = !L.paused; if (L.paused) stopPolling(); else poll(); setLive(); }
+function resetLake() {
+  Object.assign(L, { offset: 0, open: null, version: null, baseline: null, latest: null, cur: -1, fails: 0, updated: null });
+  setNew(0); show($("detail"));
+}
+async function takeFiles(found) {
+  if (!state.token) return;
+  await enqueue(found);
+}
 function init() {
   for (const sel of [$("a-type"), $("d-type")]) show(sel, SOURCE_TYPES.map((t) => h("option", { value: t }, t)));
   for (const b of document.querySelectorAll("#tabs button")) b.addEventListener("click", () => switchTab(b.dataset.tab));
   $("gate-form").addEventListener("submit", (ev) => { ev.preventDefault(); keep($("token").value.trim()); enter(); });
   $("signout").addEventListener("click", () => { keep(""); gate(""); });
-  $("tenant").addEventListener("change", () => { setTenant($("tenant").value.trim() || "default"); state.lake.offset = 0; state.lake.open = null; show($("detail")); refresh(); });
-  $("filters").addEventListener("submit", (ev) => { ev.preventDefault(); state.lake.offset = 0; loadTable(); });
+  $("help-open").addEventListener("click", toggleHelp);
+  $("tenant").addEventListener("change", () => { setTenant($("tenant").value.trim() || "default"); resetLake(); refresh(); });
+  $("filters").addEventListener("submit", (ev) => { ev.preventDefault(); L.offset = 0; L.cur = -1; loadTable(); });
+  for (const id of ["f-status", "f-type", "f-language", "f-order", "f-dir"]) $(id).addEventListener("change", () => { L.offset = 0; L.cur = -1; loadTable(); });
+  $("f-limit").addEventListener("change", () => { L.limit = +$("f-limit").value; L.offset = 0; loadTable(); });
+  $("live-toggle").addEventListener("click", togglePause);
+  $("live-now").addEventListener("click", refreshNow);
+  $("new-chip").addEventListener("click", markSeen);
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") poll(); else schedule(); });
   $("pick").addEventListener("click", () => $("files").click());
-  $("files").addEventListener("change", () => { state.files = [...$("files").files]; drawPicked(); });
+  $("pick-dir").addEventListener("click", () => $("dir").click());
+  for (const id of ["files", "dir"]) {
+    $(id).addEventListener("change", async () => {
+      await takeFiles([...$(id).files].map((file) => ({ file, path: file.webkitRelativePath || file.name })));
+      $(id).value = "";
+    });
+  }
   const drop = $("drop");
   drop.addEventListener("dragover", (ev) => { ev.preventDefault(); drop.classList.add("over"); });
   drop.addEventListener("dragleave", () => drop.classList.remove("over"));
-  drop.addEventListener("drop", (ev) => { ev.preventDefault(); drop.classList.remove("over"); state.files = [...ev.dataTransfer.files]; drawPicked(); });
-  $("add-form").addEventListener("submit", sendFiles);
+  drop.addEventListener("drop", (ev) => { ev.preventDefault(); drop.classList.remove("over"); collect(ev.dataTransfer).then(takeFiles); });
+  $("add-form").addEventListener("submit", (ev) => { ev.preventDefault(); runQueue(); });
+  $("a-cancel").addEventListener("click", cancelQueue);
+  $("a-retry").addEventListener("click", retryFailed);
+  $("a-clear").addEventListener("click", () => { Q.items = Q.items.filter((i) => i.state !== "new" && i.state !== "already stored"); Q.skipped = []; drawQueue(); });
   worldViewFile($("a-view"), $("a-view-note")); worldViewFile($("s-view"), $("s-view-note"));
   $("search-form").addEventListener("submit", search);
   $("s-compare").addEventListener("click", compare);
@@ -512,12 +839,20 @@ function init() {
       $("d-file-row").hidden = s; $("d-stored-row").hidden = !s; if (s) loadStored(); });
   }
   document.addEventListener("keydown", (ev) => {
-    if (ev.ctrlKey || ev.metaKey || ev.altKey || typing(ev) || $("app").hidden) return;
+    if (ev.ctrlKey || ev.metaKey || ev.altKey || typing(ev) || $("app").hidden || document.querySelector("dialog[open]") && ev.key !== "?") return;
     if (ev.key === "/") { ev.preventDefault(); switchTab("search"); $("s-q").focus(); }
+    if (ev.key === "?") toggleHelp();
     const tab = { 1: "lake", 2: "add", 3: "search", 4: "debug" }[ev.key];
     if (tab) switchTab(tab);
+    if (state.tab !== "lake") return;
+    if (ev.key === "j") moveCur(1);
+    if (ev.key === "k") moveCur(-1);
+    if (ev.key === "Enter" && ev.target.tagName !== "BUTTON" && L.cur >= 0) { const row = document.querySelectorAll("#table tbody tr")[L.cur]; if (row) row.click(); }
+    if (ev.key === "r") refreshNow();
+    if (ev.key === "p") togglePause();
+    if (ev.key === "n") markSeen();
   });
-  syncView();
+  syncView(); setLive(); drawQueue();
   keep(kept());
   if (state.token) enter(); else gate("");
 }

@@ -218,6 +218,15 @@ class SQLiteLake(LakeStore):
                 path.unlink()
             return True
 
+    def overview(self, tenant: str, *, since: datetime | None = None) -> dict[str, Any]:
+        with self.lock:
+            statuses = dict(self.db.execute("SELECT status, COUNT(*) FROM documents WHERE tenant=? GROUP BY status ORDER BY status",
+                                            (tenant,)).fetchall())
+            last = self.db.execute("SELECT MAX(ingested_at) FROM documents WHERE tenant=?", (tenant,)).fetchone()[0]
+            new = 0 if since is None else self.db.execute("SELECT COUNT(*) FROM documents WHERE tenant=? AND ingested_at>?",
+                                                          (tenant, _iso(since))).fetchone()[0]
+        return {"statuses": statuses, "last_ingested_at": last, "new": new}
+
     # -- text, chunks, mentions, embeddings ------------------------------------------------------------------
     def put_text(self, tenant: str, doc_id: str, text: str, parser: str) -> None:
         with self.lock:
@@ -246,6 +255,21 @@ class SQLiteLake(LakeStore):
                                    "WHERE tenant=? AND doc_id=? ORDER BY ord", (tenant, doc_id)).fetchall()
         return [Chunk(tenant=r[0], doc_id=r[1], ord=r[2], start=r[3], end=r[4], text=r[5], page=r[6], section=r[7])
                 for r in rows]
+
+    def count_chunks(self, tenant: str, doc_ids: list[str] | None = None) -> dict[str, int]:
+        if doc_ids is None:
+            with self.lock:
+                rows = self.db.execute("SELECT doc_id, COUNT(*) FROM chunks WHERE tenant=? GROUP BY doc_id ORDER BY doc_id",
+                                       (tenant,)).fetchall()
+            return {d: n for d, n in rows}
+        out = {d: 0 for d in doc_ids}
+        for k in range(0, len(doc_ids), 500):                     # SQLite caps the variables in one statement
+            part = doc_ids[k:k + 500]
+            with self.lock:
+                rows = self.db.execute(f"SELECT doc_id, COUNT(*) FROM chunks WHERE tenant=? AND doc_id IN "
+                                       f"({','.join('?' * len(part))}) GROUP BY doc_id", (tenant, *part)).fetchall()
+            out.update({d: n for d, n in rows})
+        return out
 
     def put_mentions(self, tenant: str, doc_id: str, mentions: list[Mention]) -> None:
         with self.lock:
@@ -370,6 +394,16 @@ class SQLiteLake(LakeStore):
         if doc_id is not None:
             recs = [r for r in recs if doc_id in r.doc_ids]
         return recs[:limit]
+
+    def delete_bundles_of(self, tenant: str, doc_id: str) -> int:
+        with self.lock:
+            rows = self.db.execute("SELECT id, doc_ids FROM bundles WHERE tenant=? AND doc_ids LIKE ?",
+                                   (tenant, f'%"{doc_id}"%')).fetchall()
+            used = {r[0] for r in self.db.execute("SELECT bundle_id FROM imports WHERE tenant=?", (tenant,)).fetchall()}
+            gone = [b for b, ids in rows if json.loads(ids) == [doc_id] and b not in used]
+            self.db.executemany("DELETE FROM bundles WHERE tenant=? AND id=?", [(tenant, b) for b in gone])
+            self.db.commit()
+        return len(gone)
 
     def put_import(self, rec: ImportRecord) -> None:
         with self.lock:

@@ -15,7 +15,9 @@ from fastapi.testclient import TestClient
 import axelrod_ingest.console as console
 from axelrod_ingest.lake.embed import HashingEmbedder
 from axelrod_ingest.lake.sqlite import SQLiteLake
+from axelrod_ingest.lake.store import ImportRecord
 from axelrod_ingest.pack import lake_digest
+from axelrod_ingest.parse import supported as supported_by_parse
 from axelrod_ingest.pipeline import Ingestor
 from axelrod_ingest.service import create_ingest_app
 from tests.conftest import acme_graph
@@ -75,7 +77,9 @@ def test_every_json_route_needs_the_bearer_token(lake):
     some = lake.ids["zh.txt"]
     routes = [("GET", "/v1/tenants"), ("GET", f"/v1/lake/{T}/summary"), ("GET", f"/v1/lake/{T}/documents"),
               ("GET", f"/v1/lake/{T}/documents/{some}"), ("GET", f"/v1/lake/{T}/documents/{some}/raw"),
-              ("POST", "/v1/search"), ("POST", "/v1/similar"), ("POST", "/v1/debug/stages")]
+              ("POST", "/v1/search"), ("POST", "/v1/similar"), ("POST", "/v1/debug/stages"), ("GET", "/v1/supported"),
+              ("POST", "/v1/manifest"), ("GET", f"/v1/lake/{T}/changes"), ("GET", f"/v1/lake/{T}/activity"),
+              ("DELETE", f"/v1/lake/{T}/documents/{some}")]
     for method, path in routes:
         for headers in ({}, {"Authorization": "Bearer wrong"}):
             r = lake.http.request(method, path, headers=headers, json={})
@@ -84,7 +88,7 @@ def test_every_json_route_needs_the_bearer_token(lake):
 
 
 def test_the_tenants_and_the_summary(lake):
-    assert lake.get("/v1/tenants").json() == {"tenants": [T]}
+    assert lake.get("/v1/tenants").json() == {"tenants": [T], "documents": {T: 4}}
     s = lake.get(f"/v1/lake/{T}/summary").json()
     assert s["stats"]["documents"] == 4 and s["embedder"] == {"name": "hashing-256", "dim": 256}
     assert s["by_status"] == {"extracted": 3, "failed": 1}
@@ -241,7 +245,93 @@ def test_an_empty_world_view_stores_and_chunks_but_recognizes_nothing(lake):
     res = r.json()["results"][0]
     assert r.status_code == 200 and res["new"] and res["document"]["status"] == "extracted"
     assert res["chunks"] >= 1 and res["mentions"] == 0 and res["signals"] == 0 and "store" in res["timings"]
-    assert lake.get("/v1/tenants").json()["tenants"] == [T, "fresh"]
+    assert lake.get("/v1/tenants").json() == {"tenants": [T, "fresh"], "documents": {T: 4, "fresh": 1}}
+
+
+# -- staying current, and updating the lake -------------------------------------------------------------------------------
+def test_changes_is_a_cheap_version_that_moves_when_the_lake_does(lake):
+    c = lake.get(f"/v1/lake/{T}/changes").json()
+    assert c["documents"] == 4 and c["statuses"] == {"extracted": 3, "failed": 1} and c["new"] == 0
+    assert c["last_ingested_at"] == NOW.isoformat() and c["stats"]["documents"] == 4
+    assert lake.get(f"/v1/lake/{T}/changes").json() == c                                     # nothing changed: the same version
+    assert lake.get(f"/v1/lake/{T}/summary").json()["version"] == c["version"]
+    assert lake.get(f"/v1/lake/{T}/summary").json()["last_ingested_at"] == c["last_ingested_at"]
+    assert lake.get(f"/v1/lake/{T}/changes", since="2026-10-06T11:00:00+00:00").json()["new"] == 4
+    assert lake.get(f"/v1/lake/{T}/changes", since=NOW.isoformat()).json()["new"] == 0
+    empty = lake.get("/v1/lake/nobody/changes").json()
+    assert empty["documents"] == 0 and empty["last_ingested_at"] is None and empty["version"] != c["version"]
+    lake.store.update_document(T, lake.ids["zh.txt"], status="failed", error="x")           # a status moves the version
+    assert lake.get(f"/v1/lake/{T}/changes").json()["version"] != c["version"]
+
+
+def test_the_activity_feed_is_the_latest_ingests_newest_first_with_chunk_counts(lake):
+    later = Ingestor(lake.store, HashingEmbedder(), clock=lambda: NOW.replace(hour=13), timer=lambda: 0.0)
+    fresh = later.ingest_file(T, NOTE + b"A second note.\n", "later.md", acme_graph()).document
+    feed = lake.get(f"/v1/lake/{T}/activity", limit=3).json()["documents"]
+    assert len(feed) == 3 and feed[0]["id"] == fresh.id and feed[0]["filename"] == "later.md" and feed[0]["chunks"] >= 1
+    assert [d["ingested_at"] for d in feed] == sorted((d["ingested_at"] for d in feed), reverse=True)
+    assert len(lake.get(f"/v1/lake/{T}/activity").json()["documents"]) == 5
+    assert lake.get("/v1/lake/nobody/activity").json() == {"documents": []}
+    assert lake.get(f"/v1/lake/{T}/activity", limit=0).status_code == 422
+    failed = next(d for d in lake.get(f"/v1/lake/{T}/activity").json()["documents"] if d["status"] == "failed")
+    assert failed["error"] and failed["chunks"] == 0
+
+
+def test_the_page_learns_what_files_it_may_send_from_the_service(lake):
+    s = lake.get("/v1/supported").json()
+    assert {".pdf", ".md", ".html", ".xlsx", ".json"} <= set(s["extensions"]) and s["extensions"] == sorted(s["extensions"])
+    assert "application/pdf" in s["mimes"] and "other" in s["source_types"] and "broker_research" in s["source_types"]
+    assert all(supported_by_parse(f"x{e}") for e in s["extensions"]) and not supported_by_parse("x.exe")
+
+
+def test_a_manifest_is_read_by_the_service_and_keyed_by_file_name(lake):
+    text = ("# Pack\n\nUpdated: 2026-10-01\n\n## News\n\n| File | Publisher | Source URL | SHA-256 |\n|---|---|---|---|\n"
+            "| a.html | Daily | [link](https://news.example/a) | ABC |\n| b.md | Desk | [link](https://x.example/b) | |\n")
+    m = lake.post("/v1/manifest", text=text).json()
+    assert m["title"] == "Pack" and m["updated"] == "2026-10-01" and set(m["entries"]) == {"a.html", "b.md"}
+    assert m["entries"]["a.html"] == {"file": "a.html", "url": "https://news.example/a", "section": "News", "rank": 1,
+                                      "sha256": "abc", "publisher": "Daily"}
+    assert lake.post("/v1/manifest", text="no tables here").json()["entries"] == {}
+    assert lake.post("/v1/manifest").status_code == 422
+    # the entry is what the pipeline takes as meta.manifest, and ends up in the document's meta
+    meta = {"tenant": T, "meta": {"manifest": m["entries"]["b.md"]}, "source": "x.example"}
+    r = lake.http.post("/v1/ingest", headers=AUTH, data={"meta": json.dumps(meta)},
+                       files={"world_view": ("w.json", b'{"entities":[],"values":[],"links":[]}'), "files": ("b.md", NOTE + b"b\n")})
+    assert r.json()["results"][0]["document"]["meta"]["manifest"]["publisher"] == "Desk"
+
+
+def test_deleting_a_document_removes_what_it_owns_and_its_unimported_bundles(lake):
+    pid = lake.ids["policy_2026-10-05.md"]
+    before = lake.store.stats(T)
+    mine = len(lake.store.list_bundles(T, doc_id=pid))
+    assert mine >= 1 and before["bundles"] > mine and before["chunks"] >= 1
+    r = lake.http.delete(f"/v1/lake/{T}/documents/{pid}", headers=AUTH)
+    assert r.status_code == 200 and r.json() == {"deleted": True, "bundles_removed": mine, "bundles_kept": 0}
+    assert lake.store.get_document(T, pid) is None and lake.store.get_chunks(T, pid) == []
+    assert lake.store.stats(T)["bundles"] == before["bundles"] - mine and lake.store.stats(T)["documents"] == 3
+    again = lake.http.delete(f"/v1/lake/{T}/documents/{pid}", headers=AUTH)
+    assert again.status_code == 404 and again.json()["title"] == "Not found"
+    assert lake.http.delete(f"/v1/lake/other/documents/{lake.ids['zh.txt']}", headers=AUTH).status_code == 404
+    assert lake.store.get_document(T, lake.ids["zh.txt"]) is not None
+
+
+def test_a_delete_keeps_a_bundle_the_model_imported(lake):
+    bid = next(b.id for b in lake.store.list_bundles(T))
+    lake.store.put_import(ImportRecord(tenant=T, bundle_id=bid, imported_at=NOW, update_id="U1", item_ids=[]))
+    r = lake.http.delete(f"/v1/lake/{T}/documents/{lake.ids['policy_2026-10-05.md']}", headers=AUTH).json()
+    assert r["bundles_removed"] == 0 and r["bundles_kept"] >= 1 and lake.store.get_bundle(T, bid) is not None
+
+
+def test_reprocessing_a_stored_document_runs_the_pipeline_again_and_moves_the_version(lake):
+    pid = lake.ids["policy_2026-10-05.md"]
+    before = lake.get(f"/v1/lake/{T}/changes").json()
+    assert lake.get(f"/v1/lake/{T}/documents/{pid}").json()["mentions"] >= 1
+    empty = '{"entities":[],"values":[],"links":[]}'
+    r = lake.post("/v1/process", tenant=T, doc_id=pid, world_view=empty)
+    assert r.status_code == 200 and r.json()["result"]["document"]["status"] == "extracted" and r.json()["result"]["timings"]
+    assert lake.get(f"/v1/lake/{T}/documents/{pid}").json()["mentions"] == 0                 # an empty view recognizes nothing
+    assert lake.get(f"/v1/lake/{T}/changes").json()["version"] != before["version"]
+    assert lake.post("/v1/process", tenant=T, doc_id="nope", world_view=empty).status_code == 404
 
 
 # -- the JS smoke test ---------------------------------------------------------------------------------------------------
@@ -256,23 +346,48 @@ def test_every_route_the_page_calls_exists(lake):
     calls = re.findall(r"""api\(\s*([`"'])(/v1/[^`"'?]*)[^`"']*\1(?:,\s*\{([^}]*)\})?""", js)
     assert js.count("fetch(") == 1 and calls
     for _q, path, opts in calls:
-        assert ("POST" if "POST" in opts else "GET", shape(path)) in have, path
+        assert (_method(opts), shape(path)) in have, path
     # api(lakePath(tenant, "/suffix")) calls are under /v1/lake/{tenant}
-    lakes = re.findall(r"""api\(lakePath\([^,()]+,\s*([`"'])([^`"']*)\1\)(?:[^)]*\{[^}]*(blob)[^}]*\})?""", js)
+    lakes = re.findall(r"""api\(lakePath\([^,()]+,\s*([`"'])([^`"']*)\1\)(?:,\s*\{([^}]*)\})?""", js)
     assert lakes
-    for _q, suffix, _blob in lakes:
-        assert ("GET", shape("/v1/lake/{}" + suffix)) in have, suffix
+    for _q, suffix, opts in lakes:
+        assert (_method(opts), shape("/v1/lake/{}" + suffix)) in have, suffix
     called = {p for _q, p, _o in calls}
-    assert called >= {"/v1/tenants", "/v1/search", "/v1/similar", "/v1/ingest", "/v1/debug/stages"}
-    assert {s for _q, s, _b in lakes} >= {"/summary", "/documents", "/documents/${encodeURIComponent(id)}/raw"}
+    assert called >= {"/v1/tenants", "/v1/search", "/v1/similar", "/v1/ingest", "/v1/debug/stages", "/v1/supported",
+                      "/v1/manifest", "/v1/process"}
+    assert {s for _q, s, _b in lakes} >= {"/summary", "/documents", "/documents/${encodeURIComponent(id)}/raw", "/changes",
+                                          "/activity", "/documents/${encodeURIComponent(id)}"}
+    assert ("DELETE", "/v1/lake/{}/documents/{}") in {(_method(o), shape("/v1/lake/{}" + s)) for _q, s, o in lakes}
+
+
+def _method(opts):
+    return next((m for m in ("POST", "DELETE") if m in opts), "GET")
 
 
 def test_the_page_never_turns_data_into_markup_or_keeps_the_token_anywhere_else():
     js = (UI / "app.js").read_text()
     assert not re.search(r"innerHTML|outerHTML|insertAdjacentHTML|document\.write|eval\(|new Function", js)
-    assert "localStorage" not in js and "console.log" not in js
+    assert "console.log" not in js
+    # localStorage holds one convenience (the last tenant), each use inside a try; the token is only ever in sessionStorage
+    assert re.findall(r"localStorage\.(?:get|set)Item\(\"([^\"]+)\"", js) == ["ingest-tenant", "ingest-tenant"]
+    assert all(re.search(r"try \{[^}]*localStorage", ln) for ln in js.splitlines() if "localStorage" in ln)
+    assert not re.search(r"localStorage[^\n]*token|token[^\n]*localStorage", js, re.I)
     assert re.search(r"try \{[^}]*sessionStorage", js) and "location.hash" not in js and "location.search" not in js
     html = (UI / "index.html").read_text()
     assert re.findall(r"<script\b[^>]*>", html) == ['<script src="/ui/app.js">']
     assert "<style" not in html and " style=" not in html and not re.search(r"""(?:src|href)=["']https?:""", html)
     assert "http://" not in js and "https://" not in (UI / "app.css").read_text()
+
+
+def test_the_manifest_reader_stays_linear_on_hostile_text():
+    """Cells of many "[", "!" or spaces (CodeQL py/polynomial-redos) read in well under a second."""
+    import time
+
+    from axelrod_ingest.sources import is_file_name, read_manifest
+
+    hostile = "# t\nUpdated:" + " " * 50_000 + "\n## s\n| File | URL |\n|---|---|\n| " + "[\\" * 20_000 + " | " + "!" * 50_000 + " |\n"
+    t = time.perf_counter()
+    m = read_manifest(hostile)
+    assert time.perf_counter() - t < 1.0 and m.entries == ()
+    assert is_file_name("Annual report 2025.pdf") and is_file_name("a/b/c.xlsx") and not is_file_name("no extension")
+

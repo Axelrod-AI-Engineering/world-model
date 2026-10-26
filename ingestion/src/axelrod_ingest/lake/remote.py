@@ -157,6 +157,10 @@ class RemoteLake(LakeStore):
     def delete_document(self, tenant: str, doc_id: str) -> bool:
         return self._call("DELETE", f"/documents/{doc_id}", params={"tenant": tenant})["deleted"]
 
+    def overview(self, tenant: str, *, since: datetime | None = None) -> dict[str, Any]:
+        params = {"tenant": tenant, **({"since": since.isoformat()} if since else {})}
+        return self._call("GET", "/overview", read=True, params=params)
+
     # -- text, chunks, mentions, embeddings ------------------------------------------------------------------
     def put_text(self, tenant: str, doc_id: str, text: str, parser: str) -> None:
         self._call("PUT", f"/documents/{doc_id}/text", params={"tenant": tenant}, json={"text": text, "parser": parser})
@@ -172,6 +176,9 @@ class RemoteLake(LakeStore):
     def get_chunks(self, tenant: str, doc_id: str) -> list[Chunk]:
         return [Chunk.model_validate(c) for c in
                 self._call("GET", f"/documents/{doc_id}/chunks", read=True, params={"tenant": tenant})]
+
+    def count_chunks(self, tenant: str, doc_ids: list[str] | None = None) -> dict[str, int]:
+        return self._call("POST", "/chunk-counts", read=True, json={"tenant": tenant, "doc_ids": doc_ids})
 
     def put_mentions(self, tenant: str, doc_id: str, mentions: list[Mention]) -> None:
         self._call("PUT", f"/documents/{doc_id}/mentions", params={"tenant": tenant},
@@ -221,6 +228,9 @@ class RemoteLake(LakeStore):
     def list_bundles(self, tenant: str, *, doc_id: str | None = None, limit: int = 100) -> list[BundleRecord]:
         params = {"tenant": tenant, "limit": limit, **({"doc_id": doc_id} if doc_id is not None else {})}
         return [BundleRecord.model_validate(b) for b in self._call("GET", "/bundles", read=True, params=params)]
+
+    def delete_bundles_of(self, tenant: str, doc_id: str) -> int:
+        return self._call("DELETE", f"/documents/{doc_id}/bundles", params={"tenant": tenant})["deleted"]
 
     def put_import(self, rec: ImportRecord) -> None:
         self._call("POST", "/imports", content=rec.model_dump_json(), headers=JSON)
