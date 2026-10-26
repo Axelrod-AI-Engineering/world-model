@@ -352,6 +352,39 @@ class Chunk(Api):
     mentions: list[Mention]
 
 
+class Citation(Api):
+    """The document a passage comes from, as a citation names it."""
+
+    document_id: str
+    title: str
+    filename: str
+    publisher: str
+    source_type: str
+    published_at: datetime | None
+    event_time: datetime
+    url: str | None
+
+
+class Passage(Api):
+    """A retrieved passage: its text and place, how each channel ranked it, the names in it, its neighbours, and its
+    citation."""
+
+    document_id: str
+    ordinal: int
+    text: str
+    start: int
+    end: int
+    page: int | None
+    section: str
+    score: float
+    scores: dict[str, float]
+    why: list[str]
+    mentions: list[Mention]
+    before: list[str]
+    after: list[str]
+    citation: Citation
+
+
 class DocumentText(Api):
     document_id: str
     parser: str

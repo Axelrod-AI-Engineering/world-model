@@ -77,3 +77,11 @@ semantic, graph (the nodes named and their neighbours, then the chunks that ment
 (reciprocal-rank fusion of keyword, semantic, and graph). This is the retrieval layer for the agents' RAG: each hit
 gives its document, chunk, and text, and says why it matched. See [the API reference](../../world_model/docs/api/README.md#search).
 
+**Retrieval** (`LakeStore.retrieve`, Oct 26) is the public form, behind `GET /v1/world-models/{id}/chunks`
+([retrieval.md](../../world_model/docs/api/retrieval.md)). It returns passages only, and the whole ranking runs in the
+store in one call. The document filter (ids, source types, sources, dates, entities named) is SQL inside each channel;
+keyword, semantic, and graph ranks are fused by reciprocal rank; `per_document` caps each document; and the page comes
+back with its documents, mentions, and neighbouring chunks read in three queries. The world model only embeds the query
+and resolves the names in it. Against the data service, one retrieval is one lake call, where a hybrid `search` makes
+two per hit.
+

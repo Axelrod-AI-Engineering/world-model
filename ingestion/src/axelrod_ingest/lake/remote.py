@@ -40,6 +40,8 @@ from axelrod_ingest.lake.store import (
     ImportRecord,
     LakeStore,
     Mention,
+    Retrieval,
+    RetrievalSpec,
     WorldModelRecord,
 )
 
@@ -215,6 +217,10 @@ class RemoteLake(LakeStore):
         rows = self._call("GET", "/search/keyword", read=True,
                           params={"tenant": tenant, "q": query, "prefix": prefix, "limit": limit})
         return [Hit.model_validate(h) for h in rows]
+
+    def retrieve(self, tenant: str, spec: RetrievalSpec) -> Retrieval:
+        return Retrieval.model_validate(self._call("POST", "/retrieve", read=True,
+                                                   json={"tenant": tenant, "spec": spec.model_dump(mode="json")}))
 
     # -- bundles and imports ----------------------------------------------------------------------------------
     def put_bundle(self, rec: BundleRecord) -> BundleRecord:

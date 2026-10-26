@@ -282,6 +282,23 @@ def build_mcp(app: FastAPI) -> MCPServer:
                                  limit: int = 20) -> dict:
         return await call(ctx, "GET", await wm(ctx, world_model_id) + "/search", params=p(q=q, mode=mode, limit=limit))
 
+    @server.tool(title="Retrieve passages", description="Ranked passages across the ingested documents for a question, "
+                 "each with its citation (title, publisher, date), the names in it, and how each channel ranked it. "
+                 "Filter by document, source type, source, entity, or date; `context` adds neighbouring passages; "
+                 "`per_document` caps each document; pass `cursor` from meta.next_cursor for the next page.",
+                 annotations=READ)
+    async def world_model_retrieve(ctx: Context, q: str, world_model_id: str = "",
+                                   mode: Literal["hybrid", "keyword", "semantic", "graph"] = "hybrid",
+                                   document_id: list[str] | None = None, source_type: list[str] | None = None,
+                                   source: list[str] | None = None, entity_id: list[str] | None = None,
+                                   published_from: datetime | None = None, published_to: datetime | None = None,
+                                   context: int = 0, per_document: int = 0, limit: int = 10, cursor: str = "") -> dict:
+        return await call(ctx, "GET", await wm(ctx, world_model_id) + "/chunks", params=p(
+            q=q, mode=mode, document_id=document_id, source_type=source_type, source=source, entity_id=entity_id,
+            published_from=published_from.isoformat() if published_from else None,
+            published_to=published_to.isoformat() if published_to else None, context=context,
+            per_document=per_document, limit=limit, cursor=cursor))
+
     @server.tool(title="Ingest a document", description="Needs documents:create (the data-ingestion pipeline). Store a "
                  "file (base64 `content_base64`, or plain `text`), parse and index it, and read it into a bundle of "
                  "proposed updates. Answers with the finished job. The same content always gets the same answer; "
