@@ -177,7 +177,12 @@ What each channel can do:
   files (names and bytes), or the same bundle, get the same answer whoever sends them and whenever. A request that
   fails is not kept, so its retry runs again. Deleting a document forgets the answers that named it.
 - **Async work** (uploads, re-extraction, proposing changes, simulations) answers `202 Accepted` with a job and
-  `Location: …/jobs/{id}`. Poll the job until it succeeds or fails. Jobs are kept in the lakehouse catalog too.
+  `Location: …/jobs/{id}`. Poll the job until it succeeds or fails. Jobs are kept in the lakehouse catalog too. The work runs before the answer
+  unless you send **`Prefer: respond-async`** (RFC 7240): then the `202` comes at once with the job `running` and
+  `Preference-Applied: respond-async`, and the job at `Location` ends `succeeded` (with `result`) or `failed` (with an
+  RFC 9457 problem in `error`). Use it for reading a large document again, which can outlast a proxy's request limit
+  (Railway's is 300 s). A job running when the service restarts is lost; send the request again. A replay with the same
+  `Idempotency-Key` returns the same job.
 - **Concurrency.** Reads of the model carry `ETag: "<state_hash>"` (an entity tag), and `If-None-Match` gives `304`.
   A decision on a change needs `If-Match` with the ETag of the version it was reviewed against. Without one it is
   `428 precondition_required`; if the model has moved, it is `412 version_moved`. **Under review (Manav):** ETag and
@@ -606,7 +611,7 @@ Every failure is `application/problem+json` (RFC 9457): `type` (`https://docs.ax
 | 428 | A decision needs If-Match (precondition_required) |
 | 503 | A token names a signing key and the issuer's JWKS cannot be reached (issuer_unavailable) |
 
-Codes: `invalid_request`, `invalid_json`, `invalid_cursor`, `authentication_required`, `insufficient_scope`, `not_found`, `world_model_not_found`, `version_not_found`, `entity_not_found`, `attribute_not_found`, `relationship_not_found`, `evidence_not_found`, `composition_not_found`, `path_not_found`, `event_not_found`, `document_not_found`, `chunk_not_found`, `file_missing`, `bundle_not_found`, `change_not_found`, `thesis_not_found`, `simulation_not_found`, `concept_not_found`, `group_not_found`, `job_not_found`, `invalid_token`, `issuer_unavailable`, `human_approval_required`, `conflict`, `update_in_progress`, `already_decided`, `not_parsed`, `version_moved`, `payload_too_large`, `too_many_files`, `unsupported_media_type`, `idempotency_key_reused`, `note_required`, `question_not_understood`, `thesis_unbound`, `precondition_required`, `internal_only`, `compartment_not_found`.
+Codes: `invalid_request`, `invalid_json`, `invalid_cursor`, `authentication_required`, `insufficient_scope`, `not_found`, `world_model_not_found`, `version_not_found`, `entity_not_found`, `attribute_not_found`, `relationship_not_found`, `evidence_not_found`, `composition_not_found`, `path_not_found`, `event_not_found`, `document_not_found`, `chunk_not_found`, `file_missing`, `bundle_not_found`, `change_not_found`, `thesis_not_found`, `simulation_not_found`, `concept_not_found`, `group_not_found`, `job_not_found`, `invalid_token`, `issuer_unavailable`, `internal_error`, `human_approval_required`, `conflict`, `update_in_progress`, `already_decided`, `not_parsed`, `version_moved`, `payload_too_large`, `too_many_files`, `unsupported_media_type`, `idempotency_key_reused`, `note_required`, `question_not_understood`, `thesis_unbound`, `precondition_required`, `internal_only`, `compartment_not_found`.
 
 ### Schemas
 

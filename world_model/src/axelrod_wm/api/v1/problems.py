@@ -48,7 +48,8 @@ CODES: dict[str, tuple[int, str]] = {
     "unsupported_media_type": (415, "Unsupported media type"),
     "idempotency_key_reused": (422, "Idempotency key reused"), "note_required": (422, "A reason is required"),
     "question_not_understood": (422, "Question not understood"), "thesis_unbound": (422, "Thesis unbound"),
-    "precondition_required": (428, "If-Match required"), "issuer_unavailable": (503, "Issuer unavailable"),
+    "precondition_required": (428, "If-Match required"), "internal_error": (500, "Internal error"),
+    "issuer_unavailable": (503, "Issuer unavailable"),
 }
 BY_STATUS = {400: "invalid_request", 401: "authentication_required", 403: "insufficient_scope", 404: "not_found",
              405: "not_found", 409: "conflict", 413: "payload_too_large", 415: "unsupported_media_type"}
