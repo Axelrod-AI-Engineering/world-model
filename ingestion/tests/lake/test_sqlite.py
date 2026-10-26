@@ -425,6 +425,47 @@ def test_imports_round_trip_in_order_and_filter_by_bundle(lake):
     assert len(lake.list_imports("bravo")) == 1
 
 
+def test_delete_bundles_of_keeps_shared_and_imported_ones(lake):
+    for b in (bundle("only", ["d1"]), bundle("both", ["d1", "d2"]), bundle("used", ["d1"]), bundle("other", ["d2"]),
+              bundle("theirs", ["d1"], tenant="bravo"), bundle("prefix", ["d10"])):
+        lake.put_bundle(b)
+    lake.put_import(ImportRecord(tenant="acme", bundle_id="used", imported_at=T0, update_id=None, item_ids=[]))
+    assert lake.delete_bundles_of("acme", "d1") == 1
+    assert {b.id for b in lake.list_bundles("acme")} == {"both", "used", "other", "prefix"}
+    assert lake.delete_bundles_of("acme", "d1") == 0 and lake.delete_bundles_of("acme", "nobody") == 0
+    assert [b.id for b in lake.list_bundles("bravo")] == ["theirs"]
+
+
+def test_count_chunks_is_one_read_for_many_documents(lake):
+    a = add_doc(lake, b"a", ["one", "two", "three"])
+    b = add_doc(lake, b"b", ["four"])
+    c, _ = lake.put_document(make_doc(b"c"), b"c")
+    add_doc(lake, b"x", ["other tenant"], tenant="bravo")
+    assert lake.count_chunks("acme", [a.id, b.id, c.id, "gone"]) == {a.id: 3, b.id: 1, c.id: 0, "gone": 0}
+    assert lake.count_chunks("acme") == {a.id: 3, b.id: 1}
+    assert lake.count_chunks("acme", []) == {} and lake.count_chunks("nobody") == {}
+
+
+def test_count_chunks_takes_more_ids_than_one_statement_binds(local_lake):
+    lake = local_lake
+    a = add_doc(lake, b"a", ["one", "two"])
+    ids = [f"id{k}" for k in range(1200)] + [a.id]
+    counts = lake.count_chunks("acme", ids)
+    assert len(counts) == 1201 and counts[a.id] == 2 and sum(counts.values()) == 2
+
+
+def test_overview_counts_statuses_and_what_arrived_since(lake):
+    assert lake.overview("acme") == {"statuses": {}, "last_ingested_at": None, "new": 0}
+    add_doc(lake, b"a", ["x"], ingested_at=T0)
+    b = add_doc(lake, b"b", ["y"], ingested_at=T0 + DAY)
+    add_doc(lake, b"c", ["z"], ingested_at=T0 + 2 * DAY, tenant="bravo")
+    lake.update_document("acme", b.id, status="failed", error="no")
+    ov = lake.overview("acme")
+    assert ov == {"statuses": {"failed": 1, "stored": 1}, "last_ingested_at": (T0 + DAY).isoformat(), "new": 0}
+    assert lake.overview("acme", since=T0)["new"] == 1 and lake.overview("acme", since=T0 + DAY)["new"] == 0
+    assert lake.overview("acme", since=T0 - DAY)["new"] == 2
+
+
 def test_llm_cache_gets_and_replaces(lake):
     assert lake.cache_get("k") is None
     lake.cache_put("k", "anthropic", "m1", {"b": 1, "a": [1]})

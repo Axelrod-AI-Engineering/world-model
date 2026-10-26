@@ -177,6 +177,12 @@ class LakeStore(ABC):
     @abstractmethod
     def delete_document(self, tenant: str, doc_id: str) -> bool: ...
 
+    @abstractmethod
+    def overview(self, tenant: str, *, since: datetime | None = None) -> dict[str, Any]:
+        """What changes when documents arrive or are processed, in one cheap read (no document is loaded):
+        `statuses` (document count by status), `last_ingested_at` (ISO time of the newest document, or None) and `new`
+        (documents ingested after `since`, 0 without it). The console polls this to know whether to read more."""
+
     # -- text, chunks, mentions, embeddings ------------------------------------------------------------------
     @abstractmethod
     def put_text(self, tenant: str, doc_id: str, text: str, parser: str) -> None: ...
@@ -191,6 +197,11 @@ class LakeStore(ABC):
 
     @abstractmethod
     def get_chunks(self, tenant: str, doc_id: str) -> list[Chunk]: ...
+
+    @abstractmethod
+    def count_chunks(self, tenant: str, doc_ids: list[str] | None = None) -> dict[str, int]:
+        """Chunks per document in one read: for `doc_ids`, every id (0 when it has none); for None, every document that has
+        any."""
 
     @abstractmethod
     def put_mentions(self, tenant: str, doc_id: str, mentions: list[Mention]) -> None: ...
@@ -223,6 +234,11 @@ class LakeStore(ABC):
 
     @abstractmethod
     def list_bundles(self, tenant: str, *, doc_id: str | None = None, limit: int = 100) -> list[BundleRecord]: ...
+
+    @abstractmethod
+    def delete_bundles_of(self, tenant: str, doc_id: str) -> int:
+        """Delete the bundles made from `doc_id` alone that no import used; how many were deleted. A bundle built from
+        several documents, or one the world model imported, is kept: others depend on it."""
 
     @abstractmethod
     def put_import(self, rec: ImportRecord) -> None: ...
