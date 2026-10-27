@@ -26,6 +26,7 @@ from axelrod_ingest.lake.store import (
     CHANNELS,
     MAX_DEPTH,
     RRF_K,
+    SYNC_OPERATION,
     AuditRecord,
     BundleRecord,
     Chunk,
@@ -304,6 +305,26 @@ class SQLiteLake(LakeStore):
                 rows = self.db.execute(f"SELECT doc_id, COUNT(*) FROM chunks WHERE tenant=? AND doc_id IN "
                                        f"({','.join('?' * len(part))}) GROUP BY doc_id", (tenant, *part)).fetchall()
             out.update({d: n for d, n in rows})
+        return out
+
+    def model_progress(self, tenant: str, doc_ids: list[str]) -> dict[str, dict]:
+        out: dict[str, dict] = {d: {"imported_items": 0, "last_imported_at": None, "sync": []} for d in doc_ids}
+        with self.lock:
+            imports = self.db.execute("SELECT b.doc_ids, i.imported_at, i.item_ids FROM imports i JOIN bundles b "
+                                      "ON b.tenant=i.tenant AND b.id=i.bundle_id WHERE i.tenant=? ORDER BY i.imported_at",
+                                      (tenant,)).fetchall()
+        for ids, at, items in imports:
+            for d in set(json.loads(ids)) & out.keys():
+                out[d]["imported_items"] += len(json.loads(items))
+                out[d]["last_imported_at"] = at
+        for k in range(0, len(doc_ids), 500):                     # SQLite caps the variables in one statement
+            part = doc_ids[k:k + 500]
+            with self.lock:
+                rows = self.db.execute(f"SELECT key, world_model_id, body, created_at FROM idempotency_keys WHERE org=? "
+                                       f"AND operation=? AND key IN ({','.join('?' * len(part))}) ORDER BY created_at, "
+                                       f"world_model_id", (tenant, SYNC_OPERATION, *part)).fetchall()
+            for d, wm, body, at in rows:
+                out[d]["sync"].append({"world_model_id": wm, "outcome": json.loads(body).get("outcome", ""), "at": at})
         return out
 
     def put_mentions(self, tenant: str, doc_id: str, mentions: list[Mention]) -> None:

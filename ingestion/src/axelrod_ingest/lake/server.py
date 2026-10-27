@@ -103,6 +103,11 @@ class ChunkCountsBody(_Body):
     doc_ids: list[str] | None = None
 
 
+class ModelProgressBody(_Body):
+    tenant: str
+    doc_ids: list[str]
+
+
 class FieldsBody(_Body):
     fields: dict[str, Any]
 
@@ -243,6 +248,10 @@ def create_lake_app(store: LakeStore, token: str) -> FastAPI:
     @r.post("/chunk-counts")
     def chunk_counts(body: ChunkCountsBody) -> dict:
         return store.count_chunks(body.tenant, body.doc_ids)
+
+    @r.post("/model-progress")
+    def model_progress(body: ModelProgressBody) -> dict:
+        return store.model_progress(body.tenant, body.doc_ids)
 
     @r.put("/documents/{doc_id}/mentions")
     def put_mentions(doc_id: str, tenant: str, body: MentionsBody) -> dict:

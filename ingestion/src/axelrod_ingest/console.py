@@ -42,7 +42,7 @@ from axelrod_ingest.debug import dry_run
 from axelrod_ingest.lake.embed import Embedder
 from axelrod_ingest.lake.search import MODES, Searcher
 from axelrod_ingest.lake.server import Problem
-from axelrod_ingest.lake.store import Document, LakeStore, digest
+from axelrod_ingest.lake.store import SYNC_READABLE, Document, LakeStore, digest
 from axelrod_ingest.ocr import Ocr
 from axelrod_ingest.parse import MIMES, PARSERS
 from axelrod_ingest.pipeline import SOURCE_TYPES, upload_date
@@ -125,8 +125,21 @@ def _count(docs: list[Document], key: Callable[[Document], str]) -> dict[str, in
 
 
 def _rows(store: LakeStore, tenant: str, docs: list[Document]) -> list[dict[str, Any]]:
-    counts = store.count_chunks(tenant, [d.id for d in docs]) if docs else {}
-    return [_row(d, counts[d.id]) for d in docs]
+    ids = [d.id for d in docs]
+    counts = store.count_chunks(tenant, ids) if docs else {}
+    progress = store.model_progress(tenant, ids) if docs else {}
+    return [{**_row(d, counts[d.id]), "model": _model(d, progress[d.id])} for d in docs]
+
+
+def _model(d: Document, p: dict) -> dict[str, Any]:
+    """Where a document stands with the world model, from the lake alone: `imported` (its items reached a model, whose
+    review policy decides what applies), else the lake sync's last word on it (`no_signals`, `read_elsewhere`, or the
+    status that stopped it), else `waiting` for the sync when it is readable, else nothing (excluded, failed, needs OCR)."""
+    if p["imported_items"]:
+        return {"state": "imported", "items": p["imported_items"], "at": p["last_imported_at"]}
+    if p["sync"]:
+        return {"state": p["sync"][-1]["outcome"], "items": 0, "at": p["sync"][-1]["at"]}
+    return {"state": "waiting" if d.status in SYNC_READABLE else "", "items": 0, "at": None}
 
 
 def _row(d: Document, chunks: int) -> dict[str, Any]:
@@ -233,11 +246,12 @@ def mount_console(app: FastAPI, *, store: LakeStore, embedder: Embedder, ocr: Oc
             raise KeyError(f"no document {doc_id}")
         text, parser = store.get_text(tenant, doc_id) or ("", "")
         bundles = store.list_bundles(tenant, doc_id=doc_id)
+        progress = store.model_progress(tenant, [doc_id])[doc_id]
         return {"document": doc.model_dump(mode="json"), "text": text, "parser": parser,
                 "chunks": [c.model_dump(mode="json") for c in store.get_chunks(tenant, doc_id)],
                 "mentions": len(store.mentions_of(tenant, doc_id=doc_id)),
                 "bundles": [{"id": b.id, "items": b.items, "signals": b.signals} for b in bundles],
-                "signals": sum(b.signals for b in bundles)}
+                "signals": sum(b.signals for b in bundles), "model": {**progress, **_model(doc, progress)}}
 
     @r.delete("/lake/{tenant}/documents/{doc_id}")
     def delete(tenant: str, doc_id: str) -> dict:

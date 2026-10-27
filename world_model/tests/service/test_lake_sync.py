@@ -68,6 +68,8 @@ def test_a_document_added_to_the_lake_is_read_with_recognition_imported_and_appl
         assert len(applied) == 1 and all(x["decided_by"]["sub"] == "policy:standards" for x in applied)
         imports = c.app.state.lake.list_imports(ORG)
         assert [(r.by, len(r.item_ids)) for r in imports] == [("lake-sync", 1)]
+        # what the ingestion console shows for it, from the lake alone
+        assert c.app.state.lake.model_progress(ORG, [good.id])[good.id]["imported_items"] == 1
 
 
 def test_a_document_the_gate_sends_to_a_person_stays_pending_with_its_reasons_and_the_rest_go_on(tmp_path):
@@ -114,6 +116,9 @@ def test_documents_that_were_read_elsewhere_have_no_signal_or_cannot_be_read_are
         ledger = {r.key: r.fingerprint for r in (c.app.state.lake.get_idempotency(ORG, "acme_demo", "lake-sync", d)
                                                  for d in (up["document_id"], quiet.id, broken.id, gone.id)) if r}
         assert ledger == {up["document_id"]: "read_elsewhere", quiet.id: "no_signals", broken.id: "failed"}
+        shown = c.app.state.lake.model_progress(ORG, [quiet.id, broken.id, gone.id])
+        assert [[x["outcome"] for x in shown[d]["sync"]] for d in (quiet.id, broken.id, gone.id)] == [
+            ["no_signals"], ["failed"], []]
         s = tick(c)                                                 # none is read again; the failed one is now skipped
         assert (s["read"], s["skipped"]) == (2, 4)
         # deleting a document forgets what the sync did with it

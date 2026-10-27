@@ -15,7 +15,7 @@ from fastapi.testclient import TestClient
 import axelrod_ingest.console as console
 from axelrod_ingest.lake.embed import HashingEmbedder
 from axelrod_ingest.lake.sqlite import SQLiteLake
-from axelrod_ingest.lake.store import ImportRecord
+from axelrod_ingest.lake.store import SYNC_OPERATION, IdempotencyRecord, ImportRecord
 from axelrod_ingest.pack import lake_digest
 from axelrod_ingest.parse import supported as supported_by_parse
 from axelrod_ingest.pipeline import Ingestor
@@ -320,6 +320,27 @@ def test_a_delete_keeps_a_bundle_the_model_imported(lake):
     lake.store.put_import(ImportRecord(tenant=T, bundle_id=bid, imported_at=NOW, update_id="U1", item_ids=[]))
     r = lake.http.delete(f"/v1/lake/{T}/documents/{lake.ids['policy_2026-10-05.md']}", headers=AUTH).json()
     assert r["bundles_removed"] == 0 and r["bundles_kept"] >= 1 and lake.store.get_bundle(T, bid) is not None
+
+
+def test_each_document_says_how_far_it_got_toward_the_world_model(lake):
+    pid, bid, zid = lake.ids["policy_2026-10-05.md"], lake.ids["banks.html"], lake.ids["zh.txt"]
+
+    def models():
+        return {d["filename"]: d["model"] for d in lake.get(f"/v1/lake/{T}/documents").json()["documents"]}
+    before = models()
+    assert {d["state"] for d in before.values() if d["state"]} == {"waiting"} and before["broken.pdf"]["state"] == ""
+    bundle = next(b.id for b in lake.store.list_bundles(T, doc_id=pid))
+    lake.store.put_import(ImportRecord(tenant=T, bundle_id=bundle, imported_at=NOW, update_id="U1", item_ids=["a", "b"]))
+    lake.store.put_idempotency(IdempotencyRecord(org=T, world_model_id="wm", operation=SYNC_OPERATION, key=zid,
+                                                 fingerprint="no_signals", status=200, body='{"outcome": "no_signals"}',
+                                                 headers={}, created_at=NOW))
+    after = models()
+    assert after["policy_2026-10-05.md"] == {"state": "imported", "items": 2, "at": NOW.isoformat()}
+    assert after["zh.txt"] == {"state": "no_signals", "items": 0, "at": NOW.isoformat()}
+    assert after["banks.html"]["state"] == "waiting"
+    detail = lake.get(f"/v1/lake/{T}/documents/{pid}").json()["model"]
+    assert detail["state"] == "imported" and detail["imported_items"] == 2 and detail["sync"] == []
+    assert lake.get(f"/v1/lake/{T}/documents/{bid}").json()["model"]["state"] == "waiting"
 
 
 def test_reprocessing_a_stored_document_runs_the_pipeline_again_and_moves_the_version(lake):
