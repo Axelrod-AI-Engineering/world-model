@@ -1,10 +1,12 @@
 """v1 ingestion routes (world_model/docs/api/openapi.yaml): documents (upload, read, delete, read again), their passages and
-content, the bundles extracted from them (or written by an agent), a bundle's items, and search over the lakehouse and
-the model's names. It imports only axelrod_ingest and the v1 plumbing, so it is the part of the service that moves
-with ingestion if that is ever served on its own; the world model reaches it only through the world view."""
+content, the bundles extracted from them (or written by an agent), a bundle's items, retrieval (ranked passages across
+documents, filtered and paged: `GET …/chunks`, Oct 26), and search over the lakehouse and the model's names. It imports
+only axelrod_ingest and the v1 plumbing, so it is the part of the service that moves with ingestion if that is ever
+served on its own; the world model reaches it only through the world view."""
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 import re
@@ -279,6 +281,76 @@ async def list_bundle_items(request: Request, world_model_id: str, bundle_id: st
     off, _v = decode_cursor(cursor)
     chunk, nxt = page(list(bundle_of(request, m, bundle_id).bundle.get("items", [])), off, limit, None)
     return many(request, chunk, limit, nxt)
+
+
+# -- retrieval -----------------------------------------------------------------------------------------------------------------
+RetrievalMode = Literal["hybrid", "keyword", "semantic", "graph"]
+MAX_VALUES = 100                              # values per filter parameter
+Values = Annotated[list[str] | None, Query()]
+
+
+def passage_view(p: Any) -> s.Passage:
+    from axelrod_ingest.pipeline import publisher_of
+
+    c, doc = p.chunk, p.document
+    publisher, url = publisher_of(doc)
+    return s.Passage(document_id=c.doc_id, ordinal=c.ord, text=c.text, start=c.start, end=c.end, page=c.page,
+                     section=c.section, score=p.score, scores=p.scores, why=list(p.why),
+                     mentions=[s.Mention(entity_id=x.entity_id, attribute_id=x.subentity_id, surface=x.surface)
+                               for x in p.mentions],
+                     before=[x.text for x in p.before], after=[x.text for x in p.after],
+                     citation=s.Citation(document_id=doc.id, title=doc.title, filename=doc.filename,
+                                         publisher=publisher or doc.source, source_type=doc.source_type,
+                                         published_at=doc.published_at, event_time=doc.event_time, url=url))
+
+
+def retrieval_cursor(offset: int, query: str) -> str:
+    raw = json.dumps({"o": offset, "q": query}, separators=(",", ":")).encode()
+    return base64.urlsafe_b64encode(raw).decode().rstrip("=")
+
+
+def retrieval_offset(cursor: str | None, query: str, depth: int) -> int:
+    """The offset a cursor holds. A cursor issued for another query, past the deepest page, or not by this service is
+    invalid_cursor."""
+    off, _v = decode_cursor(cursor)
+    if cursor and json.loads(base64.urlsafe_b64decode(cursor + "=" * (-len(cursor) % 4))).get("q") != query:
+        raise ApiError("invalid_cursor", "this cursor belongs to another query")
+    if off >= depth:
+        raise ApiError("invalid_cursor", "this cursor was not issued by this service")
+    return off
+
+
+@router.get(W + "/chunks", summary="Retrieve passages across documents, ranked for a query")
+async def retrieve_chunks(request: Request, world_model_id: str,
+                          q: Annotated[str, Query(min_length=1, max_length=500)], mode: RetrievalMode = "hybrid",
+                          document_id: Values = None, source_type: Values = None, source: Values = None,
+                          entity_id: Values = None, published_from: datetime | None = None,
+                          published_to: datetime | None = None, context: Annotated[int, Query(ge=0, le=3)] = 0,
+                          per_document: Annotated[int, Query(ge=0, le=50)] = 0,
+                          limit: Annotated[int, Query(ge=1, le=100)] = 10, cursor: Cursor = None) -> Response:
+    from axelrod_ingest.lake.search import Searcher
+    from axelrod_ingest.lake.store import CHANNELS, MAX_DEPTH, RetrievalFilter
+
+    m = model(request, world_model_id, READ)
+    lists = {"document_id": document_id, "source_type": source_type, "source": source, "entity_id": entity_id}
+    for name, values in lists.items():
+        if values and len(values) > MAX_VALUES:
+            raise ApiError("invalid_request", f"at most {MAX_VALUES} values of {name}")
+    flt = RetrievalFilter(document_ids=document_id or [], source_types=source_type or [], sources=source or [],
+                          entity_ids=entity_id or [], published_from=published_from, published_to=published_to)
+    query = fingerprint(q, mode, flt.model_dump(mode="json"), per_document)[:16]
+    off = retrieval_offset(cursor, query, MAX_DEPTH)
+    limit = min(limit, MAX_DEPTH - off)
+    channels = CHANNELS if mode == "hybrid" else (mode,)
+
+    def run() -> tuple[list[s.Passage], bool, dict]:
+        got = Searcher(lake(request.app), request.app.state.ingestor.embedder, view_of(m)).retrieve(
+            m.org, q, channels=channels, filter=flt, offset=off, limit=limit, context=context, per_document=per_document)
+        return [passage_view(p) for p in got.passages], got.more, vref(m.st)
+
+    rows, more, ref = await m.st.call(run)
+    nxt = retrieval_cursor(off + limit, query) if more and off + limit < MAX_DEPTH else None
+    return many(request, rows, limit, nxt, ref)
 
 
 # -- search --------------------------------------------------------------------------------------------------------------------

@@ -4,7 +4,7 @@ The world model as a service, v1: entities and their attributes, relationships a
 version; documents read into proposed changes that a person reviews; theses run as simulations. The same service is
 exposed twice: as REST under `/v1`, and as MCP (Model Context Protocol) tools at `/mcp`.
 
-The contract is [openapi.yaml](openapi.yaml) (OpenAPI 3.1). The [Reference](#reference) and the
+To find passages for RAG, start with [retrieval.md](retrieval.md). The contract is [openapi.yaml](openapi.yaml) (OpenAPI 3.1). The [Reference](#reference) and the
 [terms table](#terms-and-acronyms) below are generated from it. [design/api.md](../design/api.md) explains why the API
 looks the way it does, and [design/core-mcp-auth.md](../design/core-mcp-auth.md) explains how core authenticates.
 
@@ -33,6 +33,7 @@ looks the way it does, and [design/core-mcp-auth.md](../design/core-mcp-auth.md)
   - [Events](#events)
   - [Documents](#documents)
   - [Bundles](#bundles)
+  - [Retrieval](#retrieval)
   - [Search](#search)
   - [Changes](#changes)
   - [Theses](#theses)
@@ -110,6 +111,9 @@ Direct access is for **internal staff and backend services only**; clients use t
 - **Core's backend MCP server** reads, with core-minted service tokens. It does not write, to start.
 - **Internal staff and scripts** read with static keys (a key with no scopes listed reads only), and read the unified
   world model, `/v1/erid`.
+
+**Retrieval** (`GET {wm}/chunks`) is the exception: it is built for callers outside the company too, and a read-only
+key is enough. Its guide is [retrieval.md](retrieval.md).
 
 The service owns the world model. It does not own the agents that use it.
 
@@ -313,6 +317,7 @@ change: approval is a person's step in a review UI.
 | `world_model_list_events` | `GET {wm}/events` | read-only |
 | `world_model_impact_analysis` | `GET {wm}/events/{event_id}/impact-analysis` | read-only |
 | `world_model_search` | `GET {wm}/search` | read-only |
+| `world_model_retrieve` | `GET {wm}/chunks` ([retrieval](retrieval.md)) | read-only |
 | `world_model_ingest_document` | `POST {wm}/documents` (`content_base64` or `text`; `documents:create`) | write, idempotent |
 | `world_model_list_documents` | `GET {wm}/documents` | read-only |
 | `world_model_get_bundle` | `GET {wm}/bundles/{id}` and its items | read-only |
@@ -388,7 +393,7 @@ repository.
 ## Reference
 
 <!-- reference:start -->
-All 84 operations, from the contract ([openapi.yaml](openapi.yaml)). Paths are under `/v1`; `{wm}` is `/world-models/{world_model_id}`.
+All 85 operations, from the contract ([openapi.yaml](openapi.yaml)). Paths are under `/v1`; `{wm}` is `/world-models/{world_model_id}`.
 
 ### World models
 
@@ -524,6 +529,14 @@ Research read into dated items with signals.
 | `GET {wm}/bundles/{bundle_id}` | One bundle | `world_model:read` |  | 200, 401, 403, 404, 503 |
 | `GET {wm}/bundles/{bundle_id}/items` | A bundle's dated items and their signals | `world_model:read` |  | 200, 400, 401, 403, 404, 422, 503 |
 
+### Retrieval
+
+Ranked passages across documents for a query, filtered and paged, each with its citation (retrieval.md).
+
+| Route | What it does | Scope | Pinned | Answers |
+|---|---|---|---|---|
+| `GET {wm}/chunks` | Retrieve passages across documents, ranked for a query | `world_model:read` |  | 200, 400, 401, 403, 404, 422, 503 |
+
 ### Search
 
 Search over passages and names.
@@ -632,6 +645,7 @@ Codes: `invalid_request`, `invalid_json`, `invalid_cursor`, `authentication_requ
 | `SourceType` | Where a document comes from. |
 | `DocumentStatus` | How far a document has been read. |
 | `SearchMode` | keyword: BM25 over passages; prefix: names, then passages, by word prefix; semantic: embedding similarity; graph: the nodes named and their neighbours, then passages mentioning them; hybrid: reciprocal-rank fusion of keyword, semantic and graph. |
+| `RetrievalMode` | keyword: BM25 over passages; semantic: embedding similarity; graph: the passages that name the entities and attributes the query names, most mentions first; hybrid: all three, fused by reciprocal rank. |
 | `HitKind` | What a search hit is. |
 | `ChangeKind` | What a change proposes. |
 | `ChangeStatus` | pending: waits for a person; approved: committed a version; rejected: never applied; deferred: set aside to fold in later; auto_applied: applied under a review policy. |
@@ -683,6 +697,8 @@ Codes: `invalid_request`, `invalid_json`, `invalid_cursor`, `authentication_requ
 | `Document` | A stored file. |
 | `Mention` | A name recognized in a passage; attribute_id is null for the entity alone. |
 | `Chunk` | A passage of a document. |
+| `Citation` | The document a passage comes from, as a citation names it. |
+| `Passage` | A retrieved passage, with how it was ranked and what it cites. |
 | `DocumentText` | A document's extracted text. |
 | `BundleSummary` | Research read into dated items with signals (axelrod.import/v1). |
 | `BundleItem` | One dated item of a bundle. |

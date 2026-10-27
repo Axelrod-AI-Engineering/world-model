@@ -277,6 +277,8 @@ tags:
   description: Uploaded files and their passages.
 - name: Bundles
   description: Research read into dated items with signals.
+- name: Retrieval
+  description: 'Ranked passages across documents for a query, filtered and paged, each with its citation (retrieval.md).'
 - name: Search
   description: Search over passages and names.
 - name: Changes
@@ -1962,6 +1964,60 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/BundleItemPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /world-models/{world_model_id}/chunks:
+    get:
+      operationId: retrieveChunks
+      summary: Retrieve passages across documents, ranked for a query
+      description: Keyword (BM25), semantic (embedding), and graph (the passages that name what the query names) ranks,
+        fused by reciprocal rank, over the documents the filters admit; each filter parameter repeats, and a document
+        passes when it matches any value. One page reads at most 1000 passages deep (`offset + limit`). A cursor holds the
+        query, so it pages only the query that issued it. See retrieval.md.
+      tags:
+      - Retrieval
+      x-required-scope: world_model:read
+      security:
+      - serviceToken: []
+      - apiKey: []
+      - session: []
+      parameters:
+      - *id004
+      - $ref: '#/components/parameters/SearchQuery'
+      - $ref: '#/components/parameters/RetrievalModeParam'
+      - $ref: '#/components/parameters/RetrievalDocuments'
+      - $ref: '#/components/parameters/RetrievalSourceTypes'
+      - $ref: '#/components/parameters/RetrievalSources'
+      - $ref: '#/components/parameters/RetrievalEntities'
+      - $ref: '#/components/parameters/DocFrom'
+      - $ref: '#/components/parameters/DocTo'
+      - $ref: '#/components/parameters/RetrievalContext'
+      - $ref: '#/components/parameters/RetrievalPerDocument'
+      - $ref: '#/components/parameters/RetrievalLimit'
+      - $ref: '#/components/parameters/Cursor'
+      - *id001
+      responses:
+        '200':
+          description: Retrieve passages across documents, ranked for a query
+          headers:
+            X-Request-Id: *id002
+            X-Axelrod-API-Version: *id003
+            traceparent:
+              $ref: '#/components/headers/traceparent'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PassagePage'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -4027,6 +4083,15 @@ components:
       description: 'keyword: BM25 over passages; prefix: names, then passages, by word prefix; semantic: embedding similarity;
         graph: the nodes named and their neighbours, then passages mentioning them; hybrid: reciprocal-rank fusion of keyword,
         semantic and graph.'
+    RetrievalMode:
+      type: string
+      enum:
+      - hybrid
+      - keyword
+      - semantic
+      - graph
+      description: 'keyword: BM25 over passages; semantic: embedding similarity; graph: the passages that name the entities
+        and attributes the query names, most mentions first; hybrid: all three, fused by reciprocal rank.'
     HitKind:
       type: string
       enum:
@@ -5473,6 +5538,112 @@ components:
       - text
       - mentions
       description: A passage of a document.
+    Citation:
+      type: object
+      additionalProperties: false
+      properties:
+        document_id:
+          type: string
+        title:
+          type: string
+        filename:
+          type: string
+        publisher:
+          type: string
+          description: Who published it (the manifest, the uploader's source, the document's own metadata, or its file
+            name); empty when nothing says
+        source_type:
+          type: string
+        published_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        event_time:
+          type: string
+          format: date-time
+          description: The document's date, else when it was ingested
+        url:
+          type:
+          - string
+          - 'null'
+          description: Where it was published, when known
+      required:
+      - document_id
+      - title
+      - filename
+      - publisher
+      - source_type
+      - published_at
+      - event_time
+      - url
+      description: The document a passage comes from, as a citation names it.
+    Passage:
+      type: object
+      additionalProperties: false
+      properties:
+        document_id:
+          type: string
+        ordinal:
+          type: integer
+          description: Its position in the document (GET …/documents/{document_id}/chunks/{ordinal})
+        text:
+          type: string
+        start:
+          type: integer
+        end:
+          type: integer
+        page:
+          type:
+          - integer
+          - 'null'
+        section:
+          type: string
+        score:
+          type: number
+          description: The reciprocal-rank fusion of the channels that found it (higher is better)
+        scores:
+          type: object
+          additionalProperties:
+            type: number
+          description: 'Each channel''s own score: keyword (BM25), semantic (cosine), graph (share of the top mention count)'
+        why:
+          type: array
+          items:
+            type: string
+          description: The channels that found it, and `any word` when the keyword channel matched some of the words
+        mentions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Mention'
+        before:
+          type: array
+          items:
+            type: string
+          description: The passages before it, nearest last (with `context`)
+        after:
+          type: array
+          items:
+            type: string
+          description: The passages after it, nearest first (with `context`)
+        citation:
+          $ref: '#/components/schemas/Citation'
+      required:
+      - document_id
+      - ordinal
+      - text
+      - start
+      - end
+      - page
+      - section
+      - score
+      - scores
+      - why
+      - mentions
+      - before
+      - after
+      - citation
+      description: A retrieved passage, with how it was ranked and what it cites.
     DocumentText:
       type: object
       additionalProperties: false
@@ -6712,6 +6883,20 @@ components:
       - data
       - meta
       description: A page of BundleItem records.
+    PassagePage:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Passage'
+        meta:
+          $ref: '#/components/schemas/ListMeta'
+      required:
+      - data
+      - meta
+      description: A page of Passage records.
     HitPage:
       type: object
       additionalProperties: false
@@ -7387,6 +7572,91 @@ components:
         minimum: 1
         maximum: 200
         default: 20
+    RetrievalModeParam:
+      name: mode
+      in: query
+      required: false
+      description: Which channels rank (default hybrid, all three)
+      schema:
+        $ref: '#/components/schemas/RetrievalMode'
+    RetrievalDocuments:
+      name: document_id
+      in: query
+      required: false
+      description: Only these documents (repeat for several)
+      style: form
+      explode: true
+      schema:
+        type: array
+        maxItems: 100
+        items:
+          type: string
+    RetrievalSourceTypes:
+      name: source_type
+      in: query
+      required: false
+      description: Only documents of these source types (broker_research, news, filing, ...)
+      style: form
+      explode: true
+      schema:
+        type: array
+        maxItems: 100
+        items:
+          type: string
+    RetrievalSources:
+      name: source
+      in: query
+      required: false
+      description: Only documents from these sources, ignoring case
+      style: form
+      explode: true
+      schema:
+        type: array
+        maxItems: 100
+        items:
+          type: string
+    RetrievalEntities:
+      name: entity_id
+      in: query
+      required: false
+      description: Only documents with a passage that names one of these entities
+      style: form
+      explode: true
+      schema:
+        type: array
+        maxItems: 100
+        items:
+          type: string
+    RetrievalContext:
+      name: context
+      in: query
+      required: false
+      description: Neighbouring passages returned on each side of a passage
+      schema:
+        type: integer
+        minimum: 0
+        maximum: 3
+        default: 0
+    RetrievalPerDocument:
+      name: per_document
+      in: query
+      required: false
+      description: At most this many passages from one document (0, the default, for no cap)
+      schema:
+        type: integer
+        minimum: 0
+        maximum: 50
+        default: 0
+    RetrievalLimit:
+      name: limit
+      in: query
+      required: false
+      description: Passages per page
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 10
     ChangeStatusFilter:
       name: status
       in: query

@@ -7,20 +7,32 @@
               chunks that mention them
     hybrid    keyword, semantic, and graph, fused by reciprocal rank
 
+`retrieve` is the public retrieval (Oct 26, `GET /v1/world-models/{id}/chunks`): passages only, filtered by document,
+fused in the store in one call, and paged.
+
 Every list is ordered by score, then by document and position, so the same query over the same data always returns the
 same results in the same order.
 """
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from axelrod_ingest.contract.world_view import WorldView
 from axelrod_ingest.gazetteer import Gazetteer
 from axelrod_ingest.lake.embed import Embedder
-from axelrod_ingest.lake.store import Hit, LakeStore
+from axelrod_ingest.lake.store import (
+    CHANNELS,
+    RRF_K,
+    Hit,
+    LakeStore,
+    Retrieval,
+    RetrievalFilter,
+    RetrievalSpec,
+)
 from axelrod_ingest.text import norm, tokens
 
 MODES = ("keyword", "prefix", "semantic", "graph", "hybrid")
-RRF_K = 60
 
 
 class Searcher:
@@ -124,6 +136,24 @@ class Searcher:
                 best.setdefault(key, h)
         order = sorted(fused.items(), key=lambda kv: (-kv[1], kv[0]))[:limit]
         return [best[k].model_copy(update={"score": round(s, 6), "why": why[k]}) for k, s in order]
+
+    def retrieve(self, tenant: str, q: str, *, channels: Sequence[str] = CHANNELS,
+                 filter: RetrievalFilter | None = None, offset: int = 0, limit: int = 10, context: int = 0,
+                 per_document: int = 0) -> Retrieval:
+        """Ranked passages for `q` (store.retrieve): the query is embedded and its names resolved here, and the rest is
+        one call to the store."""
+        ents: set[str] = set()
+        vals: set[str] = set()
+        gz = self.gazetteer() if "graph" in channels else None
+        for m in gz.find(q) if gz is not None else []:
+            ents.add(m.entity_id)
+            if m.subentity_id:
+                vals.add(m.subentity_id)
+        vector = self.embedder.embed([q])[0] if "semantic" in channels and q.strip() else None
+        spec = RetrievalSpec(query=q, channels=list(channels), vector=vector, model=self.embedder.name,
+                             entity_ids=sorted(ents), attribute_ids=sorted(vals), filter=filter or RetrievalFilter(),
+                             offset=offset, limit=limit, context=context, per_document=per_document)
+        return self.store.retrieve(tenant, spec)
 
     def search(self, tenant: str, q: str, mode: str = "hybrid", limit: int = 20) -> list[Hit]:
         if mode not in MODES:

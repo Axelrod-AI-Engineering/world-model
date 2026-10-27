@@ -16,13 +16,16 @@ import re
 import sqlite3
 import threading
 from array import array
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 
 from axelrod_ingest.lake.store import (
+    CHANNELS,
+    MAX_DEPTH,
+    RRF_K,
     AuditRecord,
     BundleRecord,
     Chunk,
@@ -32,6 +35,10 @@ from axelrod_ingest.lake.store import (
     ImportRecord,
     LakeStore,
     Mention,
+    Passage,
+    Retrieval,
+    RetrievalFilter,
+    RetrievalSpec,
     WorldModelRecord,
 )
 
@@ -96,6 +103,34 @@ def _iso(t: datetime | None) -> str | None:
 
 def _dt(s: str | None) -> datetime | None:
     return None if s is None else datetime.fromisoformat(s)
+
+
+def _utc_iso(t: datetime) -> str:
+    """A filter time as the stored times are written (UTC ISO), so comparing the strings compares the times."""
+    return (t.astimezone(UTC) if t.tzinfo else t.replace(tzinfo=UTC)).isoformat()
+
+
+def _admits(tenant: str, f: RetrievalFilter) -> tuple[str, list[Any]]:
+    """SQL over `documents d` that holds for the documents the filter admits, and its arguments."""
+    def among(col: str, values: list[str]) -> str:
+        return f"{col} IN ({','.join('?' * len(values))})"
+
+    sql, args = ["d.tenant=?"], [tenant]
+    for col, values in (("d.id", f.document_ids), ("d.source_type", f.source_types),
+                        ("lower(d.source)", [v.lower() for v in f.sources])):
+        if values:
+            sql.append(among(col, values))
+            args += values
+    if f.published_from is not None:
+        sql.append("d.event_time>=?")
+        args.append(_utc_iso(f.published_from))
+    if f.published_to is not None:
+        sql.append("d.event_time<?")
+        args.append(_utc_iso(f.published_to))
+    if f.entity_ids:
+        sql.append(f"d.id IN (SELECT doc_id FROM mentions WHERE tenant=? AND {among('entity_id', f.entity_ids)})")
+        args += [tenant, *f.entity_ids]
+    return " AND ".join(sql), args
 
 
 def fts_query(query: str, *, prefix: bool = False, any_term: bool = False) -> str | None:
@@ -365,6 +400,122 @@ class SQLiteLake(LakeStore):
             if hits:
                 break
         return hits
+
+    # -- retrieval --------------------------------------------------------------------------------------------
+    def retrieve(self, tenant: str, spec: RetrievalSpec) -> Retrieval:
+        if not spec.channels or set(spec.channels) - set(CHANNELS):
+            raise ValueError(f"channels must be some of {', '.join(CHANNELS)}")
+        if spec.offset + spec.limit > MAX_DEPTH:
+            raise ValueError(f"a retrieval pages at most {MAX_DEPTH} passages deep; narrow it with a filter")
+        where, args = _admits(tenant, spec.filter)
+        depth = min(MAX_DEPTH, 3 * (spec.offset + spec.limit) + 50)    # candidates per channel: room for the cap
+        ranked: list[list[tuple[str, int, float, list[str]]]] = []
+        with self.lock:
+            if "keyword" in spec.channels:
+                ranked.append(self._keyword_ranks(spec.query, where, args, depth))
+            if "semantic" in spec.channels and spec.vector is not None:
+                admitted = {r[0] for r in self.db.execute(f"SELECT d.id FROM documents d WHERE {where}", args)}
+                ranked.append(self._semantic_ranks(tenant, spec, admitted, depth))
+            if "graph" in spec.channels and (spec.entity_ids or spec.attribute_ids):
+                ranked.append(self._graph_ranks(tenant, spec, where, args, depth))
+        fused: dict[tuple[str, int], float] = {}
+        scores: dict[tuple[str, int], dict[str, float]] = {}
+        why: dict[tuple[str, int], list[str]] = {}
+        for hits in ranked:
+            for rank, (doc_id, ord_, score, tags) in enumerate(hits):
+                key = (doc_id, ord_)
+                fused[key] = fused.get(key, 0.0) + 1.0 / (RRF_K + rank + 1)
+                scores.setdefault(key, {})[tags[0]] = score
+                why.setdefault(key, []).extend(t for t in tags if t not in why.get(key, []))
+        order = sorted(fused, key=lambda k: (-round(fused[k], 9), k))
+        if spec.per_document:
+            capped, seen = [], dict.fromkeys((d for d, _o in order), 0)
+            for k in order:
+                seen[k[0]] += 1
+                if seen[k[0]] <= spec.per_document:
+                    capped.append(k)
+            order = capped
+        keys = order[spec.offset:spec.offset + spec.limit]
+        return Retrieval(passages=self._passages(tenant, keys, spec.context, fused, scores, why),
+                         more=len(order) > spec.offset + spec.limit)
+
+    def _keyword_ranks(self, query: str, where: str, args: list[Any], depth: int) -> list[tuple[str, int, float, list[str]]]:
+        """BM25 over the admitted documents' chunks: every word first, any word when that finds nothing."""
+        for any_term in (False, True):
+            q = fts_query(query, any_term=any_term)
+            if q is None:
+                return []
+            rows = self.db.execute(
+                "SELECT f.doc_id, f.ord, bm25(chunks_fts) AS s FROM chunks_fts f "
+                f"JOIN documents d ON d.tenant=f.tenant AND d.id=f.doc_id WHERE chunks_fts MATCH ? AND {where} "
+                "ORDER BY s, f.doc_id, f.ord LIMIT ?", (q, *args, depth)).fetchall()
+            if rows:
+                return [(d, int(o), round(-float(s), 6), ["keyword", *(["any word"] if any_term else [])])
+                        for d, o, s in rows]
+        return []
+
+    def _semantic_ranks(self, tenant: str, spec: RetrievalSpec, admitted: set[str],
+                        depth: int) -> list[tuple[str, int, float, list[str]]]:
+        """Cosine similarity against the admitted documents' chunks, exactly, from the cached matrix."""
+        docs, ords, rows = self._matrix(tenant, spec.model)
+        keep = np.flatnonzero(np.fromiter((d in admitted for d in docs), dtype=bool, count=len(docs)))
+        if not keep.size:
+            return []
+        q = np.asarray(spec.vector, dtype=np.float64)
+        q = q / (float(np.linalg.norm(q)) or 1.0)
+        scores = np.round(rows[keep] @ q, 6)
+        top = np.argsort(-scores, kind="stable")[:depth]          # rows are in (doc, ordinal) order: ties stay so
+        return [(docs[keep[i]], ords[keep[i]], float(scores[i]), ["semantic"]) for i in top]
+
+    def _graph_ranks(self, tenant: str, spec: RetrievalSpec, where: str, args: list[Any],
+                     depth: int) -> list[tuple[str, int, float, list[str]]]:
+        """The admitted chunks that name what the query names, most mentions first. With attributes named, a mention
+        counts when it is of one of them, or of an entity alone."""
+        ents = sorted(set(spec.entity_ids))
+        sql = (f"SELECT m.doc_id, m.ord, COUNT(*) AS n FROM mentions m JOIN documents d ON d.tenant=m.tenant AND "
+               f"d.id=m.doc_id WHERE {where} AND m.entity_id IN ({','.join('?' * len(ents))})")
+        extra: list[Any] = list(ents)
+        if spec.attribute_ids:
+            vals = sorted(set(spec.attribute_ids))
+            sql += f" AND (m.subentity_id IS NULL OR m.subentity_id IN ({','.join('?' * len(vals))}))"
+            extra += vals
+        rows = self.db.execute(sql + " GROUP BY m.doc_id, m.ord ORDER BY n DESC, m.doc_id, m.ord LIMIT ?",
+                               (*args, *extra, depth)).fetchall()
+        top = max((n for _d, _o, n in rows), default=1)
+        return [(d, o, round(n / top, 6), ["graph"]) for d, o, n in rows]
+
+    def _passages(self, tenant: str, keys: list[tuple[str, int]], context: int, fused: dict, scores: dict,
+                  why: dict) -> list[Passage]:
+        """The page's passages, read in three queries whatever its length. A chunk that is gone (an embedding outliving
+        a re-read) is left out."""
+        doc_ids = sorted({d for d, _o in keys})
+        if not doc_ids:
+            return []
+        marks = ",".join("?" * len(doc_ids))
+        spans = " OR ".join("(doc_id=? AND ord BETWEEN ? AND ?)" for _k in keys)
+        span_args = [x for d, o in keys for x in (d, o - context, o + context)]
+        with self.lock:
+            docs = {r[1]: self._doc(r) for r in self.db.execute(
+                f"SELECT * FROM documents WHERE tenant=? AND id IN ({marks})", (tenant, *doc_ids))}
+            chunks = {(r[1], r[2]): Chunk(tenant=r[0], doc_id=r[1], ord=r[2], start=r[3], end=r[4], text=r[5], page=r[6],
+                                          section=r[7]) for r in self.db.execute(
+                'SELECT tenant, doc_id, ord, start, "end", text, page, section FROM chunks '
+                f"WHERE tenant=? AND ({spans})", (tenant, *span_args))}
+            mentions: dict[tuple[str, int], list[Mention]] = {}
+            for r in self.db.execute("SELECT tenant, doc_id, ord, entity_id, subentity_id, surface FROM mentions "
+                                     f"WHERE tenant=? AND doc_id IN ({marks}) "
+                                     "ORDER BY doc_id, ord, entity_id, subentity_id, surface", (tenant, *doc_ids)):
+                mentions.setdefault((r[1], r[2]), []).append(Mention(tenant=r[0], doc_id=r[1], ord=r[2], entity_id=r[3],
+                                                                     subentity_id=r[4], surface=r[5]))
+        out = []
+        for d, o in keys:
+            if (d, o) not in chunks or d not in docs:
+                continue
+            out.append(Passage(chunk=chunks[(d, o)], document=docs[d], score=round(fused[(d, o)], 6),
+                               scores=scores[(d, o)], why=why[(d, o)], mentions=mentions.get((d, o), []),
+                               before=[chunks[(d, k)] for k in range(o - context, o) if (d, k) in chunks],
+                               after=[chunks[(d, k)] for k in range(o + 1, o + context + 1) if (d, k) in chunks]))
+        return out
 
     # -- bundles and imports ----------------------------------------------------------------------------------
     def put_bundle(self, rec: BundleRecord) -> BundleRecord:

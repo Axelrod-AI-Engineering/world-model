@@ -25,7 +25,7 @@ TOOLS = {
     "world_model_list_entities", "world_model_get_entity", "world_model_get_attribute", "world_model_list_observations",
     "world_model_list_relationships", "world_model_get_relationship", "world_model_list_concepts",
     "world_model_construction", "world_model_trace", "world_model_list_events", "world_model_impact_analysis",
-    "world_model_search", "world_model_ingest_document", "world_model_list_documents", "world_model_get_bundle",
+    "world_model_search", "world_model_retrieve", "world_model_ingest_document", "world_model_list_documents", "world_model_get_bundle",
     "world_model_propose_changes", "world_model_list_changes", "world_model_get_change", "world_model_simulate",
     "world_model_get_simulation", "world_model_simulation_brief", "world_model_export_v4", "world_model_get_job",
 }
@@ -218,6 +218,12 @@ def test_ingest_propose_and_a_person_decides_outside_mcp(client):
     res = job["result"]["detail"]["results"][0]
     assert job["status"] == "succeeded" and res["new"] is True
     assert ok(again)["data"]["result"]["detail"]["results"][0]["new"] is False and ok(docs)["data"]
+    found, dated = calls(client, ("world_model_retrieve", {"q": "policy rate", "source_type": ["broker_research"],
+                                                          "context": 1}),
+                         ("world_model_retrieve", {"q": "policy rate", "published_from": "2026-10-01T00:00:00Z",
+                                                   "published_to": "2026-11-01T00:00:00Z"}))
+    top = ok(found)["data"][0]
+    assert "policy rate" in top["text"] and top["citation"]["publisher"] == "Desk" and ok(dated)["data"]
     bid = res["bundle_id"]
     bundle, proposed, pending, polled = calls(
         client, ("world_model_get_bundle", {"bundle_id": bid}),

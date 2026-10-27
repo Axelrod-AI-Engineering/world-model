@@ -153,6 +153,56 @@ class Hit(_R):
     why: list[str] = []
 
 
+CHANNELS = ("keyword", "semantic", "graph")
+RRF_K = 60                                    # reciprocal-rank fusion: 1 / (RRF_K + rank)
+MAX_DEPTH = 1000                              # the deepest a retrieval pages: offset + limit
+
+
+class RetrievalFilter(_R):
+    """Which documents a retrieval reads. Every condition given holds; a list holds when any of its values does."""
+
+    document_ids: list[str] = []
+    source_types: list[str] = []
+    sources: list[str] = []                   # the document's `source`, ignoring case
+    published_from: datetime | None = None    # on event_time (the document's date, else when it was ingested)
+    published_to: datetime | None = None      # exclusive
+    entity_ids: list[str] = []                # documents with a passage that names one of these entities
+
+
+class RetrievalSpec(_R):
+    """One retrieval: the query, what it was resolved to (its embedding, the names it holds), the filter, and the page."""
+
+    query: str
+    channels: list[str] = list(CHANNELS)
+    vector: list[float] | None = None         # the query's embedding, for the semantic channel
+    model: str = ""                           # the embedder that made it
+    entity_ids: list[str] = []                # the entities the query names, for the graph channel
+    attribute_ids: list[str] = []             # ... and the attributes
+    filter: RetrievalFilter = RetrievalFilter()
+    offset: int = Field(0, ge=0)
+    limit: int = Field(10, ge=1)
+    context: int = Field(0, ge=0, le=3)       # neighbouring passages returned on each side
+    per_document: int = Field(0, ge=0)        # at most this many passages from one document (0: no cap)
+
+
+class Passage(_R):
+    """A retrieved chunk with its document, the names in it, its neighbours, and how each channel ranked it."""
+
+    chunk: Chunk
+    document: Document
+    score: float                              # reciprocal-rank fusion of the channels that found it
+    scores: dict[str, float]                  # each channel's own score: BM25, cosine, share of the top mention count
+    why: list[str]
+    mentions: list[Mention] = []
+    before: list[Chunk] = []                  # up to `context` chunks before it, in order
+    after: list[Chunk] = []
+
+
+class Retrieval(_R):
+    passages: list[Passage]
+    more: bool                                # whether a further page holds passages
+
+
 class LakeStore(ABC):
     """Storage for the lakehouse. Every method takes the tenant; nothing reads across tenants."""
 
@@ -224,6 +274,13 @@ class LakeStore(ABC):
     # -- search -----------------------------------------------------------------------------------------------
     @abstractmethod
     def keyword_search(self, tenant: str, query: str, *, prefix: bool = False, limit: int = 20) -> list[Hit]: ...
+
+    @abstractmethod
+    def retrieve(self, tenant: str, spec: RetrievalSpec) -> Retrieval:
+        """Ranked passages, in one call: each channel in `spec.channels` ranks the chunks of the documents `spec.filter`
+        admits, the ranks are fused (reciprocal rank, ties by document then position), `per_document` caps each
+        document, and the page at `offset` comes back with its documents, mentions, and neighbours. The same spec over the
+        same data always returns the same page. `offset + limit` may not exceed MAX_DEPTH."""
 
     # -- bundles and imports ----------------------------------------------------------------------------------
     @abstractmethod

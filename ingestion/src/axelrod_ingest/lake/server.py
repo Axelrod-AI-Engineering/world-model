@@ -44,6 +44,7 @@ from axelrod_ingest.lake.store import (
     ImportRecord,
     LakeStore,
     Mention,
+    RetrievalSpec,
     WorldModelRecord,
     content_id,
 )
@@ -90,6 +91,11 @@ class NearestBody(_Body):
     model: str
     query: list[float]
     limit: int = 20
+
+
+class RetrieveBody(_Body):
+    tenant: str
+    spec: RetrievalSpec
 
 
 class ChunkCountsBody(_Body):
@@ -278,6 +284,11 @@ def create_lake_app(store: LakeStore, token: str) -> FastAPI:
     @r.get("/search/keyword")
     def keyword_search(tenant: str, q: str, prefix: bool = False, limit: int = 20) -> list[dict]:
         return [h.model_dump(mode="json") for h in store.keyword_search(tenant, q, prefix=prefix, limit=limit)]
+
+    @r.post("/retrieve")
+    def retrieve(body: RetrieveBody) -> dict:
+        """One retrieval, whole: ranked, fused, and its page read with documents, mentions, and neighbours."""
+        return store.retrieve(body.tenant, body.spec).model_dump(mode="json")
 
     # -- bundles and imports ------------------------------------------------------------------------------------
     @r.put("/bundles")
