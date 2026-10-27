@@ -8,7 +8,7 @@ import { defineRailway, github, preserve, project, service, volume } from "railw
 // lives in one place and no service holds a copy of it. Staging and production have no lake yet (Oct 24).
 export const partial = "world-model";
 
-const repo = github("Axelrod-AI-Engineering/world-model", { branch: "main", rootDirectory: ".", checkSuites: false });
+const repo = github("Axelrod-AI-Engineering/world-model", { branch: "main", rootDirectory: ".", checkSuites: true });
 
 export default defineRailway((ctx) => {
   // The guard: everything is dev-only until it is authorized elsewhere.

@@ -1,5 +1,6 @@
-# Three parallel jobs on every pull request and on main, one per concern. Railway deploys main by itself
-# (.railway/railway.ts); this only reports whether the tests pass.
+# Four parallel jobs, one per concern. Railway deploys a push to main only once this workflow passes on it
+# (`checkSuites: true` in .railway/railway.ts, Oct 26), so a push to main runs the fast jobs (about two minutes) and
+# world_model, which takes over an hour, runs on every pull request and nightly on main instead.
 #
 #   ingestion    the ingestion member alone: it installs only axelrod-ingest, so it cannot lean on the world model, and its
 #                own tests cover every line and branch of its own source
@@ -17,6 +18,9 @@ on:
   pull_request:
   push:
     branches: [main]
+  schedule:
+    - cron: "0 7 * * *"                      # nightly on main: world_model over what was merged that day
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -45,6 +49,8 @@ jobs:
 
   world_model:
     name: world_model
+    # not on a push to main: the pull request ran it, and a deploy waits for this workflow
+    if: github.event_name != 'push'
     runs-on: ubuntu-latest
     # the suite outgrew 75 minutes under coverage (API v1, the construction rounds, the golden harness)
     timeout-minutes: 150

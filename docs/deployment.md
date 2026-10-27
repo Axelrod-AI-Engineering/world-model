@@ -125,7 +125,7 @@ Railway requires every IaC repository that targets an environment with named par
 
 ## Releasing
 
-**A merge to `main` is a release.** The `world-model` service is linked to this repository's `main` branch (`.railway/railway.ts`, `source: github(...)`), so Railway builds the `Dockerfile` and deploys every push to `main` on its own. There is no upload step. Work on a branch, open a pull request, and merge it when it is ready to go live. The **Tests** workflow (`.github/workflows/tests.yml`) runs the unit tests on every pull request. It does not hold back a deploy; Railway's check suites are off.
+**A merge to `main` is a release.** The `world-model` service is linked to this repository's `main` branch (`.railway/railway.ts`, `source: github(...)`), so Railway builds the `Dockerfile` and deploys every push to `main` on its own. There is no upload step. Work on a branch, open a pull request, and merge it when it is ready to go live. The **Tests** workflow (`.github/workflows/tests.yml`) holds back a deploy: Railway waits for its checks on the pushed commit (`checkSuites: true`) and skips the deploy if one fails. On a push to `main` those are the fast jobs, about two minutes: `ingestion`, `repo` and `deploy`, which boots the image and restarts it (see [Before a deploy](#before-a-deploy)). The `world_model` suite, over an hour, runs on every pull request and nightly on `main`, so merge a pull request only when it passed.
 
 **Changing the infrastructure** (`.railway/railway.ts`: the service's settings, variables, volume, domain, or source) needs a Railway Admin on the Axelrod project. Apply it by hand, after review:
 
@@ -181,8 +181,8 @@ Emily's and Sally's research (everything under `data/`) is never uploaded (`.git
 
 ### Before a deploy
 
-Railway builds and deploys every push to `main`. Every failed deploy so far (Oct 10–26) built fine and then failed to
-boot, so the `deploy` CI job checks the boot, not just the code:
+Railway builds and deploys every push to `main`, once that commit's checks pass. Every failed deploy so far (Oct 10–26)
+built fine and then failed to boot, so the `deploy` CI job checks the boot, not just the code, and a deploy waits for it:
 
 | Check | Catches | Where |
 |---|---|---|
