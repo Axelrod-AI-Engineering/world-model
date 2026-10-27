@@ -17,6 +17,8 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 DEFAULT_TENANT = "default"
+SYNC_OPERATION = "lake-sync"                  # the world model's lake sync keeps its ledger as these idempotency records
+SYNC_READABLE = ("stored", "extracted")       # the statuses of a document the lake sync reads
 
 
 def content_id(data: bytes) -> str:
@@ -252,6 +254,12 @@ class LakeStore(ABC):
     def count_chunks(self, tenant: str, doc_ids: list[str] | None = None) -> dict[str, int]:
         """Chunks per document in one read: for `doc_ids`, every id (0 when it has none); for None, every document that has
         any."""
+
+    @abstractmethod
+    def model_progress(self, tenant: str, doc_ids: list[str]) -> dict[str, dict]:
+        """How far each document got toward a world model, in two reads: `imported_items` and `last_imported_at` from
+        the imports of bundles made from it, and `sync`, the lake sync's ledger entries for it (`world_model_id`,
+        `outcome`, `at`), oldest first. Every id is a key, with 0, None and [] when nothing happened to it."""
 
     @abstractmethod
     def put_mentions(self, tenant: str, doc_id: str, mentions: list[Mention]) -> None: ...

@@ -11,6 +11,7 @@ clients. Recognition, extraction and bundles are out of scope except as read-onl
 - [The tabs](#the-tabs)
 - [Staying current](#staying-current)
 - [Updating the lake](#updating-the-lake)
+- [Reaching the model](#reaching-the-model)
 - [Routes](#routes)
 - [Safety](#safety)
 - [In the code](#in-the-code)
@@ -37,7 +38,7 @@ live refresh, `n` marks new rows as seen (none of them while typing in a field).
 
 | Tab | Shows |
 |---|---|
-| **1 Lake** | The tenant (a picker over the lake's tenants), the counts from `stats`, and documents by status, type and language. A table of documents (file name or title, status, type, language, published date and its source, period, pages, chunks, size, ingested time) with filters, sort by ingested or event time, and paging. A row opens the document, with **Reprocess**, **Delete** and **Download raw file**: its metadata (type and reason, how it was dated, decoded, OCR, yen evidence, manifest and hash match, `shared_origin`), status and error, the text with chunk boundaries drawn faintly and each chunk's ordinal and page, the chunks list (each has "similar"), mention and signal counts, and a download of the raw file |
+| **1 Lake** | The tenant (a picker over the lake's tenants), the counts from `stats`, and documents by status, type and language. A table of documents (file name or title, status, where it stands with the world model, type, language, published date and its source, period, pages, chunks, size, ingested time) with filters, sort by ingested or event time, and paging. A row opens the document, with **Reprocess**, **Delete** and **Download raw file**: its metadata (type and reason, where it stands with the world model, how it was dated, decoded, OCR, yen evidence, manifest and hash match, `shared_origin`), status and error, the text with chunk boundaries drawn faintly and each chunk's ordinal and page, the chunks list (each has "similar"), mention and signal counts, and a download of the raw file |
 | **2 Add files** | Drop or pick files or a folder, set tenant, source, source type, published date and an optional world view file (the world model's export or a bare view). Files wait in a queue and go, a few at a time ("jobs submitted at once"), to `POST /v1/ingest?mode=async`: the service answers `202` with a job at once and the row polls `GET /v1/jobs/{id}` (every 1 s, then 2 s, then 5 s), so a ten-minute OCR file shows `running… 6m`, not a timeout. Each row shows its own state (queued, sending, waiting, running, then new or already stored, or failed), the document's status, warnings, per-stage timings and a link to the document. Without a world view file an empty one is used: the document is stored, parsed, typed, chunked and embedded, but nothing is recognized. See [Updating the lake](#updating-the-lake) |
 | **3 Search** | A query in keyword, prefix, semantic or hybrid mode (graph, and model-name prefix hits, need a world view file). Each hit shows score, mode, the `why` list, title, ordinal, page, event time, and the chunk with the query's words highlighted. "Compare modes" runs the query in every available mode in columns. "similar" finds passages like a chunk |
 | **4 Stage debugger** | A dry run of stages 1 to 5 on an uploaded file or a stored document, written nowhere. One collapsible card per stage with its decision and timing: **Store** (content id, SHA-256, size, MIME, whether the lake has it); **Parse** (format, parser version, segments and spans, decoding, OCR, the normalized text by page; a `ParseError` is a failed card); **Type, date, language, currency** (type and reason, substance, published date and the rule, period, language, yen and its evidence; an excluded or `needs_ocr` document stops here, plainly); **Chunk** (every chunk with page, span, weight and sentence boundaries, a weight histogram against `CHUNK_CHARS`, and a flag on chunks cut from a long sentence); **Index and embed** (index terms as tokenized, the note that FTS5 applies Porter stemming itself, the embedder, each vector's norm and first eight components, the top three nearest stored passages per chunk); **Duplicates** (the fingerprint, containment against the tenant's stored documents with the same period end, and whether it would join a `shared_origin` group and who would be primary) |
@@ -60,7 +61,8 @@ The Lake tab keeps itself up to date; nothing needs a reload.
 - **Recent activity.** The latest 8 ingests (`GET /v1/lake/{tenant}/activity`): time, file, status, chunks and the error, which is
   highlighted when the file failed. Per-stage timings are not stored with a document, so they show only for files ingested from
   this browser (the Add files queue keeps them).
-- **Cost.** Chunk counts for a page of rows are one `GROUP BY` (`LakeStore.count_chunks`), not a read per row; the table is paged
+- **Cost.** Chunk counts for a page of rows are one `GROUP BY` (`LakeStore.count_chunks`) and the model column two reads
+  (`LakeStore.model_progress`), not a read per row; the table is paged
   (50, 100 or 200 rows), so 700 or 70,000 documents draw the same number of rows.
 
 ## Updating the lake
@@ -83,6 +85,23 @@ The Lake tab keeps itself up to date; nothing needs a reload.
   imported, is kept, because something else depends on it. The answer says how many were removed and how many kept.
 - **Tenants.** The picker lists the lake's tenants, each with its document count (`GET /v1/tenants`); typing a new name starts an
   empty tenant, which exists once a document is added to it.
+
+## Reaching the model
+
+Adding a file stores it; the world model reads it on its own (below), and the **model** column says how far it got, from
+what the lake holds (`LakeStore.model_progress`: the imports of bundles made from the document, and the lake sync's ledger):
+
+| Shows | Means |
+|---|---|
+| **imported · N items** | N items reached the world model. Its review policy decides what applies; the rest waits in the model's review queue |
+| **waiting** | Readable, not read against the model yet. The sync runs about every 30 s and waits while an update is in review |
+| **nothing new** | Read against the model; nothing in it changes the model |
+| **read on upload** | Uploaded through the world model's API, which read it and proposes its changes from there |
+| a status (`failed`, …) | The sync found the document in that status and left it |
+| (blank) | Excluded, failed or needing OCR before any sync: the model will not read it |
+
+The column moves on its own: an import changes the lake's counts, so the next poll redraws the table. The document view
+lists each world model's ledger entry under **World model**.
 
 ## Routes
 
@@ -131,7 +150,7 @@ Unfiltered tables are paged by the store; a filter reads the tenant's documents 
 | `console/index.html`, `app.js`, `app.css` | the page (package data, in the wheel and the Docker image) |
 | `debug.py` | `dry_run`, the six stage cards |
 | `pipeline.py` | `analyze`, `derived_meta`, `typed_source`, `upload_date`: the stage 3 steps shared with `process` |
-| `lake/` | `LakeStore.tenants()`, `overview()`, `count_chunks()` and `delete_bundles_of()`, each with its data service route (`/v1/lake/overview`, `/chunk-counts`, `DELETE /documents/{id}/bundles`) and SQLite and `RemoteLake` versions |
+| `lake/` | `LakeStore.tenants()`, `overview()`, `count_chunks()`, `model_progress()` and `delete_bundles_of()`, each with its data service route (`/v1/lake/overview`, `/chunk-counts`, `/model-progress`, `DELETE /documents/{id}/bundles`) and SQLite and `RemoteLake` versions |
 | `tests/test_console.py`, `tests/test_debug.py` | routes, auth, filters, the dry run's equality and no-write checks, a smoke test that every route `app.js` calls exists |
 
 ## Ingest jobs

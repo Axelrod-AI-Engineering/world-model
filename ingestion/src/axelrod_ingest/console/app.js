@@ -29,6 +29,18 @@ const show = (el, ...kids) => { clear(el).append(...kids.flat().filter((k) => k 
 const loading = (what) => h("div", { class: "loading" }, `Loading ${what}...`);
 const empty = (what) => h("div", { class: "empty" }, what);
 const chip = (label) => h("span", { class: `chip ${label}` }, label);
+// Where a document stands with the world model (the lake's imports and the lake sync's ledger; see console.py `_model`).
+const MODEL = {
+  imported: (m) => [`imported · ${m.items} item${m.items === 1 ? "" : "s"}`, `Reached the world model ${when(m.at)}. The model's review policy decides what applies; the rest waits in its review queue.`],
+  waiting: () => ["waiting", "Not read against the world model yet. Its lake sync reads new files about every 30 s, and waits while an update is in review."],
+  no_signals: (m) => ["nothing new", `Read against the world model ${when(m.at)}: nothing in it changes the model.`],
+  read_elsewhere: (m) => ["read on upload", `Read against the world model when it was uploaded through the API (${when(m.at)}); its changes are proposed from there.`],
+};
+const modelChip = (m) => {
+  if (!m || !m.state) return "";
+  const [text, title] = (MODEL[m.state] || ((x) => [x.state, `The lake sync stopped at ${when(x.at)}: the document is ${x.state}.`]))(m);
+  return h("span", { class: `chip m-${m.state}`, title }, text);
+};
 const when = (t) => (t ? String(t).replace("T", " ").replace(/(\.\d+)?(\+00:00|Z)$/, "Z") : "");
 const secs = (s) => (s < 0.001 ? "<1 ms" : s < 1 ? `${(s * 1000).toFixed(0)} ms` : `${s.toFixed(2)} s`);
 const bytes = (n) => (n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1048576).toFixed(1)} MB`);
@@ -273,13 +285,13 @@ async function loadTable({ quiet = false } = {}) {
       "data-id": d.id, onclick: () => openDoc(state.tenant, d.id) },
       h("td", { class: "wrap" }, h("span", { class: "dot", title: "new since you last looked" }), d.title || d.filename,
         d.title && d.title !== d.filename ? h("div", { class: "muted mono" }, d.filename) : null),
-      h("td", {}, chip(d.status)), h("td", {}, d.type), h("td", {}, d.language),
+      h("td", {}, chip(d.status)), h("td", {}, modelChip(d.model)), h("td", {}, d.type), h("td", {}, d.language),
       h("td", { class: "mono opt" }, d.published_at ? d.published_at.slice(0, 10) : "", d.published_source ? h("div", { class: "muted" }, d.published_source) : null),
       h("td", { class: "mono opt" }, d.period), h("td", { class: "num opt" }, d.pages ?? ""), h("td", { class: "num" }, d.chunks),
       h("td", { class: "num" }, bytes(d.size)), h("td", { class: "mono" }, when(d.ingested_at))));
     const last = Math.min(r.total, L.offset + r.documents.length);
     show($("table"),
-      h("table", {}, h("thead", {}, h("tr", {}, th("document"), th("status"), th("type"), th("lang"), th("published", "opt"), th("period", "opt"),
+      h("table", {}, h("thead", {}, h("tr", {}, th("document"), th("status"), th("model"), th("type"), th("lang"), th("published", "opt"), th("period", "opt"),
         th("pages", "num opt"), th("chunks", "num"), th("size", "num"), th("ingested"))), h("tbody", {}, rows)),
       h("div", { class: "pager" },
         h("button", { type: "button", disabled: L.offset === 0, onclick: () => { L.offset = Math.max(0, L.offset - L.limit); L.cur = -1; loadTable(); } }, "Previous"),
@@ -351,7 +363,7 @@ async function openDoc(tenant, id, { scroll = true } = {}) {
     const drawList = () => drawChunkList(listBox, r.chunks, view, similar, tenant, id, drawList);
     show($("detail"),
       h("h2", {}, d.title || d.filename),
-      h("div", { class: "row" }, chip(d.status), h("span", { class: "mono muted" }, id), raw, reprocess, remove,
+      h("div", { class: "row" }, chip(d.status), modelChip(r.model), h("span", { class: "mono muted" }, id), raw, reprocess, remove,
         h("a", { onclick: () => debugStored(tenant, id) }, "Run the stage debugger on it")),
       d.error ? h("div", { class: "error" }, d.error) : null,
       h("div", { class: "cols" },
@@ -361,7 +373,9 @@ async function openDoc(tenant, id, { scroll = true } = {}) {
         section("OCR", { engine: (m.ocr || {}).engine, version: (m.ocr || {}).version, pages_read: (m.ocr || {}).pages ? JSON.stringify(m.ocr.pages) : "",
           needs_ocr: (m.needs_ocr || []).join(", ") }),
         section("Yen", (m.currency || {}).yen), section("Manifest", m.manifest), section("Shared origin", m.shared_origin),
-        section("Extraction", { language: m.language, chunks: r.chunks.length, mentions: r.mentions, bundles: r.bundles.length, signals: r.signals })),
+        section("Extraction", { language: m.language, chunks: r.chunks.length, mentions: r.mentions, bundles: r.bundles.length, signals: r.signals }),
+        section("World model", { items_imported: r.model.imported_items || "", last_imported: when(r.model.last_imported_at),
+          lake_sync: r.model.sync.map((x) => `${x.world_model_id}: ${x.outcome} ${when(x.at)}`).join("; ") })),
       h("h2", {}, `Text (${r.text.length} characters)`), textPager, h("div", { class: "panel" }, textBox),
       h("h2", {}, `Chunks (${r.chunks.length})`), listBox, similar);
     drawText(); drawList();

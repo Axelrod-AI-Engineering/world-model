@@ -5,13 +5,14 @@ LLM cache; and every read comes back in a deterministic order."""
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from datetime import timedelta
 
 import pytest
 
 from axelrod_ingest.lake.sqlite import SQLiteLake, fts_query
-from axelrod_ingest.lake.store import BundleRecord, ImportRecord, Mention
+from axelrod_ingest.lake.store import SYNC_OPERATION, BundleRecord, IdempotencyRecord, ImportRecord, Mention
 from tests.lake.conftest import T0, add_doc, make_chunks, make_doc
 
 DAY = timedelta(days=1)
@@ -444,6 +445,44 @@ def test_count_chunks_is_one_read_for_many_documents(lake):
     assert lake.count_chunks("acme", [a.id, b.id, c.id, "gone"]) == {a.id: 3, b.id: 1, c.id: 0, "gone": 0}
     assert lake.count_chunks("acme") == {a.id: 3, b.id: 1}
     assert lake.count_chunks("acme", []) == {} and lake.count_chunks("nobody") == {}
+
+
+def test_model_progress_reads_the_imports_and_the_lake_syncs_ledger(lake):
+    a, b, c = (add_doc(lake, x, ["t"]).id for x in (b"a", b"b", b"c"))
+    lake.put_bundle(bundle("one", [a]))
+    lake.put_bundle(bundle("both", [a, b]))
+    lake.put_bundle(bundle("bravo's", [a], tenant="bravo"))
+    lake.put_import(ImportRecord(tenant="acme", bundle_id="one", imported_at=T0, update_id="U1", item_ids=["i1", "i2"]))
+    lake.put_import(ImportRecord(tenant="acme", bundle_id="both", imported_at=T0 + timedelta(days=1), update_id=None,
+                                 item_ids=["i3"]))
+    lake.put_import(ImportRecord(tenant="bravo", bundle_id="bravo's", imported_at=T0, update_id=None, item_ids=["x"]))
+
+    def note(org, wm, key, outcome, at, operation=SYNC_OPERATION):
+        lake.put_idempotency(IdempotencyRecord(org=org, world_model_id=wm, operation=operation, key=key, fingerprint=outcome,
+                                               status=200, body=json.dumps({"outcome": outcome}), headers={}, created_at=at))
+    note("acme", "wm2", c, "no_signals", T0 + timedelta(days=2))
+    note("acme", "wm1", c, "imported", T0)
+    note("acme", "wm1", b, "x", T0, operation="create-changes")                 # another operation's record
+    note("bravo", "wm1", a, "imported", T0)                                     # another tenant's
+    got = lake.model_progress("acme", [a, b, c, "gone"])
+    day = timedelta(days=1)
+    assert got[a] == {"imported_items": 3, "last_imported_at": (T0 + day).isoformat(), "sync": []}
+    assert got[b] == {"imported_items": 1, "last_imported_at": (T0 + day).isoformat(), "sync": []}
+    assert got[c]["imported_items"] == 0 and [(x["world_model_id"], x["outcome"]) for x in got[c]["sync"]] == [
+        ("wm1", "imported"), ("wm2", "no_signals")]
+    assert got["gone"] == {"imported_items": 0, "last_imported_at": None, "sync": []}
+    assert lake.model_progress("acme", []) == {}
+
+
+def test_model_progress_takes_more_ids_than_one_statement_binds(local_lake):
+    lake = local_lake
+    ids = [f"id{k}" for k in range(1200)]
+    lake.put_idempotency(IdempotencyRecord(org="acme", world_model_id="wm", operation=SYNC_OPERATION, key="id1100",
+                                           fingerprint="no_signals", status=200, body='{"outcome": "no_signals"}',
+                                           headers={}, created_at=T0))
+    got = lake.model_progress("acme", ids)
+    assert len(got) == 1200 and got["id1100"]["sync"][0]["outcome"] == "no_signals"
+    assert sum(len(v["sync"]) for v in got.values()) == 1
 
 
 def test_count_chunks_takes_more_ids_than_one_statement_binds(local_lake):

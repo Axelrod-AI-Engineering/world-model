@@ -72,6 +72,9 @@ td.wrap { word-break: break-word; }
 .chip.failed { color: var(--bad); }
 .chip.stopped, .chip.excluded, .chip.needs_ocr { color: var(--warn); }
 .chip.skipped, .chip.stored { color: var(--muted); }
+.chip[class*=" m-"] { white-space: nowrap; }
+.chip.m-imported { color: var(--accent); border-color: var(--accent); }
+.chip.m-waiting, .chip.m-no_signals, .chip.m-read_elsewhere { color: var(--muted); }
 .pager { display: flex; gap: 12px; align-items: center; margin: 8px 0; color: var(--muted); }
 dl.kv { display: grid; grid-template-columns: max-content 1fr; gap: 2px 16px; margin: 0; }
 dl.kv dt { color: var(--muted); }

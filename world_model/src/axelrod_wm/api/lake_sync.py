@@ -38,12 +38,12 @@ from typing import Any
 
 import anyio
 
-from axelrod_ingest.lake.store import IdempotencyRecord
+from axelrod_ingest.lake.store import SYNC_OPERATION, SYNC_READABLE, IdempotencyRecord
 
 logger = logging.getLogger(__name__)
 
-OPERATION = "lake-sync"
-READABLE = ("stored", "extracted")
+OPERATION = SYNC_OPERATION
+READABLE = SYNC_READABLE
 DEFAULT_SECONDS = 30.0
 MAX_BACKOFF = 600.0
 PAGE = 500

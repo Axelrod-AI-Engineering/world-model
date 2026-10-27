@@ -182,6 +182,9 @@ class RemoteLake(LakeStore):
     def count_chunks(self, tenant: str, doc_ids: list[str] | None = None) -> dict[str, int]:
         return self._call("POST", "/chunk-counts", read=True, json={"tenant": tenant, "doc_ids": doc_ids})
 
+    def model_progress(self, tenant: str, doc_ids: list[str]) -> dict[str, dict]:
+        return self._call("POST", "/model-progress", read=True, json={"tenant": tenant, "doc_ids": doc_ids})
+
     def put_mentions(self, tenant: str, doc_id: str, mentions: list[Mention]) -> None:
         self._call("PUT", f"/documents/{doc_id}/mentions", params={"tenant": tenant},
                    json={"mentions": [m.model_dump(mode="json") for m in mentions]})
