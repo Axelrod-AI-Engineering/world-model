@@ -179,6 +179,20 @@ To switch logins, **Sign out** (☰ menu, or `/logout`) and sign in again, or us
 
 Emily's and Sally's research (everything under `data/`) is never uploaded (`.gitignore`, `.dockerignore`). On the hosted demo, import it with the file picker; Sally's daily files can be chosen several at a time.
 
+### Before a deploy
+
+Railway builds and deploys every push to `main`. Every failed deploy so far (Oct 10–26) built fine and then failed to
+boot, so the `deploy` CI job checks the boot, not just the code:
+
+| Check | Catches | Where |
+|---|---|---|
+| Every set in the model's state is written sorted, through the hash's own path | a state hash that follows the process's set order, so a restart cannot restore (Oct 26, three failed deploys) | `world_model/tests/unit/repo/test_set_fields.py` |
+| A state with every set filled hashes, and saves and restores, the same under three hash seeds | the same, end to end | `world_model/tests/integration/test_hashseed_determinism.py` |
+| The Dockerfile's image boots as Railway runs it (dev profile, sign-in, logins over compartments, an API key) on synthetic client content with a Mac's junk files planted; healthy within 300 s; writes versions; restarts twice under other hash seeds and resumes the same version and state hash | an image that does not start, a slow startup (Oct 22), junk on the volume (Oct 22), a restart that does not resume | `scripts/deploy/boot_check.py` |
+
+Client content never passes through CI, so it is checked before it is copied (`.railway/push-client-content.sh`, below).
+Run the boot check locally with `docker build -t world-model:boot . && python3 scripts/deploy/boot_check.py --image world-model:boot`.
+
 ### Client content
 
 Client scenarios, worlds, configs, and construction pages are not in the repository or the image (Oct 21). They live in a client root that mirrors the repository's layout:
@@ -206,7 +220,7 @@ A path in a client `scenario.yaml` (`construction_dir`, `taxonomy_dir`, `seeds`,
 
 Then set `WORLD_MODEL_SCENARIO` to `<unified>` (the main engine), and `WORLD_MODEL_LOGINS` to `<client_a>:<password>:<compartment_a>,<client_b>:<password>:<compartment_b>`. Two worlds that define the same id differently stop the load with an error naming both files; make the shared definition identical in each, or move it to one world.
 
-A login in `WORLD_MODEL_LOGINS` whose scenario is not under any client root opens the main engine, with a warning in the log, instead of stopping the server. To put a client's content on dev, copy its folders to `/app/var/clients` on the volume (for example `COPYFILE_DISABLE=1 tar cz --exclude='._*' --exclude='.DS_Store' -C data/clients scenarios worlds configs docs | railway ssh -s world-model -e dev -- tar xz -C /app/var/clients`, after `railway ssh keys add`), then redeploy. The two flags keep a Mac's resource forks out of the archive: `._*.yaml` files from a Mac copy took dev down on Oct 22 (a loader fix that ignores hidden files is in PR #41).
+A login in `WORLD_MODEL_LOGINS` whose scenario is not under any client root opens the main engine, with a warning in the log, instead of stopping the server. To put a client's content on dev, run `.railway/push-client-content.sh` (after `railway ssh keys add`), then redeploy. It checks the folder first (`scripts/deploy/check_client_content.py`: every YAML file decodes and parses, and the service boots on it with a login for every scenario, within 300 s) and stops on a failure; then it copies `scenarios`, `worlds`, `configs` and `docs` to `/app/var/clients` without a Mac's resource forks: `._*.yaml` files from a Mac copy took dev down on Oct 22 (the loaders have skipped hidden files since PR #41).
 
 To load client content on dev, copy the folder onto the volume (for example `railway ssh`, then `tar` into `/app/var/clients`) and restart; this is done by hand, outside the infrastructure code. The non-secret ids that name client scenarios stay in `configs/world_model.dev.toml` (`[compartments]`, `[auth.owners]`): a compartment whose scenario is absent is simply not served.
 
