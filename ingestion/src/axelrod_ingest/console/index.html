@@ -68,8 +68,9 @@
     </section>
 
     <section id="tab-add" class="tab" hidden>
-      <p class="muted">Documents go through the whole pipeline: stored, parsed, typed, chunked and embedded. Without a world
-        view file an empty one is used, so <strong>nothing is recognized</strong> and no signals are extracted.</p>
+      <p class="muted">Files go into tenant <strong id="a-tenant" class="mono"></strong> (change it at the top). Each is stored,
+        parsed, typed, chunked and embedded, and the world model then reads it by itself within about 30 seconds: the Lake's
+        <strong>model</strong> column shows how far it got.</p>
       <form id="add-form" class="stack">
         <div id="drop" class="drop" tabindex="0">Drop files or a folder here, or
           <button type="button" id="pick">choose files</button> or <button type="button" id="pick-dir">choose a folder</button>
@@ -77,16 +78,20 @@
           <input id="files" type="file" multiple hidden>
           <input id="dir" type="file" webkitdirectory hidden></div>
         <div class="row">
-          <label>tenant <input id="a-tenant" class="mono" autocomplete="off"></label>
           <label>source <input id="a-source" autocomplete="off"></label>
           <label>source type <select id="a-type"></select></label>
           <label>published <input id="a-published" type="date"></label>
           <label>jobs submitted at once <select id="a-conc"><option>1</option><option>2</option><option>4</option></select></label>
         </div>
-        <div class="row">
-          <label>world view <input id="a-view" type="file" accept=".json,application/json"></label>
-          <span id="a-view-note" class="muted">none: an empty world view</span>
-        </div>
+        <details class="advanced">
+          <summary>Read against a world view file instead</summary>
+          <p class="muted">Recognizes the view's names while ingesting, as the world model's own upload does. Not needed: without
+            one, the world model's lake sync reads each new file against the model.</p>
+          <div class="row">
+            <label>world view <input id="a-view" type="file" accept=".json,application/json"></label>
+            <span id="a-view-note" class="muted">none: the world model reads the file itself</span>
+          </div>
+        </details>
         <div class="row">
           <button type="submit" class="primary" id="a-send" disabled>Ingest</button>
           <button type="button" id="a-cancel" disabled title="Stops sending files. A job the service already has cannot be cancelled: it finishes.">Cancel</button>
