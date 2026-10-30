@@ -124,7 +124,7 @@ async function enter() {
   refresh();
 }
 function setTenant(t) {
-  state.tenant = t; $("tenant").value = t; $("a-tenant").value = t;
+  state.tenant = t; $("tenant").value = t; $("a-tenant").textContent = t;
   try { localStorage.setItem("ingest-tenant", t); } catch (e) { /* no storage: the next visit starts at the first tenant */ }
   showTenantNote();
 }
@@ -228,7 +228,12 @@ async function loadSummary(quiet) {
     if (L.baseline === null) L.baseline = s.last_ingested_at || EPOCH;
     state.counts[state.tenant] = s.stats.documents; showTenantNote();
     const stat = (n, label) => h("div", { class: "stat" }, h("b", {}, n), h("span", {}, label));
-    const count = (title, o) => h("div", {}, h("b", {}, title), Object.entries(o).map(([k, v]) => h("span", { class: "mono" }, `${k} ${v}`)));
+    const count = (title, o) => h("div", {}, h("b", {}, title), Object.entries(o).map(([k, v]) => {
+      const sel = $(`f-${title}`), on = sel.value === k;
+      if (k === "unknown") return h("span", { class: "mono facet-plain" }, `${k} ${v}`);       // no filter value selects it
+      return h("button", { type: "button", class: `facet${on ? " on" : ""}`, "aria-pressed": String(on), title: on ? "Show every document" : `Show only ${title} ${k}`,
+        onclick: () => { sel.value = on ? "" : k; L.offset = 0; L.cur = -1; loadTable(); loadSummary(true); } }, `${k} ${v}`);
+    }));
     show($("summary"),
       h("div", { class: "stats" }, Object.entries(s.stats).map(([k, v]) => stat(v, k)), stat(`${s.embedder.name} / ${s.embedder.dim}`, "embedder")),
       h("div", { class: "counts" }, count("status", s.by_status), count("type", s.by_type), count("language", s.by_language)));
@@ -283,16 +288,16 @@ async function loadTable({ quiet = false } = {}) {
     const th = (t, cls) => h("th", { class: cls }, t);
     const rows = r.documents.map((d, k) => h("tr", { class: `pick${L.open === d.id ? " sel" : ""}${d.ingested_at > L.baseline ? " fresh" : ""}${L.cur === k ? " cur" : ""}`,
       "data-id": d.id, onclick: () => openDoc(state.tenant, d.id) },
-      h("td", { class: "wrap" }, h("span", { class: "dot", title: "new since you last looked" }), d.title || d.filename,
+      h("td", { class: "wrap" }, h("span", { class: "dot", title: "new since you last looked" }), h("span", { class: "clamp", title: d.title || d.filename }, d.title || d.filename),
         d.title && d.title !== d.filename ? h("div", { class: "muted mono" }, d.filename) : null),
-      h("td", {}, chip(d.status)), h("td", {}, modelChip(d.model)), h("td", {}, d.type), h("td", {}, d.language),
+      h("td", {}, chip(d.status)), h("td", {}, modelChip(d.model)), h("td", { class: "narrow" }, d.type), h("td", { class: "narrow" }, d.language),
       h("td", { class: "mono opt" }, d.published_at ? d.published_at.slice(0, 10) : "", d.published_source ? h("div", { class: "muted" }, d.published_source) : null),
-      h("td", { class: "mono opt" }, d.period), h("td", { class: "num opt" }, d.pages ?? ""), h("td", { class: "num" }, d.chunks),
-      h("td", { class: "num" }, bytes(d.size)), h("td", { class: "mono" }, when(d.ingested_at))));
+      h("td", { class: "mono opt" }, d.period), h("td", { class: "num opt" }, d.pages ?? ""), h("td", { class: "num narrow" }, d.chunks),
+      h("td", { class: "num narrow" }, bytes(d.size)), h("td", { class: "mono" }, when(d.ingested_at))));
     const last = Math.min(r.total, L.offset + r.documents.length);
     show($("table"),
-      h("table", {}, h("thead", {}, h("tr", {}, th("document"), th("status"), th("model"), th("type"), th("lang"), th("published", "opt"), th("period", "opt"),
-        th("pages", "num opt"), th("chunks", "num"), th("size", "num"), th("ingested"))), h("tbody", {}, rows)),
+      h("table", {}, h("thead", {}, h("tr", {}, th("document"), th("status"), th("model"), th("type", "narrow"), th("lang", "narrow"), th("published", "opt"), th("period", "opt"),
+        th("pages", "num opt"), th("chunks", "num narrow"), th("size", "num narrow"), th("ingested"))), h("tbody", {}, rows)),
       h("div", { class: "pager" },
         h("button", { type: "button", disabled: L.offset === 0, onclick: () => { L.offset = Math.max(0, L.offset - L.limit); L.cur = -1; loadTable(); } }, "Previous"),
         h("span", { class: "mono" }, `${L.offset + 1}-${last} of ${r.total}`),
@@ -313,6 +318,11 @@ function moveCur(step) {
   rows[L.cur].scrollIntoView({ block: "nearest" });
 }
 
+// The open document sits in a drawer over the right of the page, so the table stays where it was.
+function closeDoc() {
+  L.open = null; show($("detail"));
+  for (const tr of document.querySelectorAll("#table tbody tr.sel")) tr.classList.remove("sel");
+}
 function section(title, obj) {
   const rows = Object.entries(obj || {}).filter(([, v]) => v !== "" && v !== null && v !== undefined);
   if (!rows.length) return null;
@@ -362,7 +372,8 @@ async function openDoc(tenant, id, { scroll = true } = {}) {
     const drawText = () => drawChunks(textBox, textPager, r.text, r.chunks, view, "chunkPage", 25, drawText);
     const drawList = () => drawChunkList(listBox, r.chunks, view, similar, tenant, id, drawList);
     show($("detail"),
-      h("h2", {}, d.title || d.filename),
+      h("div", { class: "drawer-head" }, h("h2", { class: "clamp", title: d.title || d.filename }, d.title || d.filename),
+        h("button", { type: "button", class: "close", title: "Close (Esc)", "aria-label": "Close", onclick: closeDoc }, "×")),
       h("div", { class: "row" }, chip(d.status), modelChip(r.model), h("span", { class: "mono muted" }, id), raw, reprocess, remove,
         h("a", { onclick: () => debugStored(tenant, id) }, "Run the stage debugger on it")),
       d.error ? h("div", { class: "error" }, d.error) : null,
@@ -379,7 +390,7 @@ async function openDoc(tenant, id, { scroll = true } = {}) {
       h("h2", {}, `Text (${r.text.length} characters)`), textPager, h("div", { class: "panel" }, textBox),
       h("h2", {}, `Chunks (${r.chunks.length})`), listBox, similar);
     drawText(); drawList();
-    if (scroll) $("detail").scrollIntoView({ behavior: "smooth", block: "start" });
+    if (scroll) $("detail").scrollTop = 0;
   } catch (err) { show($("detail"), failure(err)); }
 }
 function pager(box, total, per, view, key, redraw) {
@@ -446,7 +457,7 @@ function worldViewFile(input, note) {
 }
 function syncView() {
   const v = state.view;
-  $("a-view-note").textContent = v ? `${v.name}: ${v.entities} entities` : "none: an empty world view";
+  $("a-view-note").textContent = v ? `${v.name}: ${v.entities} entities` : "none: the world model reads the file itself";
   $("s-view-note").textContent = v ? `${v.name}: ${v.entities} entities` : "none: graph mode and model-name prefix hits are off";
   const graph = $("s-mode").querySelector("[value=graph]");
   graph.disabled = !v;
@@ -580,7 +591,7 @@ async function sendOne(it, tenant) {
   await follow(it, tenant);
 }
 async function runQueue() {
-  const tenant = $("a-tenant").value.trim();
+  const tenant = state.tenant;
   if (Q.running) return;
   if (!tenant) { toast("A tenant is required."); return; }
   Q.running = true; Q.cancel = false; drawQueue();
@@ -588,7 +599,7 @@ async function runQueue() {
     while (!Q.cancel) {
       const it = Q.items.find((i) => i.state === "queued");
       if (!it) return;
-      it.state = "sending"; drawQueue();
+      it.state = "sending"; it.tenant = tenant; drawQueue();
       await sendOne(it, tenant);
       drawQueue();
     }
@@ -652,7 +663,7 @@ function paintQueue() {
       const r = it.result;
       return h("tr", {}, h("td", { class: "mono wrap" }, it.path), h("td", {}, chipFor(it)), h("td", {}, r ? chip(r.status) : null),
         h("td", { class: `wrap ${it.state === "failed" ? "error" : "muted"}` }, it.error || detailOf(it)),
-        h("td", {}, r ? h("a", { onclick: () => openDoc($("a-tenant").value.trim(), r.id) }, "open in Lake") : null));
+        h("td", {}, r ? h("a", { onclick: () => openDoc(it.tenant || state.tenant, r.id) }, "open in Lake") : null));
     }))),
     hidden ? h("div", { class: "muted" }, `${hidden} more not shown (finished earlier or still waiting)`) : null);
 }
@@ -681,8 +692,9 @@ function hitList(hits, query, tenant, mode) {
         h("span", {}, (x.why || []).join(", "))));
     }
     return h("div", { class: "hit" },
+      h("div", { class: "hit-title", title: x.title || x.filename }, x.title || x.filename),
       h("div", { class: "head" }, h("span", { class: "mono" }, `score ${x.score}`), mode ? chip(mode) : null,
-        h("span", {}, (x.why || []).join(", ")), h("b", {}, x.title || x.filename),
+        h("span", {}, (x.why || []).join(", ")),
         h("span", { class: "mono" }, `#${x.ord}${x.page ? ` p.${x.page}` : ""}`), h("span", { class: "mono" }, when(x.event_time)),
         h("a", { onclick: () => openDoc(tenant, x.doc_id) }, "open"),
         h("button", { type: "button", class: "link", onclick: () => findSimilar(sim, tenant, x.doc_id, x.ord) }, "similar")),
@@ -856,7 +868,7 @@ function typing(ev) {
 }
 const KEYS = [["1 2 3 4", "Lake, Add files, Search, Stage debugger"], ["/", "Search"], ["j k", "Next or previous row in the Lake table"],
   ["Enter", "Open the highlighted row"], ["r", "Refresh the Lake now"], ["p", "Pause or resume the live refresh"],
-  ["n", "Mark new rows as seen"], ["?", "This list"], ["Esc", "Close a dialog"]];
+  ["n", "Mark new rows as seen"], ["?", "This list"], ["Esc", "Close the open document or a dialog"]];
 function toggleHelp() {
   const d = $("help");
   if (d.open) { d.close(); return; }
@@ -881,7 +893,7 @@ function init() {
   $("help-open").addEventListener("click", toggleHelp);
   $("tenant").addEventListener("change", () => { setTenant($("tenant").value.trim() || "default"); resetLake(); refresh(); });
   $("filters").addEventListener("submit", (ev) => { ev.preventDefault(); L.offset = 0; L.cur = -1; loadTable(); });
-  for (const id of ["f-status", "f-type", "f-language", "f-order", "f-dir"]) $(id).addEventListener("change", () => { L.offset = 0; L.cur = -1; loadTable(); });
+  for (const id of ["f-status", "f-type", "f-language", "f-order", "f-dir"]) $(id).addEventListener("change", () => { L.offset = 0; L.cur = -1; loadTable(); loadSummary(true); });
   $("f-limit").addEventListener("change", () => { L.limit = +$("f-limit").value; L.offset = 0; loadTable(); });
   $("live-toggle").addEventListener("click", togglePause);
   $("live-now").addEventListener("click", refreshNow);
@@ -913,6 +925,7 @@ function init() {
   }
   document.addEventListener("keydown", (ev) => {
     if (ev.ctrlKey || ev.metaKey || ev.altKey || typing(ev) || $("app").hidden || document.querySelector("dialog[open]") && ev.key !== "?") return;
+    if (ev.key === "Escape" && L.open) { closeDoc(); return; }
     if (ev.key === "/") { ev.preventDefault(); switchTab("search"); $("s-q").focus(); }
     if (ev.key === "?") toggleHelp();
     const tab = { 1: "lake", 2: "add", 3: "search", 4: "debug" }[ev.key];
