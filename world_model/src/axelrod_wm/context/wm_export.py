@@ -135,6 +135,13 @@ def epistemic_of_observation(o: dict) -> str:
     return "unknown"
 
 
+def _text(x: Any) -> str | None:
+    """A free-form note as one line of text: a {class, note} resolution reads "class: note"."""
+    if isinstance(x, dict):
+        return "; ".join(f"{k}: {v}" for k, v in x.items()) or None
+    return None if x is None else str(x)
+
+
 def _iso(t: Any) -> str | None:
     return t.isoformat() if isinstance(t, datetime) else (str(t) if t else None)
 
@@ -395,7 +402,7 @@ def wm_export(wm: Any, ltm: Any, *, world_model_id: str, label: str, version: in
         if cls == "assumed":
             assumptions.append({"assumption_id": f"assume:{sid}", "variable_id": sid, "name": sub.name,
                                 "assumed_value": _r(sub.prior.mean()), "reason": why or None,
-                                "replaced_by": spec.get("resolution"), "sources": []})
+                                "replaced_by": _text(spec.get("resolution")), "sources": []})
 
     # relations, views, paths
     non_driving: dict[str, set[str]] = {}

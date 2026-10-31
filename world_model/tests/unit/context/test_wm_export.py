@@ -79,6 +79,8 @@ def test_small_parsers():
     assert wx.parse_date("2026-06 (filed after results)") is None and wx.parse_date(None) is None
     assert wx._r("x") is None and wx._r(None) is None and wx._r(1.23456789) == 1.234568
     assert wx._iso(None) is None and wx._iso("2026-01-01") == "2026-01-01"
+    assert wx._text({"class": "targeted extraction", "note": "page 2"}) == "class: targeted extraction; note: page 2"
+    assert wx._text({}) is None and wx._text(None) is None
 
 
 class _NoQuantile:
