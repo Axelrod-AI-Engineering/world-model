@@ -54,6 +54,10 @@ def test_a_unit_string_splits_into_unit_scale_currency_and_flow(text, unit, scal
     ({"basis": "IFRS", "view": "customer_location"}, "", "region", "customer_location"),
     ({"basis": "IFRS geographic information"}, "", "region", None),
     ({"basis": "IFRS", "perimeter": "consolidated"}, "", "consolidated", None),
+    ({"basis": "IFRS", "perimeter": "consolidated Toyota Motor Corporation and subsidiaries"}, "reported actual",
+     "consolidated", None),
+    ({"basis": "operating income of consolidated subsidiaries", "perimeter": "subsidiaries"}, "", "subsidiary", None),
+    ({"basis": "IFRS", "perimeter": "listed subsidiaries"}, "", "subsidiary", None),
     ({"basis": "company reference table"}, "", None, None),
     (None, "", None, None),
 ])

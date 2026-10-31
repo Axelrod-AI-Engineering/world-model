@@ -106,9 +106,11 @@ def consolidation(scope: dict | None, kind: str) -> dict:
     s = scope or {}
     text = " ".join(str(s.get(k) or "") for k in ("basis", "perimeter", "view")).lower()
     view = s.get("view")
+    # Oct 31: "consolidated Toyota Motor Corporation and subsidiaries" is the group, so the bare word "subsidiaries"
+    # decides nothing; a subsidiary is named by the observation's kind ("subsidiary basis") or by TMCC
     if "equity method" in text:
         level = "equity_method"
-    elif "subsidiar" in kind or "subsidiar" in text or "tmcc" in text:
+    elif "subsidiar" in kind or "tmcc" in text or "consolidated subsidiaries" in text:
         level = "subsidiary"
     elif view in ("reporting_segments", "financial_services") or "segment" in text:
         level = "segment"
@@ -116,6 +118,8 @@ def consolidation(scope: dict | None, kind: str) -> dict:
         level = "region"
     elif "consolidated" in text:
         level = "consolidated"
+    elif "subsidiar" in text:
+        level = "subsidiary"
     else:
         level = None
     geo = {"customer_location": "customer_location", "production_location": "production_location",
