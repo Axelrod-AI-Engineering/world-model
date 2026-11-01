@@ -51,7 +51,7 @@ from axelrod_ingest.lake.store import (
 from axelrod_ingest.llm import Provider, propose
 from axelrod_ingest.ocr import Ocr
 from axelrod_ingest.parse import PARSER_VERSION, Parsed, ParseError, mime_of, parse
-from axelrod_ingest.sources import SOURCE_OF, Kind, classify
+from axelrod_ingest.sources import SOURCE_OF, Kind, classify, publisher_in_name
 from axelrod_ingest.units import Yen, language_of, resolve_yen
 
 KIND_OF = {"data": "data", "filing": "filing", "broker_research": "analyst", "expert_call": "analyst",
@@ -178,17 +178,6 @@ def _period_end(dates: Dates) -> datetime | None:
     """The end of the period a document reports on, when it ended before the document was published."""
     p = dates.period
     return None if p is None or dates.forward else datetime(p.end.year, p.end.month, p.end.day, tzinfo=UTC)
-
-
-def publisher_in_name(filename: str) -> str:
-    """The publisher a research file's name gives, else empty. Aggregators name files `YYYYMMDD - Publisher - Ticker - Title -
-    N pages.pdf`; only a name that fits this exactly is read, and any other name says nothing."""
-    stem, _, ext = filename.rpartition(".")
-    fields = stem.split(" - ")
-    last = fields[-1].removesuffix(" pages") if fields[-1].endswith(" pages") else ""
-    date = fields[0]
-    ok = bool(ext) and len(fields) >= 4 and len(date) == 8 and date.isascii() and date.isdigit()
-    return fields[1].strip() if ok and last.isascii() and last.isdigit() else ""
 
 
 def publisher_of(doc: Document) -> tuple[str, str | None]:

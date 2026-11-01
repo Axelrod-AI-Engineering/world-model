@@ -9,7 +9,7 @@ content: it only labels files (a URL, a section, a hash to compare) and is store
 
 **Source typing.** `classify` gives each file one of: `filing`, `report` (an annual, interim, or quarterly report, or financial
 statements), `transcript` (a call, or a record of management Q&A), `presentation`, `news`, `data_aggregate` (a third party's series),
-`index_page`, or `other`. The evidence, strongest first:
+`research` (a broker's research note), `index_page`, or `other`. The evidence, strongest first:
 
 1. A file named an index (INDEX_ONLY, "index of ...", "transcript index"): an index page, excluded. One named a notice only
    (NOTICE_ONLY) is `other` and still read.
@@ -17,10 +17,13 @@ statements), `transcript` (a call, or a record of management Q&A), `presentation
    JavaScript, subscribe to read, access denied) has no content. It is typed `other` (or `index_page` when it is a list of
    links), with the reason, and **excluded from extraction**. A scan that still needs OCR is not judged by its empty text, nor is an upload nobody asked to screen.
    A web page is judged by its prose (twelve ideographs or eight words a line), a PDF by its letters and digits.
-3. A report named in the file name (annual, interim, quarterly report; financial statements), then the URL's host and path (an
+3. A research note named as a research aggregator names one (`YYYYMMDD - Publisher - Ticker - Title - N pages`,
+   `publisher_in_name`): `research`, before any other word in its name (a broker's note on a quarterly report is research,
+   not the report).
+4. A report named in the file name (annual, interim, quarterly report; financial statements), then the URL's host and path (an
    exchange or regulator; a transcript service; a press room; a statistics body), then the file name's other words (transcript,
-   presentation, voluntary announcement, ...), then the manifest's section (a risk folder holds news). Anything else is `other` and
-   still extracted.
+   presentation, voluntary announcement, ...), then the manifest's section (a risk folder holds news; a sell-side or broker
+   section holds research). Anything else is `other` and still extracted.
 
 Every answer carries its `reason`. The type maps to the contract's `source_type` (`SOURCE_OF`) when the caller gave none.
 """
@@ -115,9 +118,9 @@ def read_manifest(text: str) -> Manifest:
 
 
 # -- typing -----------------------------------------------------------------------------------------------------
-TYPES = ("filing", "report", "transcript", "presentation", "news", "data_aggregate", "index_page", "other")
+TYPES = ("filing", "report", "transcript", "presentation", "news", "data_aggregate", "research", "index_page", "other")
 SOURCE_OF = {"filing": "filing", "report": "filing", "presentation": "filing", "transcript": "expert_call", "news": "news",
-             "data_aggregate": "data", "index_page": "other", "other": "other"}
+             "data_aggregate": "data", "research": "broker_research", "index_page": "other", "other": "other"}
 MIN_SUBSTANCE = 500                        # characters of prose and table rows an HTML page needs to be a document
 MIN_TEXT = 200                             # letters and digits a PDF needs (its pages are not menus)
 PROSE_WORDS = 8                            # a line of this many words is prose
@@ -156,7 +159,8 @@ NAME_AFTER = (
     ("filing", re.compile(r"announcement|disclosure|prospectus|\b10 ?[kq]\b|allotment|regulatory|notice|results release|"
                           r"press release|guidance")),
 )
-SECTION_RULES = (("news", re.compile(r"risk|event|capital action|news", re.I)),)
+SECTION_RULES = (("news", re.compile(r"risk|event|capital action|news", re.I)),
+                 ("research", re.compile(r"sell[- ]side|broker|analyst research|equity research", re.I)))
 
 
 @dataclass(frozen=True)
@@ -183,6 +187,17 @@ def substance(text: str) -> int:
 
 def _words(name: str) -> str:
     return " ".join(TOKEN.findall(name.lower()))
+
+
+def publisher_in_name(filename: str) -> str:
+    """The publisher a research file's name gives, else empty. Aggregators name files `YYYYMMDD - Publisher - Ticker - Title -
+    N pages.pdf`; only a name that fits this exactly is read, and any other name says nothing."""
+    stem, _, ext = filename.rpartition(".")
+    fields = stem.split(" - ")
+    last = fields[-1].removesuffix(" pages") if fields[-1].endswith(" pages") else ""
+    date = fields[0]
+    ok = bool(ext) and len(fields) >= 4 and len(date) == 8 and date.isascii() and date.isdigit()
+    return fields[1].strip() if ok and last.isascii() and last.isdigit() else ""
 
 
 def _empty(filename: str, text: str, where: str, fmt: str) -> Kind | None:
@@ -222,6 +237,8 @@ def classify(filename: str, text: str, *, url: str = "", section: str = "", judg
         return Kind("other", "the pack names it a notice only: a notice, not the report", False, "name")
     if judge and (empty := _empty(filename, text, where, fmt)) is not None:
         return empty
+    if publisher := publisher_in_name(filename):
+        return Kind("research", f"the file is named as an aggregator names research ({publisher})", False, "name")
     for kind, pat in NAME_FIRST:
         if found := pat.search(name):
             return Kind(kind, f"the file name says so ({found.group(0)})", False, "name")

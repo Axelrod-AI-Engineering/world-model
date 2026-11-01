@@ -152,7 +152,7 @@ error.
 means. All of this is rules over the text, the file name and the manifest.
 
 **Type** (`sources.classify`). One of `filing`, `report`, `transcript`, `presentation`, `news`, `data_aggregate`,
-`index_page` or `other`, with a reason. The evidence is checked strongest first:
+`research`, `index_page` or `other`, with a reason. The evidence is checked strongest first:
 
 1. A file named as an index is excluded.
 2. The page itself:
@@ -160,9 +160,10 @@ means. All of this is rules over the text, the file name and the manifest.
    - A page with almost none, such as a menu, a script shell or a list of links, is excluded. So is a page that says
      it is gated.
    - This screen runs on HTML and PDF from packs, and never on a scan awaiting OCR.
-3. Words in the file name, then the URL's host and path, then the manifest's section.
+3. A file named as a research aggregator names a note (`YYYYMMDD - Publisher - Ticker - Title - N pages`) is `research`.
+4. Words in the file name, then the URL's host and path, then the manifest's section.
 
-The type maps to the contract's `source_type` when the uploader gave none.
+The type maps to the contract's `source_type` when the uploader gave none (`research` is `broker_research`).
 
 **Dates** (`dates.resolve`). Two times are kept apart:
 

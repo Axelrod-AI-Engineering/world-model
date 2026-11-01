@@ -18,8 +18,8 @@ from axelrod_ingest.extract import (
     signal_plausible,
 )
 from axelrod_ingest.parse import parse
-from axelrod_ingest.pipeline import bundle_id, publisher_in_name, publisher_of
-from axelrod_ingest.sources import read_manifest
+from axelrod_ingest.pipeline import bundle_id, publisher_of
+from axelrod_ingest.sources import publisher_in_name, read_manifest
 from tests.ingest.builders import pdf
 
 T = "acme"
@@ -213,6 +213,13 @@ def test_news_with_a_hint_or_a_manifest_url_has_a_publisher_and_is_a_proxy(inges
     res = ingestor.ingest_file(T, NEWS + b"\n", "wrap2.md", graph, source_type="news", meta={"manifest": manifest})
     (item,) = items_of(res)
     assert item["publisher"] == "wire.example" and item["url"] == "https://www.wire.example/wrap"
+
+
+def test_a_research_note_named_by_an_aggregator_is_broker_research_with_its_publisher(ingestor, graph):
+    res = ingestor.ingest_file(T, NEWS, "20260805 - Synthetic Securities - ACME - Markets wrap - 3 pages.md", graph)
+    (item,) = items_of(res)
+    assert res.document.source_type == "broker_research" and res.document.meta["doc_type"]["type"] == "research"
+    assert (item["source_type"], item["kind"], item["publisher"]) == ("broker_research", "analyst", "Synthetic Securities")
 
 
 def test_news_with_no_publisher_leaves_it_empty(ingestor, graph):
