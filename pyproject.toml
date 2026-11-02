@@ -8,17 +8,19 @@ requires-python = ">=3.11"
 package = false
 
 [tool.uv.workspace]
-members = ["ingestion", "world_model"]
+members = ["ingestion", "world_model", "desk"]
 
 # The members are in the dev group, so a plain `uv sync` installs both and `uv run axelrod` works from the root.
 [tool.uv.sources]
 axelrod-ingest = { workspace = true }
 axelrod-world-model = { workspace = true }
+axelrod-desk = { workspace = true }
 
 [dependency-groups]
 dev = [
     "axelrod-ingest",
     "axelrod-world-model",
+    "axelrod-desk",
     "pytest>=8.0",
     "pytest-cov>=5.0",
     "ruff>=0.4",
@@ -31,7 +33,7 @@ addopts = "-q"
 [tool.ruff]
 line-length = 110
 target-version = "py311"
-src = ["world_model/src", "world_model/tests", "ingestion/src", "ingestion/tests"]
+src = ["world_model/src", "world_model/tests", "ingestion/src", "ingestion/tests", "desk/src", "desk/tests"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP"]

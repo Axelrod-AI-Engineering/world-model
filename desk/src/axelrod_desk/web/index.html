@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Export desk</title>
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body>
+  <div id="signin" class="signin" hidden>
+    <form id="signin-form" class="card">
+      <h1>Export desk</h1>
+      <p class="muted" id="signin-note">Sign in with your desk account.</p>
+      <label id="name-row" hidden>Name <input name="name" autocomplete="name"></label>
+      <label>Email <input name="email" type="email" required autocomplete="username"></label>
+      <label>Password <input name="password" type="password" required minlength="8" autocomplete="current-password"></label>
+      <button type="submit">Sign in</button>
+      <p class="error" id="signin-error"></p>
+    </form>
+  </div>
+
+  <div id="shell" hidden>
+    <header>
+      <span class="brand">Export desk</span>
+      <nav id="tabs">
+        <a href="#library">Library</a>
+        <a href="#facts">Facts</a>
+        <a href="#world-models">World models</a>
+        <a href="#reader">Reader</a>
+        <a href="#accounts" id="accounts-tab" hidden>Accounts</a>
+      </nav>
+      <span class="who"><span id="me"></span> <button class="link" id="signout">Sign out</button></span>
+    </header>
+
+    <main>
+      <section id="library" class="view">
+        <div class="card drop" id="drop">
+          <div>
+            <strong>Add documents</strong>: drop files or a folder here, or
+            <label class="link">choose files<input type="file" id="pick-files" multiple hidden></label> or
+            <label class="link">a folder<input type="file" id="pick-folder" webkitdirectory hidden></label>.
+            A <code>MANIFEST.md</code> in a folder labels its files. Each file is stored once, however often it is added.
+          </div>
+          <div class="row">
+            <label>Company <select id="up-company"><option value="">detect</option></select></label>
+            <label>Source <select id="up-class"><option value="">detect</option></select></label>
+            <label>Publisher <input id="up-publisher" placeholder="detect"></label>
+            <label>Published <input id="up-published" type="date"></label>
+          </div>
+          <div id="upload-log" class="log"></div>
+        </div>
+        <div class="row filters">
+          <label>Company <select id="f-company"><option value="">all</option></select></label>
+          <label>Source <select id="f-class"><option value="">all</option></select></label>
+          <label>Status <select id="f-status"><option value="">all</option><option>new</option><option>needs company</option>
+            <option>reading</option><option>read</option><option>duplicate</option><option>failed</option></select></label>
+          <span class="muted" id="doc-count"></span>
+        </div>
+        <table class="grid"><thead><tr><th>Document</th><th>Company</th><th>Source</th><th>Publisher</th><th>Published</th>
+          <th class="num">Pages</th><th>Status</th></tr></thead><tbody id="docs"></tbody></table>
+      </section>
+
+      <section id="facts" class="view" hidden>
+        <div class="row filters">
+          <label>Company <select id="fact-company"></select></label>
+          <label class="check"><input type="checkbox" id="fact-conflicts"> conflicts only</label>
+          <span class="muted" id="fact-count"></span>
+        </div>
+        <p class="muted">One fact per figure: the same company, metric, period, unit, claim and speaker with values within
+          0.5%. A broker never shares a fact with the company. Approve a company-reported fact to let builds with
+          "apply" on put it into the model; reject a fact to keep it out of every build.</p>
+        <table class="grid"><thead><tr><th>Figure</th><th>Period</th><th class="num">Value</th><th>Speaker</th><th>Claim</th>
+          <th>Cited by</th><th>Review</th></tr></thead><tbody id="fact-rows"></tbody></table>
+      </section>
+
+      <section id="world-models" class="view" hidden>
+        <form class="card" id="wm-form">
+          <h2 id="wm-title">New world model</h2>
+          <input type="hidden" name="id">
+          <label>Name <input name="name" required placeholder="e.g. BYD, CATL, Hyundai with sell-side"></label>
+          <fieldset><legend>Companies</legend><div class="chips" id="wm-companies"></div></fieldset>
+          <fieldset><legend>Sector groups</legend><div class="chips" id="wm-groups"></div></fieldset>
+          <fieldset><legend>Sources</legend><div class="chips" id="wm-classes"></div></fieldset>
+          <label class="check"><input type="checkbox" name="apply"> Apply approved figures to the model (otherwise new
+            figures travel beside the baseline and the model's estimates do not move)</label>
+          <div class="row"><button type="submit">Save</button> <button type="button" class="link" id="wm-reset">New</button></div>
+          <p class="error" id="wm-error"></p>
+        </form>
+        <div id="wm-list"></div>
+      </section>
+
+      <section id="reader" class="view" hidden>
+        <div class="card">
+          <h2>Read on your own Claude plan</h2>
+          <p>The reader runs on your computer and reads with your own Claude Code, signed in with your Claude account. The
+            desk never sees that sign-in. Install Claude Code, run <code>claude</code> once to sign in, then:</p>
+          <pre id="reader-cmd"></pre>
+          <p><button id="reader-token">Create a reader token</button> <span class="muted" id="reader-has"></span></p>
+          <p class="muted">A new token replaces your earlier one. It is shown once.</p>
+        </div>
+        <div class="card"><h2>Queue</h2><div id="queue"></div></div>
+      </section>
+
+      <section id="accounts" class="view" hidden>
+        <form class="card" id="account-form">
+          <h2>Add an account</h2>
+          <div class="row">
+            <label>Name <input name="name" required></label>
+            <label>Email <input name="email" type="email" required></label>
+            <label>Password <input name="password" type="password" minlength="8" required></label>
+            <label class="check"><input type="checkbox" name="admin"> admin</label>
+            <button type="submit">Add</button>
+          </div>
+          <p class="error" id="account-error"></p>
+        </form>
+        <table class="grid"><thead><tr><th>Name</th><th>Email</th><th>Admin</th></tr></thead><tbody id="account-rows"></tbody></table>
+      </section>
+    </main>
+
+    <aside id="drawer" hidden><button class="link close" id="drawer-close">Close</button><div id="drawer-body"></div></aside>
+  </div>
+  <script src="/app.js"></script>
+</body>
+</html>

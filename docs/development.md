@@ -1,6 +1,6 @@
 # Development
 
-How to run the tests, where things are, and the conventions. The repository is a uv workspace of two members, and
+How to run the tests, where things are, and the conventions. The repository is a uv workspace of three members, and
 each is developed and tested on its own.
 
 <!-- toc -->
@@ -70,11 +70,12 @@ Without client data the world model reaches 100% too: point `WORLD_MODEL_DATA_DI
 
 ## Continuous integration
 
-`.github/workflows/tests.yml` runs three jobs in parallel on every pull request and on `main`:
+`.github/workflows/tests.yml` runs these jobs in parallel on every pull request and on `main`:
 
 | Job | Runs | Takes |
 |---|---|---|
 | `ingestion` | Installs only `axelrod-ingest`; its tests with coverage; the gate | about 15 minutes |
+| `desk` | Installs `axelrod-desk` (and ingestion); its tests with coverage; the gate | a few minutes |
 | `world_model` | Installs both members; the unit tests first, then the full suite with coverage; the gate | up to 150 minutes |
 | `repo` | `ruff`, the root tests, and the checks of the table of contents and the diagrams | a few minutes |
 
@@ -83,6 +84,7 @@ Without client data the world model reaches 100% too: point `WORLD_MODEL_DATA_DI
 ```text
 pyproject.toml, uv.lock   the workspace root (virtual): members, shared lint settings
 ingestion/                axelrod-ingest: src/axelrod_ingest, tests, scripts, docs
+desk/                     axelrod-desk: src/axelrod_desk (web/ is the app's page), tests, README
 world_model/              axelrod-world-model: src/axelrod_wm, tests, examples, taxonomy, configs, web, skills, scripts (video/), integrations/core, docs
 docs/                     this front door: architecture, reading order, decisions, the ML stack, deployment, development
 configs/                  stage settings (world_model*.toml), read by axelrod_wm/settings.py

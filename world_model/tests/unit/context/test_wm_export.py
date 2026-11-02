@@ -122,7 +122,9 @@ REPAIR = {
          "scope": {"basis": "IFRS", "perimeter": "consolidated"}, "available_at": "2024-05-08",
          "raw": {"amount": 10000, "unit": "million"},
          "source": {"source_id": "s.own", "document": "data/sources/acme/own_filing.pdf", "location": "page 4",
-                    "page": 4, "printed_page": "3"}},
+                    "page": 4, "printed_page": "3"},
+         "citations": [{"source_id": "s.own", "document": "data/sources/acme/press.pdf", "location": "PDF page 2",
+                        "page": 2, "quote": "operating income of 10.0bn"}]},
         {"observation_id": "OBS_SHARE", "metric_id": "rival.share", "line_id": "share", "label": None,
          "period": {"label": "2023", "type": "season", "start": None, "end": "2023-12-31"}, "value": None,
          "unit": "pct", "kind": "broker statement (third party)", "scope": {"basis": "third-party broker statement"},
@@ -222,6 +224,8 @@ def test_the_export_says_what_the_model_holds_and_no_more(tmp_path):
     assert q1["as_reported"] == {"value": 10000.0, "unit_text": "million"}
     b = binds[q1["bindings"][0]]
     assert (b["document_sha256"], b["page"], b["printed_page"], b["document_name"]) == ("b" * 64, 4, "3", "own_filing.pdf")
+    also = binds[q1["bindings"][1]]                                                       # a further document, same figure
+    assert (also["document_name"], also["page"], also["passage"]) == ("press.pdf", 2, "operating income of 10.0bn")
     share = rec["OBS_SHARE"]
     assert share["variable_id"] is None and share["value_state"] == "unknown" and share["period"]["type"] == "other"
     assert share["epistemic_status"] == "third_party" and share["derived_from"]["rule"] == "sum of the two sides"
