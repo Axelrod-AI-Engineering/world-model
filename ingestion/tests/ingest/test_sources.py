@@ -111,8 +111,14 @@ NAV = "\n".join(["Home", "Company", "Investors", "Notices", "Careers", "Contact"
     ("001_1_2026-02-01_VOLUNTARY-ANNOUNCEMENT-PRODUCTION-AND-SALES-VOLUME-FOR-JANUARY-2026.pdf", PROSE, {}, "filing", False, "name"),
     ("001_1_12-May-2025_HK-IPO-prospectus-English.pdf", PROSE, {}, "filing", False, "name"),
     ("001_Results-Disclosure_2026-01-30_Q4-2025.html", PROSE, {}, "filing", False, "name"),
+    # a research aggregator's file name, before the name's other words and the address
+    ("20260924 - Synthetic Securities - ACME - Q3 Preview Loans - 28 pages.pdf", PROSE, {"fmt": "pdf"}, "research", False, "name"),
+    ("20261029 - Synthetic Research - ACME - Quarterly report preview - 9 pages.pdf", PROSE,
+     {"url": "https://www.hkexnews.hk/x.pdf", "fmt": "pdf"}, "research", False, "name"),
+    ("20261029 - Synthetic Research - ACME - Blank - 2 pages.pdf", "12", {"fmt": "pdf"}, "other", True, "content"),
     # the section, then nothing
     ("001_3_14-Oct-2024_EU-tariffs-stance.html", PROSE, {"section": "Risk Events and Capital Actions"}, "news", False, "section"),
+    ("acme_note.pdf", PROSE, {"section": "Sell-side research"}, "research", False, "section"),
     ("001_3_14-Oct-2024_EU-tariffs-stance.html", PROSE, {"section": "Historical Financials"}, "other", False, "default"),
     ("notes.txt", PROSE, {}, "other", False, "default"),
 ])
@@ -166,7 +172,7 @@ def test_reasons_and_meta():
 
 def test_every_type_has_a_source_type():
     assert set(SOURCE_OF) == set(TYPES) and set(SOURCE_OF.values()) <= {
-        "filing", "expert_call", "news", "data", "other"}
+        "filing", "expert_call", "news", "data", "broker_research", "other"}
     assert isinstance(classify("a.pdf", PROSE), Kind)
 
 

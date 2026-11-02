@@ -87,14 +87,16 @@ and the import lists them under `late`. Both times can be listed and filtered (`
 | It says it is a notice only (`NOTICE_ONLY`) | `other`, still read |
 | A web page whose prose (lines of eight words or twelve ideographs, and table rows) is under 500 characters: a menu, a script shell, a list of links, a page that says it is gated (enable JavaScript, subscribe to read, access denied, no content to display) | `other` (or `index_page` for a list of links), excluded, with the reason |
 | A PDF with fewer than 200 letters and digits in the whole document | `other`, excluded |
+| A file named as a research aggregator names a note (`YYYYMMDD - Publisher - Ticker - Title - N pages`), whatever else its title says | `research` |
 | A report named in the file name (annual, interim, quarterly, business, ESG report; financial statements) | `report` |
 | The source address (an exchange or regulator; a transcript path; a statistics body; a press room) | `filing`, `transcript`, `data_aggregate`, `news` |
 | The file name's other words (transcript, IR record, presentation, investor day, voluntary announcement, ...) | `transcript`, `presentation`, `data_aggregate`, `filing` |
-| The manifest's section (a risk folder holds news) | `news` |
+| The manifest's section (a risk folder holds news; a sell-side or broker section holds research) | `news`, `research` |
 | Nothing | `other`, still read |
 
 The type is stored in `meta.doc_type` and maps to the contract's `source_type` when the caller gave none (`filing`,
-`report`, and `presentation` are `filing`; `transcript` is `expert_call`; `news`; `data_aggregate` is `data`; index and other are `other`).
+`report`, and `presentation` are `filing`; `transcript` is `expert_call`; `news`; `data_aggregate` is `data`; `research` is
+`broker_research`, so its items are the `analyst` kind and the world model reads them as broker views; index and other are `other`).
 Items carry `doc_type:`, `lang:`, and `period:` tags. An **excluded** document is stored and its text kept, so the decision
 can be audited, but it has no chunks, no embeddings, and no bundle; its status is `excluded` and `error` holds the reason.
 Screening is a choice of the caller (`Ingestor(screen=True)`; the pack runner sets it) and applies only to web pages and PDFs
