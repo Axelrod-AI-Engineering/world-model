@@ -28,6 +28,7 @@ New to the repository? Read [the front door](../../docs/README.md) and [the arch
 | Run a demo, or see what each one shows | [guides/demos.md](guides/demos.md) |
 | Find a control, panel, or shortcut in the app | [guides/gui.md](guides/gui.md) |
 | Run a command, or set a config file or environment variable | [guides/cli.md](guides/cli.md) |
+| Export the model for evaluation (core's World Model quality tab), or run the update series | [guides/evaluation-export.md](guides/evaluation-export.md) |
 | Run the tests, or follow the conventions (TOCs, diagrams, decisions) | [development](../../docs/development.md), [../tests/README.md](../tests/README.md) |
 | Release, verify a deploy, or manage logins and keys | [deployment](../../docs/deployment.md) |
 | Know how a file becomes graph updates; the lakehouse, search, the benchmark; the bundle format | [ingestion/docs](../../ingestion/docs/README.md) ([pipeline](../../ingestion/docs/pipeline.md), [lake](../../ingestion/docs/lake.md), [bench](../../ingestion/docs/bench.md), [contract](../../ingestion/docs/contract.md)) |
