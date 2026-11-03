@@ -62,12 +62,13 @@ function fillSelects() {
 // -- routing ------------------------------------------------------------------------------------------------------------
 const VIEWS = { library: loadLibrary, facts: loadFacts, "world-models": loadWorldModels, reader: loadReader, accounts: loadAccounts };
 function route() {
-  const view = (location.hash || "#library").slice(1);
+  const asked = (location.hash || "#library").slice(1);
+  const view = Object.hasOwn(VIEWS, asked) ? asked : "library";      // only our own views: never an inherited name
   clearInterval(timer);
   document.querySelectorAll(".view").forEach((v) => (v.hidden = v.id !== view));
   document.querySelectorAll("#tabs a").forEach((a) => a.classList.toggle("on", a.getAttribute("href") === `#${view}`));
   closeDrawer();
-  (VIEWS[view] || loadLibrary)();
+  VIEWS[view]();
 }
 window.addEventListener("hashchange", route);
 
