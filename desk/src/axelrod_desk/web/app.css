@@ -10,6 +10,7 @@
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
 body { margin: 0; background: var(--bg); color: var(--ink); }
+a { color: var(--accent); }
 header { display: flex; gap: 24px; align-items: center; padding: 10px 20px; background: var(--panel);
   border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 2; flex-wrap: wrap; }
 .brand { font-weight: 600; }
