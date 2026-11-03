@@ -5,12 +5,13 @@
 <!-- toc -->
 <!-- /toc -->
 
-One causal world model of the economy, built like version control, and the machinery that keeps it current: documents in, reviewed changes, what-if answers out. A uv workspace of two members:
+One causal world model of the economy, built like version control, and the machinery that keeps it current: documents in, reviewed changes, what-if answers out. A uv workspace of three members:
 
 | Member | Is | Docs |
 |---|---|---|
 | [`ingestion/`](ingestion/) | `axelrod-ingest`: parse, extract, and search documents; the lakehouse | [ingestion/docs](ingestion/docs/README.md) |
 | [`world_model/`](world_model/) | `axelrod-world-model`: the causal graph, learning, inference, the demo, and the API | [world_model/docs](world_model/docs/README.md) |
+| [`desk/`](desk/) | `axelrod-desk`: the export desk; upload documents, read them on your own Claude plan, build the world-model files | [desk/README.md](desk/README.md) |
 
 **All news, data, and numbers are synthetic.** Real company and agency names make the graph concrete. No headline reports a real event, and nothing in it is a claim about any company.
 

@@ -337,10 +337,11 @@ def wm_export(wm: Any, ltm: Any, *, world_model_id: str, label: str, version: in
         classes.update(rep.get("input_classes", {}))
         for o in rep.get("observations", []):
             s = o.get("source") or {}
-            b = binds.add(source_id=str(s.get("source_id") or ""), document=s.get("document"),
-                          location=s.get("location") or s.get("primary_location"), passage=s.get("quote"),
-                          page=s.get("page"), printed_page=s.get("printed_page"), aspects=["magnitude"],
-                          evidence_type="document")
+            # the observation's source, then any further documents that give the same figure (`citations`, Nov 2)
+            bound = [binds.add(source_id=str(c.get("source_id") or ""), document=c.get("document"),
+                               location=c.get("location") or c.get("primary_location"), passage=c.get("quote"),
+                               page=c.get("page"), printed_page=c.get("printed_page"), aspects=["magnitude"],
+                               evidence_type="document") for c in [s, *o.get("citations", [])]]
             kind = str(o.get("kind") or "")
             status = epistemic_of_observation(o)
             mid = o.get("metric_id")
@@ -359,7 +360,7 @@ def wm_export(wm: Any, ltm: Any, *, world_model_id: str, label: str, version: in
                 "kind_text": kind or None, "valid_at": period.get("end"), "available_at": o.get("available_at"),
                 "recorded_at": None,
                 "as_reported": {"value": _r(raw.get("amount")), "unit_text": raw.get("unit")} if raw else None,
-                "bindings": [b], "supersedes": None, "current": True,
+                "bindings": bound, "supersedes": None, "current": True,
                 "derived_from": {"operands": [], "rule": o["derived_from"]} if o.get("derived_from") else None,
                 "origin": "attachment"})
     from axelrod_wm.model.distributions import from_link

@@ -64,8 +64,9 @@ def document_hashes(sources: dict, repairs: list[dict], remap: list[tuple[str, s
         d = s.get("document")
         paths |= {d} if isinstance(d, str) else {x for x in d or [] if isinstance(x, str)}
     for r in repairs:
-        paths |= {o["source"]["document"] for o in r.get("observations", [])
-                  if isinstance((o.get("source") or {}).get("document"), str)}
+        for o in r.get("observations", []):
+            paths |= {c["document"] for c in [o.get("source") or {}, *o.get("citations", [])]
+                      if isinstance(c.get("document"), str)}
     out = {}
     for p in sorted(x for x in paths if x):
         local = p

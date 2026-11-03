@@ -14,10 +14,12 @@ own `docs/`; this folder holds what spans them.
 ## The repository in one paragraph
 
 Axelrod is one causal world model of the economy, and the machinery that keeps it current. The repository is a uv
-workspace of two members. **`ingestion/`** (`axelrod-ingest`) turns documents into dated, quoted signals and keeps them
+workspace whose two core members meet at one contract. **`ingestion/`** (`axelrod-ingest`) turns documents into dated, quoted signals and keeps them
 in a searchable lakehouse. **`world_model/`** (`axelrod-world-model`) holds the causal graph, learns from reviewed
 changes, answers what-if questions, and serves the demo and the outward API. They meet at one small contract, and
-ingestion never imports the world model. [architecture.md](architecture.md) draws it.
+ingestion never imports the world model. [architecture.md](architecture.md) draws it. A third member, **`desk/`**
+(`axelrod-desk`), is the export desk: it stores and reads uploaded documents and builds a person's selection into the
+world model's export files with the world model's own scripts.
 
 ![Overview: learning, inference, and the architecture](flowchart.svg)
 
@@ -33,6 +35,7 @@ ingestion never imports the world model. [architecture.md](architecture.md) draw
 | Run the tests, follow the conventions, understand CI | [development.md](development.md) |
 | Follow a file from upload to bundle; the lakehouse; the bundle format; the benchmark | [../ingestion/docs/README.md](../ingestion/docs/README.md) |
 | Run a demo, use the app, run a command | [../world_model/docs/README.md](../world_model/docs/README.md) |
+| Turn uploaded documents into world-model files (the export desk) | [../desk/README.md](../desk/README.md) |
 | Call the API or MCP | [../world_model/docs/api/README.md](../world_model/docs/api/README.md) |
 | Look up a term | [../world_model/docs/vocab.md](../world_model/docs/vocab.md) |
 
@@ -51,4 +54,5 @@ docs/                 this front door
   media/              videos (gitignored; ask the team)
 ingestion/docs/       pipeline, lake, contract, bench
 world_model/docs/     guides, api, design, ml, construction, briefs, archive, vocab
+desk/README.md        the export desk: running it, reading on a Claude plan, duplicates, builds
 ```

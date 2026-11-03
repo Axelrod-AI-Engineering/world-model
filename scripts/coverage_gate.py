@@ -7,6 +7,8 @@ Each member is gated alone, from its own directory, so a member cannot lean on a
     uv run python scripts/coverage_gate.py ingestion/coverage.json --member ingestion --junit ingestion/junit.xml
     cd world_model && uv run pytest --cov --cov-report=json:coverage.json --junitxml=junit.xml
     uv run python scripts/coverage_gate.py world_model/coverage.json --member world_model --junit world_model/junit.xml
+    cd desk        && uv run pytest --cov --cov-report=json:coverage.json --junitxml=junit.xml
+    uv run python scripts/coverage_gate.py desk/coverage.json --member desk --junit desk/junit.xml
 
 The gate reads coverage.py's JSON report (and, optionally, pytest's JUnit XML), and fails when
 
@@ -28,7 +30,7 @@ from collections import defaultdict
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-MEMBERS = {"ingestion": "axelrod_ingest", "world_model": "axelrod_wm"}      # member folder -> its import package
+MEMBERS = {"ingestion": "axelrod_ingest", "world_model": "axelrod_wm", "desk": "axelrod_desk"}      # member folder -> its import package
 
 
 def pct(hit: int, total: int) -> float:
